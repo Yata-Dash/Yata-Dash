@@ -5,6 +5,7 @@ yata.exe~
 *.exe
 static/dashboard.js
 web/dist/
+dev.ps1
 
 # Editor / tooling
 .claude/
@@ -34,6 +35,9 @@ reference/
 # Dev tools
 internal/scrape/profile_test.go
 tools/scrapetest/
+tools/apiprobe/
+tools/genversions/
+tools/seedtest/
 
 # Self-hosted Font Awesome (e.g. Pro) — licensed assets, must NOT ship in the public repo
 static/fontawesome/
