@@ -183,7 +183,27 @@ Questions, corrections, or requests — please open an issue.
 
 ## Bundled tracker definitions
 
-Aither, Anthelion, InfinityHD, LST, Luminarr, MyAnonamouse, Oldtoons, OnlyEncodes+, RetroFlix, seedpool, YUSCENE, Zenith — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
+Any trackers not approved should only be used in API only mode until approval has been confirmed. A warning will appear in app.
+If you are a tracker not on this list please reach out.
+If you are a tracker on this list and wish to approve or ask to opt out entirely, please reach out. 
+
+| Tracker | Platform | Approved by tracker | Notes |
+|---|---|---|---|
+| Aither | Unit3D | No | Awaiting approval - New Upload groups note yet added, Monthly Uploads not retrevable |
+| Anthelion | Gazelle | No |  |
+| Huno | Unit3D | No | API Only - Not on this tracker can't seek approval |
+| InfinityHD | Unit3D | Yes | 60min scrape limit |
+| LST | Unit3D | No |  |
+| Luminarr | Unit3D | No |  |
+| MyAnonamouse | Custom | Yes | API ONLY |
+| Oldtoons | Unit3D | Yes | API ONLY - Added all required stats to API (THANK YOU!) |
+| OnlyEncodes+ | Unit3D | No | Awaiting approval  |
+| RetroFlix | Custom | No | Scrape only - No useful API stats |
+| Seedpool | Unit3D | Yes | 180min scrape limit |
+| YUSCENE | Unit3D | Pending |  |
+| Zenith | Unit3D | Yes | Will switch to API only when extended stats added |
+
+  — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
 
 **OldToonsWorld is fully API-supported:** its staff added an API endpoint that exposes every stat Yata tracks — including seed size, seed times, and unread mail/notification flags — so Yata reads everything from the API and does **no** profile scraping for it. It's the model we hope more trackers follow (UNIT3D is rolling out richer stats APIs); when they do, a tracker can be added to Yata with an API key alone, no session cookie.
 
