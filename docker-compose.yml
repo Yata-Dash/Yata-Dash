@@ -1,14 +1,20 @@
+# Yata — start it with:   docker compose up -d      then open http://localhost:8420
+#
+# Two ways to run:
+#   • Published image (recommended, once a release exists): comment out `build: .`
+#     and uncomment the `image:` line — no repo checkout needed to run it.
+#   • From source (works right now): keep `build: .`.
 services:
   yata:
     build: .
-    # or, once published: image: ghcr.io/mysterygodzillarr/yata:latest
+    # image: ghcr.io/yata-dash/yata:latest    # <- switch to this after the first release
     container_name: yata
     ports:
-      - "8420:8420"        # change the left side to remap the host port
-    environment:
-      - YATA_PORT=8420
+      - "8420:8420"          # browse http://<host>:8420 — change the LEFT number to remap
     volumes:
-      - ./data:/data                       # config.json + yata.db
-      - ./defs:/app/defs                   # tracker definitions (editable live)
-      - ./static/themes:/app/static/themes # custom themes (optional)
-    restart: unless-stopped
+      - ./data:/data         # YOUR data (config.json + database) — back this folder up
+      # - ./defs:/app/defs                    # optional: edit tracker definitions live
+      # - ./static/themes:/app/static/themes  # optional: drop in custom themes
+    environment:
+      - TZ=Etc/UTC           # optional: your timezone, e.g. Australia/Brisbane
+    restart: unless-stopped  # auto-start on reboot / after a crash

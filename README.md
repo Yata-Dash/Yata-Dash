@@ -90,13 +90,32 @@ Tracker rank icons use the same Font Awesome classes the tracker sites themselve
 
 ### Docker (recommended)
 
+Drop this `docker-compose.yml` next to wherever you want Yata's data to live, then `docker compose up -d`:
+
+```yaml
+services:
+  yata:
+    image: ghcr.io/yata-dash/yata:latest
+    container_name: yata
+    ports:
+      - "8420:8420"          # then open http://<host>:8420
+    volumes:
+      - ./data:/data         # config.json + database — back up this folder
+    environment:
+      - TZ=Etc/UTC           # optional: your timezone, e.g. Australia/Brisbane
+    restart: unless-stopped
+```
+
 ```bash
-git clone https://github.com/Yata-Dash/Yata-Dash && cd Yata-Dash
 docker compose up -d
 # → http://localhost:8420
 ```
 
-The compose file mounts `./data` (config + database), `./defs` (tracker definitions), and `./static/themes` (custom themes), so all of them survive upgrades and can be edited live.
+Only `./data` has to persist (your config + database); mount `./defs` and `./static/themes` too if you want to edit tracker definitions or drop in custom themes live. Update with `docker compose pull && docker compose up -d`.
+
+> **New to Docker?** You don't need Go, Node, or a repo checkout — Docker pulls a ready-to-run image. `docker compose up -d` starts it in the background; `docker compose logs -f` shows what it's doing; `docker compose down` stops it (your `./data` stays). That's the whole loop.
+
+*Prefer to build the image yourself?* Clone the repo and use the bundled compose with `build: .` instead of the published image — `git clone https://github.com/Yata-Dash/Yata-Dash && cd Yata-Dash && docker compose up -d`.
 
 ### From source
 

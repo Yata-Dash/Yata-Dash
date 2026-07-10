@@ -1,5 +1,10 @@
-# ── Stage 1: frontend ────────────────────────────────────────────────────────
-FROM node:20-alpine AS web
+# Multi-arch note: the frontend and Go compile always run on the BUILD machine's
+# native architecture (fast — no emulation), and the Go build cross-compiles to
+# the TARGET arch. Only the tiny runtime stage is pulled per-arch. This lets one
+# amd64 CI runner produce a linux/amd64 + linux/arm64 image quickly.
+
+# ── Stage 1: frontend (arch-independent) ─────────────────────────────────────
+FROM --platform=$BUILDPLATFORM node:20-alpine AS web
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json* ./
 RUN npm install
@@ -7,15 +12,17 @@ COPY web/ ./
 COPY static/ /build/static/
 RUN npm run build
 
-# ── Stage 2: backend ─────────────────────────────────────────────────────────
-FROM golang:1.26-alpine AS backend
+# ── Stage 2: backend (cross-compiled to $TARGETOS/$TARGETARCH) ───────────────
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend
 WORKDIR /build
+ARG TARGETOS TARGETARCH
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
-# modernc.org/sqlite is pure Go — no CGO needed
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o yata ./cmd/yata
+# modernc.org/sqlite is pure Go — no CGO needed, so cross-compiling is trivial.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags="-s -w" -o yata ./cmd/yata
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
 FROM alpine:3.21

@@ -5,6 +5,7 @@ yata.exe~
 *.exe
 static/dashboard.js
 web/dist/
+dist/
 dev.ps1
 
 # Editor / tooling
@@ -44,8 +45,10 @@ static/fontawesome/
 
 
 *.md
-# README.md — the only user-facing doc that ships
+# README.md + CHANGELOG.md are the user-facing docs that ship (CHANGELOG is also
+# read by the release workflow for the GitHub Release notes).
 !/README.md
+!/CHANGELOG.md
 
 # OS noise
 .DS_Store
