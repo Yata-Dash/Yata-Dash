@@ -216,6 +216,8 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 
 Adding one is a JSON file away: copy `defs/templates/tracker.template.jsonc` (every field documented) to `defs/trackers/<key>.json`, strip comments, then **Settings → Trackers → Reload Definitions**. Defs that fail to parse are skipped and reported — they never crash the app.
 
+Note: Z trackers, Torrentleech, IPT don't have api's and are generally not happy about scraping, so these have not been added. Unless API's are added or they reach out to provide permission they wont be supported.
+
 ## Development
 
 ```
