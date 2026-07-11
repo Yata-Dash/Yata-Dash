@@ -83,6 +83,26 @@ func (d *DB) migrate() error {
 			expires_at INTEGER NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions (expires_at)`,
+		// Tracker events — point-in-time annotations for the History view
+		// (group promotions/demotions; extensible via `kind`). Written
+		// opportunistically by the refresh path; tiny, one row per change.
+		`CREATE TABLE IF NOT EXISTS tracker_events (
+			tracker_id TEXT NOT NULL,
+			at         INTEGER NOT NULL,         -- unix seconds
+			kind       TEXT NOT NULL,            -- 'group_change' (more later)
+			detail     TEXT NOT NULL             -- e.g. "Seeker→PowerPool"
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_tracker ON tracker_events (tracker_id, at)`,
+		// Read-only integration tokens (Settings → Integrations → API Tokens).
+		// Only the SHA-256 hash is stored; the plaintext token is shown once.
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id           TEXT PRIMARY KEY,
+			name         TEXT NOT NULL,
+			prefix       TEXT NOT NULL,             -- display hint (yata_xxxx…)
+			hash         TEXT NOT NULL UNIQUE,      -- sha256 hex of the token
+			created_at   INTEGER NOT NULL,
+			last_used_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.sql.Exec(s); err != nil {
@@ -192,6 +212,8 @@ func (d *DB) WipeData() error {
 		`DELETE FROM history`,
 		`DELETE FROM history_daily`,
 		`DELETE FROM scrape_log`,
+		`DELETE FROM tracker_events`,
+		`DELETE FROM api_tokens`, // a recovery reset revokes integrations too
 	} {
 		if _, err := d.sql.Exec(q); err != nil {
 			return err
@@ -207,6 +229,7 @@ func (d *DB) DeleteTracker(trackerID string) error {
 		`DELETE FROM history WHERE tracker_id = ?`,
 		`DELETE FROM history_daily WHERE tracker_id = ?`,
 		`DELETE FROM scrape_log WHERE tracker_id = ?`,
+		`DELETE FROM tracker_events WHERE tracker_id = ?`,
 	} {
 		if _, err := d.sql.Exec(q, trackerID); err != nil {
 			return err

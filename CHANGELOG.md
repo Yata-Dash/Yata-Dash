@@ -10,6 +10,46 @@ version heading — those notes become the GitHub Release body automatically.
 ## [Unreleased]
 
 ### Added
+- **History view** — a new dashboard tab graphing the months of stats Yata
+  already records. Pick a metric, overlay one or many trackers in their own
+  colors, choose a range from 48 h to all-time (clamped to the data you
+  actually have), read exact values with a crosshair, and click to pin two
+  points for an exact delta with per-day rate. Plus a Value↔Rate/day toggle,
+  a Σ Portfolio line summing the selected trackers, dashed growth-rate
+  projection tails, and — with a single tracker selected — the tracker's
+  targets (manual or from its group, including either/or requirements) drawn
+  as reference lines so distance-to-goal reads straight off the trajectory.
+  The optional overlays (targets, **milestones** — dots where a stat first
+  crossed a round number like 10 TiB, and a **group-change timeline** marking
+  every promotion ▲ and demotion ▼) live in an Overlays menu, alongside a
+  **Smoothing** toggle for noisy metrics. Select all / none, and **save the
+  chart as PNG or SVG**.
+- **Add Tracker search** — type to filter the tracker picker by name or
+  abbreviation, so the list stays manageable as more trackers are supported.
+- **Read-only API tokens + homelab endpoint** — create tokens in Settings →
+  Integrations and point Homepage/Homarr/Grafana/scripts at the new
+  `GET /api/summary` (totals, per-tracker one-liners, health) or
+  `GET /api/history/series` (chart data). Tokens are read-only by
+  construction — they only work on those endpoints, so they can never change
+  anything or read tracker credentials — are stored hashed (shown once at
+  creation), revocable, and show last-used in the list. Polling never
+  contacts a tracker: both endpoints serve stored data. Full guide in
+  [docs/API.md](docs/API.md).
+
+### Changed
+- **Group changes are now recorded** — when a tracker promotes or demotes you,
+  Yata logs it, so the History timeline can mark exactly when you moved between
+  ranks. (Recording starts from this release; there's no history to backfill.)
+- Bulk stat refreshes are **concurrency-limited** (8 at a time) so a large
+  tracker list no longer fans out into one simultaneous request per tracker.
+
+### Fixed
+
+### Security
+
+## [Beta-20260711]
+
+### Added
 - **Hawke-uno (HUNO) support** — API-only via their custom `/api/profile`
   endpoint (Bearer auth). Seed-division bracket counts (Vanguard → Legend +
   Guardian) show as HUNO-exclusive stats on cards and in the Detail view, and
@@ -66,6 +106,11 @@ version heading — those notes become the GitHub Release body automatically.
   date it was fetched, so it no longer looks newer than it is.
 
 ### Fixed
+- **Gazelle trackers now show the API key and session cookie fields** in the
+  add/edit forms (both were wrongly hidden — the Gazelle API needs a key +
+  username, and profile scraping needs the cookie). Scrape-disabled Gazelle
+  defs show only the API key, and the key hint points at Gazelle's
+  Settings → Access Settings → API Keys.
 - **Icons no longer render as boxes with a partial self-hosted Font Awesome
   kit.** If some `webfonts/*.woff2` files are missing (e.g. Light/Thin never
   copied), the affected styles are detected at load, their icons swap to the

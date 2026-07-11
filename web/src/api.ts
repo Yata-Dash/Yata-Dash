@@ -1,7 +1,8 @@
 // api.ts — all HTTP calls to the Go backend (v2 unified-stats API)
 // To add a new endpoint: add a typed function here. Nothing else needs changing.
 import type {
-  AlertRule, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult, DryRunResult, HistoryPoint,
+  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult, DryRunResult, HistoryPoint,
+  HistorySeriesResponse,
   LogsResponse, NotificationConfig, NotifyDestination, PathwayPathsResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
   ScrapeStatusMap, StatsMap, TestStatusMap, ThemeInfo, Tracker, TrackerGroupMap,
@@ -130,6 +131,31 @@ export const fetchScrapeStatus = () =>
 
 export const fetchHistory = (hours = 48) =>
   call<HistoryPoint[]>(`/api/history?hours=${hours}`);
+
+/** History-view data feed. Omitted trackers/fields = all recorded. */
+export const fetchHistorySeries = (opts: { trackers?: string[]; fields?: string[]; range?: string; granularity?: string }) => {
+  const qs = new URLSearchParams();
+  if (opts.trackers?.length) qs.set('trackers', opts.trackers.join(','));
+  if (opts.fields?.length)   qs.set('fields', opts.fields.join(','));
+  if (opts.range)            qs.set('range', opts.range);
+  if (opts.granularity)      qs.set('granularity', opts.granularity);
+  const q = qs.toString();
+  return call<HistorySeriesResponse>(`/api/history/series${q ? `?${q}` : ''}`);
+};
+
+// ── API tokens (read-only integration tokens) ─────────────────────────────
+
+export const fetchApiTokens = () => call<ApiTokenInfo[]>('/api/tokens');
+
+/** Create a token. The response's `token` is the plaintext — shown ONCE. */
+export const createApiToken = (name: string) =>
+  call<{ token: string; info: ApiTokenInfo }>('/api/tokens', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+
+export const revokeApiToken = (id: string) =>
+  call<{ ok: boolean }>(`/api/tokens/${id}`, { method: 'DELETE' });
 
 // ── Settings ──────────────────────────────────────────────────────────────
 

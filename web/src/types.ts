@@ -160,6 +160,38 @@ export interface HistoryPoint {
   value: number;       // sizes in GiB, durations in seconds
 }
 
+// ── API tokens (read-only integration tokens) ─────────────────────────────
+
+export interface ApiTokenInfo {
+  id: string;
+  name: string;
+  prefix: string;       // display hint (yata_xxxxxxxx…) — never the full token
+  created_at: number;   // unix seconds
+  last_used_at: number; // unix seconds; 0 = never used
+}
+
+/** One tracker/field line from GET /api/history/series. */
+export interface HistorySeries {
+  tracker_id: string;
+  field: string;
+  unit: 'GiB' | 'count' | 'ratio' | 'seconds';
+  points: [number, number][]; // [unixSec, value], oldest first
+}
+
+/** A point-in-time timeline marker (group change) from GET /api/history/series. */
+export interface HistoryEvent {
+  tracker_id: string;
+  at: number;     // unix sec
+  kind: string;   // "group_change"
+  detail: string; // e.g. "Seeker→PowerPool"
+}
+
+export interface HistorySeriesResponse {
+  range: { from: number; to: number; granularity: 'fine' | 'daily' };
+  series: HistorySeries[];
+  events: HistoryEvent[];
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────
 
 export interface AppSettings {
@@ -539,4 +571,4 @@ export interface ColPref {
 }
 
 export type SortDir = 'asc' | 'desc';
-export type ViewMode = 'grid' | 'table' | 'pathways';
+export type ViewMode = 'grid' | 'table' | 'pathways' | 'history';

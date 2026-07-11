@@ -49,6 +49,8 @@ static/fontawesome/
 # read by the release workflow for the GitHub Release notes).
 !/README.md
 !/CHANGELOG.md
+!/docs/API.md
+
 
 # OS noise
 .DS_Store

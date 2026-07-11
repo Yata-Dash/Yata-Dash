@@ -1,17 +1,17 @@
-// README screenshot harness. Run against a DEMO instance (tools/demoseed):
+// README / forum screenshot harness. Run against a DEMO instance (tools/demoseed):
 //
 //   go run ./tools/demoseed -config <demo.json> -db <demo.db>
 //   <start yata against those files>
-//   node tools/screenshots.mjs http://localhost:8423
+//   node tools/screenshots.mjs http://localhost:8425
 //
 // Captures docs/screenshots/*.png. Cosmetic-only tweaks are injected at
 // capture time (hide the "no API key" banners the credential-less demo
-// trackers produce, steady green status dots) — all data shown is the
-// synthetic demoseed data.
+// trackers produce, steady green status dots, synthetic qui bar values) —
+// all data shown is the synthetic demoseed data.
 import puppeteer from '../web/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.argv[2] || 'http://localhost:8423';
+const BASE = process.argv[2] || 'http://localhost:8425';
 const OUT = new URL('../docs/screenshots/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(OUT, { recursive: true });
 
@@ -31,13 +31,11 @@ const COSMETIC_CSS = `
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** The demo trackers carry no credentials (the app must never contact the
- *  real sites), so connection-state indicators would all read "down" — pure
- *  demo-environment noise. Neutralise them; every stat shown is synthetic. */
+ *  real sites), so connection-state indicators would all read "down", and the
+ *  qui bar (no reachable qui) would read "not reachable" — pure demo-
+ *  environment noise. Neutralise them; every stat shown is synthetic. */
 async function polish() {
   await page.evaluate(() => {
-    document.querySelectorAll('.qui-bar').forEach(e => {
-      if (e.textContent.includes('QUI not configured')) e.style.display = 'none';
-    });
     for (const pfx of ['g', 't']) {
       const n = document.getElementById(`${pfx}-agg-health-num`);
       const s = document.getElementById(`${pfx}-agg-health-sub`);
@@ -52,6 +50,35 @@ async function polish() {
         const strip = sp.parentElement;
         if (strip && strip.children.length <= 2) strip.style.display = 'none';
       }
+    });
+
+    // Synthetic qui (qBittorrent) bar — the demo has no reachable qui, so fill
+    // the real bar component with representative values for the capture.
+    document.querySelectorAll('.qui-inst-bar').forEach(bar => {
+      const set = (cls, val, color) => {
+        const el = bar.querySelector(cls);
+        if (!el) return;
+        el.textContent = val;
+        if (color) el.style.color = `var(--${color})`;
+      };
+      const label = bar.querySelector('.qui-bar-label');
+      if (label && label.lastChild) label.lastChild.textContent = 'seedbox';
+      const dot = bar.querySelector('.qi-dot');
+      if (dot) dot.className = 'sdot green qi-dot';
+      set('.qi-conn-label', 'connected');
+      set('.qi-dl-speed', '1.2 MiB/s');
+      set('.qi-ul-speed', '18.4 MiB/s');
+      set('.qi-free-space', '312.6 GiB');
+      set('.qi-global-ratio', '3.12', 'green');
+      const rIcon = bar.querySelector('.qi-ratio-icon');
+      if (rIcon) rIcon.style.fill = 'var(--green)';
+      set('.qi-total-size', '18.42 TiB');
+      set('.qi-total-torrents', '1,420');
+      set('.qi-seeding', '1,376');
+      set('.qi-downloading', '2');
+      set('.qi-checking', '0');
+      set('.qi-paused', '40');
+      set('.qi-error', '2');
     });
   });
 }
@@ -80,9 +107,13 @@ async function shot(name, opts = {}) {
   console.log('captured', name);
 }
 
-// 1. Dashboard — grid view (hero).
+// 1. Dashboard — grid view (hero). Keep the hero clean: hide the qui bar here
+//    (it's showcased on the Detail view + its own shot).
 await fresh('#/');
-await page.evaluate(() => window.setView('grid'));
+await page.evaluate(() => {
+  window.setView('grid');
+  document.getElementById('qui-bars-grid')?.style.setProperty('display', 'none');
+});
 await sleep(800);
 await shot('dashboard-grid');
 
@@ -103,9 +134,31 @@ console.log('captured card-targets');
 await page.evaluate(() => { document.querySelector('.topbar').style.display = ''; });
 await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
 
-// 3. Table view with one row expanded (sparklines + full stat panel).
+// 3. Detail (table) view — enter collapsed first for the qui-bar + private-mode
+//    crops, then expand a row for the full detail shot.
 await page.evaluate(() => window.setView('table'));
 await sleep(800);
+
+// 3a. qui bar close-up — top strip (topbar + aggregate cards + qui bar).
+await polish();
+await page.screenshot({ path: `${OUT}qui-bar.png`, clip: { x: 0, y: 0, width: 1440, height: 336 } });
+console.log('captured qui-bar');
+
+// 3b. Private mode — usernames blurred. Crop the top-left of the detail table.
+await page.evaluate(() => document.body.classList.add('private-mode'));
+await sleep(300);
+const tbl = await page.$('#view-table table');
+if (tbl) {
+  const bb = await tbl.boundingBox();
+  await page.screenshot({
+    path: `${OUT}private-mode.png`,
+    clip: { x: Math.max(0, bb.x), y: bb.y, width: Math.min(720, bb.width), height: Math.min(600, bb.height) },
+  });
+  console.log('captured private-mode');
+}
+await page.evaluate(() => document.body.classList.remove('private-mode'));
+
+// 3c. Full detail shot with one row expanded (sparklines + full stat panel).
 await page.evaluate(() => {
   const row = document.querySelector('tr[id^="trow-"], tbody tr');
   row?.click();
@@ -146,6 +199,35 @@ for (const [tab, name] of [
   await sleep(tab === 'alerts' ? 1500 : 1000);
   await shot(name);
 }
+
+// 9–10. History view (flag-gated — set the dev flag + preset UI state in
+// localStorage, then full-load so boot reads them). Captured for forums /
+// future use; the feature still ships dormant.
+async function historyShot(name, ui) {
+  await page.evaluate(u => {
+    localStorage.setItem('yata.features.history', '1');
+    localStorage.setItem('u3d-view', 'history');
+    localStorage.setItem('yata.history.ui', JSON.stringify(u));
+  }, ui);
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2' });
+  await page.addStyleTag({ content: COSMETIC_CSS });
+  await sleep(1800); // history fetch + chart render
+  await polish();
+  const el = await page.$('#view-history');
+  if (el) { await el.screenshot({ path: `${OUT}${name}.png` }); console.log('captured', name); }
+}
+
+// history.png — multi-tracker overlay (the headline read).
+await historyShot('history', {
+  metric: 'uploaded', range: '365d', trackers: null,
+  mode: 'value', portfolio: false, projection: false,
+});
+// history-targets.png — single tracker with the projection tail crossing its
+// target line (seedpool seed size approaching the 1 TiB target).
+await historyShot('history-targets', {
+  metric: 'seed_size', range: '90d', trackers: ['demoseedpool0001'],
+  mode: 'value', portfolio: false, projection: true,
+});
 
 await browser.close();
 console.log('done →', OUT);

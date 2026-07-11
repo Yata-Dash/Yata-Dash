@@ -35,6 +35,12 @@ Load targets straight from a rank's real requirements ("Load from Group"), or se
 
 Requirements and estimates are guidance for planning, not guarantees — always check the tracker's own promotion rules.
 
+### History — see your growth
+
+A dedicated view over the months of stats Yata records for every tracker. Pick a metric, overlay one or many trackers in their own colours, and choose a range from 48 hours to all-time. Hover for a crosshair readout, or click to pin two points for an exact delta and per-day rate. Switch between cumulative **Value** and **Rate/day**, add a **Σ Portfolio** line summing your trackers, or turn on a dashed **projection** tail. With a single tracker selected, its targets (yours or its group's) are drawn as reference lines — so you can watch your trajectory close on the goal:
+
+![History](docs/screenshots/history.png)
+
 ### Pathways — where can I go from here?
 
 Estimated invite routes from the trackers you have to the one you want, powered by the community [trackerpathways](https://github.com/handokota/trackerpathways) dataset (MIT). The first hop is evaluated against your live stats — including the full class-requirement breakdown — and later hops use community estimates. Tracker-specific invite rules that the community data misses (e.g. MyAnonamouse's separate invite-forum requirements) are layered in from the tracker's definition, clearly marked:
@@ -81,6 +87,7 @@ Tracker rank icons use the same Font Awesome classes the tracker sites themselve
 - **Backups & portability** — one-click config export/import (with automatic pre-import backup), opt-in scheduled backups, tracker history CSV export
 - **Rolling log viewer** — live logs in Settings for troubleshooting and bug reports; query strings never reach the log
 - **qui integration** — live qBittorrent stat bars via [qui](https://github.com/autobrr/qui)
+- **Read-only API tokens** — let homelab dashboards (Homepage, Homarr), Grafana, or scripts read your stats without your login; tokens can't change anything or see credentials. See the [API reference](docs/API.md)
 - **Prowlarr / Jackett import** — pull your indexer list straight from either manager, including stored API keys (both) and session cookies (Jackett), so trackers arrive ready to fetch and scrape
 - **Demo tracker** — explore the whole UI safely with mock data, no credentials needed
 

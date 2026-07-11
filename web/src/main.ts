@@ -21,6 +21,8 @@ import { errLabel } from './utils/format';
 import * as trackersTab from './components/trackersTab';
 import * as logsTab from './components/logs';
 import * as alertsTab from './components/alertsTab';
+import * as tokensTab from './components/tokensTab';
+import { FEATURES } from './config';
 import { initPathways } from './views/pathways';
 import type { ColPref, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
 
@@ -55,10 +57,14 @@ async function boot() {
   if (!(await ensureAuthenticated())) return;
   await loadSettings();
   await loadTrackers();
+  initHistoryFeature();       // flag-gated tab; no-op while FEATURES.history is off
   void initPathwaysFeature(); // independent of stats — don't block the refresh
   await refreshAllStats();
   await loadScrapeStatus();
   await Promise.all([loadHistory(), loadTrackerGroups()]);
+  // Tracker groups drive the History view's target reference lines; if the app
+  // booted straight into that view, redraw now that the groups have arrived.
+  if (FEATURES.history) void import('./views/history').then(m => m.redrawHistory());
   await loadQUIInstances();
   renderQuiBars(state.appSettings, state.quiInstancesMeta);
   await refreshQuiStats(state.appSettings);
@@ -506,19 +512,28 @@ function toggleRow(id: string) {
 
 // ── View switching ────────────────────────────────────────────────────────
 function applyView(v: ViewMode, rerender: boolean) {
+  // A persisted 'history' view with the flag off is unreachable — normalize.
+  if (v === 'history' && !FEATURES.history) v = 'grid';
   const gridDiv  = document.getElementById('view-grid');
   const tableDiv = document.getElementById('view-table');
   const pwDiv    = document.getElementById('view-pathways');
+  const histDiv  = document.getElementById('view-history');
   const btnGrid  = document.getElementById('btn-grid-view');
   const btnTable = document.getElementById('btn-table-view');
   const btnPw    = document.getElementById('btn-pathways-view');
+  const btnHist  = document.getElementById('btn-history-view');
   const onSettings = isSettingsRoute();
   if (gridDiv)  gridDiv.style.display  = (!onSettings && v === 'grid')  ? 'block' : 'none';
   if (tableDiv) tableDiv.style.display = (!onSettings && v === 'table') ? 'block' : 'none';
   if (pwDiv)    pwDiv.style.display    = (!onSettings && v === 'pathways') ? 'block' : 'none';
+  if (histDiv)  histDiv.style.display  = (!onSettings && v === 'history') ? 'block' : 'none';
   btnGrid?.classList.toggle('active',  v === 'grid');
   btnTable?.classList.toggle('active', v === 'table');
   btnPw?.classList.toggle('active',    v === 'pathways');
+  btnHist?.classList.toggle('active',  v === 'history');
+  if (!onSettings && v === 'history') {
+    import('./views/history').then(m => m.renderHistory(state.trackers));
+  }
   if (rerender) { renderGridFull(); renderTable(); renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings); }
 }
 (window as any).setView = (v: ViewMode) => {
@@ -527,6 +542,17 @@ function applyView(v: ViewMode, rerender: boolean) {
   if (isSettingsRoute()) location.hash = '#/'; // leave settings, then show the view
   applyView(v, true);
 };
+
+/** History: flag-gated (HISTORY_VIEW_PLAN.md §7). With the flag off the tab
+ *  never renders and the view is unreachable — the app behaves as before. */
+function initHistoryFeature() {
+  if (!FEATURES.history) return;
+  const btn = document.getElementById('btn-history-view');
+  if (btn) btn.style.display = '';
+  // The boot-time applyView ran before trackers loaded; a session landing
+  // straight on History would render empty. Re-enter now that they exist.
+  if (state.currentView === 'history' && !isSettingsRoute()) applyView('history', false);
+}
 
 /** Pathways: show the view button only when the backend has route data. */
 async function initPathwaysFeature() {
@@ -571,8 +597,14 @@ function switchSettingsTab(tab: string) {
   else logsTab.stopLogsAuto();
   // Load the Alerts editor the first time its tab is opened.
   if (tab === 'alerts') void alertsTab.loadAlerts({ toast });
+  // The Integrations tab also hosts the API-token list — refresh it on open.
+  if (tab === 'qui') void tokensTab.loadApiTokens();
 }
 (window as any).switchSettingsTab = switchSettingsTab;
+(window as any).createApiTokenFromSettings = () => { void tokensTab.createApiToken(); };
+(window as any).revokeApiToken     = (id: string, btn?: HTMLButtonElement) => { void tokensTab.revokeApiToken(id, btn); };
+(window as any).copyNewApiToken    = (btn: HTMLButtonElement) => { void tokensTab.copyNewApiToken(btn); };
+(window as any).dismissNewApiToken = tokensTab.dismissNewApiToken;
 (window as any).exportAlerts     = () => alertsTab.exportAlerts();
 (window as any).importAlertsFile = (input: HTMLInputElement) => { void alertsTab.importAlertsFile(input); };
 (window as any).toggleLogLevel = (lvl: string) => logsTab.toggleLogLevel(lvl);
@@ -840,6 +872,7 @@ modalsReady.then(m => {
   (window as any).confirmDeletePopup   = () => m.confirmDeletePopup(state.trackers, state.statsCache, state.expandedRows, { loadTrackers, toast });
   (window as any).toggleEnabled        = m.toggleEnabled;
   (window as any).onAddTrackerSelect   = m.onAddTrackerSelect;
+  (window as any).onAddTrackerFilter   = m.onAddTrackerFilter;
   (window as any).onAddTypeSelect      = m.onAddTypeSelect;
   (window as any).modalToggleApiOnly       = m.modalToggleApiOnly;
   (window as any).modalValidateInterval    = m.modalValidateInterval;

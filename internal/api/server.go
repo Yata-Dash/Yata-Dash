@@ -56,10 +56,20 @@ func NewRouter(d *Deps) http.Handler {
 		})
 		registerAuth(api, d)
 
+		// Read-only integration surface — a login session OR a Yata API token
+		// (Settings → Integrations) works here. Kept to endpoints that expose
+		// no credentials and trigger no tracker traffic; see docs/API.md.
+		api.Group(func(ro chi.Router) {
+			ro.Use(requireAuthOrToken(d))
+			ro.Get("/summary", getSummary(d))
+			ro.Get("/history/series", getHistorySeries(d))
+		})
+
 		// Everything else requires a valid session once an account is
 		// configured (basic auth to protect open ports).
 		api.Group(func(pr chi.Router) {
 			pr.Use(requireAuth(d))
+			registerTokens(pr, d)
 			registerTrackers(pr, d)
 			registerStats(pr, d)
 			registerScrape(pr, d)

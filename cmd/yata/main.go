@@ -131,6 +131,8 @@ func main() {
 			}
 			_ = db.PruneHistory(time.Now().UTC().Add(-14 * 24 * time.Hour))
 			_ = db.PruneDaily(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
+			// Events (group-change timeline) kept in step with the daily window.
+			_ = db.PruneEvents(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
 			_ = db.PruneScrapeLog(time.Now().UTC().Add(-30 * 24 * time.Hour))
 			_ = db.PruneSessions(time.Now())
 			time.Sleep(6 * time.Hour)

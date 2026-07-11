@@ -78,11 +78,16 @@ async function ensureDefsLoaded(): Promise<DefsPayload> {
   return _defsCache ?? { types: [], trackers: [], issues: [] };
 }
 
-function populateAddSelect(defs: DefsPayload) {
+function populateAddSelect(defs: DefsPayload, filter = '') {
   const sel = document.getElementById('modal-add-select') as HTMLSelectElement;
   if (!sel) return;
+  const q = filter.trim().toLowerCase();
+  const match = (td: DefInfo) =>
+    !q || td.name.toLowerCase().includes(q) || (td.abbr ?? '').toLowerCase().includes(q) || td.key.toLowerCase().includes(q);
+
   const byType = new Map<string, DefInfo[]>();
   for (const td of defs.trackers) {
+    if (!match(td)) continue;
     if (!byType.has(td.type)) byType.set(td.type, []);
     byType.get(td.type)!.push(td);
   }
@@ -91,7 +96,8 @@ function populateAddSelect(defs: DefsPayload) {
     (typeLabels.get(a) ?? a).localeCompare(typeLabels.get(b) ?? b)
   );
 
-  let html = `<option value="">— Choose a tracker —</option>`;
+  const matched = defs.trackers.filter(match).length;
+  let html = `<option value="">${q ? `— ${matched} match${matched === 1 ? '' : 'es'} —` : '— Choose a tracker —'}</option>`;
   html += `<optgroup label="Manual"><option value="__manual__">Add Manually…</option></optgroup>`;
   for (const typeKey of sortedTypes) {
     const label    = typeLabels.get(typeKey) ?? typeKey;
@@ -104,6 +110,13 @@ function populateAddSelect(defs: DefsPayload) {
     html += `</optgroup>`;
   }
   sel.innerHTML = html;
+}
+
+/** Live-filter the tracker picker as the user types in the search box. */
+export function onAddTrackerFilter() {
+  if (!_defsCache) return;
+  const q = (document.getElementById('modal-add-search') as HTMLInputElement | null)?.value ?? '';
+  populateAddSelect(_defsCache, q);
 }
 
 function populateTypeSelect(defs: DefsPayload) {
@@ -379,6 +392,9 @@ export async function openAddModal(deps: ModalDeps) {
   hideFormSections();
 
   applyRequiredFieldsUI([]);
+
+  const searchEl = document.getElementById('modal-add-search') as HTMLInputElement | null;
+  if (searchEl) searchEl.value = ''; // fresh, unfiltered list each open
 
   const defs = await ensureDefsLoaded();
   populateAddSelect(defs);

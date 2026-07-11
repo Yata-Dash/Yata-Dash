@@ -139,6 +139,13 @@ func getHistorySeries(d *Deps) http.HandlerFunc {
 			series = append(series, byKey[k])
 		}
 
+		// Point-in-time events (group changes) for the same trackers/window —
+		// the History view draws these as timeline markers.
+		events, _ := d.DB.EventsSince(trackers, since)
+		if events == nil {
+			events = []store.TrackerEvent{}
+		}
+
 		jsonOK(w, map[string]any{
 			"range": seriesRange{
 				From:        since.Unix(),
@@ -146,6 +153,7 @@ func getHistorySeries(d *Deps) http.HandlerFunc {
 				Granularity: gran,
 			},
 			"series": series,
+			"events": events,
 		})
 	}
 }
