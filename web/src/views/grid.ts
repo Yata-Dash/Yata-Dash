@@ -424,8 +424,35 @@ function targetRowsFor(
     else miss('Snatched', targets['snatched'], 'amber');
   }
 
+  // Any other key targets a merged stat field directly (set from the manual
+  // target builder — e.g. fl_tokens, upload_snatches, HUNO's *_seeds).
+  // Sizes compare as sizes when both parse; everything else numerically.
+  for (const [key, tgt] of Object.entries(targets)) {
+    if (KNOWN_TARGET_KEYS.has(key)) continue;
+    const label = fieldLabel(key);
+    const curStr = strOf(stats, key);
+    let curV = parseSize(curStr), tgtV = parseSize(tgt);
+    if (curV === null || tgtV === null) {
+      const c = parseFloat(curStr.replace(/,/g, ''));
+      const g = parseFloat(tgt.replace(/,/g, ''));
+      curV = isNaN(c) ? null : c;
+      tgtV = isNaN(g) ? null : g;
+    }
+    if (curStr && curV !== null && tgtV !== null && tgtV > 0) {
+      push(label, curStr, tgt, (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]) });
+    } else {
+      miss(label, tgt, 'teal');
+    }
+  }
+
   return rows;
 }
+
+/** Target keys with dedicated rendering above — everything else is generic. */
+const KNOWN_TARGET_KEYS = new Set([
+  'uploaded', 'downloaded', 'ratio', 'seed_size', 'total_uploads',
+  'days', 'avg_seed', 'bonus_points', 'adoptions', 'snatched',
+]);
 
 /** Amber ETA chip for a target row — gated by show_target_etas. Account age is
  *  exact ("in X"); rate-projected stats use "≈ X"; approximate ones add a title. */

@@ -120,11 +120,17 @@ func main() {
 	}
 
 	// Housekeeping: fine-grained history (sparklines) kept 14 days; daily
-	// rollups (trend rates) kept 35 days; scrape log 30 days.
+	// rollups (long-range growth charts + trend rates) kept per the
+	// history_daily_retention_days setting (default ~2 years, re-read each
+	// pass so a settings change applies without a restart); scrape log 30 days.
 	go func() {
 		for {
+			dailyDays := cfg.Settings().HistoryDailyRetentionDays
+			if dailyDays <= 0 {
+				dailyDays = 730
+			}
 			_ = db.PruneHistory(time.Now().UTC().Add(-14 * 24 * time.Hour))
-			_ = db.PruneDaily(time.Now().UTC().Add(-35 * 24 * time.Hour))
+			_ = db.PruneDaily(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
 			_ = db.PruneScrapeLog(time.Now().UTC().Add(-30 * 24 * time.Hour))
 			_ = db.PruneSessions(time.Now())
 			time.Sleep(6 * time.Hour)

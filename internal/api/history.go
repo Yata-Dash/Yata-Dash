@@ -12,6 +12,9 @@ import (
 
 func registerHistory(r chi.Router, d *Deps) {
 	r.Get("/history", getHistory(d))
+	// History view data feed (additive — see history_series.go). Inert until
+	// the flag-gated History view ships; harmless to have mounted.
+	r.Get("/history/series", getHistorySeries(d))
 }
 
 // GET /api/history?hours=48 — numeric history points for all trackers,

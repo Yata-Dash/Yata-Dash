@@ -12,6 +12,13 @@
      and disables the free CDN above, so Pro-only icons (lobster, crab, …) render. -->
 <link rel="stylesheet" href="/static/dashboard.css"/>
 <link rel="icon" type="image/svg+xml" href="/static/logo.svg"/>
+<!-- PWA: lets browsers install Yata as an app (mobile home screen / desktop).
+     No service worker — the app is server-rendered live data; offline caching
+     would only show stale stats. -->
+<link rel="manifest" href="/static/manifest.json"/>
+<meta name="theme-color" content="#0d0f14"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Yata"/>
 </head>
 <body>
 
@@ -388,7 +395,9 @@
             <div class="form-group" style="margin-bottom:4px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Group name display</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px">How your user group appears in the table and expanded detail rows</div>
-              <div style="font-size:11px;color:var(--amber);margin-bottom:10px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons won't display unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
+              <div style="font-size:11px;color:var(--amber);margin-bottom:4px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons won't display unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
+              <!-- Live icon-set health (filled by renderIconSetStatus after the font probe) -->
+              <div id="fa-status" style="display:none;font-size:11px;margin-bottom:10px;line-height:1.5"></div>
               <div style="display:flex;flex-direction:column;gap:6px" id="s-group-name-style-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-group-name-style" value="plain" style="accent-color:var(--accent)">
@@ -806,77 +815,30 @@
                   </div>
                 </div>
 
-                <!-- ══ Targets section ══════════════════════════════════════ -->
+                <!-- ══ Targets section (edit mode only) ═════════════════════
+                     Group selected → a read-only chip summary of the group's
+                     requirements. "— manual —" → the dynamic target builder
+                     (pick any stat this tracker reports, one row per target). -->
                 <div id="modal-targets-section">
                   <div class="modal-divider"><span class="modal-divider-label">Targets <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></span><div class="modal-divider-line"></div></div>
                   <span class="form-hint" style="margin-top:-6px">Goals toward your next user group</span>
                   <div class="form-row" id="modal-target-group-row" style="display:none">
                     <div class="form-group" style="flex:1">
-                      <label class="form-label">Load from Group</label>
-                      <div style="display:flex;gap:8px;align-items:center">
-                        <select class="form-input" id="modal-target-group-select" style="flex:1">
-                          <option value="">&#8212; manual &#8212;</option>
-                        </select>
-                        <button type="button" class="btn btn-ghost btn-sm" id="modal-target-group-load" onclick="loadTargetsFromGroup()" style="white-space:nowrap">Load</button>
-                      </div>
-                      <span class="form-hint" id="modal-target-group-hint" style="display:none;max-width:100%"></span>
+                      <label class="form-label">Target Group</label>
+                      <select class="form-input" id="modal-target-group-select">
+                        <option value="">&#8212; manual &#8212;</option>
+                      </select>
                     </div>
                   </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Upload Target</label>
-                      <input class="form-input" type="text" id="modal-target-uploaded" placeholder="e.g. 500 GiB"/>
+                  <div id="modal-target-group-hint" style="display:none"></div>
+                  <div id="modal-target-builder" style="display:none">
+                    <div id="modal-target-rows"></div>
+                    <div class="target-add-row">
+                      <select class="form-input" id="modal-target-add-select" style="max-width:260px">
+                        <option value="">&#8212; choose a stat &#8212;</option>
+                      </select>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="modalAddTargetRow()" style="white-space:nowrap">+ Add target</button>
                     </div>
-                    <div class="form-group">
-                      <label class="form-label">Download Target</label>
-                      <input class="form-input" type="text" id="modal-target-downloaded" placeholder="e.g. 100 GiB"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Ratio Target</label>
-                      <input class="form-input" type="number" id="modal-target-ratio" placeholder="e.g. 5.00" step="0.01" min="0"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Total Uploads Target</label>
-                      <input class="form-input" type="number" id="modal-target-total-uploads" placeholder="e.g. 50" min="0"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Seed Size Target</label>
-                      <input class="form-input" type="text" id="modal-target-seed-size" placeholder="e.g. 5 TiB"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Avg Seed Time Target</label>
-                      <input class="form-input" type="text" id="modal-target-avg-seed" placeholder="e.g. 3M or 90D"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Account Age Target</label>
-                      <input class="form-input" type="text" id="modal-target-days" placeholder="e.g. 1Y 6M or 365"/>
-                      <span class="form-hint">Y M W D format or plain days. Requires Join Date.</span>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Bonus Points Target</label>
-                      <input class="form-input" type="number" id="modal-target-bonus-points" placeholder="e.g. 25000" min="0"/>
-                    </div>
-                  </div>
-                  <div class="form-row" id="modal-target-snatched-row" style="display:none">
-                    <div class="form-group">
-                      <label class="form-label">Snatched Target <span class="opt">(Gazelle)</span></label>
-                      <input class="form-input" type="number" id="modal-target-snatched" placeholder="e.g. 100" min="0"/>
-                    </div>
-                    <div></div>
-                  </div>
-                  <div class="form-row" id="modal-target-adoptions-row" style="display:none">
-                    <div class="form-group">
-                      <label class="form-label">Adoptions Target <span class="opt">(Gazelle)</span></label>
-                      <input class="form-input" type="number" id="modal-target-adoptions" placeholder="e.g. 10" min="0"/>
-                      <span class="form-hint">Completed adoptions (fostered torrents don't count until converted).</span>
-                    </div>
-                    <div></div>
                   </div>
                 </div>
 

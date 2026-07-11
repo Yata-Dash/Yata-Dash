@@ -60,12 +60,6 @@ export interface Tracker {
 /** Sentinel value meaning "credential unchanged" in PUT/POST payloads. */
 export const MASKED_KEY = '••••••••';
 
-/** Keys of the Tracker.targets map. */
-export const TARGET_KEYS = [
-  'uploaded', 'downloaded', 'ratio', 'days', 'seed_size',
-  'total_uploads', 'avg_seed', 'bonus_points', 'snatched', 'adoptions',
-] as const;
-
 /** Create/update payload for POST /api/trackers and PUT /api/trackers/{id}. */
 export interface TrackerPayload {
   name?: string;
@@ -357,6 +351,9 @@ export interface DefInfo {
   min_interval_minutes?: number;
   max_scrapes_per_day?: number;
   api_key_hint?: string;
+  /** The def's custom API authenticates with the session cookie — keep the
+   *  cookie field visible even when scraping is off. */
+  needs_session_cookie?: boolean;
   approval_status?: string; // approved | informal | pending | unknown
   approval_note?: string;
   /** Type's required config fields minus any the def's API provides. */

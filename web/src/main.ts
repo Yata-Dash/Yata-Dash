@@ -178,12 +178,26 @@ async function loadSelfHostedIcons(): Promise<void> {
     selfHosted = res.ok;
   } catch { /* keep the free set */ }
 
+  // Runs after the fallback engine's font probe: writes the icon-set status
+  // line in Settings → Display, and — when even the SOLID face of a
+  // self-hosted kit is dead (fundamentally broken install) — re-enables the
+  // free CDN so the fallback stars themselves can render.
+  const finish = (dead: { label: string; prefix: string }[]) => {
+    renderIconSetStatus(selfHosted, dead);
+    // Only when the DEFAULT solid style itself is dead is the kit broken
+    // enough that even fallback stars can't render — rescue with the free CDN.
+    if (selfHosted && dead.some(d => d.prefix === 'fas')) {
+      const cdn = document.querySelector('link[href*="font-awesome"]') as HTMLLinkElement | null;
+      if (cdn) cdn.disabled = false;
+    }
+  };
+
   if (!selfHosted) {
     // Free set only: Pro-only icon classes in tracker defs have no CSS rule
     // here — start the fallback engine once every stylesheet has loaded so
     // missing glyphs get swapped for a free icon instead of blank space.
-    if (document.readyState === 'complete') startIconFallback();
-    else window.addEventListener('load', () => startIconFallback(), { once: true });
+    if (document.readyState === 'complete') void startIconFallback().then(finish);
+    else window.addEventListener('load', () => void startIconFallback().then(finish), { once: true });
     return;
   }
 
@@ -194,13 +208,34 @@ async function loadSelfHostedIcons(): Promise<void> {
   // Even a Pro set can miss icons (older kits) — run the fallback once the
   // self-hosted CSS has actually parsed, never before (a premature sweep
   // would "fix" Pro icons whose rules simply hadn't arrived yet).
-  link.onload = () => startIconFallback();
-  link.onerror = () => startIconFallback();
+  link.onload = () => void startIconFallback().then(finish);
+  link.onerror = () => void startIconFallback().then(finish);
   document.head.appendChild(link);
   // Disable the free CDN — the self-hosted set is a superset, so loading both
   // is wasteful and could create font-family ambiguity.
   const cdn = document.querySelector('link[href*="font-awesome"]') as HTMLLinkElement | null;
   if (cdn) cdn.disabled = true;
+}
+
+/** Icon-set health line under the Font Awesome hint in Settings → Display. */
+function renderIconSetStatus(selfHosted: boolean, dead: { label: string }[]) {
+  const el = document.getElementById('fa-status');
+  if (!el) return;
+  el.style.display = '';
+  if (!selfHosted) {
+    el.innerHTML = `<i class="fas fa-circle-info" style="margin-right:5px"></i>Using the bundled free icon set — Pro-only tracker icons show a generic fallback.`;
+    el.style.color = 'var(--text3)';
+  } else if (!dead.length) {
+    el.innerHTML = `<i class="fas fa-circle-check" style="margin-right:5px"></i>Self-hosted Font Awesome loaded — all icon styles available.`;
+    el.style.color = 'var(--green)';
+  } else {
+    el.innerHTML = `<i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>` +
+      `Self-hosted Font Awesome found, but these styles failed to load: <strong>${
+        dead.map(d => d.label).join(', ')}</strong>. ` +
+      `Copy the missing <code>.woff2</code> files from your Font Awesome download into ` +
+      `<code>static/fontawesome/webfonts/</code> (next to <code>css/</code>) — affected icons show a fallback star until then.`;
+    el.style.color = 'var(--amber)';
+  }
 }
 
 function applyPrivateMode(on: boolean) {
@@ -798,7 +833,8 @@ modalsReady.then(m => {
   (window as any).resetColPrefs   = () => { colPrefs = resetColPrefs(); openColCustomizer(colPrefs); };
   (window as any).saveTracker     = () => m.saveTracker({ loadTrackers, refreshSingle, toast });
   (window as any).modalTestTracker = () => { void m.modalTestTracker(); };
-  (window as any).loadTargetsFromGroup = m.loadTargetsFromGroup;
+  (window as any).modalAddTargetRow    = m.modalAddTargetRow;
+  (window as any).modalRemoveTargetRow = m.modalRemoveTargetRow;
   (window as any).showDeleteConfirm    = m.showDeleteConfirm;
   (window as any).closeDeletePopup     = m.closeDeletePopup;
   (window as any).confirmDeletePopup   = () => m.confirmDeletePopup(state.trackers, state.statsCache, state.expandedRows, { loadTrackers, toast });

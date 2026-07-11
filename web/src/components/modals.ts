@@ -4,15 +4,15 @@
 // and exported function names so existing wiring keeps working.
 import type {
   AppSettings, DefInfo, DefsPayload, GroupDef, GroupRequirements, OptOutEntry, StatsMap,
-  Tracker, TrackerPayload, UpdateStatus,
+  Tracker, TrackerPayload, TrackerStatsResponse, UpdateStatus,
 } from '../types';
-import { MASKED_KEY, TARGET_KEYS } from '../types';
+import { MASKED_KEY } from '../types';
 import * as api from '../api';
 import { approvalIcon, approvalWarns } from '../utils/approval';
 import { eventGlobeSvg } from '../utils/icons';
 import { esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
 import { parseAgeDays, parseSeedTime } from '../utils/parse';
-import { renderGroupBadge, renderUsername } from '../utils/group';
+import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { findOptOut, optOutMessage } from '../utils/optout';
 import { renderTestDetail } from './trackerTest';
 import type { ToastType } from './toast';
@@ -284,6 +284,10 @@ function applyPredefinedDef(def: DefInfo) {
   // Def-level required fields beat the type default showFormForType applied —
   // a field the def's API provides (e.g. HUNO's join_date) isn't demanded.
   applyRequiredFieldsUI(def.required_fields ?? typeRequiredFields(def.type));
+  // API-only def → the session cookie does nothing (no profile scraping),
+  // unless the def's API itself authenticates with it (auth_method
+  // session_cookie) — then the field IS the credential and stays.
+  if (def.scrape_disabled && !def.needs_session_cookie) hide('modal-session-cookie-group');
   setEl('modal-save-btn', `Add ${def.name}`);
 }
 
@@ -291,6 +295,9 @@ function showFormForType(typeKey: string) {
   show('modal-credentials-section');
   hide('modal-mock-group');
   hide('modal-scrape-section');
+  // Add mode keeps to the basics — targets are set later from the dashboard
+  // pencil or the edit screen (this function only runs in the add flows).
+  hide('modal-targets-section');
 
   // Join date applies to every real tracker; only demo trackers hide it.
   if (typeKey === 'test') hide('modal-joindate-group'); else show('modal-joindate-group');
@@ -299,7 +306,6 @@ function showFormForType(typeKey: string) {
     hide('modal-username-group');
     hide('modal-key-group');
     hide('modal-session-cookie-group');
-    hide('modal-targets-section');
     show('modal-mock-group');
     populateScenarioSelect();
   } else if (typeKey === 'gazelle') {
@@ -307,16 +313,10 @@ function showFormForType(typeKey: string) {
     show('modal-username-group');
     hide('modal-key-group');
     hide('modal-session-cookie-group');
-    show('modal-targets-section');
-    show('modal-target-snatched-row');
-    show('modal-target-adoptions-row');
   } else if (typeKey === 'custom') {
     show('modal-username-group');
     show('modal-key-group');
     show('modal-session-cookie-group');
-    show('modal-targets-section');
-    hide('modal-target-snatched-row');
-    hide('modal-target-adoptions-row');
     resetCustomCredentialLabels();
   } else {
     // unit3d + unknown defaults — full credential set
@@ -324,9 +324,6 @@ function showFormForType(typeKey: string) {
     show('modal-username-group');
     show('modal-key-group');
     show('modal-session-cookie-group');
-    show('modal-targets-section');
-    hide('modal-target-snatched-row');
-    hide('modal-target-adoptions-row');
   }
 
   // Mark inputs required by this type (e.g. gazelle → username)
@@ -336,8 +333,6 @@ function showFormForType(typeKey: string) {
 function hideFormSections() {
   hide('modal-credentials-section');
   hide('modal-targets-section');
-  hide('modal-target-snatched-row');
-  hide('modal-target-adoptions-row');
   hide('modal-mock-group');
   hide('modal-scrape-section');
 }
@@ -398,20 +393,180 @@ export async function openAddModal(deps: ModalDeps) {
 // Open Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** IDs of all target input fields that should be locked when a group is active */
-const TARGET_FIELD_IDS = [
-  'modal-target-uploaded', 'modal-target-downloaded', 'modal-target-ratio',
-  'modal-target-total-uploads', 'modal-target-seed-size', 'modal-target-days',
-  'modal-target-avg-seed', 'modal-target-bonus-points', 'modal-target-adoptions',
+// ─────────────────────────────────────────────────────────────────────────────
+// Target builder (edit mode)
+//
+// Selecting a target group shows a read-only chip summary of that group's
+// requirements (the values are loaded from the def on save — no inputs to
+// keep in sync). "— manual —" shows the builder: one row per target, plus a
+// picker offering every stat this tracker actually reports.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface TargetSpec {
+  key: string;         // targets-map key
+  label: string;
+  placeholder: string;
+  hint?: string;
+}
+
+/** The classic targets with friendly labels/formats. Availability is still
+ *  gated on the tracker reporting the backing stat. */
+const CORE_TARGET_SPECS: TargetSpec[] = [
+  { key: 'uploaded',      label: 'Uploaded',      placeholder: 'e.g. 500 GiB' },
+  { key: 'downloaded',    label: 'Downloaded',    placeholder: 'e.g. 100 GiB' },
+  { key: 'ratio',         label: 'Ratio',         placeholder: 'e.g. 5.00' },
+  { key: 'seed_size',     label: 'Seed Size',     placeholder: 'e.g. 5 TiB' },
+  { key: 'total_uploads', label: 'Total Uploads', placeholder: 'e.g. 50' },
+  { key: 'avg_seed',      label: 'Avg Seed Time', placeholder: 'e.g. 3M or 90D' },
+  { key: 'days',          label: 'Account Age',   placeholder: 'e.g. 1Y 6M or 365', hint: 'Y M W D or plain days — needs a join date' },
+  { key: 'bonus_points',  label: 'Bonus Points',  placeholder: 'e.g. 25000' },
+  { key: 'snatched',      label: 'Snatched',      placeholder: 'e.g. 100' },
+  { key: 'adoptions',     label: 'Adoptions',     placeholder: 'e.g. 10' },
 ];
 
-function setTargetFieldsLocked(locked: boolean) {
-  for (const id of TARGET_FIELD_IDS) {
-    const el = document.getElementById(id) as HTMLInputElement | null;
-    if (!el) continue;
-    el.disabled = locked;
-    el.style.opacity = locked ? '0.5' : '';
-    el.style.cursor  = locked ? 'not-allowed' : '';
+/** Merged stat field that backs each core target key. */
+const TARGET_BACKING_FIELD: Record<string, string> = {
+  uploaded: 'uploaded', downloaded: 'downloaded', ratio: 'ratio',
+  seed_size: 'seed_size', total_uploads: 'uploads_approved',
+  avg_seed: 'avg_seed_time', days: 'join_date', bonus_points: 'bonus_points',
+  snatched: 'snatched', adoptions: 'adoptions',
+};
+
+/** Fields that never make sense as numeric targets (identity/meta/duration
+ *  strings the generic compare can't handle). */
+const TARGET_EXCLUDED_FIELDS = new Set([
+  'username', 'group', 'join_date', 'user_id', 'active_event',
+  'active_event_ends_at', 'unread_mail', 'unread_notifications',
+  'total_seedtime',
+]);
+
+let _targetSpecs: TargetSpec[] = [];             // available for the open tracker
+let _editTargets: Record<string, string> = {};   // targets when the modal opened
+
+function targetSpecFor(key: string): TargetSpec {
+  return _targetSpecs.find(s => s.key === key)
+    ?? CORE_TARGET_SPECS.find(s => s.key === key)
+    ?? { key, label: fieldLabel(key), placeholder: 'e.g. 100' };
+}
+
+/** Stats this tracker can target: the core set (where the backing stat is
+ *  reported — or all of it before any stats exist) plus every numeric
+ *  tracker-specific extra (fl_tokens, upload_snatches, HUNO's *_seeds, …). */
+function buildAvailableTargetSpecs(t: Tracker, resp: TrackerStatsResponse | undefined): TargetSpec[] {
+  const fields = resp?.fields ?? {};
+  const noStats = Object.keys(fields).length === 0;
+  const have = (f: string) =>
+    fields[f]?.value != null || (f === 'join_date' && !!t.join_date);
+
+  const out: TargetSpec[] = [];
+  for (const spec of CORE_TARGET_SPECS) {
+    if (noStats || have(TARGET_BACKING_FIELD[spec.key])) out.push(spec);
+  }
+  const coreBacked = new Set(Object.values(TARGET_BACKING_FIELD));
+  for (const key of Object.keys(fields).sort()) {
+    if (coreBacked.has(key) || TARGET_EXCLUDED_FIELDS.has(key)) continue;
+    const n = parseFloat(String(fields[key]?.value ?? '').replace(/,/g, ''));
+    if (isNaN(n)) continue;
+    out.push({ key, label: fieldLabel(key), placeholder: 'e.g. 100' });
+  }
+  return out;
+}
+
+/** Stored value → what the input shows (days/avg_seed are stored normalized). */
+function targetDisplayValue(key: string, stored: string): string {
+  if (key === 'days') {
+    const d = parseAgeDays(stored);
+    return d != null ? fmtAgeDays(d) : stored;
+  }
+  if (key === 'avg_seed') {
+    const s = parseSeedTime(stored);
+    return s !== null ? fmtSeedTime(s) : stored;
+  }
+  return stored;
+}
+
+function targetRowHtml(key: string, value: string): string {
+  const spec = targetSpecFor(key);
+  return `<div class="target-edit-row" data-target-key="${esc(key)}">
+    <span class="target-edit-label" title="${esc(spec.hint ?? '')}">${esc(spec.label)}</span>
+    <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
+    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove target" onclick="modalRemoveTargetRow('${esc(key)}')">&times;</button>
+  </div>`;
+}
+
+/** (Re)build the manual rows from a targets map. */
+function renderTargetRows(targets: Record<string, string>) {
+  const wrap = document.getElementById('modal-target-rows');
+  if (!wrap) return;
+  wrap.innerHTML = Object.entries(targets)
+    .filter(([k, v]) => v !== '' && !k.startsWith('count:'))
+    .map(([k, v]) => targetRowHtml(k, targetDisplayValue(k, v)))
+    .join('');
+  refreshTargetAddSelect();
+}
+
+/** Rebuild the "+ Add target" picker: available specs minus rows already added. */
+function refreshTargetAddSelect() {
+  const sel = document.getElementById('modal-target-add-select') as HTMLSelectElement | null;
+  if (!sel) return;
+  const added = new Set(
+    [...document.querySelectorAll<HTMLElement>('#modal-target-rows [data-target-key]')]
+      .map(el => el.dataset['targetKey'] ?? ''));
+  sel.innerHTML = `<option value="">&#8212; choose a stat &#8212;</option>` +
+    _targetSpecs.filter(s => !added.has(s.key))
+      .map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
+}
+
+export function modalAddTargetRow(): void {
+  const sel = document.getElementById('modal-target-add-select') as HTMLSelectElement | null;
+  const wrap = document.getElementById('modal-target-rows');
+  if (!sel || !wrap || !sel.value) return;
+  wrap.insertAdjacentHTML('beforeend', targetRowHtml(sel.value, ''));
+  refreshTargetAddSelect();
+  wrap.querySelector<HTMLInputElement>(`[data-target-key="${sel.value}"] input`)?.focus();
+}
+
+export function modalRemoveTargetRow(key: string): void {
+  document.querySelector(`#modal-target-rows [data-target-key="${CSS.escape(key)}"]`)?.remove();
+  refreshTargetAddSelect();
+}
+
+/** Read the builder rows back into a targets map (normalizing days/avg_seed). */
+function collectTargetRows(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of document.querySelectorAll<HTMLElement>('#modal-target-rows [data-target-key]')) {
+    const key = row.dataset['targetKey'] ?? '';
+    const raw = row.querySelector<HTMLInputElement>('[data-target-input]')?.value.trim() ?? '';
+    if (!key || !raw) continue;
+    if (key === 'days') {
+      const d = parseAgeDays(raw);
+      if (d != null) out[key] = String(d);
+    } else if (key === 'avg_seed') {
+      const s = parseSeedTime(raw);
+      if (s !== null) out[key] = String(s);
+    } else {
+      out[key] = raw;
+    }
+  }
+  return out;
+}
+
+/** Switch the targets section between group-summary and manual-builder mode. */
+function setTargetsMode(groupName: string, trackerKey: string) {
+  const builder = document.getElementById('modal-target-builder');
+  if (groupName) {
+    renderGroupHint(trackerKey, groupName);
+    if (builder) builder.style.display = 'none';
+  } else {
+    renderGroupHint('', '');
+    if (builder) builder.style.display = '';
+    // Only seed rows when the builder is empty, so toggling group ↔ manual
+    // doesn't wipe in-progress edits.
+    if (!document.querySelector('#modal-target-rows [data-target-key]')) {
+      renderTargetRows(_editTargets);
+    } else {
+      refreshTargetAddSelect();
+    }
   }
 }
 
@@ -435,9 +590,18 @@ export function openEditModal(
   setVal('modal-username', t.username ?? '');
   setVal('modal-joindate', t.join_date ?? '');
 
-  // Required fields (e.g. gazelle username) + opt-out check for this URL
+  // Required fields (e.g. gazelle username) + opt-out check for this URL.
+  // Once defs load, also settle session-cookie visibility for custom defs:
+  // API-only + cookie-less auth (e.g. MAM's mam_id) → the cookie field is
+  // pointless and hides; a session_cookie-auth def keeps it (it's the login).
   applyRequiredFieldsUI(t.required_fields ?? typeRequiredFields(t.type));
-  void ensureDefsLoaded().then(() => checkTrackerOptOut());
+  void ensureDefsLoaded().then(() => {
+    checkTrackerOptOut();
+    if (t.supports_html_scrape === false) {
+      const editDefInfo = _defsCache?.trackers.find(dd => dd.key === t.def_key);
+      if (!editDefInfo?.needs_session_cookie) hide('modal-session-cookie-group');
+    }
+  });
 
   // API key — the mask sentinel means "unchanged"; clearing the field removes the key.
   setVal('modal-key', t.has_key ? (t.api_key_masked || MASKED_KEY) : '');
@@ -465,27 +629,14 @@ export function openEditModal(
   // Per-tracker scraping section (interval, daily cap, auto-calc, API-only).
   setupScrapeSection(t);
 
-  // Targets — from the tracker.targets map
-  const targets = t.targets ?? {};
-  setVal('modal-target-uploaded',      targets['uploaded']      ?? '');
-  setVal('modal-target-downloaded',    targets['downloaded']    ?? '');
-  setVal('modal-target-ratio',         targets['ratio']         ?? '');
-  setVal('modal-target-total-uploads', targets['total_uploads'] ?? '');
-  setVal('modal-target-seed-size',     targets['seed_size']     ?? '');
-  const ageDays = parseAgeDays(targets['days'] ?? '');
-  setVal('modal-target-days', ageDays ? fmtAgeDays(ageDays) : '');
-  const tast = parseSeedTime(targets['avg_seed'] ?? '');
-  setVal('modal-target-avg-seed', tast !== null ? fmtSeedTime(tast) : '');
-  setVal('modal-target-bonus-points',  targets['bonus_points']  ?? '');
-  setVal('modal-target-snatched',      targets['snatched']      ?? '');
-  setVal('modal-target-adoptions',     targets['adoptions']     ?? '');
-  const snatchedRow = document.getElementById('modal-target-snatched-row');
-  if (snatchedRow) snatchedRow.style.display = t.type === 'gazelle' ? '' : 'none';
-  const adoptionsRow = document.getElementById('modal-target-adoptions-row');
-  if (adoptionsRow) adoptionsRow.style.display = t.type === 'gazelle' ? '' : 'none';
-
-  // Populate "Load from group" dropdown if group defs are available
+  // Targets — group summary vs manual builder. The builder's stat picker
+  // offers whatever this tracker actually reports.
   const tKey = t.def_key;
+  _editTargets = { ...(t.targets ?? {}) };
+  _targetSpecs = buildAvailableTargetSpecs(t, statsMap[t.id]);
+  const rowsWrap = document.getElementById('modal-target-rows');
+  if (rowsWrap) rowsWrap.innerHTML = ''; // fresh per tracker — setTargetsMode reseeds
+
   const tKeyGroups = tKey ? (groupDefs[tKey] ?? []) : [];
   const groupRow = document.getElementById('modal-target-group-row');
   const groupSel = document.getElementById('modal-target-group-select') as HTMLSelectElement | null;
@@ -506,26 +657,12 @@ export function openEditModal(
       groupSel.appendChild(opt);
     }
     if (!t.target_group) groupSel.value = '';
-    // Live lock/unlock as user changes selection
-    groupSel.onchange = () => {
-      if (!groupSel.value) {
-        setTargetFieldsLocked(false);
-        renderGroupHint('', '');
-      }
-      // Don't auto-load on change — user must press Load button
-    };
-    // Reflect lock state for existing target_group
-    setTargetFieldsLocked(!!t.target_group);
-    // Auto-show hint for the currently saved group target (avoids stale cross-tracker bleed)
-    if (t.target_group) {
-      renderGroupHint(tKey, t.target_group);
-    } else {
-      renderGroupHint('', '');
-    }
-  } else if (groupRow) {
-    groupRow.style.display = 'none';
-    setTargetFieldsLocked(false);
-    renderGroupHint('', '');
+    groupSel.onchange = () => setTargetsMode(groupSel.value, tKey);
+    setTargetsMode(t.target_group ?? '', tKey);
+  } else {
+    // No group defs — manual builder only.
+    if (groupRow) groupRow.style.display = 'none';
+    setTargetsMode('', tKey);
   }
 
   // Edit mode: hide add-selection, show everything directly
@@ -733,24 +870,23 @@ export async function saveTracker(deps: ModalDeps) {
   const optEntry = findOptOut(_defsCache?.opt_outs, url);
   if (optEntry) { deps.toast(optOutMessage(optEntry), 'error'); return; }
 
-  // Build the targets map (canonical keys, human-readable string values)
-  const tgtSeedSec = parseSeedTime(getVal('modal-target-avg-seed'));
-  const tgtAgeDays = parseAgeDays(getVal('modal-target-days'));
-  const rawTargets: Record<string, string> = {
-    uploaded:      getVal('modal-target-uploaded'),
-    downloaded:    getVal('modal-target-downloaded'),
-    ratio:         getVal('modal-target-ratio'),
-    days:          tgtAgeDays != null ? String(tgtAgeDays) : '',
-    seed_size:     getVal('modal-target-seed-size'),
-    total_uploads: getVal('modal-target-total-uploads'),
-    avg_seed:      tgtSeedSec != null ? String(tgtSeedSec) : '',
-    bonus_points:  getVal('modal-target-bonus-points'),
-    snatched:      getVal('modal-target-snatched'),
-    adoptions:     getVal('modal-target-adoptions'),
-  };
-  const targets: Record<string, string> = {};
-  for (const k of TARGET_KEYS) {
-    if (rawTargets[k]) targets[k] = rawTargets[k];
+  // Build the targets map. Group selected → the group's base requirements
+  // from the def (nothing to type); manual → the builder rows. In add mode
+  // the section is hidden and targets start empty — set them later from the
+  // dashboard pencil or the edit screen.
+  const targetsVisible = document.getElementById('modal-targets-section')?.style.display !== 'none';
+  const groupRowEl = document.getElementById('modal-target-group-row');
+  const groupSelEl = document.getElementById('modal-target-group-select') as HTMLSelectElement | null;
+  const chosenGroup = (targetsVisible && groupRowEl?.style.display !== 'none')
+    ? (groupSelEl?.value ?? '') : '';
+  let targets: Record<string, string> | undefined = {};
+  if (chosenGroup) {
+    const g = findGroupDef(groupDefs, groupRowEl?.dataset?.['trackerKey'] ?? '', chosenGroup);
+    // Def group missing (renamed/removed) → omit targets, keeping the stored
+    // values rather than wiping them.
+    targets = g ? groupRequirementsToTargets(g.requirements) : undefined;
+  } else if (targetsVisible) {
+    targets = collectTargetRows();
   }
 
   const cookieVal   = getVal('modal-session-cookie');
@@ -770,8 +906,8 @@ export async function saveTracker(deps: ModalDeps) {
     username: getVal('modal-username'),
     ...(cookieVal ? { session_cookie: cookieVal } : {}),
     min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
-    targets,
-    target_group: (document.getElementById('modal-target-group-select') as HTMLSelectElement)?.value ?? '',
+    ...(targets !== undefined ? { targets } : {}),
+    target_group: chosenGroup,
     join_date: getVal('modal-joindate'),
     ...(trackerType ? { type: trackerType } : {}),
   };
@@ -1595,10 +1731,6 @@ export async function switchMockScenario(
 const MODAL_INPUT_IDS = [
   'modal-tracker-id', 'modal-name', 'modal-url', 'modal-username', 'modal-joindate',
   'modal-key', 'modal-session-cookie', 'modal-min-scrape-interval', 'modal-max-scrapes',
-  'modal-target-uploaded', 'modal-target-downloaded', 'modal-target-ratio',
-  'modal-target-seed-size', 'modal-target-total-uploads', 'modal-target-days',
-  'modal-target-avg-seed', 'modal-target-bonus-points', 'modal-target-snatched',
-  'modal-target-adoptions',
 ];
 
 function clearModal() {
@@ -1606,6 +1738,13 @@ function clearModal() {
     const el = document.getElementById(id) as HTMLInputElement;
     if (el) el.value = '';
   });
+  // Reset the target builder + group summary between trackers.
+  _editTargets = {};
+  _targetSpecs = [];
+  const rows = document.getElementById('modal-target-rows');
+  if (rows) rows.innerHTML = '';
+  renderGroupHint('', '');
+  hide('modal-target-builder');
 }
 
 function setEl(id: string, text: string)        { const el = document.getElementById(id);                     if (el) el.textContent = text; }
@@ -1615,23 +1754,31 @@ function setPlaceholder(id: string, ph: string) { const el = document.getElement
 function show(id: string) { const el = document.getElementById(id); if (el) el.style.display = ''; }
 function hide(id: string) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
 
-// ── Load targets from group ───────────────────────────────────────────────
+// ── Target group summary (chips) ──────────────────────────────────────────
 
-/** Compact one-line label for an any_of alternative, e.g. "6 TiB seeding". */
-function fmtAnyOfAlt(a: GroupRequirements): string {
-  const parts: string[] = [];
-  if (a.min_seed_size)    parts.push(`${a.min_seed_size} seeding`);
-  if (a.min_uploaded)     parts.push(`${a.min_uploaded} uploaded`);
-  if (a.min_downloaded)   parts.push(`${a.min_downloaded} downloaded`);
-  if (a.min_uploads)      parts.push(`${a.min_uploads} uploads`);
-  if (a.min_adoptions)    parts.push(`${a.min_adoptions} adoptions`);
-  if (a.min_ratio)        parts.push(`${a.min_ratio} ratio`);
-  if (a.min_seedtime)     parts.push(`${a.min_seedtime} seedtime`);
-  if (a.min_uploads)      parts.push(`${a.min_uploads} uploads`);
-  if (a.min_bonus_points) parts.push(`${a.min_bonus_points.toLocaleString()} bonus`);
-  if (a.min_age)          parts.push(`${a.min_age} account age`);
-  for (const mc of a.min_counts ?? []) parts.push(`${mc.count} ${mc.label || fieldLabel(mc.field)}`);
-  return parts.join(' + ') || '—';
+/** [label, value] pairs for a requirements set — drives the chip summary. */
+function requirementPairs(req: GroupRequirements): [string, string][] {
+  const pairs: [string, string][] = [];
+  if (req.min_uploaded)     pairs.push(['Uploaded', req.min_uploaded]);
+  if (req.min_downloaded)   pairs.push(['Downloaded', req.min_downloaded]);
+  if (req.min_ratio)        pairs.push(['Ratio', String(req.min_ratio)]);
+  if (req.min_seedtime)     pairs.push(['Seedtime', req.min_seedtime]);
+  if (req.min_seed_size)    pairs.push(['Seed Size', req.min_seed_size]);
+  if (req.min_uploads)      pairs.push(['Uploads', String(req.min_uploads)]);
+  if (req.min_adoptions)    pairs.push(['Adoptions', String(req.min_adoptions)]);
+  if (req.min_bonus_points) pairs.push(['Bonus', req.min_bonus_points.toLocaleString()]);
+  if (req.min_age)          pairs.push(['Age', req.min_age]);
+  for (const mc of req.min_counts ?? []) {
+    if (mc.count > 0) pairs.push([mc.label || fieldLabel(mc.field), String(mc.count)]);
+  }
+  return pairs;
+}
+
+function chipRow(pairs: [string, string][]): string {
+  if (!pairs.length) return '';
+  return `<div class="target-chip-row">${pairs.map(([k, v]) =>
+    `<span class="target-chip"><span class="target-chip-k">${esc(k)}</span><span class="target-chip-v">${esc(v)}</span></span>`
+  ).join('')}</div>`;
 }
 
 /** Render the group hint panel for a given trackerKey + groupName.
@@ -1675,66 +1822,22 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
     (perkIconsHtml ? `<span class="card-perk-icons">${perkIconsHtml}</span>` : '') +
     `</div>`;
 
-  let descPart = '';
+  let bodyPart = '';
   if (req.description) {
-    descPart = `<div class="target-group-hint-desc">${esc(req.description)}</div>`;
+    bodyPart = `<div class="target-group-hint-desc">${esc(req.description)}</div>`;
   } else {
-    const labels: string[] = [];
-    if (req.min_uploaded)      labels.push(`Upload: ${req.min_uploaded}`);
-    if (req.min_downloaded)    labels.push(`Download: ${req.min_downloaded}`);
-    if (req.min_ratio)         labels.push(`Ratio: ${req.min_ratio}`);
-    if (req.min_seedtime)      labels.push(`Seedtime: ${req.min_seedtime}`);
-    if (req.min_seed_size)     labels.push(`Seed: ${req.min_seed_size}`);
-    if (req.min_uploads)       labels.push(`Uploads: ${req.min_uploads}`);
-    if (req.min_adoptions)     labels.push(`Adoptions: ${req.min_adoptions}`);
-    if (req.min_bonus_points)  labels.push(`Bonus: ${req.min_bonus_points.toLocaleString()}`);
-    if (req.min_age)           labels.push(`Age: ${req.min_age}`);
-    for (const mc of req.min_counts ?? []) labels.push(`${mc.label || fieldLabel(mc.field)}: ${mc.count}`);
-    const text = labels.length ? labels.join(' · ') : 'No stat requirements for this group.';
+    const pairs = requirementPairs(req);
+    bodyPart = pairs.length
+      ? chipRow(pairs)
+      : `<div class="target-group-hint-desc">No stat requirements for this group.</div>`;
     // any_of alternatives — base requirements above PLUS at least one of these
-    const anyOfText = req.any_of?.length
-      ? ` · ONE OF: ${req.any_of.map(fmtAnyOfAlt).join(' / ')}`
-      : '';
-    descPart = `<div class="target-group-hint-desc">${esc(text + anyOfText)}</div>`;
+    if (req.any_of?.length) {
+      bodyPart += `<div class="target-chip-anyof"><span class="target-chip-anyof-label">plus one of</span>${
+        req.any_of.map(a => chipRow(requirementPairs(a)))
+          .join(`<span class="target-chip-anyof-label">or</span>`)
+      }</div>`;
+    }
   }
-  hintEl.innerHTML = `<div class="target-group-hint-wrap">${namePart}${descPart}</div>`;
+  hintEl.innerHTML = `<div class="target-group-hint-wrap">${namePart}${bodyPart}</div>`;
   hintEl.style.display = '';
-}
-
-export function loadTargetsFromGroup(): void {
-  const sel = document.getElementById('modal-target-group-select') as HTMLSelectElement | null;
-  if (!sel) return;
-  const groupName = sel.value;
-
-  if (!groupName) {
-    // Manual — unlock all fields and clear hint
-    setTargetFieldsLocked(false);
-    renderGroupHint('', '');
-    return;
-  }
-
-  const groupRow = document.getElementById('modal-target-group-row');
-  const trackerKey = groupRow?.dataset?.['trackerKey'] ?? '';
-  if (!trackerKey) return;
-
-  const groups = groupDefs[trackerKey] ?? [];
-  const g = groups.find(gd => gd.name === groupName);
-  if (!g) return;
-
-  // Always set all fields — even empty string clears a previous value
-  const req = g.requirements;
-  setVal('modal-target-uploaded',      req.min_uploaded  ?? '');
-  setVal('modal-target-ratio',         req.min_ratio     != null ? String(req.min_ratio)  : '');
-  setVal('modal-target-seed-size',     req.min_seed_size ?? '');
-  setVal('modal-target-total-uploads', req.min_uploads   != null ? String(req.min_uploads): '');
-  setVal('modal-target-days',          req.min_age       ?? '');
-  setVal('modal-target-avg-seed',      req.min_seedtime  ?? '');
-  setVal('modal-target-bonus-points',  req.min_bonus_points != null ? String(req.min_bonus_points) : '');
-  setVal('modal-target-downloaded',    req.min_downloaded ?? '');
-  setVal('modal-target-adoptions',     req.min_adoptions != null ? String(req.min_adoptions) : '');
-
-  // Lock fields so user can't accidentally dirty the group-loaded values
-  setTargetFieldsLocked(true);
-
-  renderGroupHint(trackerKey, groupName);
 }

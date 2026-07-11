@@ -171,6 +171,13 @@ type Settings struct {
 	// fast. Floor 1; 0 = unset → 10-sec default. The qui toggle turns it off.
 	QUIRefreshSeconds int `json:"qui_refresh_seconds"`
 
+	// ── History retention ────────────────────────────────────────────────────
+	// HistoryDailyRetentionDays is how long daily history rollups are kept —
+	// the data behind long-range growth charts and trend rates. 0/unset →
+	// 730-day default (~150 KB per tracker per year, so "years" is cheap).
+	// Fine-grained history (sparklines) stays at 14 days regardless.
+	HistoryDailyRetentionDays int `json:"history_daily_retention_days"`
+
 	// ── QUI (qBittorrent UI) integration ────────────────────────────────────
 	QUIURL              string `json:"qui_url"`
 	QUIAPIKey           string `json:"qui_api_key"`
@@ -204,7 +211,10 @@ func DefaultSettings() Settings {
 		RefreshIntervalMinutes: 30,
 		// qui is a local API with time-sensitive data (speed/free space) — keep
 		// it snappy at 10 s (floor 1; the integration toggle turns it off).
-		QUIRefreshSeconds:   10,
+		QUIRefreshSeconds: 10,
+		// ~2 years of daily history — enough for the History view's long
+		// ranges while keeping the database tiny.
+		HistoryDailyRetentionDays: 730,
 		QUIURL:              "http://localhost:7476",
 		QUIEnabledInstances: []int{},
 	}
