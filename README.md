@@ -216,6 +216,8 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 
 Adding one is a JSON file away: copy `defs/templates/tracker.template.jsonc` (every field documented) to `defs/trackers/<key>.json`, strip comments, then **Settings → Trackers → Reload Definitions**. Defs that fail to parse are skipped and reported — they never crash the app.
 
+Note: Z trackers, Torrentleech, IPT don't have api's and are generally not happy about scraping, so these have not been added. Unless API's are added or they reach out to provide permission they wont be supported.
+
 ## Development
 
 ```
@@ -249,6 +251,7 @@ Especially interested in: trackers whose stats parse wrong, group ladders that d
 ## License
 
 [GPL-3.0](LICENSE). Free to use, study, modify, and redistribute — forever. Any derivative must stay open source under the same terms, so no fork of Yata can ever become a paid or closed product. If you'd rather rebuild the whole idea from scratch in your own code, that's not a derivative and you owe nobody anything — go for it, we actively encourage it.
+
 
 ## Credits
 
