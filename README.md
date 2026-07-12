@@ -204,7 +204,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Luminarr | Unit3D | No |  |
 | MyAnonamouse | Custom | Yes | API ONLY |
 | Oldtoons | Unit3D | Yes | API ONLY - Added all required stats to API (THANK YOU!) |
-| OnlyEncodes+ | Unit3D | No | Awaiting approval  |
+| OnlyEncodes+ | Unit3D | Yes | Once per day scrape limit  |
 | RetroFlix | Custom | No | Scrape only - No useful API stats |
 | Seedpool | Unit3D | Yes | 180min scrape limit |
 | YUSCENE | Unit3D | Pending |  |
