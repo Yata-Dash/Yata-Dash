@@ -6,8 +6,9 @@
 #   • From source (works right now): keep `build: .`.
 services:
   yata:
-    build: .
-    # image: ghcr.io/yata-dash/yata:latest    # <- switch to this after the first release
+    # build: .
+    # image: ghcr.io/yata-dash/yata-dash:latest # tbd
+    image: ghcr.io/yata-dash/yata-dash:main # here be dragons, tracks main branch, potential breaking changes
     container_name: yata
     ports:
       - "8420:8420"          # browse http://<host>:8420 — change the LEFT number to remap
