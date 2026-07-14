@@ -10,6 +10,9 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
+// registerHistory mounts the session-only history endpoints. The History-view
+// data feed (/history/series — see history_series.go) is NOT here: it lives on
+// the read-only token group in server.go so integrations can chart stats.
 func registerHistory(r chi.Router, d *Deps) {
 	r.Get("/history", getHistory(d))
 }

@@ -139,8 +139,18 @@ func NormalizeAPIFields(fieldMap map[string]string, data map[string]any) map[str
 // APIKind returns the fetcher kind for a tracker (by URL + type key).
 func (r *Registry) APIKind(trackerURL, typeKey string) string {
 	td, hasDef := r.TrackerByURL(trackerURL)
-	if hasDef && td.Type != "" {
-		typeKey = td.Type
+	if hasDef {
+		// A def that declares its own full API block (path + mappings) always
+		// fetches through the custom fetcher, whatever its base type. The type
+		// keeps driving everything else (display, credential fields, scrape
+		// conventions) — e.g. HUNO is a UNIT3D tracker whose stats come from a
+		// bespoke /api/profile endpoint.
+		if td.API != nil && td.API.Path != "" {
+			return "custom"
+		}
+		if td.Type != "" {
+			typeKey = td.Type
+		}
 	}
 	if tt, ok := r.Type(typeKey); ok {
 		return tt.API.Kind

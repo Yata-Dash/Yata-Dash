@@ -8,13 +8,15 @@ Yata pulls your stats from each tracker's **API** (and, where the operator permi
 
 **Status: public beta.** It works, it's been running against real trackers for months, and feedback is very welcome — see [Feedback & beta notes](#feedback--beta-notes).
 
+> **⚠️ Protect your `config.json`.** Yata stores your tracker **API keys and session cookies in plain text** in `config.json` (next to the binary, or in `./data` under Docker). Anyone who can read that file can act as you on your trackers. Lock it down like a password file — restrict its permissions and never share or commit it — and take extra care on **shared boxes such as seedboxes**. See [Your data and security](#your-data-and-security) before you start.
+
 ---
 
 ## Why Yata
 
 - **Private by design.** Runs entirely on your own machine/server. The only network requests it ever makes are to *your* trackers with *your* credentials, plus any integrations you explicitly configure (webhooks, qui, Prowlarr). No telemetry, no analytics, no phoning home.
 - **API first, always.** API data is authoritative. Profile scraping only fills stats the API doesn't provide, and both are merged into ONE stats view per tracker (with an optional per-stat origin dot so you can see where each number came from).
-- **Respect the trackers.** Scraping is rate-limited with a hard 60-minute floor that cannot be lowered (default set as 120min). Tracker operators can request stricter limits — or forbid scraping entirely — in their definition file, and those requests always win. There's an API-only mode, and an opt-out list for sites that don't want to be supported at all.
+- **Respect the trackers.** Scraping is rate-limited with a hard 60-minute floor that cannot be lowered. Tracker operators can request stricter limits — or forbid scraping entirely — in their definition file, and those requests always win. There's an API-only mode, and an opt-out list for sites that don't want to be supported at all.
 - **Trackers are data, not code.** Every tracker is a JSON file in `defs/trackers/`. Adding or fixing a tracker never touches the app; tracker staff can own their definition.
 
 ## Feature tour
@@ -32,6 +34,12 @@ Load targets straight from a rank's real requirements ("Load from Group"), or se
 <p align="center"><img src="docs/screenshots/card-targets.png" width="420" alt="Targets with one-of requirements"></p>
 
 Requirements and estimates are guidance for planning, not guarantees — always check the tracker's own promotion rules.
+
+### History — see your growth
+
+A dedicated view over the months of stats Yata records for every tracker. Pick a metric, overlay one or many trackers in their own colours, and choose a range from 48 hours to all-time. Hover for a crosshair readout, or click to pin two points for an exact delta and per-day rate. Switch between cumulative **Value** and **Rate/day**, add a **Σ Portfolio** line summing your trackers, or turn on a dashed **projection** tail. With a single tracker selected, its targets (yours or its group's) are drawn as reference lines — so you can watch your trajectory close on the goal:
+
+![History](docs/screenshots/history.png)
 
 ### Pathways — where can I go from here?
 
@@ -56,7 +64,7 @@ The effective interval is the **maximum** of every layer — nothing can undercu
 | Layer | Set by | Notes |
 |---|---|---|
 | Hard floor | the app | 60 min — cannot be lowered by anyone |
-| Global setting | you (Settings → Scraping) | default 120 min |
+| Global setting | you (Settings → Scraping) | default 120 min (floor 60) |
 | Tracker type def | software def file | rarely used |
 | Tracker def | **tracker operator** | e.g. "≥ 120 min, max 6/day" |
 | Per-tracker setting | you (tracker edit) | can only make it stricter |
@@ -79,6 +87,7 @@ Tracker rank icons use the same Font Awesome classes the tracker sites themselve
 - **Backups & portability** — one-click config export/import (with automatic pre-import backup), opt-in scheduled backups, tracker history CSV export
 - **Rolling log viewer** — live logs in Settings for troubleshooting and bug reports; query strings never reach the log
 - **qui integration** — live qBittorrent stat bars via [qui](https://github.com/autobrr/qui)
+- **Read-only API tokens** — let homelab dashboards (Homepage, Homarr), Grafana, or scripts read your stats without your login; tokens can't change anything or see credentials. See the [API reference](docs/API.md)
 - **Prowlarr / Jackett import** — pull your indexer list straight from either manager, including stored API keys (both) and session cookies (Jackett), so trackers arrive ready to fetch and scrape
 - **Demo tracker** — explore the whole UI safely with mock data, no credentials needed
 
@@ -88,13 +97,32 @@ Tracker rank icons use the same Font Awesome classes the tracker sites themselve
 
 ### Docker (recommended)
 
+Drop this `docker-compose.yml` next to wherever you want Yata's data to live, then `docker compose up -d`:
+
+```yaml
+services:
+  yata:
+    image: ghcr.io/yata-dash/yata:latest
+    container_name: yata
+    ports:
+      - "8420:8420"          # then open http://<host>:8420
+    volumes:
+      - ./data:/data         # config.json + database — back up this folder
+    environment:
+      - TZ=Etc/UTC           # optional: your timezone, e.g. Australia/Brisbane
+    restart: unless-stopped
+```
+
 ```bash
-git clone https://github.com/Yata-Dash/Yata-Dash && cd Yata-Dash
 docker compose up -d
 # → http://localhost:8420
 ```
 
-The compose file mounts `./data` (config + database), `./defs` (tracker definitions), and `./static/themes` (custom themes), so all of them survive upgrades and can be edited live.
+Only `./data` has to persist (your config + database); mount `./defs` and `./static/themes` too if you want to edit tracker definitions or drop in custom themes live. Update with `docker compose pull && docker compose up -d`.
+
+> **New to Docker?** You don't need Go, Node, or a repo checkout — Docker pulls a ready-to-run image. `docker compose up -d` starts it in the background; `docker compose logs -f` shows what it's doing; `docker compose down` stops it (your `./data` stays). That's the whole loop.
+
+*Prefer to build the image yourself?* Clone the repo and use the bundled compose with `build: .` instead of the published image — `git clone https://github.com/Yata-Dash/Yata-Dash && cd Yata-Dash && docker compose up -d`.
 
 ### From source
 
@@ -122,6 +150,23 @@ Also: `--config`, `--data` (SQLite file), `--defs`, `--base`, `--log` — each w
 
 ## Setting up
 
+### Your data and security
+
+**Read this first.** Yata keeps everything in two files, next to the binary (or in `./data` under Docker):
+
+- **`config.json`** — your trackers, settings, and **credentials**. Your tracker **API keys and session cookies are stored in plain text** in this file. Anyone who can read it can act as you on every tracker you've added.
+- **`yata.db`** — stats, history, and login sessions.
+
+**Treat `config.json` like a password file:**
+
+- Restrict its permissions so only you can read it (`chmod 600 config.json` on Linux/macOS; under Docker keep the `./data` volume private).
+- Never commit it to git, paste it into a bug report, or share it — the config export in Settings → General strips webhook secrets for sharing, but the raw `config.json` does **not**.
+- Be especially careful on **shared or multi-user boxes such as seedboxes**: anyone who can read your home directory can read your tracker credentials. If you can't lock the file down there, prefer **API-only** setups (an API key alone, no session cookie) and rotate/revoke keys you no longer use.
+
+Both files are yours to back up and move (export/import from Settings → General) — just treat every backup as the bundle of credentials it is.
+
+### Add your trackers
+
 1. Open **Settings → Trackers → Add Tracker** and pick your tracker from the list (or enter any base URL — trackers without a definition still work for all API stats).
 2. Paste your **API key** (usually tracker profile → API/Security settings; the form shows a tracker-specific hint where we have one).
 3. *Optional, for extra stats:* add your **username** and **session cookie** to enable profile scraping for the stats the API doesn't expose (seed size, average seed time, and friends). Log in to the tracker → DevTools (F12) → copy the cookie header. Trackers that report no join date will ask you to enter it once, for account-age tracking.
@@ -130,10 +175,6 @@ Also: `--config`, `--data` (SQLite file), `--defs`, `--base`, `--log` — each w
 ### If your instance is reachable from outside localhost
 
 Yata binds to `0.0.0.0` by default (so Docker/LAN/Tailscale setups just work) and will warn you at startup and in the UI: **anyone who can reach the port has full access until you enable login protection** (Settings → General → Account). Sessions are httpOnly cookies; five failed logins lock the IP for 15 minutes. If you ever lose the password, the reset path deliberately wipes all config and data — a stolen box can't be pried open that way. Put it behind a reverse proxy with TLS if you expose it beyond your LAN.
-
-### Your data
-
-Everything lives in two files next to the binary (or in `./data` under Docker): `config.json` (trackers, credentials, settings) and `yata.db` (stats, history, sessions). Both are yours — export/import from Settings → General, and treat backups like the credential files they are.
 
 ## For tracker staff
 
@@ -149,9 +190,33 @@ Questions, corrections, or requests — please open an issue.
 
 ## Bundled tracker definitions
 
-Aither, Anthelion, InfinityHD, LST, Luminarr, MyAnonamouse, Oldtoons, OnlyEncodes+, RetroFlix, seedpool, YUSCENE, Zenith — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
+Any trackers not approved should only be used in API only mode until approval has been confirmed. A warning will appear in app.
+If you are a tracker not on this list please reach out.
+If you are a tracker on this list and wish to approve or ask to opt out entirely, please reach out. 
+
+| Tracker | Platform | Approved by tracker | Limit | Notes |
+|---|---|---|---|---|
+| Aither | Unit3D | Yes | 180min | New Upload groups note yet added, Monthly Uploads not retrevable |
+| Anthelion | Gazelle | Pending | API Only |  |
+| Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
+| InfinityHD | Unit3D | Yes | 60min |  |
+| LST | Unit3D | No | - | Awaiting response |
+| Luminarr | Unit3D | Yes | 120min |  |
+| MyAnonamouse | Custom | Yes | API Only | |
+| Oldtoons | Unit3D | Yes | API Only | Added all required stats to API (THANK YOU!) |
+| OnlyEncodes+ | Unit3D | Yes | Once per day |  |
+| RetroFlix | Custom | Pending | API Only | Currently No useful API stats - working with team |
+| Seedpool | Unit3D | Yes | 180min |  |
+| YUSCENE | Unit3D | Pending | - | Awaiting reponse |
+| Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
+
+  — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
+
+**OldToonsWorld is fully API-supported:** its staff added an API endpoint that exposes every stat Yata tracks — including seed size, seed times, and unread mail/notification flags — so Yata reads everything from the API and does **no** profile scraping for it. It's the model we hope more trackers follow (UNIT3D is rolling out richer stats APIs); when they do, a tracker can be added to Yata with an API key alone, no session cookie.
 
 Adding one is a JSON file away: copy `defs/templates/tracker.template.jsonc` (every field documented) to `defs/trackers/<key>.json`, strip comments, then **Settings → Trackers → Reload Definitions**. Defs that fail to parse are skipped and reported — they never crash the app.
+
+Note: Z trackers, Torrentleech, IPT don't have api's and are generally not happy about scraping, so these have not been added. Unless API's are added or they reach out to provide permission they wont be supported.
 
 ## Development
 
@@ -186,6 +251,7 @@ Especially interested in: trackers whose stats parse wrong, group ladders that d
 ## License
 
 [GPL-3.0](LICENSE). Free to use, study, modify, and redistribute — forever. Any derivative must stay open source under the same terms, so no fork of Yata can ever become a paid or closed product. If you'd rather rebuild the whole idea from scratch in your own code, that's not a derivative and you owe nobody anything — go for it, we actively encourage it.
+
 
 ## Credits
 

@@ -5,11 +5,19 @@
   "abbr": "Ath",
   "url": "https://aither.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-14",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "Staff",
+    "role": "Staff",
+    "date": "2026-07-13",
+    "notes": "Approved by staff via helpdesk, respondant was 'Anonymous', stated 2-3 hours limit and switch to API when available."
+  },
+    "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 5
+  },
+  "scrape": {
+    "min_interval_minutes": 180
   },
   "groups": [
     {

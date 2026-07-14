@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net"
@@ -53,6 +54,7 @@ func registerAuth(r chi.Router, d *Deps) {
 type attemptState struct {
 	failures    int
 	lockedUntil time.Time
+	lastSeen    time.Time
 }
 
 var loginLimiter = struct {
@@ -60,11 +62,34 @@ var loginLimiter = struct {
 	byIP map[string]*attemptState
 }{byIP: map[string]*attemptState{}}
 
-func clientIP(r *http.Request) string {
+// clientIP resolves the client address for rate limiting. When the
+// trust_proxy_headers setting is on (reverse-proxy deployments), the first
+// X-Forwarded-For hop is used — otherwise every proxied client would share
+// the proxy's address and one attacker could lock everyone out. Off by
+// default: the header is trivially spoofable when Yata is directly exposed.
+func clientIP(d *Deps, r *http.Request) string {
+	if d != nil && d.Cfg != nil && d.Cfg.Settings().TrustProxyHeaders {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
+				return first
+			}
+		}
+	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+// requestIsHTTPS reports whether the client connection is HTTPS — directly,
+// or via a trusted reverse proxy's X-Forwarded-Proto. Gates the session
+// cookie's Secure flag.
+func requestIsHTTPS(d *Deps, r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return d != nil && d.Cfg != nil && d.Cfg.Settings().TrustProxyHeaders &&
+		strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // loginLocked reports whether the IP is currently locked out, and for how long.
@@ -83,9 +108,10 @@ func loginLocked(ip string, now time.Time) (bool, time.Duration) {
 func recordLoginFailure(ip string, now time.Time) time.Duration {
 	loginLimiter.mu.Lock()
 	defer loginLimiter.mu.Unlock()
-	// Opportunistic cleanup of stale, unlocked entries.
+	// Opportunistic cleanup: drop entries that aren't locked out and haven't
+	// failed in over an hour (their failure count is stale anyway).
 	for k, v := range loginLimiter.byIP {
-		if v.failures == 0 && now.After(v.lockedUntil) {
+		if now.After(v.lockedUntil) && now.Sub(v.lastSeen) > time.Hour {
 			delete(loginLimiter.byIP, k)
 		}
 	}
@@ -95,6 +121,7 @@ func recordLoginFailure(ip string, now time.Time) time.Duration {
 		loginLimiter.byIP[ip] = s
 	}
 	s.failures++
+	s.lastSeen = now
 	if s.failures >= maxLoginFailures {
 		s.failures = 0
 		s.lockedUntil = now.Add(lockoutDuration)
@@ -160,6 +187,7 @@ type authCreds struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	NewPassword string `json:"new_password"`
+	ResetCode   string `json:"reset_code"`
 }
 
 func decodeCreds(r *http.Request) authCreds {
@@ -202,7 +230,7 @@ func authSetup(d *Deps) http.HandlerFunc {
 
 func authLogin(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r)
+		ip := clientIP(d, r)
 		now := time.Now()
 		if locked, remain := loginLocked(ip, now); locked {
 			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
@@ -220,8 +248,10 @@ func authLogin(d *Deps) http.HandlerFunc {
 		}
 		// Always run exactly one bcrypt compare — against a dummy hash when the
 		// username doesn't match — so response timing can't confirm the username.
+		// Usernames are matched case-insensitively (the password stays exact);
+		// the stored username keeps its original case for display.
 		hash := dummyHash
-		userMatch := ok && u.Username == c.Username
+		userMatch := ok && strings.EqualFold(u.Username, c.Username)
 		if userMatch {
 			hash = []byte(u.PasswordHash)
 		}
@@ -262,14 +292,40 @@ func authReset(d *Deps) http.HandlerFunc {
 			jsonError(w, "logged_in", http.StatusForbidden) // use change-password instead
 			return
 		}
+		// The wipe requires the recovery code printed to the server console/
+		// log at startup — network reach alone must never be enough to erase
+		// everything. Wrong codes count toward the login lockout so the code
+		// can't be brute-forced.
+		ip := clientIP(d, r)
+		now := time.Now()
+		if locked, remain := loginLocked(ip, now); locked {
+			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
+				"error": "locked", "retry_after": int(remain.Seconds()) + 1,
+			})
+			return
+		}
+		c := decodeCreds(r)
+		if d.ResetCode == "" || subtle.ConstantTimeCompare(
+			[]byte(normalizeResetCode(c.ResetCode)), []byte(normalizeResetCode(d.ResetCode))) != 1 {
+			lockedFor := recordLoginFailure(ip, now)
+			d.logWarnf("auth: reset attempt with wrong recovery code from %s", ip)
+			if lockedFor > 0 {
+				jsonStatus(w, http.StatusTooManyRequests, map[string]any{
+					"error": "locked", "retry_after": int(lockedFor.Seconds()),
+				})
+				return
+			}
+			jsonError(w, "bad_reset_code", http.StatusForbidden)
+			return
+		}
 		_ = d.DB.DeleteUser() // account + all sessions
 		_ = d.DB.WipeData()   // stats / history / scrape log
 		_ = d.Cfg.Reset()     // trackers / settings / notifications → defaults (server kept)
-		clearSessionCookie(w, r)
+		clearSessionCookie(d, w, r)
 		loginLimiter.mu.Lock()
 		loginLimiter.byIP = map[string]*attemptState{}
 		loginLimiter.mu.Unlock()
-		d.logWarnf("auth: login + all data reset via recovery from %s", clientIP(r))
+		d.logWarnf("auth: login + all data reset via recovery from %s", ip)
 		jsonOK(w, map[string]any{"ok": true})
 	}
 }
@@ -279,7 +335,7 @@ func authLogout(d *Deps) http.HandlerFunc {
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			_ = d.DB.DeleteSession(c.Value)
 		}
-		clearSessionCookie(w, r)
+		clearSessionCookie(d, w, r)
 		jsonOK(w, map[string]any{"ok": true})
 	}
 }
@@ -342,7 +398,7 @@ func authDisable(d *Deps) http.HandlerFunc {
 			jsonError(w, "store_error", http.StatusInternalServerError)
 			return
 		}
-		clearSessionCookie(w, r)
+		clearSessionCookie(d, w, r)
 		d.logInfof("auth: login protection disabled (account removed)")
 		jsonOK(w, map[string]any{"ok": true})
 	}
@@ -361,19 +417,19 @@ func issueSession(d *Deps, w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsHTTPS(d, r),
 		MaxAge:   int(sessionTTL.Seconds()),
 	})
 }
 
-func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+func clearSessionCookie(d *Deps, w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsHTTPS(d, r),
 		MaxAge:   -1,
 	})
 }

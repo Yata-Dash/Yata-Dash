@@ -14,6 +14,7 @@ import type {
 } from '../types';
 
 const TARGET_KEY = 'u3d-pathway-target';
+const FILTER_KEY = 'u3d-pathway-filter';
 
 // ── Module state ──────────────────────────────────────────────────────────
 let targets: PathwayTarget[] = [];
@@ -22,6 +23,33 @@ let selected = '';
 let lastResult: PathwayPathsResponse | null = null;
 let expandedSteps = new Set<string>(); // "pathIdx:stepIdx"
 let pathsSeq = 0; // guards out-of-order responses when switching targets fast
+let listFilter: 'all' | 'met' | 'fav' =
+  (localStorage.getItem(FILTER_KEY) as 'all' | 'met' | 'fav') || 'all';
+let lastComboFilter = ''; // the text filter of the currently rendered list
+
+// ── Favourites / not-interested (server-side settings, survive browsers) ──
+
+function favList(): string[] { return appSettings.pathway_favorites ?? []; }
+function hiddenList(): string[] { return appSettings.pathway_not_interested ?? []; }
+function isFav(name: string): boolean { return favList().includes(name); }
+function isHidden(name: string): boolean { return hiddenList().includes(name); }
+
+/** Toggle a list membership; the two lists are mutually exclusive. */
+function togglePathwayList(name: string, which: 'fav' | 'hide') {
+  const favs = new Set(favList());
+  const hid = new Set(hiddenList());
+  if (which === 'fav') {
+    if (favs.has(name)) favs.delete(name);
+    else { favs.add(name); hid.delete(name); }
+  } else {
+    if (hid.has(name)) hid.delete(name);
+    else { hid.add(name); favs.delete(name); }
+  }
+  appSettings.pathway_favorites = [...favs].sort();
+  appSettings.pathway_not_interested = [...hid].sort();
+  void api.saveSettings({ ...appSettings });
+  renderComboList(lastComboFilter); // reflect immediately, list stays open
+}
 
 // ── ETA gating (per spec) ─────────────────────────────────────────────────
 // fmtEtaDays now lives in utils/format.ts (shared with the dashboard targets).
@@ -131,6 +159,21 @@ function wireCombo() {
     if (!(e.target as HTMLElement).closest?.('.pw-combo')) closeComboList();
   });
   list.addEventListener('click', e => {
+    // Star / not-interested buttons toggle their list without selecting.
+    const act = (e.target as HTMLElement).closest<HTMLElement>('.pw-act');
+    if (act?.dataset['name'] && act.dataset['act']) {
+      e.stopPropagation();
+      togglePathwayList(act.dataset['name'], act.dataset['act'] as 'fav' | 'hide');
+      return;
+    }
+    // Filter chips re-render the open list.
+    const chip = (e.target as HTMLElement).closest<HTMLElement>('.pw-chip-filter');
+    if (chip?.dataset['filter']) {
+      listFilter = chip.dataset['filter'] as typeof listFilter;
+      localStorage.setItem(FILTER_KEY, listFilter);
+      renderComboList(lastComboFilter);
+      return;
+    }
     const item = (e.target as HTMLElement).closest<HTMLElement>('.pw-combo-item');
     if (!item || item.classList.contains('disabled') || !item.dataset['name']) return;
     void selectTarget(item.dataset['name']);
@@ -148,24 +191,55 @@ function closeComboList() {
 function renderComboList(filter: string) {
   const list = document.getElementById('pw-combo-list');
   if (!list) return;
+  lastComboFilter = filter;
   const f = filter.toLowerCase();
   const match = (t: PathwayTarget) =>
     !f || t.name.toLowerCase().includes(f) || (t.abbr ?? '').toLowerCase().includes(f);
   const byName = (a: PathwayTarget, b: PathwayTarget) => a.name.localeCompare(b.name);
-  // Targets the user does NOT have come first; owned ones are disabled below.
-  const avail = targets.filter(t => !t.is_mine && match(t)).sort(byName);
-  const mine  = targets.filter(t =>  t.is_mine && match(t)).sort(byName);
+  const chip = (t: PathwayTarget) => {
+    if (listFilter === 'met') return !!t.reqs_met;
+    if (listFilter === 'fav') return isFav(t.name);
+    return true;
+  };
 
-  const item = (t: PathwayTarget) => `
-    <div class="pw-combo-item${t.is_mine ? ' disabled' : ''}${t.name === selected ? ' selected' : ''}" data-name="${esc(t.name)}">
+  // Order: favourites → the rest → not-interested → already joined.
+  // Not-interested is excluded from the requirements-met filter entirely
+  // (meeting a music tracker's bar doesn't mean you want in), and the two
+  // bottom sections only render in the unfiltered view.
+  const notMine = targets.filter(t => !t.is_mine && match(t));
+  const favs   = notMine.filter(t => isFav(t.name) && chip(t)).sort(byName);
+  const avail  = notMine.filter(t => !isFav(t.name) && !isHidden(t.name) && chip(t)).sort(byName);
+  const hidden = listFilter === 'all' ? notMine.filter(t => isHidden(t.name)).sort(byName) : [];
+  const mine   = listFilter === 'all' ? targets.filter(t => t.is_mine && match(t)).sort(byName) : [];
+
+  const metDot = (t: PathwayTarget) => t.reqs_met
+    ? '<span class="pw-met-dot" title="Meets the listed requirements on a direct route — community data, not a guarantee of an invite">✓ reqs met</span>'
+    : '';
+  const item = (t: PathwayTarget, dimmed = false) => `
+    <div class="pw-combo-item${t.is_mine ? ' disabled' : ''}${t.name === selected ? ' selected' : ''}${dimmed ? ' pw-item-muted' : ''}" data-name="${esc(t.name)}">
       <span class="pw-combo-name">${esc(t.name)}${t.abbr ? ` <span class="pw-combo-abbr">[${esc(t.abbr)}]</span>` : ''}</span>
+      ${dimmed ? '' : metDot(t)}
       ${t.def_key ? '<span class="pw-def-badge">def</span>' : ''}
-      ${t.is_mine ? '<span class="pw-combo-note">(already joined)</span>' : ''}
+      ${t.is_mine ? '<span class="pw-combo-note">(already joined)</span>' : `
+      <span class="pw-item-actions">
+        <button type="button" class="pw-act pw-act-fav${isFav(t.name) ? ' on' : ''}" data-act="fav" data-name="${esc(t.name)}"
+                title="${isFav(t.name) ? 'Remove from favourites' : 'Favourite — keep at the top of the list'}">${isFav(t.name) ? '★' : '☆'}</button>
+        <button type="button" class="pw-act pw-act-hide${dimmed ? ' on' : ''}" data-act="hide" data-name="${esc(t.name)}"
+                title="${dimmed ? 'Restore to the main list' : 'Not interested — move to the bottom'}"><i class="fas ${dimmed ? 'fa-rotate-left' : 'fa-eye-slash'}"></i></button>
+      </span>`}
     </div>`;
 
-  list.innerHTML =
-    (avail.length ? avail.map(item).join('') : '<div class="pw-combo-empty">No matching trackers</div>') +
-    (mine.length ? `<div class="pw-combo-sep">Already joined</div>${mine.map(item).join('')}` : '');
+  const chips = `<div class="pw-combo-chips">
+    <button type="button" class="pw-chip-filter${listFilter === 'all' ? ' on' : ''}" data-filter="all">All</button>
+    <button type="button" class="pw-chip-filter${listFilter === 'met' ? ' on' : ''}" data-filter="met">Requirements met</button>
+    <button type="button" class="pw-chip-filter${listFilter === 'fav' ? ' on' : ''}" data-filter="fav">★ Favourites</button>
+  </div>`;
+
+  const rows = favs.map(t => item(t)).join('') + avail.map(t => item(t)).join('');
+  list.innerHTML = chips
+    + (rows || '<div class="pw-combo-empty">No matching trackers</div>')
+    + (hidden.length ? `<div class="pw-combo-sep">Not interested</div>${hidden.map(t => item(t, true)).join('')}` : '')
+    + (mine.length ? `<div class="pw-combo-sep">Already joined</div>${mine.map(t => item(t)).join('')}` : '');
 }
 
 // ── Selection → paths ─────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
   "abbr": "LST",
   "url": "https://lst.gg",
   "type": "unit3d",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-14",
   "approved_by": {
     "name": "",
     "role": "",
@@ -15,7 +15,8 @@
     "event_title_class": "badge"
   },
   "rules": {
-    "min_ratio": 0.4
+    "min_ratio": 0.4,
+    "min_seed_days": 3
   },
   "groups": [
     {

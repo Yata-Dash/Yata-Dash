@@ -5,21 +5,15 @@
   "abbr": "IHD",
   "url": "https://infinityhd.net",
   "type": "unit3d",
-  "last_updated": "2026-07-07",
+  "last_updated": "2026-07-14",
   "approved_by": {
     "name": "Jeditwo",
     "role": "Magician",
     "date": "2026-07-07"
   },
-  "scrape": {
-    "labels": {
-      "account download (total)": "downloaded",
-      "account upload (total)": "uploaded",
-      "bon": "bonus_points",
-      "hit and run count (all time)": "hit_and_runs",
-      "total leeching": "leeching",
-      "total seeding": "seeding"
-    }
+    "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 5
   },
   "groups": [
     {

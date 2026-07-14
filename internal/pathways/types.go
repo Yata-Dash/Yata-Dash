@@ -34,7 +34,12 @@ type SourceInfo struct {
 	Name    string `json:"name"`
 	URL     string `json:"url"`
 	License string `json:"license"`
+	// Fetched is when Yata last pulled the snapshot (metadata only).
 	Fetched string `json:"fetched"`
+	// Updated is the actual freshness of the upstream DATA (YYYY-MM, the newest
+	// route date). This — not Fetched — is the pathways "version" the update
+	// check reports, so users see the real data date, not just when we grabbed it.
+	Updated string `json:"updated,omitempty"`
 }
 
 // Data is the parsed routes.json file.

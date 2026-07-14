@@ -5,18 +5,25 @@
   "abbr": "OTW",
   "url": "https://oldtoons.world",
   "type": "unit3d",
-  "last_updated": "2026-07-08",
+  "last_updated": "2026-07-14",
   "approved_by": {
     "name": "Jhonny",
     "role": "Gang Leader",
-    "date": "2026-07-07",
-    "notes": "120min request limit, UA must be sent, open to adding user fields to API. Change to API only after these changes"
+    "date": "2026-07-08",
+    "notes": "Fully API-supported: staff added GET /api/user/stats exposing the formerly scrape-only fields (seed_size, total_seedtime, avg_seed_time, fl_tokens, invites, warnings, uploads_approved, real up/down/ratio, unread mail/notifications). Scraping disabled at their request; UA identification kept on API traffic."
   },
   "scrape": {
-    "disable_scraping": false,
-    "min_interval_minutes": 120,
+    "disable_scraping": true,
     "identify": "ua"
     },
+  "extended_stats": {
+    "path": "/api/user/stats",
+    "byte_fields": ["seed_size", "real_uploaded", "real_downloaded"]
+  },
+    "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 2
+  },
   "groups": [
     {
       "name": "Leech",

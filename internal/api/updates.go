@@ -21,7 +21,8 @@ import (
 // Version semantics (all lexicographically comparable):
 //   app      — "Beta-YYYYMMDD[letter]" from internal/version
 //   defs     — max last_updated (YYYY-MM-DD) across bundled tracker defs
-//   pathways — routes.json source.fetched (YYYY-MM-DD)
+//   pathways — routes.json source.updated (YYYY-MM): the upstream DATA date,
+//              not when we fetched it (falls back to source.fetched if absent)
 
 const remoteManifestURL = "https://raw.githubusercontent.com/Yata-Dash/Yata-Dash/main/versions.json"
 
@@ -74,7 +75,12 @@ func localVersions(d *Deps) VersionsManifest {
 		}
 	}
 	if d.Paths != nil {
-		m.Pathways = d.Paths.Source.Fetched
+		// The pathways "version" is the upstream DATA date, not when we fetched
+		// it. Fall back to fetched for pre-`updated` snapshots.
+		m.Pathways = d.Paths.Source.Updated
+		if m.Pathways == "" {
+			m.Pathways = d.Paths.Source.Fetched
+		}
 	}
 	return m
 }

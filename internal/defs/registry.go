@@ -225,6 +225,16 @@ func (r *Registry) Type(key string) (TypeDef, bool) {
 	return td, ok
 }
 
+// ExtendedStats returns the supplementary stats-endpoint spec for a tracker, or
+// nil if its def doesn't declare one. Per-tracker (not on the type def) so an
+// endpoint that only some UNIT3D trackers expose is never blindly requested.
+func (r *Registry) ExtendedStats(trackerURL, typeKey string) *ExtendedStatsSpec {
+	if td, ok := r.TrackerByURL(trackerURL); ok {
+		return td.ExtendedStats
+	}
+	return nil
+}
+
 // TrackerByURL matches a tracker def by base URL (or alias), comparing
 // case-insensitively with trailing slashes stripped.
 func (r *Registry) TrackerByURL(rawURL string) (TrackerDef, bool) {

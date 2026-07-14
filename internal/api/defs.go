@@ -26,8 +26,37 @@ type defInfo struct {
 	MinIntervalMinutes int    `json:"min_interval_minutes,omitempty"`
 	MaxScrapesPerDay   int    `json:"max_scrapes_per_day,omitempty"`
 	APIKeyHint         string `json:"api_key_hint,omitempty"`
+	// NeedsSessionCookie: the def's custom API authenticates WITH the session
+	// cookie — the cookie field must stay visible even though scraping is off.
+	NeedsSessionCookie bool   `json:"needs_session_cookie,omitempty"`
 	ApprovalStatus     string `json:"approval_status"` // approved|informal|pending|unknown
 	ApprovalNote       string `json:"approval_note,omitempty"`
+	// RequiredFields is the def-level resolution of the type's required
+	// config fields (see requiredFieldsFor). No omitempty: an empty list
+	// must reach the UI as [] so it doesn't fall back to the type default.
+	RequiredFields []string `json:"required_fields"`
+}
+
+// requiredFieldsFor resolves a type's required config fields for one tracker:
+// any field the tracker def's custom API already provides is dropped — e.g. a
+// field_map entry mapping member_since → join_date means the user never has
+// to enter a join date (HUNO), while MAM's API reports none so the type-level
+// requirement stands. Always returns a non-nil slice.
+func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
+	out := make([]string, 0, len(base))
+	if api == nil || len(api.FieldMap) == 0 {
+		return append(out, base...)
+	}
+	provided := make(map[string]bool, len(api.FieldMap))
+	for _, canonical := range api.FieldMap {
+		provided[canonical] = true
+	}
+	for _, f := range base {
+		if !provided[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 type typeInfo struct {
@@ -59,6 +88,12 @@ func listDefs(d *Deps) http.HandlerFunc {
 			}
 			if td.API != nil {
 				info.APIKeyHint = td.API.APIKeyHint
+				info.NeedsSessionCookie = td.API.AuthMethod == "session_cookie"
+			}
+			if tt, ok := d.Reg.Type(td.Type); ok {
+				info.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, td.API)
+			} else {
+				info.RequiredFields = []string{}
 			}
 			tout = append(tout, info)
 		}

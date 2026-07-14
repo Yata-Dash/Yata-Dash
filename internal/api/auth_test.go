@@ -1,9 +1,58 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
+
+// TestLoginUsernameCaseInsensitive: the username matches regardless of case (and
+// surrounding whitespace), while the password stays exact.
+func TestLoginUsernameCaseInsensitive(t *testing.T) {
+	d := testDeps(t)
+	resetLimiter := func() {
+		loginLimiter.mu.Lock()
+		loginLimiter.byIP = map[string]*attemptState{}
+		loginLimiter.mu.Unlock()
+	}
+
+	const pw = "correct horse battery"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	if err := d.DB.SetUser("MixedCaseUser", string(hash)); err != nil {
+		t.Fatal(err)
+	}
+
+	login := func(user, pass string) int {
+		resetLimiter() // isolate each attempt from the shared brute-force limiter
+		body, _ := json.Marshal(authCreds{Username: user, Password: pass})
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+		req.RemoteAddr = "203.0.113.9:5555"
+		rec := httptest.NewRecorder()
+		authLogin(d)(rec, req)
+		return rec.Code
+	}
+
+	// Correct password with the username in any case (and with stray whitespace)
+	// must succeed.
+	for _, u := range []string{"MixedCaseUser", "mixedcaseuser", "MIXEDCASEUSER", "  MixedCaseUser  "} {
+		if code := login(u, pw); code != http.StatusOK {
+			t.Errorf("login with username %q should succeed, got %d", u, code)
+		}
+	}
+	// The password remains case/character exact.
+	if code := login("mixedcaseuser", "Correct Horse Battery"); code != http.StatusUnauthorized {
+		t.Errorf("wrong-case password must fail, got %d", code)
+	}
+	// A genuinely different username still fails.
+	if code := login("someoneelse", pw); code != http.StatusUnauthorized {
+		t.Errorf("different username must fail, got %d", code)
+	}
+}
 
 func TestLoginLockout(t *testing.T) {
 	// Isolate the shared limiter for this test.

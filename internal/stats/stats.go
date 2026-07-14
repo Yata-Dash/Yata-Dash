@@ -155,10 +155,11 @@ func duration(v any) (float64, bool) {
 	return 0, false
 }
 
-// RecordHistory snapshots the numeric fields of a merged view into both the
-// fine-grained history table (48h sparklines) and the daily rollup table
-// (stable long-term growth rates for trend projections).
-func (e *Engine) RecordHistory(trackerID string, merged models.MergedStats) error {
+// NumericSnapshot converts a merged view's recordable fields to numbers using
+// the same rules as history (sizes in GiB, durations in seconds). Shared by
+// history recording and the read-only /api/summary endpoint so integrations
+// see exactly the numbers the charts are built from.
+func NumericSnapshot(merged models.MergedStats) map[string]float64 {
 	fields := map[string]float64{}
 	for field, extract := range numericExtractors {
 		sf, ok := merged[field]
@@ -169,6 +170,14 @@ func (e *Engine) RecordHistory(trackerID string, merged models.MergedStats) erro
 			fields[field] = n
 		}
 	}
+	return fields
+}
+
+// RecordHistory snapshots the numeric fields of a merged view into both the
+// fine-grained history table (48h sparklines) and the daily rollup table
+// (stable long-term growth rates for trend projections).
+func (e *Engine) RecordHistory(trackerID string, merged models.MergedStats) error {
+	fields := NumericSnapshot(merged)
 	if len(fields) == 0 {
 		return nil
 	}

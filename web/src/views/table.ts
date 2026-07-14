@@ -168,10 +168,18 @@ function buildCell(
   switch (key) {
     case 'name': {
       const activeEvent = strOf(s, 'active_event');
+      // Unread mail/notification flags — same at-a-glance icons as the grid
+      // cards, sitting next to the event beacon. Each follows its own
+      // Display toggle; only rendered when the flag is actually "true".
+      const unreadFlags =
+        (settings.show_unread_mail !== false && strOf(s, 'unread_mail') === 'true'
+          ? `<span class="unread-flag" title="Unread mail on ${esc(t.name)} (as of the last scrape) — check your inbox"><i class="fas fa-envelope"></i></span>` : '') +
+        (settings.show_unread_notifications !== false && strOf(s, 'unread_notifications') === 'true'
+          ? `<span class="unread-flag" title="Unread notifications on ${esc(t.name)} (as of the last scrape)"><i class="fas fa-bell"></i></span>` : '');
       return `<td>
       <div class="td-tracker-wrap">
         ${settings.show_favicons && t.url ? `<img class="tracker-favicon" src="${getFaviconUrl(t.url)}" alt="" onerror="this.style.display='none'">` : ''}
-        <span class="td-tracker-name"><span class="td-name-text">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}</span>
+        <span class="td-tracker-name"><span class="td-name-text tracker-name-link" title="Open tracker detail" onclick="event.stopPropagation();openTrackerDetail('${t.id}')">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}${unreadFlags}</span>
         <a class="td-tracker-url" href="${esc(t.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(t.url)}</a>
       </div></td>`;
     }
@@ -421,6 +429,21 @@ function buildExpanded(
 
   const targetsHtml = buildTargets(tracker, stats, settings, groupDefs, tKey);
 
+  // Rules — display-only reference from the def (account-wide rules page).
+  // Always shown in the detail view; the grid card's compact line follows the
+  // Display toggle instead.
+  const rulesRows: Array<[string, string]> = [];
+  if (tracker.min_ratio && tracker.min_ratio > 0) rulesRows.push(['Min Ratio', String(tracker.min_ratio)]);
+  if (tracker.min_seed_days && tracker.min_seed_days > 0)
+    rulesRows.push(['Min Seed Time', `${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`]);
+  const rulesHtml = rulesRows.length ? `<div style="margin-top:10px">
+      <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>
+      <div class="exp-stat-list">${rulesRows.map(([l, v]) => `<div class="exp-stat">
+        <span class="exp-stat-label">${esc(l)}</span>
+        <span class="exp-stat-value">${esc(v)}</span>
+      </div>`).join('')}</div>
+    </div>` : '';
+
   return `${errorBanner}${eventBanner}<div class="expanded-cols">
     <div>
       <div class="exp-section-title">Stats</div>
@@ -433,6 +456,7 @@ function buildExpanded(
         <span class="exp-stat-value">${esc(r.v)}</span>
       </div>`).join('')}${unreadRows}${profileLinkRow}</div>
       ${scrapeSetupHint}
+      ${rulesHtml}
       ${perksHtml}
       ${sparkHTML}
     </div>

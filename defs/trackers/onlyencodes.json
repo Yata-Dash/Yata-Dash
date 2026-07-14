@@ -5,11 +5,19 @@
   "abbr": "OE+",
   "url": "https://onlyencodes.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-14",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "edge2020",
+    "role": "Leader",
+    "date": "2026-07-12",
+    "notes": "Approved for scrape once every 24 hours"
+  },
+  "scrape": {
+    "max_scrapes_per_day": 1
+  },
+    "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 2
   },
   "groups": [
     {

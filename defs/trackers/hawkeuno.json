@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "key": "hawkeuno",
+  "name": "Hawke-uno",
+  "abbr": "HUNO",
+  "url": "https://hawke.uno",
+  "type": "unit3d",
+  "last_updated": "2026-07-10",
+  "api": {
+    "path": "/api/profile",
+    "auth_method": "api_key_header",
+    "field_map": {
+      "data.username": "username",
+      "data.group": "group",
+      "data.member_since": "join_date",
+      "data.ratio": "ratio",
+      "data.hunos": "bonus_points",
+      "data.active_seeds": "seeding",
+      "data.active_leeches": "leeching",
+      "data.hit_and_runs": "hit_and_runs",
+      "data.warnings": "warnings",
+      "data.seed_divisions.vanguard": "vanguard_seeds",
+      "data.seed_divisions.squire": "squire_seeds",
+      "data.seed_divisions.knight": "knight_seeds",
+      "data.seed_divisions.champion": "champion_seeds",
+      "data.seed_divisions.guardian": "guardian_seeds",
+      "data.seed_divisions.legend": "legend_seeds"
+    },
+    "byte_fields": {
+      "data.uploaded": "uploaded",
+      "data.downloaded": "downloaded",
+      "data.buffer": "buffer"
+    },
+    "api_key_hint": "Settings → Security → API Token (requires can_api)"
+  },
+  "scrape": {
+    "disable_scraping": true
+    }, 
+    "rules": {
+    "min_ratio": 0,
+    "min_seed_days": 0
+  },
+  "groups": [
+    {
+      "name": "Silent Sisters",
+      "style": {
+        "color": "#9BA6B2",
+        "icon": "fas fa-user"
+      },
+      "requirements": {},
+      "perks": [
+        {
+          "icon": "fal fa-download",
+          "label": "Can download"
+        }
+      ]
+    },
+    {
+      "name": "Iron Fleet",
+      "style": {
+        "color": "#5DADE2",
+        "icon": "fas fa-anchor"
+      },
+      "requirements": {
+        "min_counts": [
+          { "field": "vanguard_seeds", "count": 1, "label": "Vanguard (24H–10D)" }
+        ]
+      },
+      "perks": [
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Can upload"
+        },
+        {
+          "icon": "fal fa-clipboard-list",
+          "label": "Can request"
+        }
+      ]
+    },
+    {
+      "name": "White Walkers",
+      "style": {
+        "color": "#7FDBFF",
+        "icon": "fas fa-snowflake"
+      },
+      "requirements": {
+        "min_counts": [
+          { "field": "vanguard_seeds", "count": 1, "label": "Vanguard (24H–10D)" },
+          { "field": "squire_seeds", "count": 1, "label": "Squire (10D–6M)" }
+        ]
+      },
+      "perks": [
+        {
+          "icon": "fas fa-rss",
+          "label": "RSS"
+        },
+        {
+          "icon": "fal fa-server",
+          "label": "IRC Server"
+        },
+        {
+          "icon": "fal fa-bullhorn",
+          "label": "IRC Announce"
+        },
+        {
+          "icon": "fal fa-code",
+          "label": "Upload API"
+        },
+        {
+          "icon": "fab fa-discord",
+          "label": "Can apply for hawke-one Discord access"
+        }
+      ]
+    },
+    {
+      "name": "Dothraki",
+      "style": {
+        "color": "#E67E22",
+        "icon": "fas fa-horse-head"
+      },
+      "requirements": {
+        "min_counts": [
+          { "field": "vanguard_seeds", "count": 1, "label": "Vanguard (24H–10D)" },
+          { "field": "squire_seeds", "count": 10, "label": "Squire (10D–6M)" },
+          { "field": "knight_seeds", "count": 1, "label": "Knight (6M–1Y)" },
+          { "field": "guardian_seeds", "count": 10, "label": "Guardian (Top-3)" }
+        ]
+      },
+      "perks": [
+        {
+          "icon": "fas fa-tasks",
+          "label": "Listed uploads"
+        },
+        {
+          "icon": "fal fa-syringe",
+          "label": "HnR immunity"
+        }
+      ]
+    },
+    {
+      "name": "Unsullied",
+      "style": {
+        "color": "#BF55EC",
+        "icon": "fas fa-shield"
+      },
+      "requirements": {
+        "min_counts": [
+          { "field": "vanguard_seeds", "count": 1, "label": "Vanguard (24H–10D)" },
+          { "field": "squire_seeds", "count": 100, "label": "Squire (10D–6M)" },
+          { "field": "knight_seeds", "count": 100, "label": "Knight (6M–1Y)" },
+          { "field": "champion_seeds", "count": 10, "label": "Champion (1Y–5Y)" },
+          { "field": "guardian_seeds", "count": 200, "label": "Guardian (Top-3)" }
+        ]
+      },
+      "perks": [
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Can invite"
+        },
+        {
+          "icon": "fal fa-eye",
+          "label": "Can see peers"
+        },
+        {
+          "icon": "fab fa-discord",
+          "label": "hawke-one Discord invite"
+        },
+        {
+          "icon": "fab fa-discord",
+          "label": "Unsullied on hawke-one Discord with added perks"
+        }
+      ]
+    },
+    {
+      "name": "Targaryen",
+      "style": {
+        "color": "#E74C3C",
+        "icon": "fas fa-dragon",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_counts": [
+          { "field": "squire_seeds", "count": 100, "label": "Squire (10D–6M)" },
+          { "field": "knight_seeds", "count": 100, "label": "Knight (6M–1Y)" },
+          { "field": "champion_seeds", "count": 100, "label": "Champion (1Y–5Y)" },
+          { "field": "guardian_seeds", "count": 500, "label": "Guardian (Top-3)" },
+          { "field": "legend_seeds", "count": 10, "label": "Legend (5Y+)" }
+        ]
+      },
+      "perks": [
+        {
+          "icon": "fal fa-badge-check",
+          "label": "Trusted uploader"
+        },
+        {
+          "icon": "fal fa-gem",
+          "label": "Worthy"
+        },
+        {
+          "icon": "fas fa-magic",
+          "label": "Internal"
+        },
+        {
+          "icon": "fal fa-palette",
+          "label": "Custom branding"
+        },
+        {
+          "icon": "fab fa-discord",
+          "label": "Targaryen on hawke-one Discord with added perks"
+        }
+      ]
+    }
+  ]
+}

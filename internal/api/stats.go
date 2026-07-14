@@ -72,6 +72,11 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		}
 	}
 
+	// Capture the group before this fetch so we can record a promotion/demotion
+	// event if it changes. Read from stored state (not memory) so it survives
+	// restarts and only fires on a real transition.
+	oldGroup := mergedString(d, t.ID, "group")
+
 	data, ferr := d.Fetch.Fetch(t)
 	if ferr == nil {
 		lastFetchAt.Store(t.ID, time.Now()) // gate future non-forced fetches
@@ -96,6 +101,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.Fields = merged
 		if resp.OK {
 			_ = d.Stats.RecordHistory(t.ID, merged)
+			recordGroupChange(d, t, oldGroup, mergedFieldString(merged, "group"))
 		}
 		// Growth rates (daily-rollup average) for target/promotion ETAs.
 		if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
@@ -113,6 +119,36 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		d.Alerts.Evaluate(t, resp.Fields, resp.OK)
 	}
 	return resp
+}
+
+// mergedFieldString reads one merged field as a trimmed string ("" if absent),
+// from a map already in hand (no extra query).
+func mergedFieldString(merged models.MergedStats, field string) string {
+	if f, ok := merged[field]; ok {
+		if s, ok := f.Value.(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+// recordGroupChange writes a group_change event when a tracker's group moves
+// between two known values (a promotion or demotion). Direction is left to the
+// frontend, which has the ordered group defs. Only real transitions are
+// recorded: both ends non-empty and different, and not an exact repeat of the
+// last recorded change.
+func recordGroupChange(d *Deps, t models.Tracker, oldGroup, newGroup string) {
+	oldGroup, newGroup = strings.TrimSpace(oldGroup), strings.TrimSpace(newGroup)
+	if oldGroup == "" || newGroup == "" || strings.EqualFold(oldGroup, newGroup) {
+		return
+	}
+	detail := oldGroup + "→" + newGroup
+	if last, err := d.DB.LatestEventDetail(t.ID, "group_change"); err == nil && last == detail {
+		return
+	}
+	if err := d.DB.AddEvent(t.ID, time.Now().UTC(), "group_change", detail); err == nil {
+		d.logInfof("event: %s (%s) group change — %s", t.Name, t.ID, detail)
+	}
 }
 
 // RefreshFloorMinutes is the lowest the automatic API-refresh interval can be
@@ -262,7 +298,13 @@ func RunRefreshCycle(d *Deps) {
 	}
 }
 
-// GET /api/stats — refresh all enabled trackers concurrently.
+// bulkRefreshConcurrency bounds how many trackers are refreshed at once by the
+// bulk endpoint, so a user with many trackers doesn't fan out into one
+// simultaneous outbound request per tracker. Each is a different host, so this
+// is about total load, not per-host politeness (that's the rate limiter's job).
+const bulkRefreshConcurrency = 8
+
+// GET /api/stats — refresh all enabled trackers, bounded-concurrently.
 // ?force=1 (the manual refresh button / post-import) bypasses the min-age
 // guard; the plain auto-poll omits it so idle load stays low.
 func bulkStats(d *Deps) http.HandlerFunc {
@@ -272,6 +314,7 @@ func bulkStats(d *Deps) http.HandlerFunc {
 		results := make(map[string]models.TrackerStatsResponse, len(trackers))
 		var mu sync.Mutex
 		var wg sync.WaitGroup
+		sem := make(chan struct{}, bulkRefreshConcurrency)
 		for _, t := range trackers {
 			if !t.Enabled {
 				mu.Lock()
@@ -282,6 +325,8 @@ func bulkStats(d *Deps) http.HandlerFunc {
 			wg.Add(1)
 			go func(t models.Tracker) {
 				defer wg.Done()
+				sem <- struct{}{}        // acquire a slot (blocks past the cap)
+				defer func() { <-sem }() // release
 				res := refreshTracker(d, t, force)
 				mu.Lock()
 				results[t.ID] = res

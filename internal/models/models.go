@@ -87,11 +87,16 @@ type TrackerView struct {
 	// ProfileURL is the user's profile page on the tracker ("" when unknown).
 	ProfileURL string `json:"profile_url,omitempty"`
 	// RequiredFields lists extra config fields this tracker's type needs
-	// (e.g. gazelle requires "username").
-	RequiredFields []string `json:"required_fields,omitempty"`
+	// (e.g. gazelle requires "username"), minus any the tracker def's API
+	// already provides. No omitempty: an empty list must reach the UI as []
+	// so it doesn't fall back to the type-level default.
+	RequiredFields []string `json:"required_fields"`
 	// MinRatio is the tracker's account-wide required ratio (0 = unknown).
 	// The UI colors the ratio red only below this when set.
 	MinRatio float64 `json:"min_ratio,omitempty"`
+	// MinSeedDays is the tracker's minimum per-torrent seed time in days
+	// (0 = unknown). Display-only reference from the def — no calculations.
+	MinSeedDays int `json:"min_seed_days,omitempty"`
 	// DefApproval is the def's staff-approval status (approved | informal |
 	// pending | unknown). Manual trackers (no def) report "unknown" — the UI
 	// warns for anything but "approved". Who/when details are never exposed.
@@ -139,6 +144,24 @@ type Settings struct {
 	// toggles: many users care about mail but not notifications. nil = true.
 	ShowUnreadMail          *bool `json:"show_unread_mail"`
 	ShowUnreadNotifications *bool `json:"show_unread_notifications"`
+	// ShowTrackerRules toggles the compact rules line at the bottom of grid
+	// cards (min ratio / min seed time from the def — display-only). nil =
+	// true. The Detail view's Rules section always shows.
+	ShowTrackerRules *bool `json:"show_tracker_rules"`
+	// PathwayFavorites / PathwayNotInterested are pathway-target lists (by
+	// dataset tracker name). Favourites sort first in the Pathways picker;
+	// not-interested entries sort last and are excluded from the
+	// requirements-met filter. Stored server-side so they survive browsers
+	// and ride along in config export/import.
+	PathwayFavorites     []string `json:"pathway_favorites,omitempty"`
+	PathwayNotInterested []string `json:"pathway_not_interested,omitempty"`
+
+	// TrustProxyHeaders makes Yata honor X-Forwarded-For (login rate
+	// limiting — otherwise every proxied client shares the proxy's lockout
+	// bucket) and X-Forwarded-Proto (Secure session cookie behind TLS-
+	// terminating proxies). Enable ONLY behind a reverse proxy you control:
+	// directly exposed, these headers are client-spoofable.
+	TrustProxyHeaders bool `json:"trust_proxy_headers"`
 	// UpdateCheckAuto opts in to a DAILY check of versions.json on the repo
 	// (contacts raw.githubusercontent.com). Default OFF — privacy stance: the
 	// app contacts nothing the user didn't ask for. Manual checks always work.
@@ -168,6 +191,13 @@ type Settings struct {
 	// in an open dashboard. This data is local + time-sensitive, so it stays
 	// fast. Floor 1; 0 = unset → 10-sec default. The qui toggle turns it off.
 	QUIRefreshSeconds int `json:"qui_refresh_seconds"`
+
+	// ── History retention ────────────────────────────────────────────────────
+	// HistoryDailyRetentionDays is how long daily history rollups are kept —
+	// the data behind long-range growth charts and trend rates. 0/unset →
+	// 730-day default (~150 KB per tracker per year, so "years" is cheap).
+	// Fine-grained history (sparklines) stays at 14 days regardless.
+	HistoryDailyRetentionDays int `json:"history_daily_retention_days"`
 
 	// ── QUI (qBittorrent UI) integration ────────────────────────────────────
 	QUIURL              string `json:"qui_url"`
@@ -202,7 +232,10 @@ func DefaultSettings() Settings {
 		RefreshIntervalMinutes: 30,
 		// qui is a local API with time-sensitive data (speed/free space) — keep
 		// it snappy at 10 s (floor 1; the integration toggle turns it off).
-		QUIRefreshSeconds:   10,
+		QUIRefreshSeconds: 10,
+		// ~2 years of daily history — enough for the History view's long
+		// ranges while keeping the database tiny.
+		HistoryDailyRetentionDays: 730,
 		QUIURL:              "http://localhost:7476",
 		QUIEnabledInstances: []int{},
 	}

@@ -179,7 +179,12 @@
   "rules": {
     // Ratio below which the account is at risk (warnings/demotion/ban).
     // When set, the UI colors the ratio red ONLY below this value.
-    "min_ratio": 0.4
+    "min_ratio": 0.4,
+    // Minimum per-torrent seed time in whole days (e.g. seedpool 10,
+    // InfinityHD 3). DISPLAY-ONLY reference shown in the card/detail Rules
+    // section — no calculations; fine print (partial-download thresholds,
+    // exemptions, …) stays on the tracker's rules page.
+    "min_seed_days": 10
   },
 
   // [OPTIONAL] Site-wide requirements to USE the invite system when they are
@@ -236,6 +241,16 @@
         "any_of": [
           { "min_seed_size": "6 TiB" },
           { "min_uploaded": "25 TiB" }
+        ],
+
+        // Minimum counts of per-tracker stat fields, for trackers that
+        // promote on custom counters (e.g. seed-time brackets:
+        // "N torrents seeding for 6m–1y"). "field" is the stat field the
+        // API maps the counter to; "label" overrides the generic field
+        // label in target rows. Ordered — displayed exactly as written.
+        // Never copied into a user's stored targets; always live from here.
+        "min_counts": [
+          { "field": "knight_seeds", "count": 50, "label": "Knight" }
         ]
       },
 

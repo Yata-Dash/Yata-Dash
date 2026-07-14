@@ -236,6 +236,62 @@ func FindPaths(d *Data, users []UserTracker, target string,
 	return res
 }
 
+// ReadyTargets returns every target for which the user currently meets ALL
+// listed requirements on at least one active DIRECT route (first hop, live
+// stats — the same evaluation the paths view runs). Community data: meeting
+// the listed requirements never guarantees an invite.
+func ReadyTargets(d *Data, users []UserTracker,
+	groupsFor func(pathwayName string) []defs.GroupDef,
+	inviteReqsFor func(pathwayName string) *defs.InviteReqs) map[string]bool {
+	out := map[string]bool{}
+	for _, u := range users {
+		for _, r := range d.From(u.PathwayName) {
+			if !r.Active || out[r.To] || r.To == u.PathwayName {
+				continue
+			}
+			step := evalStep(r, u, true, d, groupsFor, inviteReqsFor)
+			// Zero known ETA with nothing unknown ⇒ every requirement met
+			// (unmet controllable stats set HasUnknown; unmet age sets ETADays).
+			if step.ETADays == 0 && !step.HasUnknown {
+				out[r.To] = true
+			}
+		}
+	}
+	return out
+}
+
+// DirectRoutesFrom evaluates every ACTIVE direct invite route leaving one of
+// the user's trackers against live stats — the Tracker Detail page's
+// "pathways from here" list. Routes to targets the user already has are
+// skipped. Results are sorted: fully-met routes first, then by known ETA.
+func DirectRoutesFrom(d *Data, u UserTracker, owned map[string]bool,
+	groupsFor func(pathwayName string) []defs.GroupDef,
+	inviteReqsFor func(pathwayName string) *defs.InviteReqs) []Step {
+	var out []Step
+	for _, r := range d.From(u.PathwayName) {
+		if !r.Active || owned[r.To] {
+			continue
+		}
+		out = append(out, evalStep(r, u, true, d, groupsFor, inviteReqsFor))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		aMet := a.ETADays == 0 && !a.HasUnknown
+		bMet := b.ETADays == 0 && !b.HasUnknown
+		if aMet != bMet {
+			return aMet
+		}
+		if a.HasUnknown != b.HasUnknown {
+			return !a.HasUnknown
+		}
+		if a.ETADays != b.ETADays {
+			return a.ETADays < b.ETADays
+		}
+		return a.To < b.To
+	})
+	return out
+}
+
 func buildPath(u UserTracker, steps []Step) Path {
 	p := Path{StartTrackerID: u.TrackerID, StartName: u.PathwayName, Steps: steps}
 	for _, s := range steps {

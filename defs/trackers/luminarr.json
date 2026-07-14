@@ -5,11 +5,19 @@
   "abbr": "LUME",
   "url": "https://luminarr.me",
   "type": "unit3d",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-14",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "Socs",
+    "role": "Operator",
+    "date": "2026-07-14",
+    "notes": "Approved 60-120min Will monitor and reach out if traffic is too heavy."
+  },
+    "rules": {
+    "min_ratio": 0.6,
+    "min_seed_days": 3
+  },
+  "scrape": {
+    "min_interval_minutes": 120
   },
   "groups": [
     {

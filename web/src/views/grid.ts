@@ -2,7 +2,7 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg } from '../utils/icons';
-import { esc, errLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtTrackerName, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtTrackerName, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
@@ -123,7 +123,9 @@ export function renderCard(
     <div class="card-header-info">
       <div class="card-tracker-name" style="display:flex;align-items:center;gap:5px">
         ${favicon}
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fmtTrackerName(tracker.name, tracker.abbr, settings.tracker_name_mode))}${tracker.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${eventBeacon}${unreadFlags}</span>
+        <span class="tracker-name-link" title="Open tracker detail"
+          onclick="event.stopPropagation();openTrackerDetail('${tracker.id}')"
+          style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fmtTrackerName(tracker.name, tracker.abbr, settings.tracker_name_mode))}</span><span style="flex-shrink:0">${tracker.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${eventBeacon}${unreadFlags}</span>
       </div>
       <div class="card-header-meta">
         <a class="card-tracker-url" href="${esc(tracker.url)}" target="_blank" rel="noopener"
@@ -222,6 +224,7 @@ export function renderCard(
         <div class="card-section-title">More Stats</div>
         ${moreHtml}
       </div>` : ''}
+      ${buildRulesLine(tracker, settings)}
     </div>
     <div class="card-footer">
       <span class="card-last-updated">API ${updated}</span>
@@ -249,6 +252,21 @@ export function renderCard(
   el.innerHTML = header + body;
   // Re-attach drag/drop listeners after innerHTML wipe (drop targets still needed)
   attachDragEvents(el, tracker.id, () => {});
+}
+
+/** Compact display-only rules line at the bottom of a card (def account-wide
+ *  rules: min ratio / min seed time). Follows the Display toggle; the fine
+ *  print stays on the tracker's rules page. */
+function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
+  if (settings.show_tracker_rules === false) return '';
+  const parts: string[] = [];
+  if (tracker.min_ratio && tracker.min_ratio > 0) parts.push(`Ratio ≥ ${tracker.min_ratio}`);
+  if (tracker.min_seed_days && tracker.min_seed_days > 0)
+    parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
+  if (!parts.length) return '';
+  return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
+    <i class="fas fa-scale-balanced"></i><span>${parts.map(esc).join(' · ')}</span>
+  </div>`;
 }
 
 /** Small row of perk icons (with custom tooltip) shown after the group badge */
@@ -424,8 +442,35 @@ function targetRowsFor(
     else miss('Snatched', targets['snatched'], 'amber');
   }
 
+  // Any other key targets a merged stat field directly (set from the manual
+  // target builder — e.g. fl_tokens, upload_snatches, HUNO's *_seeds).
+  // Sizes compare as sizes when both parse; everything else numerically.
+  for (const [key, tgt] of Object.entries(targets)) {
+    if (KNOWN_TARGET_KEYS.has(key)) continue;
+    const label = fieldLabel(key);
+    const curStr = strOf(stats, key);
+    let curV = parseSize(curStr), tgtV = parseSize(tgt);
+    if (curV === null || tgtV === null) {
+      const c = parseFloat(curStr.replace(/,/g, ''));
+      const g = parseFloat(tgt.replace(/,/g, ''));
+      curV = isNaN(c) ? null : c;
+      tgtV = isNaN(g) ? null : g;
+    }
+    if (curStr && curV !== null && tgtV !== null && tgtV > 0) {
+      push(label, curStr, tgt, (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]) });
+    } else {
+      miss(label, tgt, 'teal');
+    }
+  }
+
   return rows;
 }
+
+/** Target keys with dedicated rendering above — everything else is generic. */
+const KNOWN_TARGET_KEYS = new Set([
+  'uploaded', 'downloaded', 'ratio', 'seed_size', 'total_uploads',
+  'days', 'avg_seed', 'bonus_points', 'adoptions', 'snatched',
+]);
 
 /** Amber ETA chip for a target row — gated by show_target_etas. Account age is
  *  exact ("in X"); rate-projected stats use "≈ X"; approximate ones add a title. */
@@ -462,6 +507,22 @@ export function buildTargets(
   // groupDefs data (NEVER stored in the targets map, which holds base
   // requirements only). Base must be met PLUS at least one alternative.
   const targetGroupDef = tracker.target_group && groupDefs ? findGroupDef(groupDefs, tKey, tracker.target_group) : undefined;
+
+  // min_counts requirements (e.g. HUNO's seed-time brackets) — also rendered
+  // live from the target group's def, in def order, never stored in the
+  // targets map. Folded into `rows` so the promotion-ETA headline and
+  // "Eligible now" state see them as base requirements.
+  for (const mc of targetGroupDef?.requirements?.min_counts ?? []) {
+    if (!mc.field || !(mc.count > 0)) continue;
+    const label = mc.label || fieldLabel(mc.field);
+    const curStr = strOf(stats, mc.field);
+    const curV = parseInt(curStr.replace(/,/g, ''), 10);
+    if (curStr && !isNaN(curV)) {
+      rows.push({ label, cur: curStr, tgt: String(mc.count), pct: Math.min(100, Math.max(0, (curV / mc.count) * 100)), color: 'teal' });
+    } else {
+      rows.push({ label, cur: '—', tgt: String(mc.count), pct: 0, color: 'teal' });
+    }
+  }
   const anyOf = targetGroupDef?.requirements?.any_of ?? [];
   const anyOfHtml = anyOf.length
     ? `<div class="anyof-wrap">

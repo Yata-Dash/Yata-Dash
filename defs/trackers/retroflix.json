@@ -6,7 +6,7 @@
   "url": "https://retroflix.net",
   "aliases": ["https://retroflix.club"],
   "type": "scrape_only",
-  "last_updated": "2026-07-08",
+  "last_updated": "2026-07-12",
   "approved_by": {
     "name": "",
     "role": "",
@@ -23,6 +23,9 @@
       "invitations": "invites",
       "class": "group"
     }
+  },
+    "rules": {
+    "min_ratio": 0.4
   },
   "groups": [
     {

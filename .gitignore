@@ -5,6 +5,8 @@ yata.exe~
 *.exe
 static/dashboard.js
 web/dist/
+dist/
+dev.ps1
 
 # Editor / tooling
 .claude/
@@ -34,14 +36,21 @@ reference/
 # Dev tools
 internal/scrape/profile_test.go
 tools/scrapetest/
+tools/apiprobe/
+tools/genversions/
+tools/seedtest/
 
 # Self-hosted Font Awesome (e.g. Pro) — licensed assets, must NOT ship in the public repo
 static/fontawesome/
 
 
 *.md
-# README.md — the only user-facing doc that ships
+# README.md + CHANGELOG.md are the user-facing docs that ship (CHANGELOG is also
+# read by the release workflow for the GitHub Release notes).
 !/README.md
+!/CHANGELOG.md
+!/docs/API.md
+
 
 # OS noise
 .DS_Store

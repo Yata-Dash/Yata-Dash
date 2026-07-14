@@ -83,6 +83,26 @@ func (d *DB) migrate() error {
 			expires_at INTEGER NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions (expires_at)`,
+		// Tracker events — point-in-time annotations for the History view
+		// (group promotions/demotions; extensible via `kind`). Written
+		// opportunistically by the refresh path; tiny, one row per change.
+		`CREATE TABLE IF NOT EXISTS tracker_events (
+			tracker_id TEXT NOT NULL,
+			at         INTEGER NOT NULL,         -- unix seconds
+			kind       TEXT NOT NULL,            -- 'group_change' (more later)
+			detail     TEXT NOT NULL             -- e.g. "Seeker→PowerPool"
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_events_tracker ON tracker_events (tracker_id, at)`,
+		// Read-only integration tokens (Settings → Integrations → API Tokens).
+		// Only the SHA-256 hash is stored; the plaintext token is shown once.
+		`CREATE TABLE IF NOT EXISTS api_tokens (
+			id           TEXT PRIMARY KEY,
+			name         TEXT NOT NULL,
+			prefix       TEXT NOT NULL,             -- display hint (yata_xxxx…)
+			hash         TEXT NOT NULL UNIQUE,      -- sha256 hex of the token
+			created_at   INTEGER NOT NULL,
+			last_used_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.sql.Exec(s); err != nil {
@@ -192,6 +212,8 @@ func (d *DB) WipeData() error {
 		`DELETE FROM history`,
 		`DELETE FROM history_daily`,
 		`DELETE FROM scrape_log`,
+		`DELETE FROM tracker_events`,
+		`DELETE FROM api_tokens`, // a recovery reset revokes integrations too
 	} {
 		if _, err := d.sql.Exec(q); err != nil {
 			return err
@@ -205,7 +227,9 @@ func (d *DB) DeleteTracker(trackerID string) error {
 	for _, q := range []string{
 		`DELETE FROM stat_layers WHERE tracker_id = ?`,
 		`DELETE FROM history WHERE tracker_id = ?`,
+		`DELETE FROM history_daily WHERE tracker_id = ?`,
 		`DELETE FROM scrape_log WHERE tracker_id = ?`,
+		`DELETE FROM tracker_events WHERE tracker_id = ?`,
 	} {
 		if _, err := d.sql.Exec(q, trackerID); err != nil {
 			return err
@@ -379,6 +403,78 @@ func (d *DB) AllDailySince(since time.Time) ([]HistoryPoint, error) {
 func (d *DB) PruneDaily(before time.Time) error {
 	_, err := d.sql.Exec(`DELETE FROM history_daily WHERE day < ?`, utcDay(before))
 	return err
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filtered series (History view) — generalized HistorySince/DailySince with
+// optional tracker/field filters so payloads stay bounded server-side. The
+// unfiltered originals above stay intact for their existing callers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// SeriesFine returns fine-grained history points at or after since, oldest
+// first, filtered to the given tracker IDs and fields (empty slice = all).
+func (d *DB) SeriesFine(trackerIDs, fields []string, since time.Time) ([]HistoryPoint, error) {
+	q, args := seriesQuery(
+		`SELECT tracker_id, recorded_at, field, value FROM history`,
+		"recorded_at", trackerIDs, fields, since.Unix())
+	return d.queryPoints(q, args)
+}
+
+// SeriesDaily returns daily rollup points at or after since, oldest first,
+// filtered like SeriesFine. RecordedAt carries the day's UTC midnight.
+func (d *DB) SeriesDaily(trackerIDs, fields []string, since time.Time) ([]HistoryPoint, error) {
+	q, args := seriesQuery(
+		`SELECT tracker_id, day, field, value FROM history_daily`,
+		"day", trackerIDs, fields, utcDay(since))
+	return d.queryPoints(q, args)
+}
+
+// seriesQuery builds the filtered WHERE clause shared by both series tables.
+func seriesQuery(sel, timeCol string, trackerIDs, fields []string, sinceUnix int64) (string, []any) {
+	q := sel + ` WHERE ` + timeCol + ` >= ?`
+	args := []any{sinceUnix}
+	if len(trackerIDs) > 0 {
+		q += ` AND tracker_id IN (` + placeholders(len(trackerIDs)) + `)`
+		for _, id := range trackerIDs {
+			args = append(args, id)
+		}
+	}
+	if len(fields) > 0 {
+		q += ` AND field IN (` + placeholders(len(fields)) + `)`
+		for _, f := range fields {
+			args = append(args, f)
+		}
+	}
+	q += ` ORDER BY ` + timeCol + ` ASC, tracker_id ASC`
+	return q, args
+}
+
+func placeholders(n int) string {
+	s := make([]byte, 0, n*2)
+	for i := range n {
+		if i > 0 {
+			s = append(s, ',')
+		}
+		s = append(s, '?')
+	}
+	return string(s)
+}
+
+func (d *DB) queryPoints(q string, args []any) ([]HistoryPoint, error) {
+	rows, err := d.sql.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HistoryPoint
+	for rows.Next() {
+		var p HistoryPoint
+		if err := rows.Scan(&p.TrackerID, &p.RecordedAt, &p.Field, &p.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

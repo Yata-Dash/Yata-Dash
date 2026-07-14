@@ -5,12 +5,16 @@
   "abbr": "ZNTH",
   "url": "https://znth.cx",
   "type": "unit3d",
-  "last_updated": "2026-07-07",
+  "last_updated": "2026-07-12",
   "approved_by": {
     "name": "Zenith Staff",
     "role": "Staff",
     "date": "2026-07-07",
     "note": "Staff are working to add the needed stats to their API so scraping can eventually be dropped; once the API covers the scraped fields — Zenith should move to API-only (disable_scraping)"
+  },
+    "rules": {
+    "min_ratio": 0.0,
+    "min_seed_days": 3
   },
   "groups": [
     {

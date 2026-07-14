@@ -52,6 +52,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 	}
 	typeKey := t.Type
 	v.DefApproval = defs.ApprovalUnknown // manual trackers: nobody signed off
+	var customAPI *defs.CustomAPI        // def's custom API, for requiredFieldsFor
 	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
 		v.DefKey = td.Key
 		v.Abbr = td.Abbr
@@ -66,10 +67,14 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		}
 		if td.Rules != nil {
 			v.MinRatio = td.Rules.MinRatio
+			v.MinSeedDays = td.Rules.MinSeedDays
 		}
+		customAPI = td.API
 	}
 	if tt, ok := d.Reg.Type(typeKey); ok {
-		v.RequiredFields = tt.API.RequiredFields
+		// Fields the def's API already provides aren't required from the user
+		// (e.g. HUNO's member_since → join_date).
+		v.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, customAPI)
 	}
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	v.SupportsHTMLScrape = !rs.SkipHTMLScrape && !rs.DisableScraping

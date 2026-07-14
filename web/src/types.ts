@@ -45,6 +45,9 @@ export interface Tracker {
   required_fields?: string[];
   /** Tracker's account-wide required ratio (0/absent = unknown). */
   min_ratio?: number;
+  /** Tracker's minimum per-torrent seed time in days (0/absent = unknown).
+   *  Display-only reference from the def — no calculations. */
+  min_seed_days?: number;
   /** Def staff-approval status: approved | informal | pending | unknown.
    *  Manual trackers report "unknown"; the UI warns unless "approved". */
   def_approval?: string;
@@ -59,12 +62,6 @@ export interface Tracker {
 
 /** Sentinel value meaning "credential unchanged" in PUT/POST payloads. */
 export const MASKED_KEY = '••••••••';
-
-/** Keys of the Tracker.targets map. */
-export const TARGET_KEYS = [
-  'uploaded', 'downloaded', 'ratio', 'days', 'seed_size',
-  'total_uploads', 'avg_seed', 'bonus_points', 'snatched', 'adoptions',
-] as const;
 
 /** Create/update payload for POST /api/trackers and PUT /api/trackers/{id}. */
 export interface TrackerPayload {
@@ -166,6 +163,38 @@ export interface HistoryPoint {
   value: number;       // sizes in GiB, durations in seconds
 }
 
+// ── API tokens (read-only integration tokens) ─────────────────────────────
+
+export interface ApiTokenInfo {
+  id: string;
+  name: string;
+  prefix: string;       // display hint (yata_xxxxxxxx…) — never the full token
+  created_at: number;   // unix seconds
+  last_used_at: number; // unix seconds; 0 = never used
+}
+
+/** One tracker/field line from GET /api/history/series. */
+export interface HistorySeries {
+  tracker_id: string;
+  field: string;
+  unit: 'GiB' | 'count' | 'ratio' | 'seconds';
+  points: [number, number][]; // [unixSec, value], oldest first
+}
+
+/** A point-in-time timeline marker (group change) from GET /api/history/series. */
+export interface HistoryEvent {
+  tracker_id: string;
+  at: number;     // unix sec
+  kind: string;   // "group_change"
+  detail: string; // e.g. "Seeker→PowerPool"
+}
+
+export interface HistorySeriesResponse {
+  range: { from: number; to: number; granularity: 'fine' | 'daily' };
+  series: HistorySeries[];
+  events: HistoryEvent[];
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────
 
 export interface AppSettings {
@@ -190,7 +219,11 @@ export interface AppSettings {
   qui_refresh_seconds: number;      // qui bar refresh cadence; floor 1 (default 10)
   show_unread_mail?: boolean | null;          // null = true — unread envelope icons
   show_unread_notifications?: boolean | null; // null = true — unread bell icons
+  show_tracker_rules?: boolean | null;        // null = true — compact rules line on grid cards
   update_check_auto?: boolean;                 // opt-in daily update check (default false)
+  trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
+  pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
+  pathway_not_interested?: string[];           // pathway targets pushed to the bottom, excluded from reqs-met
   qui_url: string;
   qui_api_key: string;
   qui_enabled_instances: number[];
@@ -319,6 +352,19 @@ export interface GroupRequirements {
    * PLUS at least ONE complete any_of entry. Entries never nest further.
    */
   any_of?: GroupRequirements[];
+  /**
+   * Minimum counts of per-tracker stat fields (e.g. HUNO's seed-time
+   * brackets: vanguard_seeds ≥ 1). Ordered — rendered live from the def,
+   * never copied into the stored targets map.
+   */
+  min_counts?: MinCountReq[];
+}
+
+/** One "stat field ≥ count" group requirement (GroupRequirements.min_counts). */
+export interface MinCountReq {
+  field: string;  // canonical stat field holding the current count
+  count: number;  // minimum required value
+  label?: string; // display override, e.g. "Vanguard (1–10d seed)"
 }
 
 export interface GroupDef {
@@ -344,8 +390,13 @@ export interface DefInfo {
   min_interval_minutes?: number;
   max_scrapes_per_day?: number;
   api_key_hint?: string;
+  /** The def's custom API authenticates with the session cookie — keep the
+   *  cookie field visible even when scraping is off. */
+  needs_session_cookie?: boolean;
   approval_status?: string; // approved | informal | pending | unknown
   approval_note?: string;
+  /** Type's required config fields minus any the def's API provides. */
+  required_fields?: string[];
 }
 
 export interface TypeInfo {
@@ -416,6 +467,7 @@ export interface PathwayTarget {
   def_key?: string;   // matched Yata def ("" / absent = none)
   is_mine: boolean;   // user already has this tracker
   inbound: number;    // active routes into it (0 = unreachable by invite)
+  reqs_met?: boolean; // all requirements met on ≥1 direct route (community data, no guarantee)
 }
 
 export interface PathwayTargetsResponse {
@@ -478,6 +530,13 @@ export interface PathwayPath {
   has_unknown: boolean;     // render total with a "+" suffix
 }
 
+/** GET /api/pathways/from — active direct routes leaving one tracker,
+ *  evaluated against live stats (Tracker Detail's "pathways from here"). */
+export interface PathwayFromResponse {
+  source: PathwaySource;
+  routes: PathwayStep[] | null;
+}
+
 /** Offered when the user has no path to the target. */
 export interface PathwaySuggestion {
   name: string;
@@ -527,4 +586,4 @@ export interface ColPref {
 }
 
 export type SortDir = 'asc' | 'desc';
-export type ViewMode = 'grid' | 'table' | 'pathways';
+export type ViewMode = 'grid' | 'table' | 'pathways' | 'history';

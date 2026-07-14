@@ -73,10 +73,11 @@ export function rateTip(
   return `≈ ${amount} per day`;
 }
 
-/** Format a ratio to 2 decimal places */
+/** Format a ratio to 2 decimal places. Infinite (downloaded = 0) → "∞". */
 export function fmtRatio(r: number): string {
   const n = parseFloat(String(r));
   if (isNaN(n)) return '—';
+  if (!isFinite(n)) return '∞';
   return n.toFixed(2);
 }
 

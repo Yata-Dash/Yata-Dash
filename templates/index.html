@@ -12,6 +12,13 @@
      and disables the free CDN above, so Pro-only icons (lobster, crab, …) render. -->
 <link rel="stylesheet" href="/static/dashboard.css"/>
 <link rel="icon" type="image/svg+xml" href="/static/logo.svg"/>
+<!-- PWA: lets browsers install Yata as an app (mobile home screen / desktop).
+     No service worker — the app is server-rendered live data; offline caching
+     would only show stale stats. -->
+<link rel="manifest" href="/static/manifest.json"/>
+<meta name="theme-color" content="#0d0f14"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="Yata"/>
 </head>
 <body>
 
@@ -61,6 +68,11 @@
       <button class="view-btn" id="btn-table-view" onclick="setView('table')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         Detail
+      </button>
+      <!-- Hidden unless FEATURES.history is on (main.ts flips it) -->
+      <button class="view-btn" id="btn-history-view" onclick="setView('history')" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
+        History
       </button>
       <!-- Hidden until /api/pathways/targets succeeds (404 = feature off) -->
       <button class="view-btn" id="btn-pathways-view" onclick="setView('pathways')" style="display:none">
@@ -250,6 +262,12 @@
       <div class="pw-disclosure" id="pw-disclosure"></div>
     </div><!-- /view-pathways -->
 
+    <!-- ════ HISTORY VIEW (flag-gated: FEATURES.history) ════ -->
+    <div id="view-history" style="display:none"></div>
+
+    <!-- ════ TRACKER DETAIL (drill-down page, entered by clicking a tracker name) ════ -->
+    <div id="view-detail" style="display:none"></div>
+
     <!-- ════ SETTINGS PAGE (full-page view, #/settings) ════ -->
     <div id="settings-page" style="display:none">
       <div class="settings-header">
@@ -298,6 +316,14 @@
             <p class="settings-section-label" style="margin-top:16px">Account</p>
             <div class="form-group" style="margin-bottom:14px" id="s-account-section">
               <div style="font-size:12px;color:var(--text3);font-style:italic">Loading…</div>
+            </div>
+
+            <p class="settings-section-label" style="margin-top:16px">Network</p>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="alerts-inline" style="font-size:12px">
+                <input type="checkbox" id="s-trust-proxy" onchange="toggleTrustProxy()"/> Behind a reverse proxy — trust <code>X-Forwarded-*</code> headers
+              </label>
+              <div style="font-size:11px;color:var(--text3);margin-top:6px">Enable only when Yata sits behind a reverse proxy you control (nginx, Caddy, Traefik…). Uses <code>X-Forwarded-For</code> for login rate-limiting (so one bad client can't lock everyone out through the proxy) and <code>X-Forwarded-Proto</code> to mark the session cookie Secure behind HTTPS. <strong style="color:var(--amber)">Leave off when directly exposed — these headers can be faked by clients.</strong></div>
             </div>
 
             <p class="settings-section-label" style="margin-top:16px">Data</p>
@@ -388,7 +414,9 @@
             <div class="form-group" style="margin-bottom:4px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Group name display</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px">How your user group appears in the table and expanded detail rows</div>
-              <div style="font-size:11px;color:var(--amber);margin-bottom:10px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons won't display unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
+              <div style="font-size:11px;color:var(--amber);margin-bottom:4px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons won't display unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
+              <!-- Live icon-set health (filled by renderIconSetStatus after the font probe) -->
+              <div id="fa-status" style="display:none;font-size:11px;margin-bottom:10px;line-height:1.5"></div>
               <div style="display:flex;flex-direction:column;gap:6px" id="s-group-name-style-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-group-name-style" value="plain" style="accent-color:var(--accent)">
@@ -449,6 +477,15 @@
                 <div>
                   <div style="font-size:13px;font-weight:600;color:var(--text)">Trend rate on hover</div>
                   <div style="font-size:11px;color:var(--text3);margin-top:2px">Hovering a stat shows its recent per-day trend — e.g. bonus points "≈ 3,423 per day" or download "≈ 245.3 GiB per day" (upload, download, buffer, bonus, uploads).</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-tracker-rules-track" onclick="toggleSettingsTrackerRules()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Tracker rules on cards</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">A compact reference line at the bottom of each card with the tracker's account rules from its definition — min ratio and min seed time (e.g. "Ratio ≥ 1 · Seed ≥ 10 days"). Display only; the Detail view's Rules section always shows.</div>
                 </div>
               </label>
             </div>
@@ -683,6 +720,8 @@
                 <div id="modal-add-selection" style="display:none">
                   <div class="form-group" style="margin-bottom:12px">
                     <label class="form-label">Select Tracker</label>
+                    <input class="form-input" id="modal-add-search" type="text" autocomplete="off"
+                      placeholder="Search by name or abbreviation…" oninput="onAddTrackerFilter()" style="margin-bottom:8px"/>
                     <select class="form-input" id="modal-add-select" onchange="onAddTrackerSelect()">
                       <option value="">— Choose a tracker —</option>
                     </select>
@@ -796,6 +835,7 @@
                       <label class="form-label">Max Scrapes Per Day <span class="opt">(0 = unlimited)</span></label>
                       <input class="form-input" type="number" id="modal-max-scrapes" placeholder="0" min="0" style="max-width:140px" oninput="modalOnMaxScrapesChange()"/>
                       <span class="form-hint">Per UTC day for this tracker. Still subject to global / operator caps.</span>
+                      <span class="form-error" id="modal-max-scrapes-error" style="display:none;font-size:11px;color:var(--red);margin-top:4px"></span>
                     </div>
                     <div class="form-group">
                       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text)">
@@ -806,77 +846,30 @@
                   </div>
                 </div>
 
-                <!-- ══ Targets section ══════════════════════════════════════ -->
+                <!-- ══ Targets section (edit mode only) ═════════════════════
+                     Group selected → a read-only chip summary of the group's
+                     requirements. "— manual —" → the dynamic target builder
+                     (pick any stat this tracker reports, one row per target). -->
                 <div id="modal-targets-section">
                   <div class="modal-divider"><span class="modal-divider-label">Targets <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></span><div class="modal-divider-line"></div></div>
                   <span class="form-hint" style="margin-top:-6px">Goals toward your next user group</span>
                   <div class="form-row" id="modal-target-group-row" style="display:none">
                     <div class="form-group" style="flex:1">
-                      <label class="form-label">Load from Group</label>
-                      <div style="display:flex;gap:8px;align-items:center">
-                        <select class="form-input" id="modal-target-group-select" style="flex:1">
-                          <option value="">&#8212; manual &#8212;</option>
-                        </select>
-                        <button type="button" class="btn btn-ghost btn-sm" id="modal-target-group-load" onclick="loadTargetsFromGroup()" style="white-space:nowrap">Load</button>
-                      </div>
-                      <span class="form-hint" id="modal-target-group-hint" style="display:none;max-width:100%"></span>
+                      <label class="form-label">Target Group</label>
+                      <select class="form-input" id="modal-target-group-select">
+                        <option value="">&#8212; manual &#8212;</option>
+                      </select>
                     </div>
                   </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Upload Target</label>
-                      <input class="form-input" type="text" id="modal-target-uploaded" placeholder="e.g. 500 GiB"/>
+                  <div id="modal-target-group-hint" style="display:none"></div>
+                  <div id="modal-target-builder" style="display:none">
+                    <div id="modal-target-rows"></div>
+                    <div class="target-add-row">
+                      <select class="form-input" id="modal-target-add-select" style="max-width:260px">
+                        <option value="">&#8212; choose a stat &#8212;</option>
+                      </select>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="modalAddTargetRow()" style="white-space:nowrap">+ Add target</button>
                     </div>
-                    <div class="form-group">
-                      <label class="form-label">Download Target</label>
-                      <input class="form-input" type="text" id="modal-target-downloaded" placeholder="e.g. 100 GiB"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Ratio Target</label>
-                      <input class="form-input" type="number" id="modal-target-ratio" placeholder="e.g. 5.00" step="0.01" min="0"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Total Uploads Target</label>
-                      <input class="form-input" type="number" id="modal-target-total-uploads" placeholder="e.g. 50" min="0"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Seed Size Target</label>
-                      <input class="form-input" type="text" id="modal-target-seed-size" placeholder="e.g. 5 TiB"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Avg Seed Time Target</label>
-                      <input class="form-input" type="text" id="modal-target-avg-seed" placeholder="e.g. 3M or 90D"/>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label">Account Age Target</label>
-                      <input class="form-input" type="text" id="modal-target-days" placeholder="e.g. 1Y 6M or 365"/>
-                      <span class="form-hint">Y M W D format or plain days. Requires Join Date.</span>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Bonus Points Target</label>
-                      <input class="form-input" type="number" id="modal-target-bonus-points" placeholder="e.g. 25000" min="0"/>
-                    </div>
-                  </div>
-                  <div class="form-row" id="modal-target-snatched-row" style="display:none">
-                    <div class="form-group">
-                      <label class="form-label">Snatched Target <span class="opt">(Gazelle)</span></label>
-                      <input class="form-input" type="number" id="modal-target-snatched" placeholder="e.g. 100" min="0"/>
-                    </div>
-                    <div></div>
-                  </div>
-                  <div class="form-row" id="modal-target-adoptions-row" style="display:none">
-                    <div class="form-group">
-                      <label class="form-label">Adoptions Target <span class="opt">(Gazelle)</span></label>
-                      <input class="form-input" type="number" id="modal-target-adoptions" placeholder="e.g. 10" min="0"/>
-                      <span class="form-hint">Completed adoptions (fostered torrents don't count until converted).</span>
-                    </div>
-                    <div></div>
                   </div>
                 </div>
 
@@ -922,6 +915,11 @@
                 <button class="btn btn-ghost btn-sm" id="modal-delete-btn" type="button" style="display:none;color:var(--red);border-color:rgba(239,68,68,.25);margin-right:auto" onclick="showDeleteConfirm()">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   Delete Tracker
+                </button>
+                <button class="btn btn-ghost" id="modal-detail-btn" type="button" style="display:none" title="Open this tracker's detail page"
+                  onclick="(function(){var id=document.getElementById('modal-tracker-id').value; if(id){ closeModal(); location.hash='#/'; setTimeout(function(){ openTrackerDetail(id); }, 80); }})()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  Details
                 </button>
                 <button class="btn btn-ghost" id="modal-test-btn" type="button" style="display:none" onclick="modalTestTracker()" title="Test the API and profile scrape for this tracker">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -983,6 +981,26 @@
               </div>
             </div>
             </div><!-- /s-qui-options -->
+
+            <!-- ── API tokens (read-only integration tokens) ──────────── -->
+            <div class="modal-divider" style="margin:18px 0 10px"><span class="modal-divider-label">API Tokens</span><div class="modal-divider-line"></div></div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:10px">
+              Read-only tokens let other apps — homelab dashboards like
+              <a class="link-accent" href="https://gethomepage.dev/" target="_blank" rel="noopener noreferrer">Homepage</a> or
+              <a class="link-accent" href="https://homarr.dev/" target="_blank" rel="noopener noreferrer">Homarr</a>, scripts, monitoring — read your
+              stats without your login. A token only unlocks the read-only endpoints (<code>/api/summary</code>, <code>/api/history/series</code>);
+              it can never change anything or see tracker credentials. Full details in the
+              <a class="link-accent" href="https://github.com/Yata-Dash/Yata-Dash/blob/main/docs/API.md" target="_blank" rel="noopener noreferrer">API reference</a>.
+            </p>
+            <div id="s-token-new" style="display:none;margin-bottom:10px"></div>
+            <div id="s-token-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;min-height:20px">
+              <span style="font-size:12px;color:var(--text3);font-style:italic">Loading…</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="form-input" type="text" id="s-token-name" placeholder="Token name — e.g. Homepage widget" maxlength="64" style="max-width:320px"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();createApiTokenFromSettings();}"/>
+              <button type="button" class="btn btn-primary btn-sm" onclick="createApiTokenFromSettings()">Create token</button>
+            </div>
           </div>
 
           <!-- ── Tab: Alerts (webhooks + rule builder) ────────────────── -->
@@ -1108,6 +1126,7 @@ function toggleSettingsPathwayEtas() { _settingsToggle('s-pw-eta-track'); }
 function toggleSettingsTrendEstimates() { _settingsToggle('s-trend-est-track'); }
 function toggleSettingsTargetEtas() { _settingsToggle('s-target-eta-track'); }
 function toggleSettingsRateHovers() { _settingsToggle('s-rate-hover-track'); }
+function toggleSettingsTrackerRules() { _settingsToggle('s-tracker-rules-track'); }
 function toggleSettingsUnreadMail() { _settingsToggle('s-unread-mail-track'); }
 function toggleSettingsUnreadNotif() { _settingsToggle('s-unread-notif-track'); }
 function toggleSettingsBackup() { _settingsToggle('s-backup-track'); _applyBackupLock(); }

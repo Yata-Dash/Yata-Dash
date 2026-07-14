@@ -5,7 +5,7 @@
   "abbr": "ANT",
   "url": "https://anthelion.me",
   "type": "gazelle",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-12",
   "approved_by": {
     "name": "",
     "role": "",
@@ -15,6 +15,9 @@
     "labels": {
       "orbs": "bonus_points"
     }
+  },
+    "rules": {
+    "min_ratio": 0.8
   },
   "groups": [
     {

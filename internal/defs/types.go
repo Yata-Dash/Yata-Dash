@@ -138,6 +138,13 @@ type TrackerDef struct {
 	// API configures the fetch for type kind "custom". Null otherwise.
 	API *CustomAPI `json:"api,omitempty"`
 
+	// ExtendedStats, when set on a unit3d tracker, adds a supplementary API
+	// stats endpoint (e.g. the /api/user/stats that newer UNIT3D trackers add to
+	// expose formerly scrape-only stats). Its fields are merged on top of the
+	// core /api/user response — letting a tracker turn OFF scraping entirely
+	// while Yata still shows seed size, seed times, unread flags, etc.
+	ExtendedStats *ExtendedStatsSpec `json:"extended_stats,omitempty"`
+
 	// Groups lists user ranks in ascending order (lowest first).
 	Groups []GroupDef `json:"groups,omitempty"`
 
@@ -239,6 +246,25 @@ type TrackerRules struct {
 	// demotion / ban per the tracker's rules). The UI colors the ratio stat
 	// red ONLY below this value when set (otherwise generic thresholds).
 	MinRatio float64 `json:"min_ratio,omitempty"`
+	// MinSeedDays is the tracker's minimum seed time per torrent, in days
+	// (e.g. seedpool 10, InfinityHD 3). DISPLAY-ONLY reference — Yata does
+	// no per-torrent tracking or calculations with it, and the fine print
+	// (partial-download thresholds, exemptions, …) stays on the tracker.
+	MinSeedDays int `json:"min_seed_days,omitempty"`
+}
+
+// ExtendedStatsSpec declares a supplementary UNIT3D stats endpoint. Field names
+// in the response are expected to already be canonical (UNIT3D/Yata names, e.g.
+// seed_size, avg_seed_time, fl_tokens, real_ratio, unread_mail), so only the
+// byte-count fields need conversion — everything else (seconds, counts, ratios,
+// bools) passes through unchanged. Authenticated with the same api_token query
+// param as /api/user; the endpoint's fields never overwrite core /api/user ones.
+type ExtendedStatsSpec struct {
+	// Path is appended to the tracker base URL, e.g. "/api/user/stats".
+	Path string `json:"path"`
+	// ByteFields lists response fields returned as raw byte counts that must be
+	// formatted as human-readable sizes (e.g. seed_size, real_uploaded).
+	ByteFields []string `json:"byte_fields,omitempty"`
 }
 
 // CustomAPI describes a non-standard tracker API entirely as data.
@@ -308,6 +334,26 @@ type GroupRequirements struct {
 	// Whale): uploads+ratio+age+seedtime above, any_of: [{min_seed_size:
 	// "6 TiB"}, {min_uploaded: "25 TiB"}]. Entries must not nest further.
 	AnyOf []GroupRequirements `json:"any_of,omitempty"`
+
+	// MinCounts are minimum counts of arbitrary per-tracker stat fields —
+	// e.g. HUNO promotes on "torrents seeding within a seed-time bracket"
+	// (vanguard_seeds ≥ 1, champion_seeds ≥ 10, …) where each bracket count
+	// arrives as its own API stat. An ordered slice (not a map) so the def
+	// controls display order. Rendered live from the def like any_of — the
+	// entries are never copied into a tracker's stored targets map.
+	MinCounts []MinCountReq `json:"min_counts,omitempty"`
+}
+
+// MinCountReq is one "stat field ≥ count" group requirement (see
+// GroupRequirements.MinCounts).
+type MinCountReq struct {
+	// Field is the canonical stat field holding the current count.
+	Field string `json:"field"`
+	// Count is the minimum required value.
+	Count int `json:"count"`
+	// Label overrides the generic field label in target rows, e.g.
+	// "Vanguard (1–10d seed)" instead of "Vanguard Seeds".
+	Label string `json:"label,omitempty"`
 }
 
 // GroupPerk is one benefit a group enjoys.

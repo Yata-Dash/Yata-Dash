@@ -186,6 +186,68 @@ func TestFindPathsDirectAndRanked(t *testing.T) {
 	}
 }
 
+// TestReadyTargets: only targets whose direct-route requirements are ALL met
+// against live stats are flagged; inactive routes and multi-hop-only targets
+// never are.
+func TestReadyTargets(t *testing.T) {
+	d := testData()
+	veteran := UserTracker{
+		TrackerID: "t1", PathwayName: "Home",
+		Stats: Stats{AgeDays: 200, UploadedGiB: 2048, Ratio: 2.0, SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, BonusPoints: -1},
+	}
+	ready := ReadyTargets(d, []UserTracker{veteran}, testGroups, noInviteReqs)
+	if !ready["Target"] {
+		t.Error("veteran meets 180d + Power on the direct route — Target should be ready")
+	}
+	if !ready["Mid"] {
+		t.Error("Home → Mid has no requirements — Mid should be ready")
+	}
+	if ready["Dead"] {
+		t.Error("inactive routes must never mark a target ready")
+	}
+
+	// A young account meets nothing time-gated: Target drops out, the
+	// no-requirement route stays.
+	young := veteran
+	young.Stats.AgeDays = 30
+	young.Stats.UploadedGiB = 100
+	ready = ReadyTargets(d, []UserTracker{young}, testGroups, noInviteReqs)
+	if ready["Target"] {
+		t.Error("young account (30d < 180d, upload unmet) must not be ready for Target")
+	}
+	if !ready["Mid"] {
+		t.Error("no-requirement route should stay ready regardless of stats")
+	}
+}
+
+// TestDirectRoutesFrom: only active routes leave the list, owned targets are
+// skipped, met routes sort first.
+func TestDirectRoutesFrom(t *testing.T) {
+	d := testData()
+	u := UserTracker{
+		TrackerID: "t1", PathwayName: "Home",
+		Stats: Stats{AgeDays: 200, UploadedGiB: 2048, Ratio: 2.0, SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, BonusPoints: -1},
+	}
+	routes := DirectRoutesFrom(d, u, map[string]bool{"Home": true}, testGroups, noInviteReqs)
+	// Home → Target (met), Home → Mid (no reqs, met); Dead is inactive.
+	if len(routes) != 2 {
+		t.Fatalf("routes = %d, want 2 (Dead is inactive): %+v", len(routes), routes)
+	}
+	for _, s := range routes {
+		if s.To == "Dead" {
+			t.Error("inactive route must be excluded")
+		}
+		if !(s.ETADays == 0 && !s.HasUnknown) {
+			t.Errorf("veteran should meet route to %s: eta=%v unknown=%v", s.To, s.ETADays, s.HasUnknown)
+		}
+	}
+	// Owned targets are skipped.
+	routes = DirectRoutesFrom(d, u, map[string]bool{"Home": true, "Mid": true}, testGroups, noInviteReqs)
+	if len(routes) != 1 || routes[0].To != "Target" {
+		t.Fatalf("owned Mid should be skipped: %+v", routes)
+	}
+}
+
 func TestFindPathsClassETA(t *testing.T) {
 	d := testData()
 	// Young account, upload not yet met. The ETA is driven ONLY by account

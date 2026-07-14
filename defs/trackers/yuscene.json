@@ -5,7 +5,7 @@
   "abbr": "YUS",
   "url": "https://yu-scene.net",
   "type": "unit3d",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-14",
   "approved_by": {
     "name": "",
     "role": "",
@@ -16,6 +16,10 @@
       "label": "profile-stats-ribbon__label",
       "value": "profile-stats-ribbon__value"
     }
+  },
+    "rules": {
+    "min_ratio": 0.7,
+    "min_seed_days": 5
   },
   "groups": [
     {

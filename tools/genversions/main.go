@@ -9,7 +9,8 @@
 //
 //	app      — internal/version.Version
 //	defs     — max last_updated across defs/trackers/*.json
-//	pathways — defs/pathways/routes.json source.fetched
+//	pathways — defs/pathways/routes.json source.updated (the real upstream data
+//	           date; falls back to source.fetched for older snapshots)
 package main
 
 import (
@@ -58,12 +59,17 @@ func main() {
 	var routes struct {
 		Source struct {
 			Fetched string `json:"fetched"`
+			Updated string `json:"updated"`
 		} `json:"source"`
 	}
 	if err := json.Unmarshal(raw, &routes); err != nil {
 		log.Fatalf("routes.json: %v", err)
 	}
-	out.Pathways = routes.Source.Fetched
+	// The pathways version is the upstream DATA date, not our fetch date.
+	out.Pathways = routes.Source.Updated
+	if out.Pathways == "" {
+		out.Pathways = routes.Source.Fetched // pre-`updated` snapshots
+	}
 
 	enc, _ := json.MarshalIndent(out, "", "  ")
 	if err := os.WriteFile("versions.json", append(enc, '\n'), 0o644); err != nil {

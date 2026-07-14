@@ -17,15 +17,69 @@ import (
 func registerPathways(r chi.Router, d *Deps) {
 	r.Get("/pathways/targets", pathwayTargets(d))
 	r.Get("/pathways/paths", pathwayPaths(d))
+	r.Get("/pathways/from", pathwayFrom(d))
+}
+
+// GET /api/pathways/from?tracker=<id> — active direct routes leaving one of
+// the user's trackers, evaluated against live stats (the Tracker Detail
+// page's "pathways from here"). 404 when pathways data is absent; an empty
+// list when the tracker isn't in the dataset.
+func pathwayFrom(d *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.Paths == nil {
+			jsonError(w, "pathways_data_missing", http.StatusNotFound)
+			return
+		}
+		id := strings.TrimSpace(r.URL.Query().Get("tracker"))
+		if id == "" {
+			jsonError(w, "tracker is required", http.StatusBadRequest)
+			return
+		}
+		users := mapUserTrackers(d)
+		owned := map[string]bool{}
+		for _, u := range users {
+			owned[u.PathwayName] = true
+		}
+		routes := []pathways.Step{}
+		for _, u := range users {
+			if u.TrackerID != id {
+				continue
+			}
+			groupsFor, inviteReqsFor := defLookups(d)
+			routes = pathways.DirectRoutesFrom(d.Paths, u, owned, groupsFor, inviteReqsFor)
+			break
+		}
+		jsonOK(w, map[string]any{"source": d.Paths.Source, "routes": routes})
+	}
 }
 
 // targetEntry is one selectable target tracker.
 type targetEntry struct {
 	Name    string `json:"name"`
 	Abbr    string `json:"abbr,omitempty"`
-	DefKey  string `json:"def_key,omitempty"`  // matched Yata def
-	IsMine  bool   `json:"is_mine"`            // user already has it
-	Inbound int    `json:"inbound"`            // number of active routes in
+	DefKey  string `json:"def_key,omitempty"` // matched Yata def
+	IsMine  bool   `json:"is_mine"`           // user already has it
+	Inbound int    `json:"inbound"`           // number of active routes in
+	// ReqsMet: the user meets ALL listed requirements on at least one active
+	// direct route in (live stats vs community data — never a guarantee).
+	ReqsMet bool `json:"reqs_met,omitempty"`
+}
+
+// defLookups builds the def-resolution callbacks the pathways engine needs.
+func defLookups(d *Deps) (func(string) []defs.GroupDef, func(string) *defs.InviteReqs) {
+	groupsFor := func(name string) []defs.GroupDef {
+		if td, ok := matchDef(d.Reg, d.Paths, name); ok {
+			return td.Groups
+		}
+		return nil
+	}
+	inviteReqsFor := func(name string) *defs.InviteReqs {
+		if td, ok := matchDef(d.Reg, d.Paths, name); ok {
+			return td.InviteRequirements
+		}
+		return nil
+	}
+	return groupsFor, inviteReqsFor
 }
 
 // GET /api/pathways/targets — every tracker in the dataset (the UI's target
@@ -36,13 +90,19 @@ func pathwayTargets(d *Deps) http.HandlerFunc {
 			jsonError(w, "pathways_data_missing", http.StatusNotFound)
 			return
 		}
+		users := mapUserTrackers(d)
 		mine := map[string]bool{}
-		for _, u := range mapUserTrackers(d) {
+		for _, u := range users {
 			mine[u.PathwayName] = true
 		}
+		groupsFor, inviteReqsFor := defLookups(d)
+		ready := pathways.ReadyTargets(d.Paths, users, groupsFor, inviteReqsFor)
 		out := make([]targetEntry, 0, len(d.Paths.Names()))
 		for _, name := range d.Paths.Names() {
-			e := targetEntry{Name: name, Abbr: d.Paths.Abbr[name], IsMine: mine[name]}
+			e := targetEntry{
+				Name: name, Abbr: d.Paths.Abbr[name], IsMine: mine[name],
+				ReqsMet: ready[name] && !mine[name],
+			}
 			if td, ok := matchDef(d.Reg, d.Paths, name); ok {
 				e.DefKey = td.Key
 			}
@@ -76,18 +136,7 @@ func pathwayPaths(d *Deps) http.HandlerFunc {
 			return
 		}
 		users := mapUserTrackers(d)
-		groupsFor := func(name string) []defs.GroupDef {
-			if td, ok := matchDef(d.Reg, d.Paths, name); ok {
-				return td.Groups
-			}
-			return nil
-		}
-		inviteReqsFor := func(name string) *defs.InviteReqs {
-			if td, ok := matchDef(d.Reg, d.Paths, name); ok {
-				return td.InviteRequirements
-			}
-			return nil
-		}
+		groupsFor, inviteReqsFor := defLookups(d)
 		jsonOK(w, pathways.FindPaths(d.Paths, users, target, groupsFor, inviteReqsFor))
 	}
 }
