@@ -1,7 +1,7 @@
 // views/aggCards.ts — aggregate stat cards at the top of both views
 import type { AppSettings, HistoryPoint, StatsMap, Tracker } from '../types';
 import { numOf, strOf } from '../state';
-import { fmtGib, fmtRatio, fmtSeedTime } from '../utils/format';
+import { fmtGib, fmtRatio, fmtSeedTime, parseRatio } from '../utils/format';
 import { parseSize, parseSeedTime } from '../utils/parse';
 import { renderSparkline } from '../components/sparkline';
 import { buildAggSeries } from '../utils/history';
@@ -22,7 +22,7 @@ export function renderAggCards(
     if (!s || !Object.keys(s.fields ?? {}).length) return;
     totalUpGiB   += parseSize(strOf(s, 'uploaded'))   ?? 0;
     totalDownGiB += parseSize(strOf(s, 'downloaded')) ?? 0;
-    const ratio = numOf(s, 'ratio') ?? 0;
+    const ratio = parseRatio(strOf(s, 'ratio')); // ∞ → Infinity, counts as healthy
     const hnr   = numOf(s, 'hit_and_runs') ?? 0;
     if (ratio >= 1 && hnr === 0 && s.ok) healthyCount++; else issueCount++;
 

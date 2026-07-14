@@ -1,7 +1,14 @@
 // utils/sort.ts — table sorting (reads from the merged stats fields)
 import type { SortDir, StatsMap, Tracker } from '../types';
 import { numOf, strOf } from '../state';
+import { parseRatio } from './format';
 import { parseSize, parseSeedTime, memberDays } from './parse';
+
+/** Ratio sort key: an infinite ratio ("∞") sorts highest; missing → 0. */
+function ratioSort(raw: string): number {
+  const r = parseRatio(raw);
+  return isNaN(r) ? 0 : r;
+}
 
 export function sortKey(
   tracker: Tracker,
@@ -15,7 +22,7 @@ export function sortKey(
     case 'username':      return (strOf(s, 'username') || tracker.username || '').toLowerCase();
     case 'uploaded':      return parseSize(strOf(s, 'uploaded'))   ?? 0;
     case 'downloaded':    return parseSize(strOf(s, 'downloaded')) ?? 0;
-    case 'ratio':         return numOf(s, 'ratio') ?? 0;
+    case 'ratio':         return ratioSort(strOf(s, 'ratio'));
     case 'buffer':        return parseSize(strOf(s, 'buffer'))     ?? 0;
     case 'seed_size':     return parseSize(strOf(s, 'seed_size'))  ?? 0;
     case 'avg_seed_time': return parseSeedTime(strOf(s, 'avg_seed_time')) ?? 0;
@@ -26,7 +33,7 @@ export function sortKey(
     case 'bonus_points':  return numOf(s, 'bonus_points')    ?? 0;
     case 'snatched':      return numOf(s, 'snatched')        ?? 0;
     case 'upload_snatches': return numOf(s, 'upload_snatches') ?? 0;
-    case 'real_ratio':    return numOf(s, 'real_ratio')      ?? 0;
+    case 'real_ratio':    return ratioSort(strOf(s, 'real_ratio'));
     case 'fl_tokens':     return numOf(s, 'fl_tokens')       ?? 0;
     case 'invites':       return numOf(s, 'invites')         ?? 0;
     case 'warnings':      return numOf(s, 'warnings')        ?? 0;

@@ -2,7 +2,7 @@
 // All values come from statsCache[id].fields (StatField objects). There is no
 // separate profile cache anymore — API and scraped values arrive pre-merged.
 import type { AppSettings, StatField, Tracker, TrackerStatsResponse } from '../types';
-import { esc, fieldLabel, fmtRatio, fmtSeedTime, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { esc, fieldLabel, fmtRatio, fmtSeedTime, parseRatio, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { parseSeedTime } from '../utils/parse';
 import { scrapeStatus } from '../state';
 
@@ -23,8 +23,8 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'uploaded',        label: 'Uploaded',        color: 'green'  },
   { key: 'downloaded',      label: 'Downloaded',      color: 'purple' },
   { key: 'buffer',          label: 'Buffer',          color: 'blue'   },
-  { key: 'ratio',           label: 'Ratio',           color: v => ratioColor(parseFloat(v) || 0), fmt: v => fmtRatio(parseFloat(v)) },
-  { key: 'real_ratio',      label: 'Real Ratio',      color: v => ratioColor(parseFloat(v) || 0), fmt: v => fmtRatio(parseFloat(v)) },
+  { key: 'ratio',           label: 'Ratio',           color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
+  { key: 'real_ratio',      label: 'Real Ratio',      color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'bonus_points',    label: 'Bonus Points',    color: 'orange' },
   { key: 'seeding',         label: 'Seeding',         color: 'blue'   },
   { key: 'leeching',        label: 'Leeching',        color: 'amber'  },
@@ -89,7 +89,7 @@ export function buildStatRows(
     if (exclude.has(def.key)) continue;
     // min_ratio-aware colouring for the main ratio stat (item 7)
     const colorDef = def.key === 'ratio' && minRatio && minRatio > 0
-      ? (v: string) => ratioColorFor(parseFloat(v) || 0, minRatio)
+      ? (v: string) => ratioColorFor(parseRatio(v), minRatio)
       : def.color;
     push(def.key, def.label, colorDef, def.fmt);
   }

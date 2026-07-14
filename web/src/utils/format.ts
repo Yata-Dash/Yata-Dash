@@ -73,6 +73,17 @@ export function rateTip(
   return `≈ ${amount} per day`;
 }
 
+/** Parse a ratio field that may be numeric OR an "infinite" sentinel — some
+ *  trackers report ratio as "∞" / "Inf" / "Infinity" when downloaded is 0.
+ *  Returns Infinity for those (so it renders as ∞ and colours green, not a
+ *  red 0.00), the number when numeric, or NaN when missing/unparseable. */
+export function parseRatio(raw: unknown): number {
+  const s = String(raw ?? '').trim().replace(/,/g, '');
+  if (s === '') return NaN;
+  if (/^(∞|inf|infinity)$/i.test(s)) return Infinity;
+  return parseFloat(s);
+}
+
 /** Format a ratio to 2 decimal places. Infinite (downloaded = 0) → "∞". */
 export function fmtRatio(r: number): string {
   const n = parseFloat(String(r));

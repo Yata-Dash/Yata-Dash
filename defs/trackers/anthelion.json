@@ -14,10 +14,14 @@
   "scrape": {
     "labels": {
       "orbs": "bonus_points"
-    }
+    },
+    "disable_scraping": false
   },
     "rules": {
     "min_ratio": 0.8
+  },
+  "invite_requirements": {
+    "min_class": "Power User"
   },
   "groups": [
     {

@@ -2,7 +2,7 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtTrackerName, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
@@ -161,7 +161,7 @@ export function renderCard(
   } else {
     // STALE DATA RULE: render fields exactly like fresh data even when
     // stats.ok is false — the offline state only adds a banner + dimmed dot.
-    const ratio    = parseFloat(strOf(stats, 'ratio')) || 0;
+    const ratio    = parseRatio(strOf(stats, 'ratio'));
     const rc       = ratioColorFor(ratio, tracker.min_ratio);
     const hnr      = parseInt(strOf(stats, 'hit_and_runs')) || 0;
     const updated  = fmtDateTime(stats.fetched_at);
@@ -367,7 +367,7 @@ function targetRowsFor(
   }
   // Ratio — no projection (can't sensibly project a ratio)
   if (targets['ratio']) {
-    const curV = parseFloat(strOf(stats, 'ratio')), tgtV = parseFloat(targets['ratio']);
+    const curV = parseRatio(strOf(stats, 'ratio')), tgtV = parseFloat(targets['ratio']);
     if (strOf(stats, 'ratio') && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Ratio', fmtRatio(curV), fmtRatio(tgtV), (curV / tgtV) * 100, ratioColorFor(curV, minRatio));
     else miss('Ratio', fmtRatio(parseFloat(targets['ratio'])), 'amber');
   }

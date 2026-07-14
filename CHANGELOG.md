@@ -64,6 +64,13 @@ version heading — those notes become the GitHub Release body automatically.
   bottom.
 
 ### Fixed
+- **An infinite ratio now shows as ∞ everywhere, not a red 0.00.** Trackers
+  that report ratio as "∞"/"Inf" (zero downloaded) were parsed as 0 — shown as
+  a red "0.00" and counted as below-minimum. Ratio (and real ratio) now
+  recognise the infinite forms across the grid, table, and Detail page:
+  rendered as ∞, coloured green, sorted to the top, and no longer flagged as a
+  low ratio or a portfolio "issue". (Custom-API trackers already normalised
+  this; the fix covers every source.)
 - **Editing targets from the Tracker Detail page now updates it live.**
   Changing a tracker's target group (or manual targets) via the Detail page's
   Targets pencil refreshes the page in place — the targets progress, the

@@ -1,6 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { esc, errLabel, fmtRatio, fmtSeedTime, fmtTrackerName, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
@@ -221,10 +221,10 @@ function buildCell(
       return `<td class="td-mono"${rtip('downloaded')} style="color:var(--purple)">${v ? esc(v) + dot('downloaded') : dash}</td>`;
     }
     case 'ratio': {
-      const r = numOf(s, 'ratio');
-      const rc = ratioColorFor(r ?? 0, t.min_ratio);
+      const r = parseRatio(strOf(s, 'ratio'));
+      const rc = ratioColorFor(isNaN(r) ? 0 : r, t.min_ratio);
       const tip = t.min_ratio && t.min_ratio > 0 ? ` title="Tracker minimum: ${t.min_ratio}"` : '';
-      return `<td class="td-mono"${tip} style="color:var(--${rc})">${r !== null ? fmtRatio(r) + dot('ratio') : dash}</td>`;
+      return `<td class="td-mono"${tip} style="color:var(--${rc})">${!isNaN(r) ? fmtRatio(r) + dot('ratio') : dash}</td>`;
     }
     case 'buffer': {
       const v = strOf(s, 'buffer');
@@ -269,9 +269,9 @@ function buildCell(
       return `<td class="td-mono td-center" style="color:var(--green)">${v ? esc(v) + dot('upload_snatches') : dash}</td>`;
     }
     case 'real_ratio': {
-      const rr = numOf(s, 'real_ratio');
-      const rrc = rr !== null ? ratioColor(rr) : 'text3';
-      return `<td class="td-mono td-center" style="color:var(--${rrc})">${rr !== null ? fmtRatio(rr) + dot('real_ratio') : dash}</td>`;
+      const rr = parseRatio(strOf(s, 'real_ratio'));
+      const rrc = !isNaN(rr) ? ratioColor(rr) : 'text3';
+      return `<td class="td-mono td-center" style="color:var(--${rrc})">${!isNaN(rr) ? fmtRatio(rr) + dot('real_ratio') : dash}</td>`;
     }
     case 'fl_tokens': {
       const v = strOf(s, 'fl_tokens');
