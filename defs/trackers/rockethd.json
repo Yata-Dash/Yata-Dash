@@ -1,0 +1,843 @@
+{
+  "schema_version": 1,
+  "key": "rockethd",
+  "name": "RocketHD",
+  "abbr": "RHD",
+  "url": "https://rocket-hd.cc",
+  "type": "unit3d",
+  "last_updated": "2026-07-15",
+  "approved_by": {
+    "name": "sudo2k16",
+    "role": "Systems Engineer",
+    "date": "2026-07-15",
+    "notes": "Definition maintained by RocketHD staff (Systems Engineer)."
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 1.0,
+    "min_seed_days": 7
+  },
+  "groups": [
+    {
+      "name": "Leech",
+      "style": {
+        "color": "#96281B",
+        "icon": "fas fa-user-alien"
+      },
+      "requirements": {
+        "description": "Demoted users that were not connectable for 7 days"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: 0"
+        }
+      ]
+    },
+    {
+      "name": "Lost Soul",
+      "style": {
+        "color": "#D32F2F",
+        "icon": "fas fa-triangle-exclamation"
+      },
+      "requirements": {
+        "description": "Demoted users that repeatedly broke the rules or otherwise stood out negatively"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: 3"
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "style": {
+        "color": "#7289DA",
+        "icon": "fas fa-rocket"
+      },
+      "requirements": {},
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        }
+      ]
+    },
+    {
+      "name": "Lunar Explorer",
+      "style": {
+        "color": "#81D4FA",
+        "icon": "fas fa-starfighter"
+      },
+      "requirements": {
+        "min_uploaded": "2 TiB",
+        "min_ratio": 1.0,
+        "min_age": "2M"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        }
+      ]
+    },
+    {
+      "name": "Deep Space Scout",
+      "style": {
+        "color": "#45B0DE",
+        "icon": "fas fa-starfighter-twin-ion-engine"
+      },
+      "requirements": {
+        "min_uploaded": "5 TiB",
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_uploads": 5
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Star Seeker",
+      "style": {
+        "color": "#F48FB1",
+        "icon": "fas fa-starfighter-twin-ion-engine-advanced"
+      },
+      "requirements": {
+        "min_uploaded": "10 TiB",
+        "min_ratio": 1.0,
+        "min_age": "6M",
+        "min_uploads": 10
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Star Navigator",
+      "style": {
+        "color": "#9575CD",
+        "icon": "fas fa-starship-freighter"
+      },
+      "requirements": {
+        "min_uploaded": "15 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1Y",
+        "min_uploads": 25
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Galactic Voyager",
+      "style": {
+        "color": "#FFF176",
+        "icon": "fas fa-space-station-moon-construction"
+      },
+      "requirements": {
+        "min_uploaded": "20 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1Y 3M",
+        "min_uploads": 50
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Galactic Pioneer",
+      "style": {
+        "color": "#FFB74D",
+        "icon": "fas fa-space-station-moon",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1Y 6M",
+        "min_uploads": 100
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Supply Shuttle",
+      "style": {
+        "color": "#7FE883",
+        "icon": "fas fa-floppy-disk"
+      },
+      "requirements": {
+        "min_ratio": 1.0,
+        "min_age": "2M",
+        "min_seedtime": "1M",
+        "min_seed_size": "5 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Data Capsule",
+      "style": {
+        "color": "#66BB6A",
+        "icon": "fas fa-hdd"
+      },
+      "requirements": {
+        "min_ratio": 1.0,
+        "min_age": "4M",
+        "min_seedtime": "2M",
+        "min_seed_size": "10 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Nebula Vault",
+      "style": {
+        "color": "#2C852F",
+        "icon": "fas fa-server",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_ratio": 1.0,
+        "min_age": "6M",
+        "min_seedtime": "3M",
+        "min_seed_size": "20 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Allied Officer",
+      "style": {
+        "color": "#AB47BC",
+        "icon": "fas fa-jedi"
+      },
+      "requirements": {
+        "description": "Staff of other trackers/indexers or releasers"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Honored Traveler",
+      "style": {
+        "color": "#BC4793",
+        "icon": "fas fa-user-visor",
+        "sparkle": true
+      },
+      "requirements": {
+        "description": "Users who go above and beyond for the tracker"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Payload Commander",
+      "style": {
+        "color": "#EF6C00",
+        "icon": "fas fa-sword-laser"
+      },
+      "requirements": {
+        "description": "Uploader"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Payload Specialist",
+      "style": {
+        "color": "#BAAF92",
+        "icon": "fas fa-sword-laser-alt"
+      },
+      "requirements": {
+        "description": "Member of a RocketHD internal release group"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Launch Technician",
+      "style": {
+        "color": "#4DB6AC",
+        "icon": "fas fa-user-bounty-hunter"
+      },
+      "requirements": {
+        "description": "Torrent moderator"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Flight Assistant",
+      "style": {
+        "color": "#26C6DA",
+        "icon": "fas fa-robot-astromech"
+      },
+      "requirements": {
+        "description": "Reviews new uploads"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Flight Director",
+      "style": {
+        "color": "#4ECDC4",
+        "icon": "fas fa-user-pilot-tie"
+      },
+      "requirements": {
+        "description": "Moderator"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Chief Engineer",
+      "style": {
+        "color": "#F92672",
+        "icon": "fas fa-cat-space"
+      },
+      "requirements": {
+        "description": "Administrator"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Systems Engineer",
+      "style": {
+        "color": "#E20074",
+        "icon": "fas fa-wrench"
+      },
+      "requirements": {
+        "description": "Developer"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Mission Commander",
+      "style": {
+        "color": "#672E1C",
+        "icon": "fas fa-user-astronaut"
+      },
+      "requirements": {
+        "description": "Owner"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Mission Control",
+      "style": {
+        "color": "#FBC02D",
+        "icon": "fas fa-satellite"
+      },
+      "requirements": {
+        "description": "Bot accounts"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-angles-up",
+          "label": "Can use upPollo API mode"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    }
+  ]
+}
