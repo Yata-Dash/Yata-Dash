@@ -325,14 +325,18 @@ type TgtRow = {
   etaDays?: number;   // projected/exact days to reach this target (only when unmet + projectable)
   etaApprox?: boolean; // true for projections that assume continuous activity (e.g. avg seed)
   etaExact?: boolean;  // true for account-age (exact countdown → "in X" not "≈ X")
+  unavailable?: boolean; // requirement the tracker's API can't report — shown with an icon, no bar
 };
 
 /**
  * Build progress rows for a targets map (canonical target keys → values).
- * With alwaysShow=false a row is skipped when the current stat is missing
- * (existing behaviour for base targets); with alwaysShow=true the row renders
- * with "—" and an empty bar (used for any_of alternatives so they stay
- * visible even before stats arrive).
+ * A base target whose current stat is missing is either hidden (the tracker
+ * has no data yet) or shown as UNAVAILABLE — an icon + tooltip, no bar — when
+ * the tracker returns data but simply doesn't report that stat (e.g. an
+ * API-only tracker whose profile omits seedtime). This keeps a real
+ * requirement visible even though it can't be tracked. With alwaysShow=true a
+ * still-trackable-but-empty row renders with "—" and an empty bar (used for
+ * any_of alternatives so they stay visible even before stats arrive).
  */
 function targetRowsFor(
   targets: Record<string, string>,
@@ -342,10 +346,15 @@ function targetRowsFor(
 ): TgtRow[] {
   const rows: TgtRow[] = [];
   const rates = stats?.rates ?? {};
+  // The tracker has been fetched and returned at least one field — so a stat
+  // that's still absent is one this tracker's API genuinely can't report,
+  // not merely one that hasn't arrived yet.
+  const hasData = !!stats && Object.keys(stats.fields ?? {}).length > 0;
   const push = (label: string, cur: string, tgt: string, pct: number, color: string, eta?: Partial<TgtRow>) =>
     rows.push({ label, cur, tgt, pct: Math.min(100, Math.max(0, pct)), color, ...eta });
   const miss = (label: string, tgt: string, color: string) => {
-    if (alwaysShow) push(label, '—', tgt, 0, color);
+    if (hasData) push(label, '—', tgt, 0, color, { unavailable: true });
+    else if (alwaysShow) push(label, '—', tgt, 0, color);
   };
 
   // Projected ETA (days) for a rate-based target: remaining / per-day rate.
@@ -489,13 +498,28 @@ function targetEtaChip(r: TgtRow): string {
   return ` <span class="target-eta"${title}>${prefix} ${esc(fmtEtaDays(r.etaDays))}</span>`;
 }
 
-const renderTargetRow = (r: TgtRow): string => `<div class="target-row">
+/** Eye-with-a-slash mark for a requirement this tracker's API can't report. */
+const UNAVAIL_ICON =
+  `<svg class="target-unavail-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>`;
+
+const UNAVAIL_TIP = 'This tracker’s API doesn’t report this stat, so progress can’t be tracked — the requirement still applies.';
+
+const renderTargetRow = (r: TgtRow): string => {
+  if (r.unavailable) return `<div class="target-row target-row--unavail" title="${esc(UNAVAIL_TIP)}">
+  <div class="target-header">
+    <span class="target-lbl">${esc(r.label)}</span>
+    <span class="target-vals target-vals--unavail">${UNAVAIL_ICON}<span class="target-unavail-txt">Not available</span> <span class="tgt">/ ${esc(r.tgt)}</span></span>
+  </div>
+  <div class="progress-track progress-track--unavail"></div>
+</div>`;
+  return `<div class="target-row">
   <div class="target-header">
     <span class="target-lbl">${esc(r.label)}</span>
     <span class="target-vals">${esc(r.cur)} <span class="tgt">/ ${esc(r.tgt)}</span>${targetEtaChip(r)}</span>
   </div>
   <div class="progress-track"><div class="progress-fill ${r.color}" style="width:${r.pct.toFixed(1)}%"></div></div>
 </div>`;
+};
 
 /** Build the progress-bar targets section (shared by grid cards and table). */
 export function buildTargets(
@@ -519,6 +543,7 @@ export function buildTargets(
   // live from the target group's def, in def order, never stored in the
   // targets map. Folded into `rows` so the promotion-ETA headline and
   // "Eligible now" state see them as base requirements.
+  const hasData = !!stats && Object.keys(stats.fields ?? {}).length > 0;
   for (const mc of targetGroupDef?.requirements?.min_counts ?? []) {
     if (!mc.field || !(mc.count > 0)) continue;
     const label = mc.label || fieldLabel(mc.field);
@@ -527,7 +552,9 @@ export function buildTargets(
     if (curStr && !isNaN(curV)) {
       rows.push({ label, cur: curStr, tgt: String(mc.count), pct: Math.min(100, Math.max(0, (curV / mc.count) * 100)), color: 'teal' });
     } else {
-      rows.push({ label, cur: '—', tgt: String(mc.count), pct: 0, color: 'teal' });
+      // Present-but-empty: show as untrackable when the tracker returns data
+      // yet omits this field, otherwise a plain pending "—".
+      rows.push({ label, cur: '—', tgt: String(mc.count), pct: 0, color: 'teal', unavailable: hasData });
     }
   }
   const anyOf = targetGroupDef?.requirements?.any_of ?? [];
@@ -570,6 +597,7 @@ export function buildTargets(
     let unmetUnprojectable = false;
     let anyUnmet = false;
     for (const r of rows) {
+      if (r.unavailable) continue; // untrackable — excluded from ETA/eligibility math
       if (r.pct >= 100) continue; // met
       anyUnmet = true;
       if (r.etaDays != null && r.etaDays > 0) maxEta = Math.max(maxEta, r.etaDays);
@@ -581,7 +609,8 @@ export function buildTargets(
     let bestAltEta = Infinity;
     let bestAltUnprojectable = false;
     for (const req of anyOf) {
-      const aRows = targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true);
+      const aRows = targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true)
+        .filter(r => !r.unavailable); // untrackable reqs don't gate an alternative
       const unmet = aRows.filter(r => r.pct < 100);
       if (aRows.length && !unmet.length) { altMet = true; break; }
       let eta = 0, unproj = !aRows.length;

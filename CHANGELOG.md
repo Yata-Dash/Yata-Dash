@@ -9,6 +9,22 @@ version heading — those notes become the GitHub Release body automatically.
 
 ## [Unreleased]
 
+### Changed
+- **Untrackable target requirements now stay visible.** When a target's stat
+  isn't reported by a tracker's API (e.g. an API-only tracker whose profile
+  omits seed time or seed size), the requirement no longer silently vanishes
+  from the TARGETS section — it shows with an eye-off icon, an italic *Not
+  tracked* label, the required value, and a dashed placeholder bar, plus a
+  tooltip explaining the stat can't be tracked but the requirement still
+  applies. A stat is treated as untrackable only when the tracker has been
+  fetched and returned other fields but not this one, so a not-yet-polled or
+  failed tracker doesn't show a wall of false "not tracked" rows. Untrackable
+  rows are excluded from the promotion-ETA / "Eligible now" maths, so those
+  headlines are unchanged. Applies everywhere targets render — grid cards, the
+  Detail page, and the Detail table.
+
+## [Beta-20260716]
+
 ### Added
 - **RetroFlix now uses its API instead of scraping.** RetroFlix finished their
   API expansion, so the def switched to their `/api/me` endpoint (Bearer/JWT

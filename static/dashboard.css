@@ -321,6 +321,13 @@ html{overflow-x:clip}
 .progress-fill.pink{background:var(--pink);box-shadow:0 0 6px rgba(236,72,153,.4)}
 .progress-fill.purple{background:var(--purple);box-shadow:0 0 6px rgba(168,85,247,.4)}
 .progress-fill.orange{background:var(--orange);box-shadow:0 0 6px rgba(249,115,22,.4)}
+/* Untrackable requirement — the tracker's API can't report this stat. Shown
+   dimmed, with an eye-off icon and a dashed placeholder bar (no fill). */
+.target-row--unavail{opacity:.72}
+.target-vals--unavail{display:inline-flex;align-items:center;gap:5px;color:var(--text3)}
+.target-unavail-icon{flex:none;color:var(--text3);vertical-align:-2px}
+.target-unavail-txt{font-style:italic;letter-spacing:.2px}
+.progress-track--unavail{background:transparent;border:1px dashed var(--border);height:5px;border-radius:3px}
 .progress-pct{font-size:10px;font-weight:600;font-family:'Geist Mono',monospace;color:var(--text3);text-align:right}
 .card-footer{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);gap:8px;flex-wrap:wrap}
 .card-last-updated{font-size:11px;color:var(--text3)}
