@@ -5,17 +5,21 @@
   "abbr": "ANT",
   "url": "https://anthelion.me",
   "type": "gazelle",
-  "last_updated": "2026-07-12",
+  "last_updated": "2026-07-16",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "Alastor",
+    "role": "Owner",
+    "date": "2026-07-14",
+    "notes": "Will look at adding API stats in the future"
+  },
+  "api": { 
+    "api_key_hint": "Settings → Access Settings"
   },
   "scrape": {
     "labels": {
       "orbs": "bonus_points"
     },
-    "disable_scraping": false
+    "disable_scraping": true
   },
     "rules": {
     "min_ratio": 0.8

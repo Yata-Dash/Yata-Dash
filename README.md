@@ -102,7 +102,7 @@ Drop this `docker-compose.yml` next to wherever you want Yata's data to live, th
 ```yaml
 services:
   yata:
-    image: ghcr.io/yata-dash/yata:latest
+    image: ghcr.io/yata-dash/yata-dash:main
     container_name: yata
     ports:
       - "8420:8420"          # then open http://<host>:8420
@@ -197,22 +197,22 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Tracker | Platform | Approved by tracker | Limit | Notes |
 |---|---|---|---|---|
 | Aither | Unit3D | Yes | 180min | New Upload groups note yet added, Monthly Uploads not retrevable |
-| Anthelion | Gazelle | Pending | API Only |  |
+| Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
 | InfinityHD | Unit3D | Yes | 60min |  |
-| LST | Unit3D | No | - | Awaiting response |
+| LST | Unit3D | Yes | 180min |  |
 | Luminarr | Unit3D | Yes | 120min |  |
 | MyAnonamouse | Custom | Yes | API Only | |
-| Oldtoons | Unit3D | Yes | API Only | Added all required stats to API (THANK YOU!) |
+| Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
-| RetroFlix | Custom | Pending | API Only | Currently No useful API stats - working with team |
+| RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
+| RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
 | YUSCENE | Unit3D | Pending | - | Awaiting reponse |
 | Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
 
   — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
 
-**OldToonsWorld is fully API-supported:** its staff added an API endpoint that exposes every stat Yata tracks — including seed size, seed times, and unread mail/notification flags — so Yata reads everything from the API and does **no** profile scraping for it. It's the model we hope more trackers follow (UNIT3D is rolling out richer stats APIs); when they do, a tracker can be added to Yata with an API key alone, no session cookie.
 
 Adding one is a JSON file away: copy `defs/templates/tracker.template.jsonc` (every field documented) to `defs/trackers/<key>.json`, strip comments, then **Settings → Trackers → Reload Definitions**. Defs that fail to parse are skipped and reported — they never crash the app.
 

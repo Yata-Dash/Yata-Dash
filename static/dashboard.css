@@ -290,6 +290,9 @@ html{overflow-x:clip}
 .stat-label{font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
 .stat-value{font-size:13px;font-weight:600;font-family:'Geist Mono',monospace;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat-value.green{color:var(--green)}.stat-value.red{color:var(--red)}.stat-value.amber{color:var(--amber)}.stat-value.blue{color:var(--blue)}.stat-value.purple{color:var(--purple)}.stat-value.teal{color:var(--teal)}.stat-value.orange{color:var(--orange)}.stat-value.pink{color:var(--pink)}.stat-value.text3{color:var(--text3)}
+/* Stacked seed-time value: Y/M/W/D headline, h/m/s wrapped smaller on line 2 */
+.stat-time-major{display:block}
+.stat-time-minor{font-size:.78em;font-weight:500;opacity:.7}
 .activity-row{display:flex;gap:8px}
 .activity-pill{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:13px;font-weight:500}
 .activity-pill .num{font-family:'Geist Mono',monospace;font-weight:700}

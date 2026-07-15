@@ -129,6 +129,33 @@ export function fmtSeedTime(totalSec: number | null | undefined): string {
   return parts.join(' ') || '0s';
 }
 
+/** Seed time for compact card boxes: the Y/M/W/D units on the main line with
+ *  h/m/s wrapped onto a smaller second line, so long durations (a heavy
+ *  uploader's "333Y 9M 3W 4D 17h 30m 25s") stop overflowing horizontally
+ *  while keeping every unit visible. Returns HTML. Sub-day values (only h/m/s)
+ *  stay on one normal line. */
+export function fmtSeedTimeStacked(totalSec: number | null | undefined): string {
+  if (totalSec == null || isNaN(Number(totalSec))) return '—';
+  let t = Math.abs(Math.round(Number(totalSec)));
+  if (t === 0) return '0s';
+  const steps: [number, string][] = [
+    [31536000, 'Y'], [2592000, 'M'], [604800, 'W'], [86400, 'D'],
+    [3600, 'h'], [60, 'm'], [1, 's'],
+  ];
+  const major: string[] = [];
+  const minor: string[] = [];
+  for (const [sec, u] of steps) {
+    const v = Math.floor(t / sec);
+    t -= v * sec;
+    if (!v) continue;
+    // Y/M/W/D headline (case-sensitive: "M" month, not "m" minute); h/m/s wrap.
+    (u === 'Y' || u === 'M' || u === 'W' || u === 'D' ? major : minor).push(`${v}${u}`);
+  }
+  if (!major.length) return esc(minor.join(' ')) || '0s'; // sub-day → single line
+  const minorHtml = minor.length ? `<span class="stat-time-minor">${esc(minor.join(' '))}</span>` : '';
+  return `<span class="stat-time-major">${esc(major.join(' '))}</span>${minorHtml}`;
+}
+
 /** Format account age in days to "1Y 2M 3W 4D" */
 export function fmtAgeDays(days: number): string {
   if (!days) return '—';

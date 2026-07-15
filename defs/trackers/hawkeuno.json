@@ -31,7 +31,7 @@
       "data.downloaded": "downloaded",
       "data.buffer": "buffer"
     },
-    "api_key_hint": "Settings → Security → API Token (requires can_api)"
+    "api_key_hint": "Settings → API"
   },
   "scrape": {
     "disable_scraping": true

@@ -10,6 +10,17 @@ version heading — those notes become the GitHub Release body automatically.
 ## [Unreleased]
 
 ### Added
+- **RetroFlix now uses its API instead of scraping.** RetroFlix finished their
+  API expansion, so the def switched to their `/api/me` endpoint (Bearer/JWT
+  auth), working on both **retroflix.net** and **retroflix.club**. Stats come
+  straight from the API now — ratio, up/down (with computed buffer), seed
+  bonus, snatched, average/total seed time, hit-and-runs, invites, join date,
+  and your membership class as its named group. Two small, reusable def
+  mechanisms landed with it: **`class_map`** (turn a numeric membership
+  "class" into its named group) and **`bool_fields`** (turn a count like
+  unread private messages into the unread-mail flag). The previous scrape
+  setup is retained in the def as dormant reference, and the scrape-only
+  tracker type stays supported for any future scrape-only tracker.
 - **Tracker Detail page** — click any tracker's name (on a card, in the
   Detail table, or via the edit screen's new *Details* button) for a single
   page with everything Yata knows about it: identity header (group, member
@@ -52,6 +63,12 @@ version heading — those notes become the GitHub Release body automatically.
   and ride along in config export/import.
 
 ### Changed
+- **Seed-time stats wrap instead of overflowing on cards.** Avg Seed Time and
+  Total Seed Time now show the Y/M/W/D part on the main line with the h/m/s
+  wrapped onto a smaller, dimmer second line — so a heavy seeder's long
+  duration (e.g. "333Y 9M 3W 4D · 17h 30m 25s") stays fully visible without
+  running off the edge of the stat box. Card view only; the detail page and
+  table keep the single-line form.
 - **Chart axis scaling reworked (Tracker Detail + History).** Flat lines with
   no target now sit centred with zero as a baseline instead of pinned to the
   top or bottom, so a steady stat reads at its real magnitude. When a target

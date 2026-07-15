@@ -2,7 +2,7 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
@@ -213,7 +213,7 @@ export function renderCard(
         ${stat('Leeching',      'leeching',        'amber',  String(leeching))}
         ${stat('Buffer',        'buffer',          'blue',   esc(strOf(stats, 'buffer')     || '—'), rTip('buffer'))}
         ${stat('Seed Size',     'seed_size',       'teal',   esc(strOf(stats, 'seed_size')  || '—'))}
-        ${stat('Avg Seed Time', 'avg_seed_time',   'pink',   ast !== null ? fmtSeedTime(ast) : '—')}
+        ${stat('Avg Seed Time', 'avg_seed_time',   'pink',   ast !== null ? fmtSeedTimeStacked(ast) : '—')}
         ${stat('Bonus',         'bonus_points',    'orange', esc(bonusRaw || '—'), rTip('bonus_points'))}
         ${stat('Total Uploads', 'uploads_approved','green',  esc(totalUploads || '—'), rTip('uploads_approved'))}
         ${stat('Warnings',      'warnings',        warnings !== null && warnings > 0 ? 'red' : 'text3', warnings !== null ? String(warnings) : '—')}
@@ -299,9 +299,16 @@ function buildMoreStatsBoxes(
     </div>`;
   }
 
-  const grid = `<div class="stats-grid" style="margin-top:0">${rows.map(r =>
-    `<div class="stat-item"><div class="stat-label">${esc(r.label)}</div><div class="stat-value ${esc(r.color)}">${esc(r.value)}${srcDot(r.field, settings)}</div></div>`
-  ).join('')}</div>`;
+  // Duration stats (total seed time) get the stacked Y/M/W/D + wrapped h/m/s
+  // treatment here so long values don't overflow the card box; other surfaces
+  // (detail page, table) keep the single-line form from buildStatRows.
+  const DURATION_FIELDS = new Set(['total_seedtime', 'total_seed_time', 'avg_seed_time']);
+  const grid = `<div class="stats-grid" style="margin-top:0">${rows.map(r => {
+    const value = DURATION_FIELDS.has(r.key)
+      ? fmtSeedTimeStacked(parseSeedTime(strOf(stats, r.key)))
+      : esc(r.value);
+    return `<div class="stat-item"><div class="stat-label">${esc(r.label)}</div><div class="stat-value ${esc(r.color)}">${value}${srcDot(r.field, settings)}</div></div>`;
+  }).join('')}</div>`;
 
   const footer = `<div class="prof-footer" style="margin-top:6px;align-items:center">
     <span></span>

@@ -16,6 +16,9 @@
     "min_ratio": 0.6,
     "min_seed_days": 3
   },
+  "invite_requirements": {
+    "min_class": "Archivist"
+  },
   "scrape": {
     "min_interval_minutes": 120
   },

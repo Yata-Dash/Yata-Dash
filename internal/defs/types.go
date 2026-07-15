@@ -291,6 +291,17 @@ type CustomAPI struct {
 	// using the byte_fields entries mapped to "uploaded" and "downloaded".
 	BufferFromBytes bool `json:"buffer_from_bytes,omitempty"`
 
+	// BoolFields map JSON paths → canonical fields, emitting "true"/"false"
+	// from a truthy value (non-zero number, JSON true, or a non-empty/non-"0"
+	// string). Turns e.g. an unread-message COUNT into the unread_mail flag.
+	BoolFields map[string]string `json:"bool_fields,omitempty"`
+
+	// ClassField is the JSON path to a numeric/string membership "class", and
+	// ClassMap translates that value → a group NAME (matched to the def's
+	// groups). For APIs that report the rank as an id rather than its name.
+	ClassField string            `json:"class_field,omitempty"`
+	ClassMap   map[string]string `json:"class_map,omitempty"`
+
 	// APIKeyHint overrides the hint under the API key field in the UI.
 	APIKeyHint string `json:"api_key_hint,omitempty"`
 }

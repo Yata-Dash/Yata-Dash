@@ -5,14 +5,54 @@
   "abbr": "RF",
   "url": "https://retroflix.net",
   "aliases": ["https://retroflix.club"],
-  "type": "scrape_only",
-  "last_updated": "2026-07-12",
+  "type": "custom",
+  "last_updated": "2026-07-16",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "ovrflo",
+    "role": "Special Effects",
+    "date": "2026-07-15"
+  },
+  "api": {
+    "path": "/api/me",
+    "auth_method": "api_key_header",
+    "field_map": {
+      "username": "username",
+      "id": "user_id",
+      "ratio": "ratio",
+      "created_at": "join_date",
+      "seed_bonus": "bonus_points",
+      "snatched_count": "snatched",
+      "average_seed_time": "avg_seed_time",
+      "seed_time": "total_seedtime",
+      "hit_and_run_count": "hit_and_runs",
+      "invites": "invites"
+    },
+    "byte_fields": {
+      "uploaded": "uploaded",
+      "downloaded": "downloaded"
+    },
+    "buffer_from_bytes": true,
+    "bool_fields": {
+      "unread_private_message_count": "unread_mail"
+    },
+    "class_field": "class",
+    "class_map": {
+      "0": "Film Dummy",
+      "1": "Film Stunt",
+      "2": "Movie Lover",
+      "3": "Cinema Addicted",
+      "4": "Film Critic",
+      "5": "VIP",
+      "6": "Retiree",
+      "7": "Uploader",
+      "8": "Director",
+      "9": "Producer",
+      "10": "Executive Producer"
+    },
+    "api_key_hint": "Your RetroFlix API token (Bearer/JWT) from your account settings. Works on both retroflix.net and retroflix.club."
   },
   "scrape": {
+    "disable_scraping": true,
     "profile_path": "/userdetails.php?id={id}",
     "labels": {
       "share ratio": "ratio",
@@ -23,6 +63,9 @@
       "invitations": "invites",
       "class": "group"
     }
+  },
+  "invite_requirements": {
+    "min_class": "Movie Lover"
   },
     "rules": {
     "min_ratio": 0.4

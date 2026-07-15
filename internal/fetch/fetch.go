@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -345,7 +346,53 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if api.BufferFromBytes {
 		out["buffer"] = parse.BytesToSize(max(rawBytes["uploaded"]-rawBytes["downloaded"], 0))
 	}
+
+	// Bool flags: a truthy value (a non-zero count, JSON true, or a non-empty
+	// string) → "true". Lets an unread-COUNT drive the unread_mail flag.
+	for jsonPath, canonical := range api.BoolFields {
+		if v := nested(raw, jsonPath); v != nil {
+			out[canonical] = strconv.FormatBool(anyTruthy(v))
+		}
+	}
+
+	// Membership class id/name → a group NAME from the def's groups. Some APIs
+	// report the rank as a numeric class ("class": 3) rather than its name.
+	if api.ClassField != "" && len(api.ClassMap) > 0 {
+		if v := nested(raw, api.ClassField); v != nil {
+			if name, ok := api.ClassMap[classKey(v)]; ok {
+				out["group"] = name
+			}
+		}
+	}
 	return out, nil
+}
+
+// classKey renders a class value as a ClassMap lookup key: a JSON number
+// becomes its integer form (3.0 → "3"), a string is used as-is.
+func classKey(v any) string {
+	switch n := v.(type) {
+	case float64:
+		return strconv.Itoa(int(n))
+	case string:
+		return n
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// anyTruthy reports whether a JSON value is "set": a non-zero number, a true
+// boolean, or a string that isn't empty/"false"/"0".
+func anyTruthy(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case float64:
+		return t != 0
+	case string:
+		return t != "" && t != "0" && !strings.EqualFold(t, "false")
+	default:
+		return false
+	}
 }
 
 // normalizeCustomString cleans up string values from custom APIs per
