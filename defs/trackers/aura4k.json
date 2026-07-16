@@ -1,0 +1,550 @@
+{
+  "schema_version": 1,
+  "key": "aura4k",
+  "name": "Aura4K",
+  "abbr": "A4K",
+  "url": "https://aura4k.net",
+  "type": "unit3d",
+  "last_updated": "2026-07-17",
+  "approved_by": {
+    "name": "",
+    "role": "",
+    "date": ""
+  },
+    "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 3
+  },
+  "groups": [
+    {
+    "name": "Pruned",
+    "style": {
+      "color": "#8D6262",
+      "icon": "fas fa-times-circle"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      }
+    ]
+  },
+  {
+    "name": "Banned",
+    "style": {
+      "color": "red",
+      "icon": "fas fa-ban"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      }
+    ]
+  },
+  {
+    "name": "Disabled",
+    "style": {
+      "color": "#8D6262",
+      "icon": "fas fa-pause-circle"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      }
+    ]
+  },
+  {
+    "name": "Guest",
+    "style": {
+      "color": "#575757",
+      "icon": "fas fa-question-circle"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      }
+    ]
+  },
+  {
+    "name": "Validating",
+    "style": {
+      "color": "#95A5A6",
+      "icon": "fas fa-question-circle"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      }
+    ]
+  },
+  {
+    "name": "Leech",
+    "style": {
+      "color": "#96281B",
+      "icon": "fas fa-times"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 1"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      }
+    ]
+  },
+  {
+    "name": "User",
+    "style": {
+      "color": "#7289DA",
+      "icon": "fas fa-user"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 3"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      }
+    ]
+  },
+  {
+    "name": "Bright Light",
+    "style": {
+      "color": "#3c78d8",
+      "icon": "fas fa-user-circle"
+    },
+    "requirements": {
+      "min_uploaded": "1 TiB",
+      "min_ratio": 0.5,
+      "min_age": "1M"
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 5"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      }
+    ]
+  },
+  {
+    "name": "Radiant",
+    "style": {
+      "color": "#1155cc",
+      "icon": "fas fa-power-off"
+    },
+    "requirements": {
+      "min_uploaded": "5 TiB",
+      "min_ratio": 0.6,
+      "min_age": "2M",
+      "min_uploads": 10
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 8"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      }
+    ]
+  },
+  {
+    "name": "Luminous",
+    "style": {
+      "color": "#1c4587",
+      "icon": "fas fa-bolt"
+    },
+    "requirements": {
+      "min_uploaded": "20 TiB",
+      "min_ratio": 0.75,
+      "min_age": "3M",
+      "min_uploads": 25
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 10"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Ethereal",
+    "style": {
+      "color": "#1c4587",
+      "icon": "fas fa-rocket"
+    },
+    "requirements": {
+      "min_uploaded": "50 TiB",
+      "min_ratio": 1.0,
+      "min_age": "6M",
+      "min_uploads": 50
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 25"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Eternal",
+    "style": {
+      "color": "#1c4587",
+      "icon": "fas fa-key",
+      "sparkle": true
+    },
+    "requirements": {
+      "min_uploaded": "100 TiB",
+      "min_ratio": 1.0,
+      "min_age": "1Y",
+      "min_uploads": 100
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Beacon",
+    "style": {
+      "color": "#1c4587",
+      "icon": "fas fa-hdd"
+    },
+    "requirements": {
+      "min_age": "6M",
+      "min_seedtime": "3M",
+      "min_seed_size": "50 TiB"
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 50"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Resonator",
+    "style": {
+      "color": "#1c4587",
+      "icon": "fas fa-server",
+      "sparkle": true
+    },
+    "requirements": {
+      "min_age": "3M",
+      "min_seedtime": "2M",
+      "min_seed_size": "100 TiB"
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Internal",
+    "style": {
+      "color": "#BAAF92",
+      "icon": "fas fa-magic"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Uploader",
+    "style": {
+      "color": "#2ECC71",
+      "icon": "fas fa-upload"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      },
+      {
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
+      }
+    ]
+  },
+  {
+    "name": "Guardian",
+    "style": {
+      "color": "#BF55EC",
+      "icon": "fas fa-shield"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Shaper",
+    "style": {
+      "color": "#15B097",
+      "icon": "fas fa-user-pen"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Sentinel",
+    "style": {
+      "color": "#15B097",
+      "icon": "fas fa-badge-check"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-envelope-open-text text-blue",
+        "label": "Access to Invite Forum"
+      }
+    ]
+  },
+  {
+    "name": "Automaton",
+    "style": {
+      "color": "#f1c40f",
+      "icon": "fab fa-android"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      }
+    ]
+  }
+  ]
+}
