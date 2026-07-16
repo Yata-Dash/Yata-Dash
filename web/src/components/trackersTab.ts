@@ -14,6 +14,7 @@ import type { ToastType } from './toast';
 interface TabDeps {
   loadTrackers: () => Promise<void>;
   refreshSingle: (id: string) => Promise<void>;
+  loadScrapeStatus: () => Promise<void>;
   toast: (msg: string, type?: ToastType) => void;
 }
 
@@ -148,6 +149,8 @@ export async function trkToggleEnabled(id: string): Promise<void> {
   if (ok) {
     _deps.toast(`${t.name} ${newEnabled ? 'enabled' : 'disabled'}`, 'success');
     await _deps.loadTrackers();
+    await _deps.loadScrapeStatus(); // disabling stops scraping — badges must reflect that now
+    void import('../views/detail').then(m => m.redrawDetail()); // no-op unless this tracker's detail page is open
   } else {
     _deps.toast(`Failed to ${newEnabled ? 'enable' : 'disable'} ${t.name}`, 'error');
   }
@@ -171,6 +174,10 @@ export async function trkConfirmDelete(id: string): Promise<void> {
   if (ok) {
     _deps.toast(`${t?.name ?? 'Tracker'} removed`, 'success');
     await _deps.loadTrackers();
+    await _deps.loadScrapeStatus();
+    // Redraw an open detail page for this tracker — closing it rather than
+    // rendering a "not found" ghost, since it no longer exists in state.
+    void import('../views/detail').then(m => m.detailTrackerDeleted(id));
   } else {
     _deps.toast('Failed to remove tracker', 'error');
     renderTrackersTable(_trackers, _deps);
@@ -222,6 +229,13 @@ async function ensureOptOutsLoaded(): Promise<void> {
   if (_optOutsLoaded) return;
   const { ok, data } = await api.fetchDefs();
   if (ok) { _optOuts = data.opt_outs ?? []; _optOutsLoaded = true; }
+}
+
+/** Invalidate the cached opt-out list — the defs it's derived from may have
+ *  just changed (Reload Definitions), so the next import fetch must re-fetch
+ *  it instead of using the stale cache. */
+export function resetOptOutsLoaded(): void {
+  _optOutsLoaded = false;
 }
 
 /** Prefill the URL/secret inputs from saved settings — only when the user
@@ -372,6 +386,7 @@ export async function importSelected(key: ImportKey): Promise<void> {
     failed ? 'error' : 'success',
   );
   await _deps.loadTrackers(); // refreshes trackers table + dashboard state
+  await _deps.loadScrapeStatus(); // newly-imported trackers' scrape badges start correct, not stale
   renderImportResults(key, results); // re-render with "already added" rows disabled
   updateImportBtn(key);
 }

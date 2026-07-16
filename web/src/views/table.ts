@@ -337,8 +337,9 @@ function buildExpanded(
     { l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' },
     { l: 'Last Scrape Update', v: (() => {
         if (ss?.reason === 'opted_out') return 'Operator opted out';
+        // Same unified label as the grid footer — cause doesn't matter here.
         if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
-          return 'Scrape disabled';
+          return 'API only';
         if (ss?.last_scrape_at) return fmtDateTime(ss.last_scrape_at);
         return '—';
       })() },

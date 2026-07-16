@@ -2885,7 +2885,7 @@
       "from": "LST",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "Whale or Sailbot",
+      "reqs": "Whale or Sailboat",
       "active": true,
       "updated": "Apr 2026"
     },
@@ -2901,7 +2901,7 @@
       "from": "LST",
       "to": "Luminarr",
       "days": 0,
-      "reqs": "Whale or Sailbot",
+      "reqs": "Whale or Sailboat",
       "active": true,
       "updated": "Apr 2026"
     },

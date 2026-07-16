@@ -4,7 +4,7 @@
 // and exported function names so existing wiring keeps working.
 import type {
   AppSettings, DefInfo, DefsPayload, GroupDef, GroupRequirements, OptOutEntry, StatsMap,
-  Tracker, TrackerPayload, TrackerStatsResponse, UpdateStatus,
+  Tracker, TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, UpdateStatus,
 } from '../types';
 import { MASKED_KEY } from '../types';
 import * as api from '../api';
@@ -25,6 +25,11 @@ import { appSettings, groupDefs, strOf } from '../state';
 interface ModalDeps {
   loadTrackers: () => Promise<void>;
   refreshSingle: (id: string) => Promise<void>;
+  loadScrapeStatus: () => Promise<void>;
+  // Re-fetches the settings table's cached test-status pills — needed after
+  // a save so a just-promoted pending test result (see modalTestTracker /
+  // backend promoteOrDiscardPendingTest) shows up without a manual refresh.
+  loadTestStatus: () => Promise<void>;
   toast: (msg: string, type?: ToastType) => void;
 }
 
@@ -382,7 +387,9 @@ export async function openAddModal(deps: ModalDeps) {
 
   hide('modal-enabled-group');
   hide('modal-delete-btn');
-  hide('modal-test-btn');
+  // Test is available in Add mode too (ad-hoc, unsaved) — modalTestTracker
+  // branches on the absence of modal-tracker-id to hit /test-adhoc instead.
+  show('modal-test-btn');
   hide('modal-detail-btn');
   hide('modal-test-result');
 
@@ -883,19 +890,61 @@ export function modalValidateMaxScrapes(): boolean {
 // Connectivity test (edit panel "Test connection" button)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Run a live API + profile-scrape test for the tracker being edited, and
- *  render the detailed per-method result inline above the footer so the user
- *  can see exactly whether the API, the scrape cookie, or both are working. */
+/** Build the test-body overrides from the CURRENT edit-panel form values, so
+ *  Test checks what's about to be saved rather than only what's stored. A
+ *  field still showing the MASKED_KEY sentinel means the user hasn't
+ *  touched it — omit it so the backend falls back to the stored value; any
+ *  other value (including "") is a live override. */
+function gatherTestOverrides(): TrackerTestOverrides {
+  const overrides: TrackerTestOverrides = {
+    username: getVal('modal-username'),
+    url: getVal('modal-url'),
+  };
+  const key = getVal('modal-key');
+  if (key !== MASKED_KEY) overrides.api_key = key;
+  const cookie = getVal('modal-session-cookie');
+  if (cookie !== MASKED_KEY) overrides.session_cookie = cookie;
+  return overrides;
+}
+
+/** Build the /test-adhoc payload from the Add-tracker form — no tracker
+ *  exists yet, so there's no masked sentinel to worry about; everything
+ *  currently typed is sent as-is. */
+function gatherAdhocPayload(): TrackerPayload {
+  const type = _selectedDef?.type || _selectedTypeKey || undefined;
+  return {
+    url: getVal('modal-url'),
+    api_key: getVal('modal-key'),
+    session_cookie: getVal('modal-session-cookie'),
+    username: getVal('modal-username'),
+    ...(type ? { type } : {}),
+  };
+}
+
+/** Run a live API + profile-scrape test and render the detailed per-method
+ *  result inline above the footer, so the user can see exactly whether the
+ *  API, the scrape cookie, or both are working. Edit mode tests the CURRENT
+ *  form values against the saved tracker (gatherTestOverrides); Add mode
+ *  (no modal-tracker-id yet) runs an ad-hoc test of the whole form — nothing
+ *  is saved either way. */
 export async function modalTestTracker(): Promise<void> {
   const id = getVal('modal-tracker-id');
-  if (!id) return;
   const panel = document.getElementById('modal-test-result');
   const btn = document.getElementById('modal-test-btn') as HTMLButtonElement | null;
   if (!panel) return;
+
+  if (!id && !getVal('modal-url')) {
+    panel.style.display = '';
+    panel.innerHTML = `<div class="trk-test-row fail"><i class="fas fa-circle-xmark"></i> <span class="trk-test-word">Enter a URL first.</span></div>`;
+    return;
+  }
+
   panel.style.display = '';
   panel.innerHTML = `<div class="trk-test-row"><i class="fas fa-spinner fa-spin"></i> <span class="trk-test-word">Testing API &amp; profile scrape…</span></div>`;
   if (btn) btn.disabled = true;
-  const { ok, data } = await api.testTracker(id);
+  const { ok, data } = id
+    ? await api.testTracker(id, gatherTestOverrides())
+    : await api.testTrackerAdhoc(gatherAdhocPayload());
   if (btn) btn.disabled = false;
   panel.innerHTML = (ok && data)
     ? renderTestDetail(data)
@@ -987,7 +1036,13 @@ export async function saveTracker(deps: ModalDeps) {
     const maxScrape = parseInt(getVal('modal-max-scrapes'), 10);
     payload.max_scrapes_per_day = !isNaN(maxScrape) && maxScrape > 0 ? maxScrape : 0;
     payload.auto_interval = !!(document.getElementById('modal-auto-interval') as HTMLInputElement | null)?.checked;
-    payload.api_only = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
+    // When the def forbids scraping the toggle is forced ON for display only —
+    // don't persist that visual state (omit → backend keeps the stored value).
+    // Persisting it would bake api_only=true into the tracker, which outlives
+    // a later def change that re-allows scraping.
+    if (!_apiOnlyLocked) {
+      payload.api_only = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
+    }
   }
 
   if (isDemo || (!isNew && document.getElementById('modal-mock-group')?.style.display !== 'none')) {
@@ -997,7 +1052,14 @@ export async function saveTracker(deps: ModalDeps) {
 
   if (!isNew) {
     const { ok } = await api.updateTracker(id, payload);
-    if (ok) { deps.toast(`${name} updated`, 'success'); closeModal(); await deps.loadTrackers(); await deps.refreshSingle(id); }
+    if (ok) {
+      deps.toast(`${name} updated`, 'success');
+      closeModal();
+      await deps.loadTrackers();
+      await deps.refreshSingle(id);
+      await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
+      await deps.loadTestStatus(); // a pending test (unsaved-value test, see modalTestTracker) may have just been promoted
+    }
     else    { deps.toast('Failed to update tracker', 'error'); }
   } else {
     const { ok, status, data } = await api.addTracker(payload);
@@ -1006,6 +1068,7 @@ export async function saveTracker(deps: ModalDeps) {
       closeModal();
       await deps.loadTrackers();
       if (data?.id && (payload.api_key || isDemo)) await deps.refreshSingle(data.id);
+      await deps.loadScrapeStatus();
     } else if (status === 403 && (data as unknown as { error?: string })?.error === 'tracker_opted_out') {
       // Backend backstop for opted-out trackers
       const entry = (data as unknown as { opt_out?: OptOutEntry }).opt_out;
@@ -1041,18 +1104,23 @@ export async function confirmDeletePopup(
   trackers: Tracker[],
   statsMap: StatsMap,
   expandedRows: Set<string>,
-  deps: { loadTrackers: () => Promise<void>; toast: (msg: string, type?: ToastType) => void },
+  deps: { loadTrackers: () => Promise<void>; loadScrapeStatus: () => Promise<void>; toast: (msg: string, type?: ToastType) => void },
 ) {
   if (!_pendingDeleteId) return;
-  const t = trackers.find(x => x.id === _pendingDeleteId);
-  const { ok } = await api.deleteTracker(_pendingDeleteId);
+  const deletedId = _pendingDeleteId;
+  const t = trackers.find(x => x.id === deletedId);
+  const { ok } = await api.deleteTracker(deletedId);
   if (ok) {
     deps.toast(`${t?.name ?? 'Tracker'} removed`, 'success');
-    delete statsMap[_pendingDeleteId!];
-    expandedRows.delete(_pendingDeleteId!);
+    delete statsMap[deletedId];
+    expandedRows.delete(deletedId);
     closeDeletePopup();
     closeModal();
     await deps.loadTrackers();
+    await deps.loadScrapeStatus();
+    // Redraw an open detail page for this tracker — closing it rather than
+    // rendering a "not found" ghost, since it no longer exists in state.
+    void import('../views/detail').then(m => m.detailTrackerDeleted(deletedId));
   } else {
     deps.toast('Failed to remove tracker', 'error');
     closeDeletePopup();
@@ -1420,22 +1488,40 @@ export async function checkForUpdates(): Promise<void> {
   }
 }
 
-/** Persist the daily-auto-check opt-in immediately (like the other toggles). */
+/** Persist the daily-auto-check opt-in immediately (like the other toggles).
+ *  On failure, revert appSettings AND the checkbox — mirrors togglePrivacyQuick
+ *  (main.ts) — so the UI never claims a setting persisted when it didn't. */
 export async function toggleAutoUpdate(): Promise<void> {
   if (!_sd) return;
-  const on = (document.getElementById('s-update-auto') as HTMLInputElement | null)?.checked ?? false;
+  const cb = document.getElementById('s-update-auto') as HTMLInputElement | null;
+  const on = cb?.checked ?? false;
   appSettings.update_check_auto = on;
-  await api.saveSettings({ ...appSettings, update_check_auto: on });
-  _sd.toast(on ? 'Daily update check on' : 'Daily update check off', 'success');
+  const { ok } = await api.saveSettings({ ...appSettings, update_check_auto: on });
+  if (ok) {
+    _sd.toast(on ? 'Daily update check on' : 'Daily update check off', 'success');
+  } else {
+    appSettings.update_check_auto = !on;
+    if (cb) cb.checked = !on;
+    _sd.toast('Failed to save — daily update check unchanged', 'error');
+  }
 }
 
-/** Persist the reverse-proxy header opt-in immediately (like the other toggles). */
+/** Persist the reverse-proxy header opt-in immediately (like the other toggles).
+ *  On failure, revert appSettings AND the checkbox — mirrors togglePrivacyQuick
+ *  (main.ts) — so the UI never claims a setting persisted when it didn't. */
 export async function toggleTrustProxy(): Promise<void> {
   if (!_sd) return;
-  const on = (document.getElementById('s-trust-proxy') as HTMLInputElement | null)?.checked ?? false;
+  const cb = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
+  const on = cb?.checked ?? false;
   appSettings.trust_proxy_headers = on;
-  await api.saveSettings({ ...appSettings, trust_proxy_headers: on });
-  _sd.toast(on ? 'Proxy headers trusted' : 'Proxy headers ignored', 'success');
+  const { ok } = await api.saveSettings({ ...appSettings, trust_proxy_headers: on });
+  if (ok) {
+    _sd.toast(on ? 'Proxy headers trusted' : 'Proxy headers ignored', 'success');
+  } else {
+    appSettings.trust_proxy_headers = !on;
+    if (cb) cb.checked = !on;
+    _sd.toast('Failed to save — proxy header trust unchanged', 'error');
+  }
 }
 
 /** Populate the settings page form from current settings (no modal — full page). */
@@ -1652,14 +1738,17 @@ export function onQuiInstanceToggle() {
   _sd.applyQuiInstances(enabledIds);
 }
 
-/** POST /api/defs/reload — re-read tracker definition files at runtime. */
-export async function reloadDefs(toastFn?: (msg: string, type?: ToastType) => void) {
+/** POST /api/defs/reload — re-read tracker definition files at runtime.
+ *  Returns whether the reload succeeded, so the caller (main.ts) knows
+ *  whether it's safe to chain the follow-up full refresh. */
+export async function reloadDefs(toastFn?: (msg: string, type?: ToastType) => void): Promise<boolean> {
   const notify = toastFn ?? _sd?.toast;
   const btn = document.getElementById('s-reload-defs-btn') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
   const { ok, data } = await api.reloadDefs();
   if (btn) btn.disabled = false;
-  if (ok && data.ok) {
+  const success = ok && data.ok;
+  if (success) {
     _defsCache = null; // force re-fetch next time the add modal opens
     notify?.(`Definitions reloaded — ${data.trackers} trackers, ${data.types} types`, 'success');
   } else {
@@ -1668,6 +1757,7 @@ export async function reloadDefs(toastFn?: (msg: string, type?: ToastType) => vo
   for (const issue of data?.issues ?? []) {
     notify?.(`${issue.file}: ${issue.error}`, 'error');
   }
+  return success;
 }
 
 // ── Auto-save (qui-style): main settings persist on modify ──────────────────

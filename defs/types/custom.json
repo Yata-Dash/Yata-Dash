@@ -6,8 +6,5 @@
   "api": {
     "kind": "custom",
     "required_fields": ["join_date"]
-  },
-  "scrape": {
-    "skip_html_scrape": true
   }
 }

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -40,8 +43,77 @@ type TrackerTestResult struct {
 // Cleared lazily — a deleted tracker's stale entry is harmless.
 var testResults sync.Map // trackerID → TrackerTestResult
 
+// pendingTest is a test result whose CREDENTIALS DIFFER from what's currently
+// saved (the user tested unsaved form edits). It is promoted to testResults
+// only if the tracker is then saved with matching credentials — see
+// promoteOrDiscardPendingTest — so "test → save" shows the result in the
+// table pill, but "test → cancel" never does (nothing is saved to match
+// against, so the pending entry just sits there inert).
+type pendingTest struct {
+	Result        TrackerTestResult
+	APIKey        string
+	SessionCookie string
+	Username      string
+	URL           string
+}
+
+var pendingTestResults sync.Map // trackerID → pendingTest
+
+// testOverrides is the optional body for POST /api/trackers/{id}/test — lets
+// the edit panel test values still in the form (unsaved) instead of only
+// what's persisted, e.g. checking a freshly pasted cookie before Save. Same
+// pointer + masked-sentinel semantics as trackerPayload/applyPayload
+// (trackers.go): absent field = use the stored value; maskedKey = unchanged;
+// anything else (including "") = the value to test with. NEVER persisted.
+type testOverrides struct {
+	APIKey        *string `json:"api_key"`
+	SessionCookie *string `json:"session_cookie"`
+	Username      *string `json:"username"`
+	URL           *string `json:"url"`
+}
+
+// applyTestOverrides mutates an in-memory copy of a stored tracker for one
+// test run. Mirrors applyPayload's masked-sentinel rules for just these four
+// fields — deliberately NOT the full payload, so a stray field in the body
+// can never affect anything but what's being tested.
+func applyTestOverrides(t *models.Tracker, p testOverrides) {
+	if p.APIKey != nil && *p.APIKey != maskedKey {
+		t.APIKey = strings.TrimSpace(*p.APIKey)
+	}
+	if p.SessionCookie != nil && *p.SessionCookie != maskedKey {
+		t.SessionCookie = strings.TrimSpace(*p.SessionCookie)
+	}
+	if p.Username != nil {
+		t.Username = strings.TrimSpace(*p.Username)
+	}
+	if p.URL != nil && strings.TrimSpace(*p.URL) != "" {
+		t.URL = strings.TrimRight(strings.TrimSpace(*p.URL), "/")
+	}
+}
+
+// promoteOrDiscardPendingTest runs after a tracker save (updateTracker,
+// trackers.go): a pending test result from testing unsaved form values is
+// promoted to testResults only if the just-saved credentials match exactly
+// what was tested — otherwise it's discarded as stale.
+func promoteOrDiscardPendingTest(saved models.Tracker) {
+	v, ok := pendingTestResults.Load(saved.ID)
+	if !ok {
+		return
+	}
+	pendingTestResults.Delete(saved.ID)
+	p := v.(pendingTest)
+	if p.APIKey == saved.APIKey && p.SessionCookie == saved.SessionCookie &&
+		p.Username == saved.Username && p.URL == saved.URL {
+		testResults.Store(saved.ID, p.Result)
+	}
+}
+
 // POST /api/trackers/{id}/test — actively test the tracker's API and profile
-// scrape and return which works. Caches the result for the table indicator.
+// scrape and return which works. An optional JSON body overrides api_key/
+// session_cookie/username/url with current-but-unsaved form values (see
+// testOverrides). Caches the result for the table indicator — but ONLY when
+// the tested credentials match what's actually saved; a test of edited
+// values goes to pendingTestResults instead (see promoteOrDiscardPendingTest).
 func testTracker(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -50,8 +122,33 @@ func testTracker(d *Deps) http.HandlerFunc {
 			jsonError(w, "tracker not found", http.StatusNotFound)
 			return
 		}
+		orig := t // stored credentials, to tell whether overrides changed anything
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			jsonError(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if len(bytes.TrimSpace(body)) > 0 {
+			var p testOverrides
+			if err := json.Unmarshal(body, &p); err != nil {
+				jsonError(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+			applyTestOverrides(&t, p) // in-memory copy only — never persisted
+		}
+
 		res := runTrackerTest(d, t)
-		testResults.Store(t.ID, res)
+		if t.APIKey == orig.APIKey && t.SessionCookie == orig.SessionCookie &&
+			t.Username == orig.Username && t.URL == orig.URL {
+			testResults.Store(t.ID, res)
+			pendingTestResults.Delete(t.ID) // a fresh matching test supersedes any stale pending one
+		} else {
+			pendingTestResults.Store(t.ID, pendingTest{
+				Result: res, APIKey: t.APIKey, SessionCookie: t.SessionCookie,
+				Username: t.Username, URL: t.URL,
+			})
+		}
 		// Level follows the outcome: a user asked for this test, so a failed
 		// or rate-limit-blocked check is a warning, not a routine info line.
 		msg := fmt.Sprintf("test: %s (%s) — api=%s scrape=%s",
@@ -63,6 +160,50 @@ func testTracker(d *Deps) http.HandlerFunc {
 			d.logInfof("%s", msg)
 		}
 		jsonOK(w, res)
+	}
+}
+
+// adhocTestID is the throwaway tracker ID used for POST /api/trackers/test-adhoc
+// (Add-mode Test button, testing a tracker that hasn't been added yet). It is
+// never used for anything persisted (see runAdhocTest's persist=false), so
+// there is no risk of it colliding with — or leaking state to/from — a real
+// tracker's rate-limit ledger or cached stats. Fixed rather than randomised:
+// it's never written anywhere, so uniqueness buys nothing, and a readable
+// constant makes it obvious in passing (e.g. a stack trace) that it's not a
+// real tracker.
+const adhocTestID = "adhoc-test"
+
+// POST /api/trackers/test-adhoc — ad-hoc connectivity test for a tracker
+// that hasn't been added yet (Add-mode Test button). Body = the full add
+// form payload (trackerPayload — reused as-is; fields the add form doesn't
+// send, e.g. targets, are simply absent). Resolves def/type from the URL the
+// same way createTracker does, builds a synthetic unpersisted Tracker, and
+// runs the same checks with persist=false so nothing touches a real
+// tracker's bookkeeping. Never cached (no real ID exists yet) — modal
+// display only.
+func testAdhocTracker(d *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var p trackerPayload
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			jsonError(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if p.URL == nil || strings.TrimSpace(*p.URL) == "" {
+			jsonError(w, "url is required", http.StatusBadRequest)
+			return
+		}
+		t := models.Tracker{
+			ID:  adhocTestID,
+			URL: strings.TrimRight(strings.TrimSpace(*p.URL), "/"),
+		}
+		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
+			t.Type = td.Type
+		}
+		applyPayload(&t, p) // an explicit type/credentials selection wins over the def match
+		if t.Type == "" {
+			t.Type = "unit3d"
+		}
+		jsonOK(w, runAdhocTest(d, t))
 	}
 }
 
@@ -89,18 +230,33 @@ func fmtCheck(c CheckResult) string {
 	return c.Status + ":" + c.Detail
 }
 
-// runTrackerTest runs both checks. On success it persists the freshly fetched
-// data (a test doubles as a refresh) — the scrape, being a real request, also
-// records a rate-limit attempt just like a normal scrape.
+// runTrackerTest runs both checks for a REAL saved tracker. On success it
+// persists the freshly fetched data (a test doubles as a refresh) — the
+// scrape, being a real request, also records a rate-limit attempt just like
+// a normal scrape.
 func runTrackerTest(d *Deps, t models.Tracker) TrackerTestResult {
 	return TrackerTestResult{
-		API:      testAPI(d, t),
-		Scrape:   testScrape(d, t),
+		API:      testAPI(d, t, true),
+		Scrape:   testScrape(d, t, true),
 		TestedAt: time.Now().Unix(),
 	}
 }
 
-func testAPI(d *Deps, t models.Tracker) CheckResult {
+// runAdhocTest runs the same two checks for a tracker that was never added
+// (POST /api/trackers/test-adhoc). persist=false on testAPI/testScrape skips
+// every bit of bookkeeping that's keyed by Tracker.ID — the rate-limit lock,
+// the scrape-log entry, and the cached API/scrape stats — so an ad-hoc test
+// can never corrupt a real tracker's history, and never needs cleaning up
+// afterwards because it never wrote anything.
+func runAdhocTest(d *Deps, t models.Tracker) TrackerTestResult {
+	return TrackerTestResult{
+		API:      testAPI(d, t, false),
+		Scrape:   testScrape(d, t, false),
+		TestedAt: time.Now().Unix(),
+	}
+}
+
+func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	// Opt-out is a hard stop for the API too — a "Test" must never contact a
 	// tracker whose operator asked not to be supported (testScrape enforces the
 	// same via the scrape policy).
@@ -125,11 +281,13 @@ func testAPI(d *Deps, t models.Tracker) CheckResult {
 	if ferr != nil {
 		return CheckResult{Status: "fail", Detail: ferr.Kind}
 	}
-	_ = d.Stats.SaveAPI(t.ID, fields)
+	if persist {
+		_ = d.Stats.SaveAPI(t.ID, fields)
+	}
 	return CheckResult{Status: "ok", Fields: len(fields)}
 }
 
-func testScrape(d *Deps, t models.Tracker) CheckResult {
+func testScrape(d *Deps, t models.Tracker, persist bool) CheckResult {
 	// Demo trackers never scrape.
 	if t.Type == "test" {
 		return CheckResult{Status: "not_applicable", Detail: "no_scrape_support"}
@@ -139,9 +297,14 @@ func testScrape(d *Deps, t models.Tracker) CheckResult {
 	// as runScrape) so a test can never race a refresh into double-hitting the
 	// tracker — and evaluate the SAME policy cascade. A test that bypassed
 	// cooldowns or daily caps would let the Test button hammer a tracker;
-	// rate limits protect users' accounts and must stay airtight.
-	mu := lockScrape(t.ID)
-	defer mu.Unlock()
+	// rate limits protect users' accounts and must stay airtight. An ad-hoc
+	// test (persist=false) has no real tracker/ID to race against — and must
+	// not leave an entry in the lock map for an ID that will never recur —
+	// so it skips the lock entirely.
+	if persist {
+		mu := lockScrape(t.ID)
+		defer mu.Unlock()
+	}
 
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	pol := scrape.Evaluate(d.Cfg.Settings(), t, rs, d.DB, time.Now())
@@ -167,11 +330,13 @@ func testScrape(d *Deps, t models.Tracker) CheckResult {
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
 	}
 	result, serr := scrape.Profile(t, spec)
-	recordScrapeAttempt(d, t.ID, serr)
+	if persist {
+		recordScrapeAttempt(d, t.ID, serr)
+	}
 	if serr != nil {
 		return CheckResult{Status: "fail", Detail: serr.Kind}
 	}
-	if len(result) > 0 {
+	if persist && len(result) > 0 {
 		_ = d.Stats.SaveScrape(t.ID, toAnyMap(result))
 	}
 	return CheckResult{Status: "ok", Fields: len(result)}

@@ -131,6 +131,18 @@ export interface TrackerTestResult {
 
 export type TestStatusMap = Record<string, TrackerTestResult>;
 
+/** Optional body for POST /api/trackers/{id}/test — test the CURRENT edit-
+ *  panel form values instead of only what's saved. Same pointer + masked-
+ *  sentinel semantics as TrackerPayload: absent field = use the stored
+ *  value; MASKED_KEY = unchanged; anything else (including "") = the value
+ *  to test with. Never persisted. */
+export interface TrackerTestOverrides {
+  api_key?: string;
+  session_cookie?: string;
+  username?: string;
+  url?: string;
+}
+
 // ── Scrape status ─────────────────────────────────────────────────────────
 
 export interface ScrapeStatus {

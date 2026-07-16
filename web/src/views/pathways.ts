@@ -311,7 +311,7 @@ function pathEtaLabel(p: PathwayPath): string {
   if (p.total_eta_days === 0 && p.has_unknown) {
     // Can't compute the age floor (join date unknown) vs. age met, only
     // controllable stat targets left.
-    return pathHasUnknownAge(p) ? 'Timeline unknown' : 'Stat targets remain';
+    return pathHasUnknownAge(p) ? 'Timeline unknown' : '0D+ - Only stats left';
   }
   // The number is the account-age minimum (the one thing you can't speed up);
   // "+" means other, controllable requirements may make the real time longer.

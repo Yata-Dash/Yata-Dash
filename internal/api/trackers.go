@@ -21,6 +21,7 @@ func registerTrackers(r chi.Router, d *Deps) {
 	r.Delete("/trackers/{id}", deleteTracker(d))
 	r.Post("/trackers/{id}/test", testTracker(d))
 	r.Get("/trackers/test-status", testStatusAll(d))
+	r.Post("/trackers/test-adhoc", testAdhocTracker(d))
 }
 
 // toView converts a Tracker into its safe public representation, enriched
@@ -233,6 +234,10 @@ func updateTracker(d *Deps) http.HandlerFunc {
 		}
 		t, _ := d.Cfg.Tracker(id)
 		syncManualLayer(d, t)
+		// A pending test result (tested unsaved credentials, see testTracker)
+		// graduates to the official cached result only if what was just saved
+		// matches what was tested — otherwise it's discarded as stale.
+		promoteOrDiscardPendingTest(t)
 		d.logInfof("tracker: updated %s (%s)", t.Name, t.ID)
 		jsonOK(w, toView(d, t))
 	}

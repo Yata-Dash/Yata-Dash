@@ -283,7 +283,14 @@ async function togglePrivacyQuick() {
 // ── Scrape status ──────────────────────────────────────────────────────────
 async function loadScrapeStatus() {
   const { ok, data } = await api.fetchScrapeStatus();
-  if (ok) { setScrapeStatus(data); updateScrapeAlert(); }
+  if (ok) {
+    setScrapeStatus(data);
+    updateScrapeAlert();
+    // Per-card/-row "Profile scraping off" badges read scrapeStatus directly
+    // from state — re-render so they don't lag a full refresh cycle.
+    renderGridFull();
+    renderTable();
+  }
 }
 
 function updateScrapeAlert() {
@@ -314,7 +321,7 @@ async function loadTrackers() {
 
 /** Render the Settings → Trackers tab table from current state. */
 function renderTrackersTab() {
-  trackersTab.renderTrackersTable(state.trackers, { loadTrackers, refreshSingle, toast });
+  trackersTab.renderTrackersTable(state.trackers, { loadTrackers, refreshSingle, loadScrapeStatus, toast });
   trackersTab.prefillImportCreds(); // saved Prowlarr/Jackett connections
   trackersTab.restoreImportSections(); // remembered open/closed state
   void trackersTab.loadTestStatus(); // fill in cached test-status pills
@@ -381,6 +388,8 @@ async function refreshAllStats(force = false) {
       renderCard(t, state.statsCache[t.id], state.appSettings, state.groupDefs);
     });
     renderTable();
+    // An open Tracker Detail page re-renders with the fresh stats (no-op otherwise).
+    void import('./views/detail').then(m => m.redrawDetail());
   } else {
     // Server unreachable — keep everything currently displayed.
     state.trackers.forEach(t => setCardLoading(t.id, false));
@@ -463,6 +472,8 @@ async function scrapeProfile(id: string, silent = false): Promise<void> {
     renderTable();
     updateSummary();
     renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
+    // An open Tracker Detail page re-renders with the fresh stats (no-op otherwise).
+    void import('./views/detail').then(m => m.redrawDetail());
     if (!silent) toast(`${t?.name ?? 'Tracker'} profile scraped`, 'success');
   } else if (res.status === 429) {
     // Rate-limited — keep displaying what we have.
@@ -861,7 +872,7 @@ const settingsDeps = () => ({
 // ── Tracker panel / settings wiring (modals.ts, exposed on window) ────────
 modalsReady.then(m => {
   const editDeps = () => ({
-    loadTrackers, refreshSingle, toast,
+    loadTrackers, refreshSingle, loadScrapeStatus, loadTestStatus: trackersTab.loadTestStatus, toast,
     scrapeProfile: (id: string) => scrapeProfile(id),
     loadSettings, renderTable,
     renderGrid: () => renderGridFull(),
@@ -872,7 +883,7 @@ modalsReady.then(m => {
   // Edit/Add open the inline panel on the Settings → Trackers tab; navigate
   // there first when invoked from the dashboard.
   (window as any).openEditModal   = (id: string) => { gotoSettingsTrackers(); m.openEditModal(id, state.trackers, state.statsCache, state.appSettings, editDeps()); };
-  (window as any).openAddModal    = () => { gotoSettingsTrackers(); void m.openAddModal({ loadTrackers, refreshSingle, toast }); };
+  (window as any).openAddModal    = () => { gotoSettingsTrackers(); void m.openAddModal({ loadTrackers, refreshSingle, loadScrapeStatus, loadTestStatus: trackersTab.loadTestStatus, toast }); };
   (window as any).closeModal      = m.closeModal;
   (window as any).toggleSettingsSync      = m.toggleSettingsSync;
   (window as any).toggleSettingsFavicon   = m.toggleSettingsFavicon;
@@ -881,18 +892,28 @@ modalsReady.then(m => {
   (window as any).toggleSettingsStatSources = m.toggleSettingsStatSources;
   (window as any).onQuiInstanceToggle     = m.onQuiInstanceToggle;
   (window as any).saveSettings            = () => m.saveSettings(settingsDeps());
-  (window as any).reloadDefs              = () => m.reloadDefs(toast);
+  // Reload Definitions is a FULL refresh: fresh def_approval (settings table),
+  // a fresh import-picker opt-out cache, and fresh group defs — all derive
+  // from the def files that were just reloaded, so a partial refresh would
+  // leave stale approval badges / opt-out state / group data on screen.
+  (window as any).reloadDefs              = async () => {
+    const reloaded = await m.reloadDefs(toast);
+    if (!reloaded) return;
+    await loadTrackers();
+    trackersTab.resetOptOutsLoaded();
+    await loadTrackerGroups();
+  };
   (window as any).openColCustomizer  = () => { openColCustomizer(colPrefs); };
   (window as any).closeColModal   = () => { closeColModal(); };
   (window as any).toggleColVisible = (key: string, el: Element) => { toggleColVisible(key, el, colPrefs); };
   (window as any).resetColPrefs   = () => { colPrefs = resetColPrefs(); openColCustomizer(colPrefs); };
-  (window as any).saveTracker     = () => m.saveTracker({ loadTrackers, refreshSingle, toast });
+  (window as any).saveTracker     = () => m.saveTracker({ loadTrackers, refreshSingle, loadScrapeStatus, loadTestStatus: trackersTab.loadTestStatus, toast });
   (window as any).modalTestTracker = () => { void m.modalTestTracker(); };
   (window as any).modalAddTargetRow    = m.modalAddTargetRow;
   (window as any).modalRemoveTargetRow = m.modalRemoveTargetRow;
   (window as any).showDeleteConfirm    = m.showDeleteConfirm;
   (window as any).closeDeletePopup     = m.closeDeletePopup;
-  (window as any).confirmDeletePopup   = () => m.confirmDeletePopup(state.trackers, state.statsCache, state.expandedRows, { loadTrackers, toast });
+  (window as any).confirmDeletePopup   = () => m.confirmDeletePopup(state.trackers, state.statsCache, state.expandedRows, { loadTrackers, loadScrapeStatus, toast });
   (window as any).toggleEnabled        = m.toggleEnabled;
   (window as any).onAddTrackerSelect   = m.onAddTrackerSelect;
   (window as any).onAddTrackerFilter   = m.onAddTrackerFilter;

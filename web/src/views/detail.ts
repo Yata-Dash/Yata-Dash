@@ -128,6 +128,23 @@ export function redrawDetail(): void {
   void loadData(); // async: fresh series (new metrics/reflines) + routes, then redraws
 }
 
+/** Called after a tracker delete succeeds. If the deleted tracker is the one
+ *  currently open in the detail page, close it — a redrawDetail() here would
+ *  just render "Tracker not found" once it's gone from state.trackers.
+ *  If the detail page isn't the visible view right now (user navigated away
+ *  without an explicit close, so `trackerId` is stale), just forget the id
+ *  rather than forcing navigation via closeTrackerDetail()'s setView() call —
+ *  that would yank the user out of, say, the Settings page they're deleting
+ *  from. Deleting some other tracker while detail IS open is a no-op. */
+export function detailTrackerDeleted(id: string): void {
+  if (trackerId !== id) return;
+  if (document.getElementById('view-detail')?.style.display === 'none') {
+    trackerId = null;
+    return;
+  }
+  closeTrackerDetail();
+}
+
 function current(): Tracker | undefined {
   return trackers.find(t => t.id === trackerId);
 }
@@ -420,6 +437,13 @@ function wireControls(t: Tracker): void {
     if (!menuCloserWired) {
       menuCloserWired = true;
       document.addEventListener('click', () => {
+        const m = document.getElementById('detail-metrics-menu');
+        if (m) m.style.display = 'none';
+      });
+      // Escape closes it too — matches the pattern other popovers/dropdowns
+      // use (main.ts's global handler, targetsPopover.ts's own listener).
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
         const m = document.getElementById('detail-metrics-menu');
         if (m) m.style.display = 'none';
       });

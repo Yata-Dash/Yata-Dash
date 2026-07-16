@@ -20,7 +20,6 @@
     "min_seed_days": 3
   },
   "invite_requirements": {
-    "min_class": "Sailboat",
     "note": "Sailboat OR Whale for invite-forum access. Many invite threads additionally require further requirements."
   },
   "groups": [

@@ -6,7 +6,7 @@ import type {
   LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
   ScrapeStatusMap, StatsMap, TestStatusMap, ThemeInfo, Tracker, TrackerGroupMap,
-  TrackerPayload, TrackerStatsResponse, TrackerTestResult, UpdateStatus,
+  TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, TrackerTestResult, UpdateStatus,
 } from './types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -101,9 +101,20 @@ export const updateTracker = (id: string, payload: TrackerPayload) =>
 export const deleteTracker = (id: string) =>
   call<{ ok: boolean }>(`/api/trackers/${id}`, { method: 'DELETE' });
 
-/** Actively test a tracker's API + profile scrape (real requests). */
-export const testTracker = (id: string) =>
-  call<TrackerTestResult>(`/api/trackers/${id}/test`, { method: 'POST' });
+/** Actively test a tracker's API + profile scrape (real requests). Optional
+ *  overrides test the CURRENT edit-panel form values (e.g. an unsaved
+ *  cookie) instead of only what's saved — omit to test the stored values. */
+export const testTracker = (id: string, overrides?: TrackerTestOverrides) =>
+  call<TrackerTestResult>(`/api/trackers/${id}/test`, {
+    method: 'POST',
+    ...(overrides ? { body: JSON.stringify(overrides) } : {}),
+  });
+
+/** Ad-hoc connectivity test for a tracker that hasn't been added yet
+ *  (Add-mode Test button). Body is the same shape as addTracker's payload.
+ *  Never persisted — the modal shows the result directly. */
+export const testTrackerAdhoc = (payload: TrackerPayload) =>
+  call<TrackerTestResult>('/api/trackers/test-adhoc', { method: 'POST', body: JSON.stringify(payload) });
 
 /** Cached last-test results for all trackers (absent = not tested yet). */
 export const fetchTestStatus = () =>

@@ -234,9 +234,13 @@ export function renderCard(
         let tip: string;
         let setup = false; // setup states (missing credentials) — muted, not amber
         if (ss.reason === 'opted_out')              tip = 'Operator opted out';
-        else if (ss.reason === 'api_only')          tip = 'API only mode';
-        else if (ss.reason === 'no_scrape_support') tip = 'No scrape support';
-        else if (ss.reason === 'scrape_disabled')   tip = 'Scrape disabled';
+        // api_only / no_scrape_support / scrape_disabled differ only in CAUSE
+        // (user toggle vs type can't scrape vs operator forbids) — to the user
+        // they all mean the same thing here: stats come from the API alone.
+        // One label; the precise cause stays in the edit-modal hint and the
+        // connectivity-test detail.
+        else if (ss.reason === 'api_only' || ss.reason === 'no_scrape_support' || ss.reason === 'scrape_disabled')
+          tip = 'API only';
         else if (ss.reason === 'no_cookie')   { tip = 'Profile scraping off — add your session cookie (Settings → Trackers)'; setup = true; }
         else if (ss.reason === 'no_username') { tip = 'Profile scraping off — add your username (Settings → Trackers)'; setup = true; }
         else if (ss.reason === 'daily_limit')       tip = 'Daily limit reached';
