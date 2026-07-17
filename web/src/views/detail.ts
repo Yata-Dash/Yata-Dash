@@ -16,9 +16,9 @@ import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { eventGlobeSvg } from '../utils/icons';
 import { getFaviconUrl, memberDur } from '../utils/parse';
 import {
-  HISTORY_METRICS, metricLabel, metricUnit, recentRatePerDay, targetRefLinesFor,
+  fmtGiB, HISTORY_METRICS, metricLabel, metricUnit, recentRatePerDay, targetRefLinesFor,
 } from '../utils/series';
-import type { HistoryRangeKey } from '../utils/series';
+import type { HistoryRangeKey, SeriesUnit } from '../utils/series';
 import type { HistoryEvent, HistorySeriesResponse, PathwayStep, Tracker } from '../types';
 
 // ── State (not persisted except the per-tracker chart picks) ────────────────
@@ -26,6 +26,7 @@ import type { HistoryEvent, HistorySeriesResponse, PathwayStep, Tracker } from '
 const METRICS_KEY = 'yata.detail.metrics'; // Record<trackerId, string[]>
 const RANGE_KEY = 'yata.detail.range';
 const PROJECTION_KEY = 'yata.detail.projection';
+const DELTAS_KEY = 'yata.detail.deltas'; // '0' = per-stat change chips hidden
 
 const DETAIL_RANGES: { key: HistoryRangeKey; label: string }[] = [
   { key: '7d', label: '7d' },
@@ -44,9 +45,14 @@ const TARGET_KEY_TO_METRIC: Record<string, string> = {
   avg_seed: 'avg_seed_time',
 };
 
+/** Every canonical recorded field, requested in the one series call below —
+ *  see loadData() for why this is a superset of chartMetrics(t). */
+const ALL_METRIC_KEYS = HISTORY_METRICS.map(m => m.key);
+
 let trackerId: string | null = null;
 let range: HistoryRangeKey = (localStorage.getItem(RANGE_KEY) as HistoryRangeKey) || '90d';
 let projection = localStorage.getItem(PROJECTION_KEY) === '1';
+let deltas = localStorage.getItem(DELTAS_KEY) !== '0'; // default ON
 let lastResp: HistorySeriesResponse | null = null;
 let lastRoutes: PathwayStep[] | null = null; // null = pathways unavailable
 let fetchSeq = 0;
@@ -155,8 +161,13 @@ async function loadData(): Promise<void> {
   const t = current();
   if (!t) return;
   const seq = ++fetchSeq;
+  // Request every canonical metric, not just the currently-charted ones: the
+  // Stats section's per-stat delta chips (statDeltaChip below) want a series
+  // for any stat that's ever recorded, and this is still ONE call — same
+  // shape as before, just a wider (and bounded — 11 keys, one tracker) field
+  // list — so it stays within "no per-stat network calls".
   const [seriesRes, fromRes] = await Promise.all([
-    api.fetchHistorySeries({ trackers: [t.id], fields: chartMetrics(t), range }),
+    api.fetchHistorySeries({ trackers: [t.id], fields: ALL_METRIC_KEYS, range }),
     api.fetchPathwaysFrom(t.id),
   ]);
   if (seq !== fetchSeq || trackerId !== t.id) return; // superseded / page left
@@ -232,6 +243,8 @@ function render(): void {
   const rangeChips = DETAIL_RANGES.map(r =>
     `<button type="button" class="history-range-btn${r.key === range ? ' active' : ''}" data-range="${r.key}">${r.label}</button>`).join('');
   const metricsMenu = `<div class="detail-controls-right">
+    <button type="button" class="history-range-btn${deltas ? ' active' : ''}" id="detail-deltas-btn"
+      title="Show each stat's change over the selected range">Changes</button>
     <button type="button" class="history-range-btn${projection ? ' active' : ''}" id="detail-projection-btn"
       title="Extend each line at its recent rate — dashed, turning green where it reaches a target">Projection</button>
     <div class="history-menu-wrap">
@@ -276,12 +289,48 @@ function render(): void {
 function renderStats(t: Tracker): void {
   const el = document.getElementById('detail-stats');
   if (!el) return;
-  const rows = buildStatRows(statsCache[t.id], undefined, t.min_ratio);
+  // Settings passed so hit_and_runs honours the highlight_hnr display toggle.
+  const rows = buildStatRows(statsCache[t.id], undefined, t.min_ratio, appSettings);
   el.innerHTML = `<div class="exp-section-title">Stats</div>
     <div class="exp-stat-list">${rows.map(r => `<div class="exp-stat">
       <span class="exp-stat-label">${esc(r.label)}</span>
-      <span class="exp-stat-value" style="color:var(--${r.color})">${esc(r.value)}</span>
+      <span class="exp-stat-value" style="color:var(--${r.color})">${statDeltaChip(t, r.key)}${esc(r.value)}</span>
     </div>`).join('') || '<div class="detail-empty">No stats recorded yet.</div>'}</div>`;
+}
+
+/** Sign-preserving delta formatting per unit — mirrors targetRefLinesFor's
+ *  unit switch in utils/series.ts, but always shows a sign (target labels
+ *  never do) and works from a raw delta rather than an absolute value.
+ *  Seconds go through fmtEtaDays (which respects the duration_format
+ *  setting) rather than fmtSeedTime, matching how series.ts already formats
+ *  seconds-unit reference-line labels. */
+function fmtSignedDelta(unit: SeriesUnit, dv: number): string {
+  const sign = dv > 0 ? '+' : '-';
+  const abs = Math.abs(dv);
+  switch (unit) {
+    case 'GiB':     return sign + fmtGiB(abs, 2);
+    case 'ratio':   return sign + abs.toFixed(2);
+    case 'seconds': return sign + fmtEtaDays(abs / 86400);
+    default:        return sign + Math.round(abs).toLocaleString();
+  }
+}
+
+/** Small muted "(+2.30 TiB /30d)" chip before a Stats-section value — the
+ *  change over the currently selected range chip, read off the same series
+ *  data loadData() already fetched for the mini-charts (see the comment
+ *  there). Sits BEFORE the value so the coloured values stay flush on the
+ *  right. Gated by the Changes toggle; omitted when the stat has no matching
+ *  history series, too few points to diff, or a zero delta — a silent stat
+ *  reads better than a "+0" chip on every row. */
+function statDeltaChip(t: Tracker, key: string): string {
+  if (!deltas) return '';
+  const s = lastResp?.series.find(x => x.tracker_id === t.id && x.field === key);
+  if (!s || s.points.length < 2) return '';
+  const dv = s.points[s.points.length - 1][1] - s.points[0][1];
+  if (!dv) return '';
+  const unit = s.unit ?? metricUnit(key);
+  const label = DETAIL_RANGES.find(r => r.key === range)?.label ?? range;
+  return `<span class="stat-delta-chip">(${esc(fmtSignedDelta(unit, dv))} /${esc(label)})</span> `;
 }
 
 function renderTargetsCol(t: Tracker): void {
@@ -415,6 +464,16 @@ function wireControls(t: Tracker): void {
       void loadData();
     };
   });
+
+  // Changes (per-stat delta chips) toggle — persisted; re-renders the Stats
+  // section only (the series data is already loaded).
+  const deltasBtn = document.getElementById('detail-deltas-btn');
+  if (deltasBtn) deltasBtn.onclick = () => {
+    deltas = !deltas;
+    try { localStorage.setItem(DELTAS_KEY, deltas ? '1' : '0'); } catch { /* private mode */ }
+    deltasBtn.classList.toggle('active', deltas);
+    renderStats(t);
+  };
 
   // Projection toggle — persisted; redraws the charts (no refetch needed).
   const projBtn = document.getElementById('detail-projection-btn');

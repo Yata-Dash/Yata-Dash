@@ -453,6 +453,32 @@ func TestKnownFloorPropagates(t *testing.T) {
 	}
 }
 
+// TestMinMonthlyUploadsIgnoredInGroupEval proves min_monthly_uploads (no live
+// stat exists for it yet — RocketHD/Aither-style uploader-class groundwork)
+// is silently ignored by group requirement evaluation, exactly like
+// MinCounts: it contributes no row, no ETA, and never blocks a group that is
+// otherwise fully met.
+func TestMinMonthlyUploadsIgnoredInGroupEval(t *testing.T) {
+	req := defs.GroupRequirements{
+		MinRatio:          1.5,
+		MinMonthlyUploads: 10,
+	}
+	u := UserTracker{Stats: Stats{
+		AgeDays: -1, UploadedGiB: -1, DownloadedGiB: -1, Ratio: 2.0,
+		SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, Adoptions: -1, BonusPoints: -1,
+	}}
+	rows, eta, unknown := evalGroupReqs(req, u)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1 (only the ratio requirement — min_monthly_uploads must add nothing)", len(rows))
+	}
+	if !rows[0].Met {
+		t.Errorf("ratio requirement should be met: %+v", rows[0])
+	}
+	if eta != 0 || unknown {
+		t.Errorf("eta=%v unknown=%v — min_monthly_uploads must not block an otherwise fully-met group", eta, unknown)
+	}
+}
+
 func TestFindPathsNoRouteSuggestions(t *testing.T) {
 	d := testData()
 	// User only on a tracker with no outgoing routes at all.

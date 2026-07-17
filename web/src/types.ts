@@ -232,6 +232,7 @@ export interface AppSettings {
   show_unread_mail?: boolean | null;          // null = true — unread envelope icons
   show_unread_notifications?: boolean | null; // null = true — unread bell icons
   show_tracker_rules?: boolean | null;        // null = true — compact rules line on grid cards
+  highlight_hnr?: boolean | null;             // null = true — red colouring for a nonzero H&R count
   update_check_auto?: boolean;                 // opt-in daily update check (default false)
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
@@ -358,6 +359,11 @@ export interface GroupRequirements {
   min_adoptions?: number;
   min_bonus_points?: number;
   min_age?: string;
+  /** Uploads required per rolling month (e.g. RocketHD/Aither uploader
+   *  classes). No live stat exists yet — mapped to the "monthly_uploads"
+   *  target key, which always renders as an untrackable ("Not available")
+   *  row until Yata can estimate it from upload history. */
+  min_monthly_uploads?: number;
   description?: string;  // non-empty = text-only / special group
   /**
    * Alternative requirement sets: the base fields above must ALL be met,

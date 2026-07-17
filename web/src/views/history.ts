@@ -228,6 +228,8 @@ function closeMenus() {
 }
 // One document-level listener closes any open menu on an outside click.
 document.addEventListener('click', () => closeMenus());
+// Escape closes an open Overlays/Save menu too — matches detail.ts's Charts menu.
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
 
 function selectedIds(): string[] {
   const known = new Set(allTrackers.map(t => t.id));

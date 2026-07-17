@@ -129,7 +129,8 @@ function buildTableRow(
     cells += buildCell(col.key, t, s, settings, userGroupDef);
   });
 
-  const mainTr = `<tr class="tr-main${hnr >= 1 ? ' hnr-row' : ''}" id="trow-${t.id}" onclick="toggleRow('${t.id}')">
+  const hnrHighlight = settings.highlight_hnr !== false;
+  const mainTr = `<tr class="tr-main${hnr >= 1 && hnrHighlight ? ' hnr-row' : ''}" id="trow-${t.id}" onclick="toggleRow('${t.id}')">
     <td style="text-align:center;padding-left:10px">
       <svg class="expand-chev ${isExp ? 'open' : ''}" width="14" height="14" viewBox="0 0 24 24"
         fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -249,7 +250,8 @@ function buildCell(
     case 'hit_and_runs': {
       const v = numOf(s, 'hit_and_runs');
       const hnr = v ?? 0;
-      return `<td class="td-center td-mono" style="color:${hnr >= 1 ? 'var(--red)' : 'var(--green)'}">
+      const color = hnr < 1 ? 'var(--green)' : (settings.highlight_hnr !== false ? 'var(--red)' : 'var(--text3)');
+      return `<td class="td-center td-mono" style="color:${color}">
       ${v !== null ? String(hnr) + dot('hit_and_runs') : dash}</td>`;
     }
     case 'account_age': {

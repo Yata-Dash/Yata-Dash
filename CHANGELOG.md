@@ -9,19 +9,108 @@ version heading — those notes become the GitHub Release body automatically.
 
 ## [Unreleased]
 
+### Added
+- **Highlight hit & runs toggle (Settings → Display).** H&R counts colour red
+  by default across cards, the Detail table, and expanded stat rows. Some
+  trackers' H&Rs are permanent (never clear once recorded), so the red reads
+  as a false ongoing alarm — the new *Highlight hit & runs* toggle switches a
+  nonzero count to a neutral colour instead (zero still shows green either
+  way).
+- **`min_monthly_uploads` groundwork for uploader-class requirements
+  (RocketHD/Aither-style).** Group definitions can now record a required
+  uploads-per-rolling-month figure. There's no live stat to track it against
+  yet, so it maps to a `monthly_uploads` target that renders through the
+  existing untrackable-target mechanism (eye-off icon, "Not available", the
+  required value) rather than silently disappearing or showing false
+  progress — the manual target builder also lists it. Pathway/promotion ETA
+  evaluation ignores the field entirely, the same way it already ignores
+  `min_counts`.
+
+- **Per-stat change over the selected range on the Tracker Detail page.**
+  Every value in the Stats section now carries a small muted delta chip
+  showing how much it moved across the selected range chip — e.g.
+  "(+2.30 TiB /30d) 4.25 TiB", sitting BEFORE the value so the coloured
+  values stay flush on the right — switching 7d/30d/90d/1y/All updates the
+  window live. A **Changes** toggle next to Projection turns the chips on or
+  off (remembered, on by default). Reuses the series data already fetched
+  for the mini-charts (no extra network calls); stats with no recorded
+  history or a zero delta simply show no chip.
+
 ### Changed
+- **One "API only" label for every no-scraping tracker.** Cards and the
+  Detail table used to show three different footers — "API only mode",
+  "Scrape disabled", "No scrape support" — depending on *why* scraping is off
+  (your per-tracker toggle, an operator's def-level request, or a type that
+  can't scrape). To the reader they all mean the same thing: stats come from
+  the API alone. All three now display **API only**; the precise cause still
+  shows in the edit modal's hint and the connectivity-test detail. Also fixed
+  the quirk that made the labels inconsistent between identical trackers in
+  the first place: saving any edit to a tracker whose def forbids scraping
+  silently persisted the display-locked "API only" toggle as a real user
+  setting — which would also have kept scraping off if the tracker's def ever
+  re-allowed it. The locked toggle is display-only now.
 - **Untrackable target requirements now stay visible.** When a target's stat
   isn't reported by a tracker's API (e.g. an API-only tracker whose profile
   omits seed time or seed size), the requirement no longer silently vanishes
   from the TARGETS section — it shows with an eye-off icon, an italic *Not
-  tracked* label, the required value, and a dashed placeholder bar, plus a
+  available* label, the required value, and a dashed placeholder bar, plus a
   tooltip explaining the stat can't be tracked but the requirement still
   applies. A stat is treated as untrackable only when the tracker has been
   fetched and returned other fields but not this one, so a not-yet-polled or
-  failed tracker doesn't show a wall of false "not tracked" rows. Untrackable
-  rows are excluded from the promotion-ETA / "Eligible now" maths, so those
-  headlines are unchanged. Applies everywhere targets render — grid cards, the
-  Detail page, and the Detail table.
+  failed tracker doesn't show a wall of false "not tracked" rows. In the
+  promotion-ETA / "Eligible now" maths an unavailable requirement is assumed
+  to be ZERO — many trackers simply omit zero-valued stats — so it counts as
+  unmet: "Eligible now" never shows while any requirement can't be verified,
+  and the ETA headline gets a "+" (or stays hidden) instead of a false
+  all-clear. Applies everywhere targets render — grid cards, the Detail page,
+  and the Detail table.
+
+### Fixed
+- **The daily-scrape-limit notice is a warning now, not an error.** "N
+  trackers have hit the daily maximum scrapes" showed in red — but red means
+  something is broken, and this is expected behaviour (the cap is often the
+  tracker operator's, and there's nothing to fix). It's now amber, and
+  dismissible for the session with an × — same treatment as the
+  login-protection nudge.
+- **Several actions in Settings → Trackers left the UI stale until the next
+  full refresh.** Importing from Prowlarr/Jackett, saving a tracker's
+  cookie/key, and toggling or deleting a tracker all updated the backend
+  immediately but left the "profile scraping off" badges (grid cards, table
+  rows) showing the old scrape-status until the next 5-minute cycle. Those
+  actions — plus Reload Definitions — now also miss the fresh state they
+  produce: a reload only cleared the internal defs cache, leaving the
+  settings table's approval badges, the import picker's opt-out list, and
+  group data all showing pre-reload values. Reload Definitions is now a full
+  refresh (re-fetches trackers, the opt-out cache, and group defs, same as
+  boot); the other actions all re-fetch scrape status and re-render. An open
+  Tracker Detail page is included in this: it now redraws after a stats
+  refresh, a profile scrape, or a toggle, and closes itself (instead of
+  showing "Tracker not found") if you delete the tracker it's showing.
+- **The daily update-check and reverse-proxy-trust toggles no longer lie
+  about being saved.** Both persisted silently and never checked whether the
+  save actually succeeded — a failed request left the checkbox showing the
+  new state while the backend kept the old one. They now revert the
+  checkbox and the setting, and show an error toast, on failure — matching
+  the topbar privacy-eye toggle's existing behaviour.
+- **The Test button tested the wrong thing, or nothing at all.** In the edit
+  panel, Test always hit the tracker with whatever was last *saved* — pasting
+  a new cookie or key and testing before Save silently tested the OLD
+  credentials, telling you nothing about the change you were about to make.
+  It also had no way to distinguish "I tested my saved config" from "I
+  tested an edit I then cancelled": either way the result landed in the
+  trackers table's status pill, so a test→cancel could leave a misleading
+  pill behind for a tracker whose real saved credentials were never tried.
+  Test now runs against the values currently in the form; the table pill
+  only updates when those values match what's actually saved (test→save
+  shows it, test→cancel doesn't — a pending result is promoted or discarded
+  based on what you actually save). Add mode had no Test button at all — you
+  couldn't check a key/cookie until after adding the tracker. Test is now
+  available there too, running an ad-hoc check against a synthetic,
+  never-persisted tracker built from the form (its own throwaway ID keeps it
+  fully isolated from any real tracker's rate limits and scrape history).
+- **Escape now closes the History view's Overlays/Save menus and the Alerts
+  tab's tracker/destination multi-selects**, matching the Tracker Detail
+  page's Charts menu.
 
 ## [Beta-20260716]
 

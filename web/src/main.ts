@@ -303,10 +303,20 @@ function updateScrapeAlert() {
   }
   const parts: string[] = [];
   if (apiOnly) parts.push('<span style="color:var(--text3);font-size:12px"><i class="fas fa-ban" style="margin-right:5px;opacity:.7"></i>API only mode — profile scraping is disabled</span>');
-  if (limitedCount > 0) parts.push(`<span style="color:var(--red);font-size:12px;font-weight:500"><i class="fas fa-exclamation-triangle" style="margin-right:5px"></i>${limitedCount} tracker${limitedCount > 1 ? 's have' : ' has'} hit the daily maximum scrapes</span>`);
+  // Daily-limit notice is a WARNING (amber), not an error — the cap is often
+  // the tracker operator's and there's nothing the user can do about it, so
+  // it's dismissible for the session (like the login-protection nudge).
+  const limitDismissed = sessionStorage.getItem('yata-scrape-limit-dismissed') === '1';
+  if (limitedCount > 0 && !limitDismissed) parts.push(`<span style="color:var(--amber);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>${limitedCount} tracker${limitedCount > 1 ? 's have' : ' has'} hit the daily maximum scrapes<button type="button" class="auth-nudge-x" onclick="dismissScrapeLimitAlert()" title="Dismiss for this session">&times;</button></span>`);
   if (parts.length > 0) { bar.innerHTML = parts.join('<span style="color:var(--border2);margin:0 8px">|</span>'); bar.style.display = 'flex'; }
   else { bar.style.display = 'none'; }
 }
+
+function dismissScrapeLimitAlert() {
+  sessionStorage.setItem('yata-scrape-limit-dismissed', '1');
+  updateScrapeAlert(); // re-derive — hides the bar unless API-only mode still needs it
+}
+(window as any).dismissScrapeLimitAlert = dismissScrapeLimitAlert;
 
 // ── Trackers ──────────────────────────────────────────────────────────────
 async function loadTrackers() {

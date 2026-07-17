@@ -508,6 +508,15 @@
               </label>
             </div>
             <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-hnr-highlight-track" onclick="toggleSettingsHnrHighlight()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Highlight hit &amp; runs</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Highlight hit &amp; runs in red. Some trackers' H&amp;Rs are permanent — turn off if the red is noise.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Duration format</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:10px">How you want trend estimates displayed. Effects dashboard and pathway views.
               </div>
@@ -1129,6 +1138,7 @@ function toggleSettingsRateHovers() { _settingsToggle('s-rate-hover-track'); }
 function toggleSettingsTrackerRules() { _settingsToggle('s-tracker-rules-track'); }
 function toggleSettingsUnreadMail() { _settingsToggle('s-unread-mail-track'); }
 function toggleSettingsUnreadNotif() { _settingsToggle('s-unread-notif-track'); }
+function toggleSettingsHnrHighlight() { _settingsToggle('s-hnr-highlight-track'); }
 function toggleSettingsBackup() { _settingsToggle('s-backup-track'); _applyBackupLock(); }
 function _applyBackupLock() {
   var on = !!(document.getElementById('s-backup-track') && document.getElementById('s-backup-track').classList.contains('on'));

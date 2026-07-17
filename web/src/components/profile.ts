@@ -67,6 +67,7 @@ export function buildStatRows(
   resp: TrackerStatsResponse | undefined,
   exclude: Set<string> = new Set(),
   minRatio?: number,
+  settings?: AppSettings,
 ): StatRow[] {
   const fields = resp?.fields ?? {};
   const rows: StatRow[] = [];
@@ -90,6 +91,9 @@ export function buildStatRows(
     // min_ratio-aware colouring for the main ratio stat (item 7)
     const colorDef = def.key === 'ratio' && minRatio && minRatio > 0
       ? (v: string) => ratioColorFor(parseRatio(v), minRatio)
+      // Highlight toggle for hit & runs — neutral instead of red when off.
+      : def.key === 'hit_and_runs' && settings?.highlight_hnr === false
+      ? (v: string) => (parseInt(v) || 0) >= 1 ? 'text3' : 'green'
       : def.color;
     push(def.key, def.label, colorDef, def.fmt);
   }
@@ -152,7 +156,7 @@ export function buildStatsPanel(
   resp: TrackerStatsResponse | undefined,
   settings: AppSettings,
 ): string {
-  const rows = buildStatRows(resp, undefined, tracker.min_ratio);
+  const rows = buildStatRows(resp, undefined, tracker.min_ratio, settings);
 
   if (!rows.length) {
     let hint: string;

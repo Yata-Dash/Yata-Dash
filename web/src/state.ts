@@ -44,7 +44,7 @@ export let appSettings: AppSettings = {
   private_mode: false, show_favicons: false, show_stat_sources: false,
   show_pathway_etas: true, show_trend_estimates: true, show_target_etas: true,
   show_rate_hovers: true, show_unread_mail: true, show_unread_notifications: true,
-  show_tracker_rules: true,
+  show_tracker_rules: true, highlight_hnr: true,
   update_check_auto: false, trust_proxy_headers: false, duration_format: 'ym',
   pathway_favorites: [], pathway_not_interested: [],
   profile_auto_sync: true, api_only_mode: false,

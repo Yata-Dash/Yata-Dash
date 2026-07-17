@@ -338,7 +338,13 @@ type GroupRequirements struct {
 	MinAdoptions   int    `json:"min_adoptions,omitempty"`
 	MinBonusPoints int    `json:"min_bonus_points,omitempty"`
 	MinAge         string `json:"min_age,omitempty"`
-	Description    string `json:"description,omitempty"`
+	// MinMonthlyUploads is uploads required per rolling month (e.g. RocketHD/
+	// Aither uploader classes). No live stat exists for this yet — Yata will
+	// eventually estimate it from upload history — so it is never evaluated
+	// against live data (same treatment as MinCounts below); the field just
+	// lets defs record the requirement today.
+	MinMonthlyUploads int    `json:"min_monthly_uploads,omitempty"`
+	Description       string `json:"description,omitempty"`
 
 	// AnyOf expresses alternative requirement sets: the fields above must
 	// ALL be met, plus AT LEAST ONE complete AnyOf entry. Example (LST

@@ -5,4 +5,4 @@
 package version
 
 // Version is the current build identifier.
-const Version = "Beta-20260716"
+const Version = "Beta-20260717"

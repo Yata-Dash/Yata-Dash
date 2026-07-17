@@ -435,6 +435,10 @@ th.sort-desc .sort-icon .up{opacity:.2}
 .exp-stat-label{font-size:12px;color:var(--text3);flex-shrink:0}
 .exp-stat-value{font-size:12px;font-family:'Geist Mono',monospace;font-weight:600;text-align:right;word-break:break-word}
 .exp-stat-value.green{color:var(--green)}.exp-stat-value.red{color:var(--red)}.exp-stat-value.amber{color:var(--amber)}.exp-stat-value.blue{color:var(--blue)}.exp-stat-value.teal{color:var(--teal)}.exp-stat-value.purple{color:var(--purple)}.exp-stat-value.orange{color:var(--orange)}.exp-stat-value.pink{color:var(--pink)}
+/* Muted per-stat "changed by X over the selected range" chip on the Tracker
+   Detail page's Stats section — quieter than the amber .target-eta above,
+   since it's a passive readout rather than a time-to-target estimate. */
+.stat-delta-chip{font-size:10px;font-weight:500;color:var(--text3);font-family:'Geist Mono',monospace;white-space:nowrap}
 .exp-targets{display:flex;flex-direction:column;gap:10px}
 .table-empty-row td{padding:60px 20px!important;text-align:center;color:var(--text3);border:none!important}
 

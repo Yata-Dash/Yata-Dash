@@ -501,6 +501,12 @@ function wire(): void {
       if (dd.parentElement !== own) dd.hidden = true;
     });
   });
+  // Escape closes any open multi-select dropdown too — matches detail.ts's
+  // Charts menu.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll<HTMLElement>('.ms-dropdown').forEach(dd => { dd.hidden = true; });
+  });
 }
 
 /** Dry run: evaluate the rule (as currently edited, saved or not) against

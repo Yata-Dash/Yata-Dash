@@ -194,7 +194,7 @@ export function renderCard(
     const warnings = numOf(stats, 'warnings');
     const minRatioTip = tracker.min_ratio && tracker.min_ratio > 0 ? `Tracker minimum: ${tracker.min_ratio}` : '';
     const totalUploads = strOf(stats, 'uploads_approved');
-    const hnrColor = hnr >= 1 ? 'red' : 'green';
+    const hnrColor = hnr < 1 ? 'green' : (settings.highlight_hnr !== false ? 'red' : 'text3');
     // Per-day trend rollover ("≈ 245.3 GiB per day") from the growth rates.
     const rTip = (f: string) => rateTip(stats?.rates, f, settings);
 
@@ -601,7 +601,14 @@ export function buildTargets(
     let unmetUnprojectable = false;
     let anyUnmet = false;
     for (const r of rows) {
-      if (r.unavailable) continue; // untrackable — excluded from ETA/eligibility math
+      if (r.unavailable) {
+        // Untrackable requirement — many trackers omit zero-valued stats
+        // entirely, so the only safe assumption is zero: it counts as UNMET
+        // (blocks "Eligible now") but can never be projected.
+        anyUnmet = true;
+        unmetUnprojectable = true;
+        continue;
+      }
       if (r.pct >= 100) continue; // met
       anyUnmet = true;
       if (r.etaDays != null && r.etaDays > 0) maxEta = Math.max(maxEta, r.etaDays);
@@ -613,8 +620,10 @@ export function buildTargets(
     let bestAltEta = Infinity;
     let bestAltUnprojectable = false;
     for (const req of anyOf) {
-      const aRows = targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true)
-        .filter(r => !r.unavailable); // untrackable reqs don't gate an alternative
+      // Untrackable rows stay in: they carry pct 0 and no eta, so an
+      // alternative containing one reads as unmet-and-unprojectable —
+      // assume-zero, same as the base rows above.
+      const aRows = targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true);
       const unmet = aRows.filter(r => r.pct < 100);
       if (aRows.length && !unmet.length) { altMet = true; break; }
       let eta = 0, unproj = !aRows.length;

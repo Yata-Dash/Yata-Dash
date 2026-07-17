@@ -450,6 +450,9 @@ const CORE_TARGET_SPECS: TargetSpec[] = [
   { key: 'bonus_points',  label: 'Bonus Points',  placeholder: 'e.g. 25000' },
   { key: 'snatched',      label: 'Snatched',      placeholder: 'e.g. 100' },
   { key: 'adoptions',     label: 'Adoptions',     placeholder: 'e.g. 10' },
+  // No backing stat exists yet (see GroupRequirements.min_monthly_uploads) —
+  // always offered; renders as an untrackable "Not available" target row.
+  { key: 'monthly_uploads', label: 'Monthly Uploads', placeholder: 'e.g. 4', hint: 'No live stat yet — the requirement still shows, just without progress tracking' },
 ];
 
 /** Merged stat field that backs each core target key. */
@@ -488,7 +491,8 @@ export function buildAvailableTargetSpecs(t: Tracker, resp: TrackerStatsResponse
 
   const out: TargetSpec[] = [];
   for (const spec of CORE_TARGET_SPECS) {
-    if (noStats || have(TARGET_BACKING_FIELD[spec.key])) out.push(spec);
+    // monthly_uploads has no backing stat to gate on — always offered.
+    if (spec.key === 'monthly_uploads' || noStats || have(TARGET_BACKING_FIELD[spec.key])) out.push(spec);
   }
   const coreBacked = new Set(Object.values(TARGET_BACKING_FIELD));
   for (const key of Object.keys(fields).sort()) {
@@ -1558,6 +1562,8 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   if (unreadMailTrack) unreadMailTrack.className = `toggle-track ${settings.show_unread_mail !== false ? 'on' : ''}`;
   const unreadNotifTrack = document.getElementById('s-unread-notif-track');
   if (unreadNotifTrack) unreadNotifTrack.className = `toggle-track ${settings.show_unread_notifications !== false ? 'on' : ''}`;
+  const hnrHighlightTrack = document.getElementById('s-hnr-highlight-track');
+  if (hnrHighlightTrack) hnrHighlightTrack.className = `toggle-track ${settings.highlight_hnr !== false ? 'on' : ''}`;
   const durFmt = settings.duration_format || 'ym';
   document.querySelectorAll<HTMLInputElement>('input[name="s-duration-format"]').forEach(r => {
     r.checked = r.value === durFmt;
@@ -1835,6 +1841,7 @@ export async function saveSettings(deps: SettingsDeps) {
     show_unread_mail:          isOn('s-unread-mail-track', true),
     show_unread_notifications: isOn('s-unread-notif-track', true),
     show_tracker_rules:        isOn('s-tracker-rules-track', true),
+    highlight_hnr:             isOn('s-hnr-highlight-track', true),
     update_check_auto:     (document.getElementById('s-update-auto') as HTMLInputElement | null)?.checked ?? false,
     trust_proxy_headers:   (document.getElementById('s-trust-proxy') as HTMLInputElement | null)?.checked ?? false,
     duration_format:       (document.querySelector<HTMLInputElement>('input[name="s-duration-format"]:checked')?.value ?? 'ym'),

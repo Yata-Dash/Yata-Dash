@@ -148,6 +148,11 @@ type Settings struct {
 	// cards (min ratio / min seed time from the def — display-only). nil =
 	// true. The Detail view's Rules section always shows.
 	ShowTrackerRules *bool `json:"show_tracker_rules"`
+	// HighlightHnR toggles red colouring for a nonzero hit-and-run count
+	// (cards, table, expanded stat rows). nil = true. Some trackers' H&Rs
+	// never clear (permanent record) — off shows a neutral colour instead so
+	// it doesn't read as an ongoing alarm.
+	HighlightHnR *bool `json:"highlight_hnr"`
 	// PathwayFavorites / PathwayNotInterested are pathway-target lists (by
 	// dataset tracker name). Favourites sort first in the Pathways picker;
 	// not-interested entries sort last and are excluded from the
@@ -236,8 +241,8 @@ func DefaultSettings() Settings {
 		// ~2 years of daily history — enough for the History view's long
 		// ranges while keeping the database tiny.
 		HistoryDailyRetentionDays: 730,
-		QUIURL:              "http://localhost:7476",
-		QUIEnabledInstances: []int{},
+		QUIURL:                    "http://localhost:7476",
+		QUIEnabledInstances:       []int{},
 	}
 }
 
