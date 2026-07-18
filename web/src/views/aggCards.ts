@@ -12,6 +12,10 @@ export function renderAggCards(
   historyData: HistoryPoint[],
   settings: AppSettings,
 ): void {
+  // Disabled trackers are hidden from the dashboard — their (stale, no longer
+  // refreshed) stats shouldn't inflate totals or count as health issues.
+  trackers = trackers.filter(t => t.enabled !== false);
+
   let totalUpGiB = 0, totalDownGiB = 0, healthyCount = 0, issueCount = 0;
   let weightedSeedSec = 0, totalSeeding = 0;
 

@@ -50,7 +50,17 @@ export function renderGrid(
     return;
   }
 
-  trackers.forEach(t => {
+  // Disabled trackers are hidden from the dashboard — they live in
+  // Settings → Trackers until re-enabled. Distinct empty state so a fully
+  // disabled set doesn't show the first-run welcome.
+  const visible = trackers.filter(t => t.enabled !== false);
+  if (!visible.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text3);font-size:13px">
+      All trackers are disabled — re-enable them in Settings → Trackers.</div>`;
+    return;
+  }
+
+  visible.forEach(t => {
     const el = document.createElement('div');
     el.className = 'tracker-card';
     el.id = `card-${t.id}`;

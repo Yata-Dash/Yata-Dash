@@ -23,7 +23,8 @@
       "total seeding": "seeding",
       "total leeching": "leeching",
       "bon": "bonus_points",
-      "hit and run count (all time)": "hit_and_runs"
+      "hit and run count (all time)": "hit_and_runs",
+      "seeding size": "seed_size"
     }
   }
 }

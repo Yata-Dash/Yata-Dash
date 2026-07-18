@@ -42,7 +42,17 @@ export function renderTable(
   const tbody = document.getElementById('tracker-tbody');
   if (!tbody) return;
 
-  const sorted = getSortedTrackers(trackers, sortCol, sortDir, statsCache);
+  // Disabled trackers are hidden from the dashboard (they stay listed in
+  // Settings → Trackers); the "N / M active" line follows the visible set.
+  const visible = trackers.filter(t => t.enabled !== false);
+  if (trackers.length && !visible.length) {
+    tbody.innerHTML = `<tr class="table-empty-row"><td colspan="${2 + cols.length + 1}"
+      style="color:var(--text3)">All trackers are disabled — re-enable them in Settings → Trackers.</td></tr>`;
+    const statusEl = document.getElementById('t-sum-status');
+    if (statusEl) statusEl.textContent = `0 / 0 active`;
+    return;
+  }
+  const sorted = getSortedTrackers(visible, sortCol, sortDir, statsCache);
 
   if (!sorted.length) {
     tbody.innerHTML = `<tr class="table-empty-row"><td colspan="${2 + cols.length + 1}">

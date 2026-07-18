@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "key": "aura4k",
-  "name": "Aura4K",
-  "abbr": "A4K",
-  "url": "https://aura4k.net",
+  "key": "midnightscene",
+  "name": "MidnightScene",
+  "abbr": "MNS",
+  "url": "https://midnightscene.cc/",
   "type": "unit3d",
-  "last_updated": "2026-07-17",
+  "last_updated": "2026-07-18",
   "approved_by": {
     "name": "",
     "role": "",
@@ -15,11 +15,31 @@
     "max_scrapes_per_day": 1
   },
     "rules": {
-    "min_ratio": 0.4,
-    "min_seed_days": 3
+    "min_ratio": 0.25,
+    "min_seed_days": 2
   },
   "groups": [
     {
+    "name": "Parked",
+    "style": {
+      "color": "#575757",
+      "icon": "fas fa-circle-parking"
+    },
+    "requirements": {
+      "description": "Paused account if you're going to be away for a while"
+    },
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: 0"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      }
+    ]
+  },
+  {
     "name": "Pruned",
     "style": {
       "color": "#8D6262",
@@ -29,21 +49,21 @@
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 0"
+        "label": "DL slots: ∞"
       }
     ]
   },
   {
     "name": "Banned",
     "style": {
-      "color": "red",
+      "color": "#ff0000",
       "icon": "fas fa-ban"
     },
     "requirements": {},
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 0"
+        "label": "DL slots: ∞"
       }
     ]
   },
@@ -57,7 +77,7 @@
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 0"
+        "label": "DL slots: ∞"
       }
     ]
   },
@@ -71,7 +91,7 @@
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 0"
+        "label": "DL slots: ∞"
       }
     ]
   },
@@ -85,7 +105,7 @@
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 0"
+        "label": "DL slots: ∞"
       }
     ]
   },
@@ -95,15 +115,17 @@
       "color": "#96281B",
       "icon": "fas fa-times"
     },
-    "requirements": {},
+    "requirements": {
+      "min_uploaded": "0 B",
+      "min_ratio": 0.0,
+      "min_age": "0",
+      "min_seed_size": "0 B",
+      "min_uploads": 0
+    },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
         "label": "DL slots: 1"
-      },
-      {
-        "icon": "fas fa-upload text-success",
-        "label": "Upload Torrents"
       }
     ]
   },
@@ -113,11 +135,17 @@
       "color": "#7289DA",
       "icon": "fas fa-user"
     },
-    "requirements": {},
+    "requirements": {
+      "min_uploaded": "0 B",
+      "min_ratio": 0,
+      "min_age": "0",
+      "min_seed_size": "0 B",
+      "min_uploads": 0
+    },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 3"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
@@ -126,20 +154,22 @@
     ]
   },
   {
-    "name": "Bright Light",
+    "name": "PowerUser",
     "style": {
       "color": "#3c78d8",
       "icon": "fas fa-user-circle"
     },
     "requirements": {
       "min_uploaded": "1 TiB",
-      "min_ratio": 0.5,
-      "min_age": "1M"
+      "min_ratio": 0.4,
+      "min_age": "1M",
+      "min_seed_size": "0 B",
+      "min_uploads": 0
     },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 5"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
@@ -148,110 +178,98 @@
     ]
   },
   {
-    "name": "Radiant",
+    "name": "SuperUser",
     "style": {
       "color": "#1155cc",
       "icon": "fas fa-power-off"
     },
     "requirements": {
       "min_uploaded": "5 TiB",
-      "min_ratio": 0.6,
+      "min_ratio": 0.4,
       "min_age": "2M",
-      "min_uploads": 10
+      "min_seed_size": "0 B",
+      "min_uploads": 0
     },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 8"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
         "label": "Upload Torrents"
-      },
-      {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
       }
     ]
   },
   {
-    "name": "Luminous",
+    "name": "ExtremeUser",
     "style": {
       "color": "#1c4587",
       "icon": "fas fa-bolt"
     },
     "requirements": {
       "min_uploaded": "20 TiB",
-      "min_ratio": 0.75,
+      "min_ratio": 0.4,
       "min_age": "3M",
-      "min_uploads": 25
+      "min_seed_size": "0 B",
+      "min_uploads": 0
     },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 10"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
         "label": "Upload Torrents"
       },
       {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
-      },
-      {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Ethereal",
+    "name": "InsaneUser",
     "style": {
-      "color": "#1c4587",
+      "color": "#c143de",
       "icon": "fas fa-rocket"
     },
     "requirements": {
       "min_uploaded": "50 TiB",
-      "min_ratio": 1.0,
+      "min_ratio": 0.4,
       "min_age": "6M",
-      "min_uploads": 50
+      "min_seed_size": "0 B",
+      "min_uploads": 0
     },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 25"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
         "label": "Upload Torrents"
       },
       {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
-      },
-      {
-        "icon": "fas fa-syringe",
-        "label": "Immune to automated HnR warnings"
-      },
-      {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Eternal",
+    "name": "Veteran",
     "style": {
-      "color": "#1c4587",
+      "color": "#625882",
       "icon": "fas fa-key",
       "sparkle": true
     },
     "requirements": {
       "min_uploaded": "100 TiB",
-      "min_ratio": 1.0,
+      "min_ratio": 0.4,
       "min_age": "1Y",
-      "min_uploads": 100
+      "min_seed_size": "0 B",
+      "min_uploads": 0
     },
     "perks": [
       {
@@ -263,68 +281,62 @@
         "label": "Upload Torrents"
       },
       {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
-      },
-      {
         "icon": "fas fa-star text-gold",
         "label": "Freeleech"
       },
       {
-        "icon": "fas fa-syringe",
-        "label": "Immune to automated HnR warnings"
-      },
-      {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Beacon",
+    "name": "Seeder",
     "style": {
-      "color": "#1c4587",
+      "color": "#03adfc",
       "icon": "fas fa-hdd"
     },
     "requirements": {
-      "min_age": "6M",
-      "min_seedtime": "3M",
-      "min_seed_size": "50 TiB"
+      "min_uploaded": "0 B",
+      "min_ratio": 0.4,
+      "min_age": "1M",
+      "min_seedtime": "1M",
+      "min_seed_size": "5 TiB",
+      "min_uploads": 0
     },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: 50"
+        "label": "DL slots: ∞"
       },
       {
         "icon": "fas fa-upload text-success",
         "label": "Upload Torrents"
       },
       {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
-      },
-      {
         "icon": "fas fa-syringe",
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Resonator",
+    "name": "Archivist",
     "style": {
-      "color": "#1c4587",
+      "color": "#dbfc03",
       "icon": "fas fa-server",
       "sparkle": true
     },
     "requirements": {
+      "min_uploaded": "0 B",
+      "min_ratio": 0.4,
       "min_age": "3M",
       "min_seedtime": "2M",
-      "min_seed_size": "100 TiB"
+      "min_seed_size": "10 TiB",
+      "min_uploads": 0
     },
     "perks": [
       {
@@ -336,10 +348,6 @@
         "label": "Upload Torrents"
       },
       {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
-      },
-      {
         "icon": "fas fa-star text-gold",
         "label": "Freeleech"
       },
@@ -348,8 +356,8 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
@@ -382,8 +390,34 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
+      }
+    ]
+  },
+  {
+    "name": "Junior Uploader",
+    "style": {
+      "color": "#67dd99",
+      "icon": "fas fa-angle-up"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
@@ -391,7 +425,7 @@
     "name": "Uploader",
     "style": {
       "color": "#2ECC71",
-      "icon": "fas fa-upload"
+      "icon": "fas fa-angles-up"
     },
     "requirements": {},
     "perks": [
@@ -416,17 +450,13 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
-      },
-      {
         "icon": "fas fa-tasks",
         "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Guardian",
+    "name": "Trustee",
     "style": {
       "color": "#BF55EC",
       "icon": "fas fa-shield"
@@ -454,13 +484,47 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Shaper",
+    "name": "MidKnight",
+    "style": {
+      "color": "#fc9d03",
+      "icon": "fas fa-shield"
+    },
+    "requirements": {},
+    "perks": [
+      {
+        "icon": "fas fa-arrow-down-short-wide text-blue",
+        "label": "DL slots: ∞"
+      },
+      {
+        "icon": "fas fa-upload text-success",
+        "label": "Upload Torrents"
+      },
+      {
+        "icon": "fas fa-paper-plane",
+        "label": "Send invite"
+      },
+      {
+        "icon": "fas fa-star text-gold",
+        "label": "Freeleech"
+      },
+      {
+        "icon": "fas fa-syringe",
+        "label": "Immune to automated HnR warnings"
+      },
+      {
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
+      }
+    ]
+  },
+  {
+    "name": "Editor",
     "style": {
       "color": "#15B097",
       "icon": "fas fa-user-pen"
@@ -488,13 +552,13 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   },
   {
-    "name": "Sentinel",
+    "name": "Torrent Moderator",
     "style": {
       "color": "#15B097",
       "icon": "fas fa-badge-check"
@@ -522,32 +586,10 @@
         "label": "Immune to automated HnR warnings"
       },
       {
-        "icon": "fas fa-envelope-open-text text-blue",
-        "label": "Access to Invite Forum"
-      }
-    ]
-  },
-  {
-    "name": "Automaton",
-    "style": {
-      "color": "#f1c40f",
-      "icon": "fab fa-android"
-    },
-    "requirements": {},
-    "perks": [
-      {
-        "icon": "fas fa-arrow-down-short-wide text-blue",
-        "label": "DL slots: ∞"
-      },
-      {
-        "icon": "fas fa-upload text-success",
-        "label": "Upload Torrents"
-      },
-      {
-        "icon": "fas fa-paper-plane",
-        "label": "Send invite"
+        "icon": "fas fa-tasks",
+        "label": "Torrent moderation bypass"
       }
     ]
   }
-  ]
+]
 }

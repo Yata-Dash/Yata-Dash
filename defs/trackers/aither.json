@@ -16,6 +16,9 @@
     "min_ratio": 0.4,
     "min_seed_days": 5
   },
+  "invite_requirements": {
+    "min_class": "Prometheus"
+  },
   "scrape": {
     "min_interval_minutes": 180
   },

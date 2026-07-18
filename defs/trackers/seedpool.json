@@ -5,7 +5,7 @@
   "abbr": "SP",
   "url": "https://seedpool.org",
   "type": "unit3d",
-  "last_updated": "2026-07-14",
+  "last_updated": "2026-07-18",
   "approved_by": {
     "name": "Tetrahydroc",
     "role": "sysop",
@@ -21,6 +21,9 @@
     "rules": {
     "min_ratio": 1.0,
     "min_seed_days": 10
+  },
+  "invite_requirements": {
+    "min_class": "SuperPool"
   },
   "groups": [
     {
