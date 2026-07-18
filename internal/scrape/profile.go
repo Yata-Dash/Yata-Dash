@@ -351,6 +351,13 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, serr(resp.StatusCode, fmt.Sprintf("http_%d", resp.StatusCode))
 	}
+	// An invalid/expired cookie doesn't 401 on most trackers — they redirect
+	// the profile URL to the login page, which the client follows to a clean
+	// 200. Catch it by the FINAL URL (Unit3D /login, TBDev/Gazelle /login.php)
+	// so it reports session_expired instead of silently scraping 0 fields.
+	if finalPath := strings.ToLower(resp.Request.URL.Path); strings.Contains(finalPath, "login") {
+		return nil, serr(401, "session_expired")
+	}
 
 	rawHTML, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -358,6 +365,13 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	}
 
 	result := ExtractFromHTML(string(rawHTML), spec)
+	// A real profile page always yields SOMETHING. Zero extracted fields on a
+	// 200 means we got an interstitial (anti-bot page, maintenance page, a
+	// login form that didn't redirect) — an error the user should see, not an
+	// "ok — 0 fields" that quietly never updates their stats.
+	if len(result) == 0 {
+		return nil, serr(http.StatusBadGateway, "empty_scrape")
+	}
 
 	// Gazelle: API values are authoritative for these fields.
 	if spec.Gazelle && gz != nil {

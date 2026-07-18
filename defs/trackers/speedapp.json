@@ -1,0 +1,311 @@
+{
+  "schema_version": 1,
+  "key": "speedapp",
+  "name": "SpeedApp",
+  "abbr": "SP",
+  "url": "https://speedapp.io",
+  "type": "custom",
+  "last_updated": "2026-07-19",
+  "api": {
+    "path": "/api/me",
+    "auth_method": "api_key_header",
+    "field_map": {
+      "username": "username",
+      "id": "user_id",
+      "created_at": "join_date",
+      "snatch_count": "snatched",
+      "hit_and_run_count": "hit_and_runs",
+      "average_seed_time": "avg_seed_time",
+      "invites": "invites",
+      "free_leech_tokens": "fl_tokens",
+      "double_upload_tokens": "double_upload_tokens",
+      "need_seed": "need_seed"
+    },
+    "byte_fields": {
+      "uploaded": "uploaded",
+      "downloaded": "downloaded"
+    },
+    "buffer_from_bytes": true,
+    "ratio_from_bytes": true,
+    "class_field": "class",
+    "class_map": {
+      "0": "Peasant",
+      "1": "User",
+      "2": "Power User",
+      "3": "Elite User",
+      "4": "Xtreme User",
+      "5": "Super User",
+      "6": "Legend User",
+      "7": "VIP",
+      "8": "Legend VIP",
+      "9": "Hyperseeder",
+      "10": "Hall of Fame",
+      "11": "Helper",
+      "12": "Junior Uploader",
+      "13": "Uploader",
+      "14": "Elite Uploader",
+      "15": "Encoder",
+      "16": "Junior Moderator",
+      "17": "Moderator",
+      "18": "Administrator",
+      "19": "Supervisor",
+      "20": "Owner",
+      "21": "Coder"
+    },
+    "api_key_hint": "Profile settings > API tokens"
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 0.95,
+    "min_seed_days": 2
+  },
+  "groups": [
+    {
+      "name": "Peasant",
+      "style": {
+        "color": "#708090",
+        "icon": "fas fa-wheat-awn"
+      },
+      "requirements": {
+        "description": "Demotion class — ratio under 0.95 or an account newer than one month. Demotion is automatic and download restrictions may apply."
+      }
+    },
+    {
+      "name": "User",
+      "style": {
+        "color": "#c0c0c0",
+        "icon": "fas fa-user"
+      },
+      "requirements": {
+        "min_age": "30D",
+        "min_uploaded": "25 GB",
+        "min_ratio": 1.05
+      }
+    },
+    {
+      "name": "Power User",
+      "style": {
+        "color": "#2ECC71",
+        "icon": "fas fa-bolt"
+      },
+      "requirements": {
+        "min_age": "90D",
+        "min_uploaded": "200 GB",
+        "min_ratio": 2.0
+      }
+    },
+    {
+      "name": "Elite User",
+      "style": {
+        "color": "#00bfff",
+        "icon": "fas fa-medal"
+      },
+      "requirements": {
+        "min_age": "180D",
+        "min_uploaded": "1 TB",
+        "min_ratio": 3.0
+      }
+    },
+    {
+      "name": "Xtreme User",
+      "style": {
+        "color": "#9370db",
+        "icon": "fas fa-fire"
+      },
+      "requirements": {
+        "min_age": "1Y",
+        "min_uploaded": "5 TB",
+        "min_ratio": 4.0
+      }
+    },
+    {
+      "name": "Super User",
+      "style": {
+        "color": "#ff8c00",
+        "icon": "fas fa-rocket"
+      },
+      "requirements": {
+        "min_age": "2Y",
+        "min_uploaded": "20 TB",
+        "min_ratio": 5.0
+      }
+    },
+    {
+      "name": "Legend User",
+      "style": {
+        "color": "#ffd700",
+        "icon": "fas fa-crown",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_age": "6Y",
+        "min_uploaded": "100 TB",
+        "min_ratio": 6.0
+      }
+    },
+    {
+      "name": "Star",
+      "style": {
+        "color": "#f5c518",
+        "icon": "fas fa-star"
+      },
+      "requirements": {
+        "description": "Buy one of the donate packages — a star next to your name plus the bonus of the purchased package."
+      }
+    },
+    {
+      "name": "VIP",
+      "style": {
+        "color": "#009f00",
+        "icon": "fas fa-gem"
+      },
+      "requirements": {
+        "description": "Attributed by Staff at their discretion to users who helped the tracker or purchased a market/donation package. Anyone requesting this status is automatically disqualified."
+      }
+    },
+    {
+      "name": "Legend VIP",
+      "style": {
+        "color": "#50c878",
+        "icon": "fas fa-gem",
+        "sparkle": true
+      },
+      "requirements": {
+        "description": "Attributed by Staff — long-standing VIP tier."
+      }
+    },
+    {
+      "name": "Hyperseeder",
+      "style": {
+        "color": "#1cc6d5",
+        "icon": "fas fa-seedling"
+      },
+      "requirements": {
+        "description": "Top 10 users by seed size, seeding more than 90% of the last 72 hours. Elite, Xtreme, Super and Legend Users can participate — promotion and demotion are automatic."
+      }
+    },
+    {
+      "name": "Hall of Fame",
+      "style": {
+        "color": "#daa520",
+        "icon": "fas fa-trophy"
+      },
+      "requirements": {
+        "description": "Granted by Staff for exceptional contributions to the tracker."
+      }
+    },
+    {
+      "name": "Helper",
+      "style": {
+        "color": "#87ceeb",
+        "icon": "fas fa-handshake-angle"
+      },
+      "requirements": {
+        "description": "Granted by moderators at their choice."
+      }
+    },
+    {
+      "name": "Junior Uploader",
+      "style": {
+        "color": "#98fb98",
+        "icon": "fas fa-upload"
+      },
+      "requirements": {
+        "description": "Entry uploader class — named by the Administrator / SysOp (see the tracker's Uploading section for conditions)."
+      }
+    },
+    {
+      "name": "Uploader",
+      "style": {
+        "color": "#32cd32",
+        "icon": "fas fa-upload"
+      },
+      "requirements": {
+        "description": "Named by the Administrator / SysOp — see the tracker's Uploading section for conditions."
+      }
+    },
+    {
+      "name": "Elite Uploader",
+      "style": {
+        "color": "#228b22",
+        "icon": "fas fa-cloud-arrow-up"
+      },
+      "requirements": {
+        "description": "Senior uploader class — named by the Administrator / SysOp."
+      }
+    },
+    {
+      "name": "Encoder",
+      "style": {
+        "color": "#ba55d3",
+        "icon": "fas fa-photo-film"
+      },
+      "requirements": {
+        "description": "Site encoder — appointed by Staff."
+      }
+    },
+    {
+      "name": "Junior Moderator",
+      "style": {
+        "color": "#ff7f50",
+        "icon": "fas fa-gavel"
+      },
+      "requirements": {
+        "description": "SpeedApp junior staff."
+      }
+    },
+    {
+      "name": "Moderator",
+      "style": {
+        "color": "#ff0000",
+        "icon": "fas fa-gavel"
+      },
+      "requirements": {
+        "description": "SpeedApp staff. \"We were asking you, not the other way around!\""
+      }
+    },
+    {
+      "name": "Administrator",
+      "style": {
+        "color": "#ff4500",
+        "icon": "fas fa-user-shield"
+      },
+      "requirements": {
+        "description": "SpeedApp administrator."
+      }
+    },
+    {
+      "name": "Supervisor",
+      "style": {
+        "color": "#b22222",
+        "icon": "fas fa-user-tie"
+      },
+      "requirements": {
+        "description": "SpeedApp senior staff."
+      }
+    },
+    {
+      "name": "Owner",
+      "style": {
+        "color": "#ff3030",
+        "icon": "fas fa-chess-king",
+        "sparkle": true
+      },
+      "requirements": {
+        "description": "SpeedApp owner / SysOp."
+      }
+    },
+    {
+      "name": "Coder",
+      "style": {
+        "color": "#00ced1",
+        "icon": "fas fa-code"
+      },
+      "requirements": {
+        "description": "SpeedApp developer."
+      }
+    }
+  ]
+}

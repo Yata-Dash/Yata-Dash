@@ -11,6 +11,9 @@
     "role": "",
     "date": ""
   },
+  "api": {
+    "required_fields": ["join_date"]
+  },
   "scrape": {
     "max_scrapes_per_day": 1
   },

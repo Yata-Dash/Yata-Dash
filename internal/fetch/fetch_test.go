@@ -297,3 +297,127 @@ func TestFetchCustomInfRatio(t *testing.T) {
 		t.Errorf("ratio = %#v, want \"Infinity\"", got)
 	}
 }
+
+// speedappMe is the documented SpeedApp GET /api/me response shape — a flat
+// object like RetroFlix's but with NO ratio field (only raw transfer bytes),
+// so ratio_from_bytes must derive it. uploaded/downloaded are printf slots.
+const speedappMe = `{
+  "id": 5897683,
+  "username": "MysteryZiLLA",
+  "email": "user@example.com",
+  "created_at": "2026-07-18T02:40:17+00:00",
+  "class": 0,
+  "uploaded": %d,
+  "downloaded": %d,
+  "title": "",
+  "is_donor": false,
+  "warned": false,
+  "invites": 0,
+  "hit_and_run_count": 0,
+  "snatch_count": 2,
+  "need_seed": 1,
+  "average_seed_time": 8640,
+  "free_leech_tokens": 3,
+  "double_upload_tokens": 1
+}`
+
+// speedappRegistry writes a custom type + a SpeedApp tracker def exercising
+// ratio_from_bytes alongside buffer_from_bytes.
+func speedappRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom","required_fields":["join_date"]},
+		"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"speedapp","name":"SpeedApp","abbr":"SP",
+		"url":%q,"type":"custom",
+		"api":{
+			"path":"/api/me","auth_method":"api_key_header",
+			"field_map":{
+				"username":"username","id":"user_id","created_at":"join_date",
+				"snatch_count":"snatched","hit_and_run_count":"hit_and_runs",
+				"average_seed_time":"avg_seed_time","invites":"invites",
+				"free_leech_tokens":"fl_tokens","need_seed":"need_seed"
+			},
+			"byte_fields":{"uploaded":"uploaded","downloaded":"downloaded"},
+			"buffer_from_bytes":true,
+			"ratio_from_bytes":true
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "speedapp.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+// fetchSpeedapp serves speedappMe with the given transfer bytes and fetches it.
+func fetchSpeedapp(t *testing.T, up, down int64) map[string]any {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, speedappMe, up, down)
+	}))
+	defer ts.Close()
+
+	c := NewClient(speedappRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	return data
+}
+
+// TestFetchCustomRatioFromBytes: an API with raw transfer bytes and no ratio
+// field gets ratio = uploaded/downloaded computed by the fetcher.
+func TestFetchCustomRatioFromBytes(t *testing.T) {
+	data := fetchSpeedapp(t, 53687091200, 10737418240) // 50 GiB / 10 GiB
+	want := map[string]any{
+		"uploaded":      "50.00 GiB",
+		"downloaded":    "10.00 GiB",
+		"buffer":        "40.00 GiB",
+		"ratio":         5.0,
+		"join_date":     "2026-07-18", // ISO trimmed
+		"snatched":      2,
+		"need_seed":     1,
+		"avg_seed_time": 8640,
+		"fl_tokens":     3.0,
+	}
+	for k, w := range want {
+		if got, ok := data[k]; !ok {
+			t.Errorf("missing field %q", k)
+		} else if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+// TestFetchCustomRatioFromBytesInf: uploads but nothing downloaded → "Infinity"
+// (the frontend renders ∞), matching how trackers report an undivided ratio.
+func TestFetchCustomRatioFromBytesInf(t *testing.T) {
+	data := fetchSpeedapp(t, 53687091200, 0)
+	if got := data["ratio"]; got != "Infinity" {
+		t.Errorf("ratio = %#v, want \"Infinity\"", got)
+	}
+}
+
+// TestFetchCustomRatioFromBytesNoData: a 0/0 account has no meaningful ratio —
+// the field must be absent (renders as an em dash), not 0 or ∞.
+func TestFetchCustomRatioFromBytesNoData(t *testing.T) {
+	data := fetchSpeedapp(t, 0, 0)
+	if got, ok := data["ratio"]; ok {
+		t.Errorf("ratio = %#v, want absent", got)
+	}
+}

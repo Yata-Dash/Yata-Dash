@@ -208,6 +208,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
+| Speedapp | Custom | Yes | API Only | Added API stats - Thanks team! |
 | YUSCENE | Unit3D | Pending | - | Awaiting reponse |
 | Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
 

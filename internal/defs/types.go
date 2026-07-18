@@ -290,6 +290,11 @@ type CustomAPI struct {
 	// BufferFromBytes computes buffer = uploaded_bytes − downloaded_bytes,
 	// using the byte_fields entries mapped to "uploaded" and "downloaded".
 	BufferFromBytes bool `json:"buffer_from_bytes,omitempty"`
+	// RatioFromBytes computes ratio = uploaded_bytes / downloaded_bytes from
+	// the same byte_fields entries, for APIs that return raw transfer counts
+	// but no ratio (e.g. SpeedApp). A ratio mapped via field_map wins;
+	// downloaded = 0 with uploads → "Infinity" (rendered ∞).
+	RatioFromBytes bool `json:"ratio_from_bytes,omitempty"`
 
 	// BoolFields map JSON paths → canonical fields, emitting "true"/"false"
 	// from a truthy value (non-zero number, JSON true, or a non-empty/non-"0"

@@ -3,13 +3,27 @@
 All notable changes to Yata, newest first. Versions are date-based builds:
 `Beta-YYYYMMDD[letter]`.
 
-How this is used: jot changes under **Unreleased** as you work. When you cut a
-release (dev.ps1 → *Cut a release*), move the Unreleased notes under a new
-version heading — those notes become the GitHub Release body automatically.
 
 ## [Unreleased]
 
 ### Added
+
+- **SpeedApp support (API-only).** New `speedapp` definition using the
+  site's Bearer-token `/api/me` endpoint: transfer totals, buffer, snatch
+  count, hit & runs, average seed time, invites, FL/double-upload tokens,
+  need-seed count, and join date. SpeedApp is API-only by operator policy,
+  so scraping is disabled in the def. Includes the full class ladder —
+  Peasant through Legend User with age/upload/ratio promotion requirements.
+  - **`ratio_from_bytes` custom-API option.** Custom tracker definitions can
+  now derive ratio from the raw uploaded/downloaded byte counts when the API
+  doesn't return a ratio field (SpeedApp is the first such tracker). A ratio
+  mapped directly from the API still wins; nothing downloaded yet renders as
+  ∞, and a 0/0 account shows no ratio rather than a misleading 0.
+
+## [Beta-20260717]
+
+### Added
+
 - **Highlight hit & runs toggle (Settings → Display).** H&R counts colour red
   by default across cards, the Detail table, and expanded stat rows. Some
   trackers' H&Rs are permanent (never clear once recorded), so the red reads
@@ -66,6 +80,23 @@ version heading — those notes become the GitHub Release body automatically.
   and the Detail table.
 
 ### Fixed
+- **A scrape that hits a login page now says so instead of silently finding
+  nothing.** When a session cookie expires, most trackers don't return an
+  auth error — they redirect the profile URL to their login page, which
+  arrives as a clean 200. The scraper extracted zero stats from it and
+  reported "ok — 0 fields", leaving stats quietly frozen with no visible
+  problem. The scraper now recognises the login-page redirect and reports
+  **session cookie expired**; and any 200 page that yields zero recognisable
+  stats (anti-bot interstitial, maintenance page) is reported as an error
+  rather than a successful empty scrape. Found via DarkPeers, whose saved
+  profile page extracts 21 fields — the def was fine; the cookie wasn't.
+- **Disabled trackers are hidden from the dashboard.** Disabling a tracker
+  already stopped its refreshes, but its card and table row (with stats going
+  stale) stayed on the dashboard. Disabled trackers now disappear from the
+  grid, the Detail table (the "N / M active" line follows), and the aggregate
+  totals/health cards — they stay listed in Settings → Trackers, which is
+  where you re-enable them. If every tracker is disabled the dashboard says
+  so instead of showing the first-run welcome screen.
 - **The daily-scrape-limit notice is a warning now, not an error.** "N
   trackers have hit the daily maximum scrapes" showed in red — but red means
   something is broken, and this is expected behaviour (the cap is often the

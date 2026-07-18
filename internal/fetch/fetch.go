@@ -347,6 +347,19 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 		out["buffer"] = parse.BytesToSize(max(rawBytes["uploaded"]-rawBytes["downloaded"], 0))
 	}
 
+	if api.RatioFromBytes {
+		if _, mapped := out["ratio"]; !mapped {
+			up, down := rawBytes["uploaded"], rawBytes["downloaded"]
+			switch {
+			case down > 0:
+				out["ratio"] = float64(up) / float64(down)
+			case up > 0:
+				out["ratio"] = "Infinity" // nothing downloaded yet → ∞
+			}
+			// both zero: no ratio row — a 0/0 account has no meaningful ratio
+		}
+	}
+
 	// Bool flags: a truthy value (a non-zero count, JSON true, or a non-empty
 	// string) → "true". Lets an unread-COUNT drive the unread_mail flag.
 	for jsonPath, canonical := range api.BoolFields {
