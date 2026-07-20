@@ -49,11 +49,7 @@
       "icon": "fas fa-download"
     },
     "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0.0,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+
     },
     "perks": [
       {
@@ -69,11 +65,7 @@
       "icon": "fas fa-user"
     },
     "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0.8,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_ratio": 0.8
     },
     "perks": [
       {
@@ -96,8 +88,7 @@
       "min_uploaded": "1 TiB",
       "min_ratio": 0.8,
       "min_age": "1M",
-      "min_seed_size": "100 GiB",
-      "min_uploads": 0
+      "min_seed_size": "100 GiB"
     },
     "perks": [
       {
@@ -121,12 +112,10 @@
       "icon": "fas fa-seedling"
     },
     "requirements": {
-      "min_uploaded": "0 B",
       "min_ratio": 0.8,
       "min_age": "1M",
       "min_seedtime": "1M",
-      "min_seed_size": "3 TiB",
-      "min_uploads": 0
+      "min_seed_size": "3 TiB"
     },
     "perks": [
       {
@@ -178,12 +167,10 @@
       "icon": "fas fa-face-cowboy-hat"
     },
     "requirements": {
-      "min_uploaded": "0 B",
       "min_ratio": 0.8,
       "min_age": "2M",
       "min_seedtime": "2M",
-      "min_seed_size": "8 TiB",
-      "min_uploads": 0
+      "min_seed_size": "8 TiB"
     },
     "perks": [
       {
@@ -244,12 +231,10 @@
       "icon": "fas fa-computer"
     },
     "requirements": {
-      "min_uploaded": "0 B",
       "min_ratio": 0.8,
       "min_age": "4M",
       "min_seedtime": "3M",
-      "min_seed_size": "16 TiB",
-      "min_uploads": 0
+      "min_seed_size": "16 TiB"
     },
     "perks": [
       {

@@ -7,12 +7,12 @@
   "type": "unit3d",
   "last_updated": "2026-07-18",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "VisionsofJoanne",
+    "role": "Senior Moderator",
+    "date": "2026-07-20"
   },
   "scrape": {
-    "max_scrapes_per_day": 1
+    "min_interval_minutes": 180
   },
     "rules": {
     "min_ratio": 0.4,
@@ -95,13 +95,6 @@
       "color": "#96281B",
       "icon": "fas fa-times"
     },
-    "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0.0,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
-    },
     "perks": [
       {
         "icon": "fas fa-arrow-down-short-wide text-blue",
@@ -120,11 +113,7 @@
       "icon": "fas fa-user"
     },
     "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0.4,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_ratio": 0.4
     },
     "perks": [
       {

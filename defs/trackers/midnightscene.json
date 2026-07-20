@@ -116,11 +116,6 @@
       "icon": "fas fa-times"
     },
     "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0.0,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
     },
     "perks": [
       {
@@ -136,11 +131,6 @@
       "icon": "fas fa-user"
     },
     "requirements": {
-      "min_uploaded": "0 B",
-      "min_ratio": 0,
-      "min_age": "0",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
     },
     "perks": [
       {
@@ -162,9 +152,7 @@
     "requirements": {
       "min_uploaded": "1 TiB",
       "min_ratio": 0.4,
-      "min_age": "1M",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_age": "1M"
     },
     "perks": [
       {
@@ -186,9 +174,7 @@
     "requirements": {
       "min_uploaded": "5 TiB",
       "min_ratio": 0.4,
-      "min_age": "2M",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_age": "2M"
     },
     "perks": [
       {
@@ -210,9 +196,7 @@
     "requirements": {
       "min_uploaded": "20 TiB",
       "min_ratio": 0.4,
-      "min_age": "3M",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_age": "3M"
     },
     "perks": [
       {
@@ -238,9 +222,7 @@
     "requirements": {
       "min_uploaded": "50 TiB",
       "min_ratio": 0.4,
-      "min_age": "6M",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_age": "6M"
     },
     "perks": [
       {
@@ -267,9 +249,7 @@
     "requirements": {
       "min_uploaded": "100 TiB",
       "min_ratio": 0.4,
-      "min_age": "1Y",
-      "min_seed_size": "0 B",
-      "min_uploads": 0
+      "min_age": "1Y"
     },
     "perks": [
       {
@@ -297,12 +277,10 @@
       "icon": "fas fa-hdd"
     },
     "requirements": {
-      "min_uploaded": "0 B",
       "min_ratio": 0.4,
       "min_age": "1M",
       "min_seedtime": "1M",
-      "min_seed_size": "5 TiB",
-      "min_uploads": 0
+      "min_seed_size": "5 TiB"
     },
     "perks": [
       {
@@ -331,12 +309,10 @@
       "sparkle": true
     },
     "requirements": {
-      "min_uploaded": "0 B",
       "min_ratio": 0.4,
       "min_age": "3M",
       "min_seedtime": "2M",
-      "min_seed_size": "10 TiB",
-      "min_uploads": 0
+      "min_seed_size": "10 TiB"
     },
     "perks": [
       {
