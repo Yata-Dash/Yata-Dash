@@ -2,7 +2,7 @@
   "schema_version": 1,
   "key": "unit3d",
   "label": "Unit3D",
-  "last_updated": "2026-07-06",
+  "last_updated": "2026-07-21",
   "description": "Standard Unit3D private tracker. Provides /api/user stats and scrapes the /users/{username} profile page for extended stats.",
   "api": { 
     "kind": "unit3d",
@@ -24,7 +24,8 @@
       "total leeching": "leeching",
       "bon": "bonus_points",
       "hit and run count (all time)": "hit_and_runs",
-      "seeding size": "seed_size"
+      "seeding size": "seed_size",
+      "Total uploads (Non-Anonymous)": "uploads"
     }
   }
 }
