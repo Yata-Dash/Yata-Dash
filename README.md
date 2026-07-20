@@ -212,6 +212,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
 | Speedapp | Custom | Yes | API Only | Added API stats - Thanks team! |
+| Unwalled | Unit3D | Yes | 180min |  |
 | YUSCENE | Unit3D | Yes | 180min |  |
 | Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
 
