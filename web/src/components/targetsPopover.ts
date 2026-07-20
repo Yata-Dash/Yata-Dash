@@ -14,6 +14,8 @@ import type { Tracker, TrackerGroupMap } from '../types';
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { groupRequirementsToTargets } from '../utils/group';
+import { defaultGoalDeadline } from '../utils/pacing';
+import { commonDeadline, fanDeadline, goalDateControlHtml, wireGoalDateUI } from './goalDate';
 import { statsCache, strOf } from '../state';
 import type { ToastType } from './toast';
 import {
@@ -68,6 +70,17 @@ function ensureEl(): HTMLDivElement {
   el.style.display = 'none';
   el.addEventListener('mousedown', e => e.stopPropagation());
   el.addEventListener('click', e => e.stopPropagation());
+  // Prefill a deadline input the first time it's focused (still empty) with
+  // today + max(remaining days on an unmet account-age target, 30). Wired
+  // once here (el itself survives across opens — only its innerHTML is
+  // rebuilt) rather than per-render.
+  el.addEventListener('focusin', e => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>('[data-target-deadline]');
+    if (!input || input.value) return;
+    const joinDate = strOf(statsCache[_trackerId], 'join_date') || undefined;
+    input.value = defaultGoalDeadline(currentAgeTargetRaw(), joinDate);
+  });
+  wireGoalDateUI(el); // icon-button open/clear/state for every goal control inside
   document.body.appendChild(el);
 
   // Close on outside click / Esc
@@ -109,6 +122,10 @@ export function openTargetsPopover(trackerId: string, anchor: HTMLElement): void
         return `<option value="${esc(g.name)}"${style} ${g.name === t.target_group ? 'selected' : ''}>${label}</option>`;
       }).join('')}
     </select>
+    <div id="targets-popover-groupgoal" class="targets-popover-groupgoal" style="display:${startManual ? 'none' : 'flex'}">
+      <span class="target-edit-label">Goal date <span class="targets-popover-groupgoal-hint">(whole group)</span></span>
+      ${goalDateControlHtml('group', commonDeadline(t.target_group ? t.target_deadlines : undefined))}
+    </div>
     <div id="targets-popover-manual" style="display:${startManual ? 'block' : 'none'}">
       <div id="targets-popover-rows" class="targets-popover-rows"></div>
       <div class="targets-popover-add">
@@ -132,8 +149,9 @@ export function openTargetsPopover(trackerId: string, anchor: HTMLElement): void
   });
 
   // Seed the manual builder when opening already-manual (current targets).
-  if (startManual) renderRows(seedManual(t));
+  if (startManual) renderRows(seedManual(t), seedManualDeadlines(t));
   refreshAddSelect();
+  if (!startManual) updateGroupGoalDefault(t, t.target_group);
 
   positionPopover(el, anchor);
   (startManual
@@ -163,16 +181,45 @@ function seedManual(t: Tracker): Record<string, string> {
   return cachedManual(t.id);
 }
 
+/** Deadlines to seed alongside seedManual's targets — only when the tracker
+ *  is ALREADY manual (its own target_deadlines); the local last-manual cache
+ *  never carried deadlines, so switching from a group starts with none. */
+function seedManualDeadlines(t: Tracker): Record<string, string> {
+  return t.target_group ? {} : { ...(t.target_deadlines ?? {}) };
+}
+
+/** The live "days" (account age) row's raw target value, if one is in the
+ *  builder right now — feeds the default-deadline rule. */
+function currentAgeTargetRaw(): string | undefined {
+  const input = document.querySelector<HTMLInputElement>('#targets-popover-rows [data-target-key="days"] [data-target-input]');
+  return input?.value || undefined;
+}
+
+/** Point the group-goal control's empty-input default at the SELECTED
+ *  group's remaining min_age (the "beat my age requirement" rule) — the
+ *  manual rows' focusin prefill can't see a group's age requirement. */
+function updateGroupGoalDefault(t: Tracker, groupName: string): void {
+  const input = document.querySelector<HTMLInputElement>('#targets-popover-groupgoal [data-target-deadline]');
+  if (!input) return;
+  const g = (_deps?.groupDefs()[t.def_key] ?? []).find(x => x.name === groupName);
+  const ageRaw = g ? groupRequirementsToTargets(g.requirements)['days'] : undefined;
+  const joinDate = strOf(statsCache[_trackerId], 'join_date') || undefined;
+  input.dataset['goalDefault'] = defaultGoalDeadline(ageRaw, joinDate);
+}
+
 function onGroupSelectChange(t: Tracker): void {
   const sel = document.getElementById('targets-popover-select') as HTMLSelectElement | null;
   const manual = document.getElementById('targets-popover-manual');
+  const groupGoal = document.getElementById('targets-popover-groupgoal');
   if (!sel || !manual) return;
+  if (groupGoal) groupGoal.style.display = sel.value ? 'flex' : 'none';
   if (sel.value) {
     manual.style.display = 'none';
+    updateGroupGoalDefault(t, sel.value);
   } else {
     manual.style.display = 'block';
     // Reseed only when empty, so an accidental toggle doesn't wipe edits.
-    if (!document.querySelector('#targets-popover-rows [data-target-key]')) renderRows(seedManual(t));
+    if (!document.querySelector('#targets-popover-rows [data-target-key]')) renderRows(seedManual(t), seedManualDeadlines(t));
     refreshAddSelect();
     if (_el) positionPopover(_el, _el); // no-op reposition keeps it on-screen after growth
   }
@@ -183,21 +230,26 @@ function specFor(key: string): TargetSpec {
     ?? { key, label: key, placeholder: 'e.g. 100' };
 }
 
-function rowHtml(key: string, value: string): string {
+/** Every target row EXCEPT account age gets an optional goal-date control
+ *  (a small icon button; the date editor pops on demand so the value stays
+ *  readable) — reaching an age by a date is arbitrary, so "days" never gets
+ *  one. */
+function rowHtml(key: string, value: string, deadline: string): string {
   const spec = specFor(key);
   return `<div class="target-edit-row" data-target-key="${esc(key)}">
     <span class="target-edit-label" title="${esc(spec.hint ?? '')}">${esc(spec.label)}</span>
     <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
+    ${goalDateControlHtml(key, deadline)}
     <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" data-remove="${esc(key)}" title="Remove target">&times;</button>
   </div>`;
 }
 
-function renderRows(targets: Record<string, string>): void {
+function renderRows(targets: Record<string, string>, deadlines: Record<string, string> = {}): void {
   const wrap = document.getElementById('targets-popover-rows');
   if (!wrap) return;
   wrap.innerHTML = Object.entries(targets)
     .filter(([k, v]) => v !== '' && !k.startsWith('count:'))
-    .map(([k, v]) => rowHtml(k, targetDisplayValue(k, v)))
+    .map(([k, v]) => rowHtml(k, targetDisplayValue(k, v), deadlines[k] ?? ''))
     .join('');
   refreshAddSelect();
 }
@@ -217,7 +269,7 @@ function addRow(): void {
   const sel = document.getElementById('targets-popover-add-select') as HTMLSelectElement | null;
   const wrap = document.getElementById('targets-popover-rows');
   if (!sel || !wrap || !sel.value) return;
-  wrap.insertAdjacentHTML('beforeend', rowHtml(sel.value, ''));
+  wrap.insertAdjacentHTML('beforeend', rowHtml(sel.value, '', ''));
   refreshAddSelect();
   wrap.querySelector<HTMLInputElement>(`[data-target-key="${CSS.escape(sel.value)}"] input`)?.focus();
 }
@@ -229,6 +281,20 @@ function collectRows(): Record<string, string> {
     const raw = row.querySelector<HTMLInputElement>('[data-target-input]')?.value ?? '';
     const norm = key ? normalizeTargetValue(key, raw) : null;
     if (norm != null) out[key] = norm;
+  }
+  return out;
+}
+
+/** Read the builder rows' deadline inputs back into a target_deadlines map.
+ *  An empty date input (including "days", which never has one) is simply
+ *  omitted — that's how clearing a deadline removes it. */
+function collectDeadlines(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of document.querySelectorAll<HTMLElement>('#targets-popover-rows [data-target-key]')) {
+    const key = row.dataset['targetKey'] ?? '';
+    if (!key || key === 'days') continue;
+    const val = row.querySelector<HTMLInputElement>('[data-target-deadline]')?.value ?? '';
+    if (val) out[key] = val;
   }
   return out;
 }
@@ -249,12 +315,20 @@ async function applyTargetsPopover(): Promise<void> {
   if (!groupName) {
     // "— manual —": replace targets with the builder rows and clear the group.
     const targets = collectRows();
+    const target_deadlines = collectDeadlines();
     cacheManual(t.id, targets); // remember for next time
-    payload = { target_group: '', targets };
+    payload = { target_group: '', targets, target_deadlines };
   } else {
+    // A group carries ONE optional goal date for the whole requirement set —
+    // fanned out per key on save, since that's the storage the pacing/alert
+    // layer already understands. Empty control = no goal (clears any old
+    // per-key deadlines: the control shows the state, so what you see is
+    // what gets saved).
     const g = (_deps.groupDefs()[t.def_key] ?? []).find(x => x.name === groupName);
     if (!g) return;
-    payload = { target_group: groupName, targets: groupRequirementsToTargets(g.requirements) };
+    const targets = groupRequirementsToTargets(g.requirements);
+    const date = document.querySelector<HTMLInputElement>('#targets-popover-groupgoal [data-target-deadline]')?.value ?? '';
+    payload = { target_group: groupName, targets, target_deadlines: date ? fanDeadline(targets, date) : {} };
   }
 
   const btn = document.getElementById('targets-popover-apply') as HTMLButtonElement | null;

@@ -6,8 +6,101 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Changed
+- **Scrape-limit fields untangled (edit tracker + Settings → Scraping).**
+  Users read the red "This tracker operator requests ≥ N min between
+  scrapes" banner as an error blocking their save — it never blocked
+  anything, it's information. It's now an amber info notice (ⓘ) and says so
+  outright: "Applied automatically — your values below can only add further
+  limits." Red is reserved for the actual blocking validation messages
+  under the fields. The fields themselves lost their double hints: units
+  now sit beside the input ("min", "per UTC day") and each field keeps ONE
+  helper line, reworded to say what 0 really does — the per-tracker
+  interval follows the global setting or the tracker's limit *whichever is
+  longer*, while the per-tracker cap follows the global cap or the
+  tracker's limit *whichever is lower* (an interval is a floor, a cap is a
+  ceiling — the previous wording implied they merged the same way). The
+  global Scraping page gets the same treatment, plus its interval field no
+  longer fights the keyboard: it used to clamp to 60 on every keystroke, so
+  typing "120" snapped to 60 at the "1" — it now shows a soft red state
+  while a value is under the minimum and only clamps when you leave the
+  field.
+
 ### Added
 
+- **Weekly digest.** A scheduled webhook summary — Settings → Alerts gets a
+  "Weekly digest" card with its own enable toggle, weekday + hour picker
+  (server-local, default Monday 09:00), and a destination multi-select
+  (empty = all enabled, same searchable picker the rules use). Each digest
+  covers the trailing 7 days: per-tracker deltas (uploaded/downloaded/buffer,
+  ratio old→new — a tracker with no movement just says "no change"), how many
+  targets are currently met, a goal-pacing verdict for any dated target
+  (behind/overdue/on track), this week's group promotions and demotions, and
+  any pathway target that's newly gone requirements-met since the last
+  digest. A week with nothing to report still sends a short "all quiet"
+  heartbeat rather than staying silent, so silence never gets confused with
+  "the digest broke". If Yata was offline at the scheduled moment, it catches
+  up and sends on the next check after boot instead of skipping the week
+  entirely. "Preview" builds the text against live stats without sending
+  anything (inline, like a rule's dry run); "Send now" delivers immediately,
+  independent of the schedule. Long digests split across multiple messages on
+  line boundaries to respect Discord's 2000-character limit.
+- **Goal pacing: "reach it by" deadlines on targets.** Any target row —
+  manually set or loaded from a group — can now carry an optional deadline
+  date. Yata compares the rate you NEED (what's left, divided by the days
+  remaining) against the rate you HAVE (your existing growth rate) and shows
+  an on-track/behind verdict, both as a compact chip on grid cards and the
+  table's expanded targets, and as a full "needs 8.2 GiB/day · doing 11.4
+  GiB/day · on track" line on the Tracker Detail page — each behind its own
+  Display toggle (*Goal pacing on Detail*, *Goal chips on cards/table*, both
+  on by default). A deadline that's passed with the row still unmet reads as
+  overdue; a flat stat with time left reads as "needs X/day" with no verdict,
+  since no rate is neither proven on-track nor proven behind. Setting a date
+  stays out of the way: target rows carry only a small calendar icon button
+  (accented once a goal is set, tooltip naming the date) that pops a compact
+  date editor on demand, so the target value itself stays readable — and a
+  GROUP target set carries ONE optional "whole group" goal date (in both the
+  dashboard popover and the edit screen) that applies to every requirement
+  in the set, rather than asking for a date per stat. Ratio targets
+  get their own honest treatment — there's no meaningful "ratio rate" to pace
+  against, so a dated ratio row instead shows the extra upload needed to hit
+  it (e.g. "1.56 / 2.00 — needs +64 GiB upload") and never participates in
+  the behind-pace alert. Account age can't take a deadline at all — reaching
+  an age by a date isn't something you control. Setting a date for the first
+  time defaults to today plus whichever is longer: 30 days, or the time left
+  on an unmet account-age target (the common goal is beating your age
+  requirement before it completes on its own). A new alert condition,
+  *Behind goal pace*, fires when any dated target is behind or overdue.
+- **Standing guards: predictive decline alerts.** Four new polled conditions
+  in the rule builder project a stat's current trend forward instead of just
+  comparing its live value: *Ratio hits tracker min within (days)* and
+  *Buffer runs out within (days)* answer "at this rate, when do I cross the
+  line" (e.g. "your ratio will cross LST's minimum in ~9 days at this rate"),
+  while *Seed size drop over 7d (%)* and *Seeding count drop over 7d (%)*
+  catch a sudden mass deletion or a client going quiet before it shows up as
+  a ratio problem. All four are silent (never match) until there's enough
+  history to trust — a flat or rising stat, or a tracker too young to have a
+  week of data, reads as "not declining"/"not dropping" rather than a false
+  positive. A new starter rule, *Ratio approaching minimum* (fires within 14
+  days, a day's cooldown to damp rate noise), is added to the two existing
+  seeded rules for fresh installs.
+- **Event notifications: promoted, demoted, and target-met alerts.** The
+  rule builder gains three one-shot conditions alongside the existing
+  polled fields — *Promoted*, *Demoted*, and *Target met* — that fire the
+  moment a tracker's group moves up or down its def's ladder, or one of its
+  target rows (base targets, a group's min-counts brackets, or an any-of
+  alternative) crosses from unmet into met. Unlike the rest of the rule
+  builder these aren't polled on a schedule; they fire at the instant the
+  transition is detected, so they can be combined with a normal numeric
+  condition on the same rule ("promoted AND ratio < 1") without waiting for
+  the next refresh cycle. The target-met message reports progress as
+  `m/T` — the count of currently-met target rows out of the total, e.g.
+  "Seedpool — Met target 3/5 — Ratio" — with 5/5 being how an all-met
+  account reads (there's no separate all-met condition). Fresh installs
+  that have never touched the Alerts tab get two starter rules out of the
+  box (*Promotions & demotions*, *Target met*) so the feature isn't
+  invisible until someone discovers Settings → Alerts; anyone who already
+  had a destination or rule configured keeps their setup untouched.
 - **SpeedApp support (API-only).** New `speedapp` definition using the
   site's Bearer-token `/api/me` endpoint: transfer totals, buffer, snatch
   count, hit & runs, average seed time, invites, FL/double-upload tokens,

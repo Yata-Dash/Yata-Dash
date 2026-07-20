@@ -198,10 +198,13 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 |---|---|---|---|---|
 | Aither | Unit3D | Yes | 180min | New Upload groups note yet added, Monthly Uploads not retrevable |
 | Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
+| Aura4K | Unit3D | Yes | 180min |  |
+| Darkpeers | Unit3D | Yes | 180min |  |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
 | InfinityHD | Unit3D | Yes | 60min |  |
 | LST | Unit3D | Yes | 180min |  |
 | Luminarr | Unit3D | Yes | 120min |  |
+| MidnightScene | Unit3D | Yes | 60min |  |
 | MyAnonamouse | Custom | Yes | API Only | |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
@@ -209,7 +212,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
 | Speedapp | Custom | Yes | API Only | Added API stats - Thanks team! |
-| YUSCENE | Unit3D | Pending | - | Awaiting reponse |
+| YUSCENE | Unit3D | Yes | 180min |  |
 | Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
 
   — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.

@@ -14,6 +14,8 @@ import { esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrac
 import { parseAgeDays, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { findOptOut, optOutMessage } from '../utils/optout';
+import { defaultGoalDeadline } from '../utils/pacing';
+import { commonDeadline, fanDeadline, goalDateControlHtml, wireGoalDateUI } from './goalDate';
 import { renderTestDetail } from './trackerTest';
 import type { ToastType } from './toast';
 import { appSettings, groupDefs, strOf } from '../state';
@@ -473,6 +475,8 @@ const TARGET_EXCLUDED_FIELDS = new Set([
 
 let _targetSpecs: TargetSpec[] = [];             // available for the open tracker
 let _editTargets: Record<string, string> = {};   // targets when the modal opened
+let _editDeadlines: Record<string, string> = {}; // target_deadlines when the modal opened
+let _editJoinDate = '';                          // merged/manual join_date — feeds the default-deadline rule
 
 function targetSpecFor(key: string): TargetSpec {
   return _targetSpecs.find(s => s.key === key)
@@ -517,11 +521,17 @@ export function targetDisplayValue(key: string, stored: string): string {
   return stored;
 }
 
-function targetRowHtml(key: string, value: string): string {
+/** Every target row EXCEPT account age gets an optional goal-date control
+ *  (small icon button; the date editor pops on demand so the value stays
+ *  readable) — reaching an age by a date is arbitrary (see the plan), so
+ *  "days" never gets one. Empty inputs prefill on first focus via
+ *  wireTargetDeadlinePrefill; clearing removes the deadline on save. */
+function targetRowHtml(key: string, value: string, deadline: string): string {
   const spec = targetSpecFor(key);
   return `<div class="target-edit-row" data-target-key="${esc(key)}">
     <span class="target-edit-label" title="${esc(spec.hint ?? '')}">${esc(spec.label)}</span>
     <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
+    ${goalDateControlHtml(key, deadline)}
     <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove target" onclick="modalRemoveTargetRow('${esc(key)}')">&times;</button>
   </div>`;
 }
@@ -532,9 +542,36 @@ function renderTargetRows(targets: Record<string, string>) {
   if (!wrap) return;
   wrap.innerHTML = Object.entries(targets)
     .filter(([k, v]) => v !== '' && !k.startsWith('count:'))
-    .map(([k, v]) => targetRowHtml(k, targetDisplayValue(k, v)))
+    .map(([k, v]) => targetRowHtml(k, targetDisplayValue(k, v), _editDeadlines[k] ?? ''))
     .join('');
   refreshTargetAddSelect();
+  wireTargetDeadlinePrefill();
+  wireGoalDateUI(wrap);
+}
+
+/** The live "days" (account age) row's raw target value, if one is in the
+ *  builder right now — feeds the default-deadline rule below. Reads the
+ *  CURRENT edit, not the saved tracker, so adding/typing an age target before
+ *  dating another row picks it up immediately. */
+function currentAgeTargetRaw(): string | undefined {
+  const input = document.querySelector<HTMLInputElement>('#modal-target-rows [data-target-key="days"] [data-target-input]');
+  return input?.value || undefined;
+}
+
+let _targetDeadlineListenerWired = false;
+
+/** Prefill a deadline input the first time it's focused (still empty) with
+ *  today + max(remaining days on an unmet account-age target, 30). Wired
+ *  once (delegated on the rows container, which survives innerHTML rebuilds)
+ *  since renderTargetRows recreates the actual <input> elements each time. */
+function wireTargetDeadlinePrefill(): void {
+  if (_targetDeadlineListenerWired) return;
+  _targetDeadlineListenerWired = true;
+  document.getElementById('modal-target-rows')?.addEventListener('focusin', e => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>('[data-target-deadline]');
+    if (!input || input.value) return;
+    input.value = defaultGoalDeadline(currentAgeTargetRaw(), _editJoinDate || undefined);
+  });
 }
 
 /** Rebuild the "+ Add target" picker: available specs minus rows already added. */
@@ -553,7 +590,7 @@ export function modalAddTargetRow(): void {
   const sel = document.getElementById('modal-target-add-select') as HTMLSelectElement | null;
   const wrap = document.getElementById('modal-target-rows');
   if (!sel || !wrap || !sel.value) return;
-  wrap.insertAdjacentHTML('beforeend', targetRowHtml(sel.value, ''));
+  wrap.insertAdjacentHTML('beforeend', targetRowHtml(sel.value, '', ''));
   refreshTargetAddSelect();
   wrap.querySelector<HTMLInputElement>(`[data-target-key="${sel.value}"] input`)?.focus();
 }
@@ -583,6 +620,20 @@ function collectTargetRows(): Record<string, string> {
     const raw = row.querySelector<HTMLInputElement>('[data-target-input]')?.value ?? '';
     const norm = key ? normalizeTargetValue(key, raw) : null;
     if (norm != null) out[key] = norm;
+  }
+  return out;
+}
+
+/** Read the builder rows' deadline inputs back into a target_deadlines map.
+ *  An empty date input (including "days", which never has one) is simply
+ *  omitted — that's how clearing a deadline removes it. */
+function collectTargetDeadlines(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of document.querySelectorAll<HTMLElement>('#modal-target-rows [data-target-key]')) {
+    const key = row.dataset['targetKey'] ?? '';
+    if (!key || key === 'days') continue;
+    const val = row.querySelector<HTMLInputElement>('[data-target-deadline]')?.value ?? '';
+    if (val) out[key] = val;
   }
   return out;
 }
@@ -669,6 +720,10 @@ export function openEditModal(
   // offers whatever this tracker actually reports.
   const tKey = t.def_key;
   _editTargets = { ...(t.targets ?? {}) };
+  _editDeadlines = { ...(t.target_deadlines ?? {}) };
+  // join_date feeds the default-deadline rule: merged (API/scrape) first,
+  // falling back to the tracker's own manually-entered fallback.
+  _editJoinDate = strOf(statsMap[t.id], 'join_date') || t.join_date || '';
   _targetSpecs = buildAvailableTargetSpecs(t, statsMap[t.id]);
   const rowsWrap = document.getElementById('modal-target-rows');
   if (rowsWrap) rowsWrap.innerHTML = ''; // fresh per tracker — setTargetsMode reseeds
@@ -782,7 +837,10 @@ function setupScrapeSection(t: Tracker) {
   modalValidateMaxScrapes();
 }
 
-/** Operator-requested limits, emphasised in red above the fields. */
+/** Operator-requested limits above the fields. Informational (amber, info
+ *  icon) — NOT an error: nothing here blocks saving. Red is reserved for the
+ *  blocking validation messages under the inputs, so users don't read a
+ *  def-level request as "my save is being rejected". */
 function renderScrapeReq(t: Tracker) {
   const el = document.getElementById('modal-scrape-req');
   if (!el) return;
@@ -790,7 +848,7 @@ function renderScrapeReq(t: Tracker) {
   if (t.tracker_min_interval) parts.push(`requests ≥ ${t.tracker_min_interval} min between scrapes`);
   if (t.tracker_max_per_day)  parts.push(`max ${t.tracker_max_per_day} scrapes/day`);
   if (!parts.length) { el.style.display = 'none'; return; }
-  el.innerHTML = `<i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>This tracker operator ${parts.join(' · ')}.`;
+  el.innerHTML = `<i class="fas fa-circle-info" style="margin-right:6px"></i>This tracker operator ${parts.join(' · ')}. Applied automatically — your values below can only add further limits.`;
   el.style.display = '';
 }
 
@@ -998,13 +1056,23 @@ export async function saveTracker(deps: ModalDeps) {
   const chosenGroup = (targetsVisible && groupRowEl?.style.display !== 'none')
     ? (groupSelEl?.value ?? '') : '';
   let targets: Record<string, string> | undefined = {};
+  // Manual mode reads per-row deadline inputs; group mode reads the ONE
+  // whole-group goal date from the hint panel and fans it out per key —
+  // empty means no goal (clears old per-key deadlines: the control shows
+  // the state, so what you see is what gets saved).
+  let targetDeadlines: Record<string, string> | undefined;
   if (chosenGroup) {
     const g = findGroupDef(groupDefs, groupRowEl?.dataset?.['trackerKey'] ?? '', chosenGroup);
     // Def group missing (renamed/removed) → omit targets, keeping the stored
     // values rather than wiping them.
     targets = g ? groupRequirementsToTargets(g.requirements) : undefined;
+    if (g && targets) {
+      const date = document.querySelector<HTMLInputElement>('#modal-target-group-hint [data-target-deadline]')?.value ?? '';
+      targetDeadlines = date ? fanDeadline(targets, date) : {};
+    }
   } else if (targetsVisible) {
     targets = collectTargetRows();
+    targetDeadlines = collectTargetDeadlines();
   }
 
   const cookieVal   = getVal('modal-session-cookie');
@@ -1031,6 +1099,7 @@ export async function saveTracker(deps: ModalDeps) {
     min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
     ...(targets !== undefined ? { targets } : {}),
     target_group: chosenGroup,
+    ...(targetDeadlines !== undefined ? { target_deadlines: targetDeadlines } : {}),
     join_date: getVal('modal-joindate'),
     ...(trackerType ? { type: trackerType } : {}),
   };
@@ -1564,6 +1633,10 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   if (unreadNotifTrack) unreadNotifTrack.className = `toggle-track ${settings.show_unread_notifications !== false ? 'on' : ''}`;
   const hnrHighlightTrack = document.getElementById('s-hnr-highlight-track');
   if (hnrHighlightTrack) hnrHighlightTrack.className = `toggle-track ${settings.highlight_hnr !== false ? 'on' : ''}`;
+  const goalPacingTrack = document.getElementById('s-goal-pacing-track');
+  if (goalPacingTrack) goalPacingTrack.className = `toggle-track ${settings.show_goal_pacing !== false ? 'on' : ''}`;
+  const goalChipsTrack = document.getElementById('s-goal-chips-track');
+  if (goalChipsTrack) goalChipsTrack.className = `toggle-track ${settings.show_goal_chips !== false ? 'on' : ''}`;
   const durFmt = settings.duration_format || 'ym';
   document.querySelectorAll<HTMLInputElement>('input[name="s-duration-format"]').forEach(r => {
     r.checked = r.value === durFmt;
@@ -1842,6 +1915,8 @@ export async function saveSettings(deps: SettingsDeps) {
     show_unread_notifications: isOn('s-unread-notif-track', true),
     show_tracker_rules:        isOn('s-tracker-rules-track', true),
     highlight_hnr:             isOn('s-hnr-highlight-track', true),
+    show_goal_pacing:          isOn('s-goal-pacing-track', true),
+    show_goal_chips:           isOn('s-goal-chips-track', true),
     update_check_auto:     (document.getElementById('s-update-auto') as HTMLInputElement | null)?.checked ?? false,
     trust_proxy_headers:   (document.getElementById('s-trust-proxy') as HTMLInputElement | null)?.checked ?? false,
     duration_format:       (document.querySelector<HTMLInputElement>('input[name="s-duration-format"]:checked')?.value ?? 'ym'),
@@ -1924,6 +1999,8 @@ function clearModal() {
   });
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
+  _editDeadlines = {};
+  _editJoinDate = '';
   _targetSpecs = [];
   const rows = document.getElementById('modal-target-rows');
   if (rows) rows.innerHTML = '';
@@ -2022,6 +2099,19 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
       }</div>`;
     }
   }
-  hintEl.innerHTML = `<div class="target-group-hint-wrap">${namePart}${bodyPart}</div>`;
+  // ONE optional goal date for the whole group's requirement set (fanned out
+  // per key on save). Rebuilding the hint on a group switch must not lose an
+  // in-progress date — carry the current input's value over; first render
+  // seeds from stored deadlines when they all share one date.
+  const prevDate = hintEl.querySelector<HTMLInputElement>('[data-target-deadline]')?.value;
+  const seedDate = prevDate ?? commonDeadline(_editDeadlines);
+  const ageRaw = groupRequirementsToTargets(req)['days'];
+  const goalDefault = defaultGoalDeadline(ageRaw, _editJoinDate || undefined);
+  const goalPart = `<div class="modal-group-goal">
+    <span class="target-edit-label">Goal date <span class="targets-popover-groupgoal-hint">(whole group)</span></span>
+    ${goalDateControlHtml('group', seedDate, goalDefault)}
+  </div>`;
+  hintEl.innerHTML = `<div class="target-group-hint-wrap">${namePart}${bodyPart}${goalPart}</div>`;
   hintEl.style.display = '';
+  wireGoalDateUI(hintEl);
 }

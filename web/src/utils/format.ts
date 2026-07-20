@@ -48,6 +48,29 @@ function fmtGiBRate(gibPerDay: number): string {
   return `${sign}${(g * 1024 * 1024).toFixed(0)} KiB`;
 }
 
+/** Goal-pacing keys whose numbers are sizes (GiB/day) — the target keys
+ *  goal pacing can project a growth rate for. Everything else is a plain
+ *  count/day (or, for avg_seed, a day-count with no rate — see pacing.ts). */
+const GOAL_SIZE_KEYS = new Set(['uploaded', 'downloaded', 'seed_size']);
+
+/** Format a goal-pacing "needed"/"doing" per-day number in its row's own
+ *  unit: GiB/day for size-backed keys (reusing fmtGiBRate), otherwise a
+ *  plain count/day — mirrors internal/api/pacing.go's formatGoalRequired. */
+export function fmtGoalRate(key: string, perDay: number): string {
+  if (GOAL_SIZE_KEYS.has(key)) return `${fmtGiBRate(perDay)}/day`;
+  const abs = Math.abs(perDay);
+  const amount = abs >= 10 ? Math.round(perDay).toLocaleString() : perDay.toFixed(1);
+  return `${amount}/day`;
+}
+
+/** Format a goal deadline (YYYY-MM-DD) as "Dec 31" — parsed as a plain UTC
+ *  date so it never shifts a day depending on the viewer's time zone. */
+export function fmtDueDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 /**
  * Hover tooltip showing a stat's per-day trend, e.g. "≈ 245.3 GiB per day" or
  * "≈ 3,423 per day". Empty when the setting is off, the field has no measured
@@ -215,6 +238,8 @@ export function errLabel(err: string): string {
     parse_error:      'Could not parse tracker response',
     api_error:        'Tracker API error',
     auth_error:       'Authentication failed',
+    session_expired:  'Session cookie expired — log in again and re-copy it',
+    empty_scrape:     'Profile page had no recognisable stats',
     store_error:      'Local storage error',
     http_401:         'Invalid API key (401)',
     http_403:         'Access forbidden (403)',

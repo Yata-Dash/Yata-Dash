@@ -201,6 +201,18 @@ const (
 	// rollups exist, so a fresh tracker still projects within a few hours.
 	rateFineWindowDays = 7
 	rateFineMinSpanSec = 3 * 3600
+
+	// bufferNoiseFloor / ratioNoiseFloor: minimum |rate| considered real
+	// movement rather than measurement noise, for the two signed-rate fields.
+	// Ratio moves in hundredths, not GiB, so it needs a much finer floor.
+	bufferNoiseFloor = 0.01
+	ratioNoiseFloor  = 0.001
+
+	// dropWindowDays / dropMinSpanSec: the standing-guard drop-% window — a
+	// stat's oldest point within the last week vs its newest, requiring at
+	// least a day of span so a young tracker stays silent instead of noisy.
+	dropWindowDays = 7
+	dropMinSpanSec = 24 * 3600
 )
 
 // GrowthRates returns per-day growth for projectable fields (uploaded,
@@ -226,12 +238,91 @@ func (e *Engine) GrowthRates(trackerID string) map[string]float64 {
 			out[f] = r
 		}
 	}
-	if r, ok := signedRateFromPoints(byDay["buffer"], 86400); ok {
-		out["buffer"] = r
-	} else if r, ok := signedRateFromPoints(byFine["buffer"], rateFineMinSpanSec); ok {
+	if r, ok := signedRatePerDay(byDay, byFine, "buffer", bufferNoiseFloor); ok {
 		out["buffer"] = r
 	}
 	return out
+}
+
+// DeclineSignals are per-day/windowed decline measurements for the alert
+// engine's standing guards. Nil pointer = no measurable signal (not enough
+// history, or the stat isn't moving in the guarded direction).
+type DeclineSignals struct {
+	RatioPerDay       *float64 // signed ratio change per day (14d daily window, fine fallback)
+	BufferPerDay      *float64 // signed GiB/day (same computation GrowthRates uses)
+	SeedSizeDrop7dPct *float64 // % drop vs the oldest point in the last 7d (>=24h span required)
+	SeedingDrop7dPct  *float64 // same for the seeding count
+}
+
+// DeclineSignals computes the standing-guard trend signals from the same two
+// history queries GrowthRates uses (one DailySince + one TrackerHistorySince,
+// grouped by field once) so a rule evaluation pass never issues a query per
+// signal.
+func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
+	now := time.Now().UTC()
+	daily, _ := e.DB.DailySince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
+	fine, _ := e.DB.TrackerHistorySince(trackerID, now.Add(-rateFineWindowDays*24*time.Hour))
+	byDay := groupByField(daily)
+	byFine := groupByField(fine)
+
+	var out DeclineSignals
+	if r, ok := signedRatePerDay(byDay, byFine, "ratio", ratioNoiseFloor); ok {
+		out.RatioPerDay = &r
+	}
+	if r, ok := signedRatePerDay(byDay, byFine, "buffer", bufferNoiseFloor); ok {
+		out.BufferPerDay = &r
+	}
+
+	// Truncate to UTC midnight before subtracting whole days: history_daily
+	// buckets are stored at UTC midnight (see utcDay), so comparing against a
+	// plain "now minus 7×24h" instant would inconsistently include/exclude the
+	// 7-day-old bucket depending on what time of day it is right now.
+	dropSince := now.Truncate(24*time.Hour).AddDate(0, 0, -dropWindowDays)
+	if p, ok := dropPct(windowed(byDay["seed_size"], dropSince), byFine["seed_size"]); ok {
+		out.SeedSizeDrop7dPct = &p
+	}
+	if p, ok := dropPct(windowed(byDay["seeding"], dropSince), byFine["seeding"]); ok {
+		out.SeedingDrop7dPct = &p
+	}
+	return out
+}
+
+// windowed filters an oldest-first point slice down to those recorded at or
+// after since.
+func windowed(points []store.HistoryPoint, since time.Time) []store.HistoryPoint {
+	cut := since.Unix()
+	for i, p := range points {
+		if p.RecordedAt >= cut {
+			return points[i:]
+		}
+	}
+	return nil
+}
+
+// dropPct computes a decline % from oldest→newest, preferring the (already
+// 7d-windowed) daily points and falling back to fine history for a tracker
+// too young to have daily rollups yet.
+func dropPct(daily, fine []store.HistoryPoint) (float64, bool) {
+	if p, ok := dropPctFromPoints(daily); ok {
+		return p, true
+	}
+	return dropPctFromPoints(fine)
+}
+
+// dropPctFromPoints is dropPct's single-slice math: baseline (oldest) must be
+// positive and the span must cover at least a day, or the tracker is too
+// young/thin to trust. Growth (a negative "drop") is nil, never a negative
+// percentage.
+func dropPctFromPoints(points []store.HistoryPoint) (float64, bool) {
+	if len(points) < 2 {
+		return 0, false
+	}
+	first, last := points[0], points[len(points)-1]
+	if last.RecordedAt-first.RecordedAt < dropMinSpanSec || first.Value <= 0 {
+		return 0, false
+	}
+	drop := (first.Value - last.Value) / first.Value * 100
+	return drop, drop > 0
 }
 
 func groupByField(points []store.HistoryPoint) map[string][]store.HistoryPoint {
@@ -250,11 +341,23 @@ func rateFromPoints(points []store.HistoryPoint, minSpanSec int64) (float64, boo
 	return r, ok && r > 0
 }
 
-// signedRateFromPoints is the buffer variant: negative rates pass through,
-// only near-flat movement (|r| < 0.01 GiB/day — measurement noise) is omitted.
-func signedRateFromPoints(points []store.HistoryPoint, minSpanSec int64) (float64, bool) {
+// signedRateFromPoints is the signed-rate variant for fields that can
+// legitimately shrink (buffer, ratio): negative rates pass through, only
+// near-flat movement (|r| < floor — measurement noise) is omitted.
+func signedRateFromPoints(points []store.HistoryPoint, minSpanSec int64, floor float64) (float64, bool) {
 	r, ok := spanRate(points, minSpanSec)
-	return r, ok && math.Abs(r) >= 0.01
+	return r, ok && math.Abs(r) >= floor
+}
+
+// signedRatePerDay is the shared daily-preferred/fine-fallback signed-rate
+// lookup: GrowthRates' buffer entry and DeclineSignals' ratio/buffer signals
+// both project a field's per-day trend the same way, only the noise floor
+// differs.
+func signedRatePerDay(byDay, byFine map[string][]store.HistoryPoint, field string, floor float64) (float64, bool) {
+	if r, ok := signedRateFromPoints(byDay[field], 86400, floor); ok {
+		return r, true
+	}
+	return signedRateFromPoints(byFine[field], rateFineMinSpanSec, floor)
 }
 
 // spanRate is the shared oldest→newest per-day delta (no sign filtering).

@@ -82,6 +82,23 @@ func defLookups(d *Deps) (func(string) []defs.GroupDef, func(string) *defs.Invit
 	return groupsFor, inviteReqsFor
 }
 
+// pathwayReadiness bundles the pathway evaluation both pathwayTargets and the
+// weekly digest (digest.go's readyPathwayTargetNames) need: which pathway
+// target names are already the user's own trackers, and which are
+// requirements-met on at least one active direct route (live stats, first
+// hop only — see pathways.ReadyTargets). Factored out so the digest doesn't
+// re-derive mapUserTrackers/defLookups/ReadyTargets from scratch.
+func pathwayReadiness(d *Deps) (mine, ready map[string]bool) {
+	users := mapUserTrackers(d)
+	mine = map[string]bool{}
+	for _, u := range users {
+		mine[u.PathwayName] = true
+	}
+	groupsFor, inviteReqsFor := defLookups(d)
+	ready = pathways.ReadyTargets(d.Paths, users, groupsFor, inviteReqsFor)
+	return mine, ready
+}
+
 // GET /api/pathways/targets — every tracker in the dataset (the UI's target
 // dropdown), plus the dataset attribution for the disclosure banner.
 func pathwayTargets(d *Deps) http.HandlerFunc {
@@ -90,13 +107,7 @@ func pathwayTargets(d *Deps) http.HandlerFunc {
 			jsonError(w, "pathways_data_missing", http.StatusNotFound)
 			return
 		}
-		users := mapUserTrackers(d)
-		mine := map[string]bool{}
-		for _, u := range users {
-			mine[u.PathwayName] = true
-		}
-		groupsFor, inviteReqsFor := defLookups(d)
-		ready := pathways.ReadyTargets(d.Paths, users, groupsFor, inviteReqsFor)
+		mine, ready := pathwayReadiness(d)
 		out := make([]targetEntry, 0, len(d.Paths.Names()))
 		for _, name := range d.Paths.Names() {
 			e := targetEntry{

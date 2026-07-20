@@ -38,6 +38,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		Username:                 t.Username,
 		Targets:                  t.Targets,
 		TargetGroup:              t.TargetGroup,
+		TargetDeadlines:          t.TargetDeadlines,
 		JoinDate:                 t.JoinDate,
 		MinScrapeIntervalMinutes: t.MinScrapeIntervalMinutes,
 		MaxScrapesPerDay:         t.MaxScrapesPerDay,
@@ -47,6 +48,9 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 	}
 	if v.Targets == nil {
 		v.Targets = map[string]string{}
+	}
+	if v.TargetDeadlines == nil {
+		v.TargetDeadlines = map[string]string{}
 	}
 	if v.HasKey {
 		v.APIKeyMasked = maskedKey
@@ -163,6 +167,7 @@ type trackerPayload struct {
 	APIOnly                  *bool              `json:"api_only"`
 	Targets                  *map[string]string `json:"targets"`
 	TargetGroup              *string            `json:"target_group"`
+	TargetDeadlines          *map[string]string `json:"target_deadlines"`
 	MockScenario             *string            `json:"mock_scenario"`
 	JoinDate                 *string            `json:"join_date"`
 }
@@ -293,11 +298,28 @@ func applyPayload(t *models.Tracker, p trackerPayload) {
 	if p.TargetGroup != nil {
 		t.TargetGroup = *p.TargetGroup
 	}
+	if p.TargetDeadlines != nil {
+		t.TargetDeadlines = *p.TargetDeadlines
+	}
 	if p.MockScenario != nil {
 		t.MockScenario = *p.MockScenario
 	}
 	if p.JoinDate != nil {
 		t.JoinDate = strings.TrimSpace(*p.JoinDate)
+	}
+	sanitizeTargetDeadlines(t)
+}
+
+// sanitizeTargetDeadlines drops a deadline whose target field has no value
+// (removed target, stale entry from an earlier edit) and any "days" (account
+// age) entry that arrives despite the editors never offering one — reaching
+// an age by a date isn't something the user controls. Runs after every
+// payload apply so a direct API call can't smuggle either past the UI.
+func sanitizeTargetDeadlines(t *models.Tracker) {
+	for key := range t.TargetDeadlines {
+		if key == "days" || strings.TrimSpace(t.Targets[key]) == "" {
+			delete(t.TargetDeadlines, key)
+		}
 	}
 }
 

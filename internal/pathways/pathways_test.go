@@ -28,7 +28,7 @@ func TestParseDurationDays(t *testing.T) {
 		{"forever", 0},
 	}
 	for _, tc := range cases {
-		got, ok := parseDurationDays(tc.in)
+		got, ok := ParseDurationDays(tc.in)
 		if tc.want == 0 {
 			if ok {
 				t.Errorf("%q: expected ok=false, got %v", tc.in, got)

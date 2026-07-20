@@ -671,7 +671,7 @@ func evalGroupReqs(req defs.GroupRequirements, u UserTracker) ([]ReqProgress, fl
 		add(statProgress(Req{Kind: "ratio", Value: req.MinRatio, Raw: "Ratio ≥ " + strconv.FormatFloat(req.MinRatio, 'f', -1, 64)}, u))
 	}
 	if req.MinSeedtime != "" {
-		if days, k := parseDurationDays(req.MinSeedtime); k {
+		if days, k := ParseDurationDays(req.MinSeedtime); k {
 			add(statProgress(Req{Kind: "seedtime", Value: days * 86400, Raw: "Avg seedtime " + req.MinSeedtime}, u))
 		}
 	}
@@ -685,7 +685,7 @@ func evalGroupReqs(req defs.GroupRequirements, u UserTracker) ([]ReqProgress, fl
 		add(statProgress(Req{Kind: "bonus", Value: float64(req.MinBonusPoints), Raw: "Bonus points: " + strconv.Itoa(req.MinBonusPoints)}, u))
 	}
 	if req.MinAge != "" {
-		if days, k := parseDurationDays(req.MinAge); k {
+		if days, k := ParseDurationDays(req.MinAge); k {
 			add(ageProgress(days, u.Stats.AgeDays))
 		}
 	}
@@ -713,7 +713,7 @@ func inviteReqTokens(ir *defs.InviteReqs) []Req {
 		out = append(out, Req{Kind: "seed_size", Value: parseSizeGiB(ir.MinSeedSize), Raw: "Seed size " + ir.MinSeedSize})
 	}
 	if ir.MinSeedtime != "" {
-		if days, ok := parseDurationDays(ir.MinSeedtime); ok {
+		if days, ok := ParseDurationDays(ir.MinSeedtime); ok {
 			out = append(out, Req{Kind: "seedtime", Value: days * 86400, Raw: "Avg seedtime " + ir.MinSeedtime})
 		}
 	}
@@ -727,7 +727,7 @@ func inviteReqTokens(ir *defs.InviteReqs) []Req {
 		out = append(out, Req{Kind: "bonus", Value: float64(ir.MinBonusPoints), Raw: "Bonus points: " + strconv.Itoa(ir.MinBonusPoints)})
 	}
 	if ir.MinAge != "" {
-		if days, ok := parseDurationDays(ir.MinAge); ok {
+		if days, ok := ParseDurationDays(ir.MinAge); ok {
 			out = append(out, Req{Kind: "age", Days: int(days), Raw: "Account age " + ir.MinAge})
 		}
 	}

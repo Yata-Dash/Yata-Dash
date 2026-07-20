@@ -5,17 +5,17 @@
   "abbr": "A4K",
   "url": "https://aura4k.net",
   "type": "unit3d",
-  "last_updated": "2026-07-17",
+  "last_updated": "2026-07-20",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "Tok3z",
+    "role": "Celestial",
+    "date": "2026-07-18"
   },
   "api": {
     "required_fields": ["join_date"]
   },
   "scrape": {
-    "max_scrapes_per_day": 1
+    "min_interval_minutes": 180
   },
     "rules": {
     "min_ratio": 0.4,

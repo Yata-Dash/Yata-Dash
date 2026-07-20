@@ -336,7 +336,7 @@ function statDeltaChip(t: Tracker, key: string): string {
 function renderTargetsCol(t: Tracker): void {
   const el = document.getElementById('detail-targets');
   if (!el) return;
-  const targetsHtml = buildTargets(t, statsCache[t.id], appSettings, groupDefs, t.def_key ?? '');
+  const targetsHtml = buildTargets(t, statsCache[t.id], appSettings, groupDefs, t.def_key ?? '', 'full');
   const rules: string[] = [];
   if (t.min_ratio && t.min_ratio > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Ratio</span><span class="exp-stat-value">${esc(String(t.min_ratio))}</span></div>`);
   if (t.min_seed_days && t.min_seed_days > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_days} day${t.min_seed_days === 1 ? '' : 's'}</span></div>`);

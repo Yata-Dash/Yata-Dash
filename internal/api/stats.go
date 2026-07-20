@@ -8,7 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 )
 
@@ -101,7 +103,6 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.Fields = merged
 		if resp.OK {
 			_ = d.Stats.RecordHistory(t.ID, merged)
-			recordGroupChange(d, t, oldGroup, mergedFieldString(merged, "group"))
 		}
 		// Growth rates (daily-rollup average) for target/promotion ETAs.
 		if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
@@ -112,11 +113,29 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.Error = "store_error"
 	}
 
+	// Standing-guard trend signals for this pass — built once (cheap no-op
+	// with zero alert rules, see buildTrendContext) and threaded through every
+	// evaluation call below, so a mixed rule like "promoted AND ratio < 1"
+	// sees the same numbers whether it fires from the event path or the poll.
+	var trends notify.TrendContext
+	if d.Alerts != nil {
+		trends = buildTrendContext(d, t, resp.Fields, resp.Rates)
+	}
+	if err == nil && resp.OK {
+		recordGroupChange(d, t, resp.Fields, oldGroup, mergedFieldString(resp.Fields, "group"), trends)
+	}
+
 	// Alert evaluation — fires webhooks on rising-edge rule matches. Runs on
 	// every refresh path (frontend poll, single, or the background loop);
 	// edge-triggering + per-tracker priming keep it from spamming.
 	if d.Alerts != nil {
-		d.Alerts.Evaluate(t, resp.Fields, resp.OK)
+		d.Alerts.Evaluate(t, resp.Fields, resp.OK, trends)
+		// Target-met events need fresh data to mean anything — a failed
+		// refresh serves the last stored fields, which would just re-diff the
+		// same values against themselves.
+		if resp.OK {
+			evaluateTrackerTargets(d, t, resp.Fields, trends)
+		}
 	}
 	return resp
 }
@@ -133,11 +152,13 @@ func mergedFieldString(merged models.MergedStats, field string) string {
 }
 
 // recordGroupChange writes a group_change event when a tracker's group moves
-// between two known values (a promotion or demotion). Direction is left to the
-// frontend, which has the ordered group defs. Only real transitions are
-// recorded: both ends non-empty and different, and not an exact repeat of the
-// last recorded change.
-func recordGroupChange(d *Deps, t models.Tracker, oldGroup, newGroup string) {
+// between two known values (a promotion or demotion), and — when the def's
+// group ladder can classify the direction — fires the matching promoted/
+// demoted alert event. Styled badges etc. still classify direction
+// independently client-side from the same ordered group defs. Only real
+// transitions are recorded: both ends non-empty and different, and not an
+// exact repeat of the last recorded change.
+func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, oldGroup, newGroup string, trends notify.TrendContext) {
 	oldGroup, newGroup = strings.TrimSpace(oldGroup), strings.TrimSpace(newGroup)
 	if oldGroup == "" || newGroup == "" || strings.EqualFold(oldGroup, newGroup) {
 		return
@@ -149,6 +170,57 @@ func recordGroupChange(d *Deps, t models.Tracker, oldGroup, newGroup string) {
 	if err := d.DB.AddEvent(t.ID, time.Now().UTC(), "group_change", detail); err == nil {
 		d.logInfof("event: %s (%s) group change — %s", t.Name, t.ID, detail)
 	}
+
+	if d.Alerts == nil {
+		return
+	}
+	td, ok := d.Reg.TrackerByURL(t.URL)
+	if !ok {
+		return
+	}
+	oldIdx, newIdx := groupLadderIndex(td.Groups, oldGroup), groupLadderIndex(td.Groups, newGroup)
+	if oldIdx < 0 || newIdx < 0 || oldIdx == newIdx {
+		// Unranked (not in this def's ladder) or same rung either way — the
+		// neutral "group changed" rule still catches this via polling.
+		return
+	}
+	if newIdx > oldIdx {
+		d.Alerts.EvaluateEvent(t, merged, notify.EventContext{Kind: "promoted", Detail: "promoted: " + oldGroup + " → " + newGroup}, trends)
+	} else {
+		d.Alerts.EvaluateEvent(t, merged, notify.EventContext{Kind: "demoted", Detail: "demoted: " + oldGroup + " → " + newGroup}, trends)
+	}
+}
+
+// groupLadderIndex returns a group's position in the def's ascending ladder
+// (Groups is lowest-first — see defs.TrackerDef.Groups), matched case-
+// insensitively, or -1 if the name isn't one of this def's ranks.
+func groupLadderIndex(groups []defs.GroupDef, name string) int {
+	for i, g := range groups {
+		if strings.EqualFold(g.Name, name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// evaluateTrackerTargets computes the tracker's current target rows (base
+// targets + its target group's min_counts/any_of, see targeteval.go) and
+// feeds them to the alert engine's per-row edge tracker, which fires a
+// target_met event for each row crossing unmet→met. Cheap no-op when the
+// tracker isn't tracking anything.
+func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
+	if len(t.Targets) == 0 && t.TargetGroup == "" {
+		return
+	}
+	var groups []defs.GroupDef
+	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
+		groups = td.Groups
+	}
+	rows, met, total := evaluateTargetRows(t, merged, groups)
+	if len(rows) == 0 {
+		return
+	}
+	d.Alerts.EvaluateTargets(t, merged, rows, met, total, trends)
 }
 
 // RefreshFloorMinutes is the lowest the automatic API-refresh interval can be

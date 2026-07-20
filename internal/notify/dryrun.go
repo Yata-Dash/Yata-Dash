@@ -21,7 +21,7 @@ type DryRunResult struct {
 // Limitations are inherent to a point-in-time preview: "changed" conditions
 // have no previous value to compare against (never match), and trackers are
 // assumed reachable (matching Announce's behaviour).
-func DryRun(rule models.AlertRule, trackers []models.Tracker, mergedFn func(string) models.MergedStats) []DryRunResult {
+func DryRun(rule models.AlertRule, trackers []models.Tracker, mergedFn func(string) models.MergedStats, trendFn func(string) TrendContext) []DryRunResult {
 	out := []DryRunResult{}
 	// A rule with no conditions never matches/fires in the engine (Evaluate
 	// and Announce both skip it) — enforce the same here rather than letting
@@ -36,11 +36,12 @@ func DryRun(rule models.AlertRule, trackers []models.Tracker, mergedFn func(stri
 		merged := mergedFn(t.ID)
 		cur := rawValues(merged)
 		prev := map[string]string{} // no history in a dry run — "changed" can't match
+		trends := trendFn(t.ID)
 		out = append(out, DryRunResult{
 			TrackerID:   t.ID,
 			TrackerName: t.Name,
-			Matched:     evalRule(rule, merged, cur, prev, true),
-			Detail:      describeDryRun(rule, merged, cur, prev),
+			Matched:     evalRule(rule, merged, cur, prev, true, trends),
+			Detail:      describeDryRun(rule, merged, cur, prev, trends),
 		})
 	}
 	return out
@@ -50,10 +51,10 @@ func DryRun(rule models.AlertRule, trackers []models.Tracker, mergedFn func(stri
 // met/unmet mark, e.g. "ratio 5.20 < 1.0 ✗ and warnings 1 ≥ 1 ✓". Wording
 // comes from the shared describeCondition so the preview reads exactly like
 // the live alert message would.
-func describeDryRun(rule models.AlertRule, merged models.MergedStats, cur, prev map[string]string) string {
+func describeDryRun(rule models.AlertRule, merged models.MergedStats, cur, prev map[string]string, trends TrendContext) string {
 	parts := make([]string, 0, len(rule.Conditions))
 	for _, c := range rule.Conditions {
-		met := evalCondition(c, merged, cur, prev, true)
+		met := evalCondition(c, merged, cur, prev, true, trends)
 		mark := " ✗"
 		if met {
 			mark = " ✓"
@@ -63,7 +64,7 @@ func describeDryRun(rule models.AlertRule, merged models.MergedStats, cur, prev 
 		case c.Op == "changed":
 			desc = c.Field + " changed (not previewable)"
 		case c.Field == "reachable":
-			desc = describeCondition(c, merged, cur, prev) + " (assumed)"
+			desc = describeCondition(c, merged, cur, prev, trends) + " (assumed)"
 		case c.Field == "freeleech_active" && c.Op == "is_true" && !met:
 			// The live wording (eventDescription) only ever renders on a match;
 			// for an unmet preview row "no active event" is the honest state.
@@ -71,9 +72,9 @@ func describeDryRun(rule models.AlertRule, merged models.MergedStats, cur, prev 
 		case (c.Field == "unread_mail" || c.Field == "unread_notifications") && c.Op == "is_true" && !met:
 			// Same honesty rule: "unread mail waiting ✗" reads wrong — show the
 			// is_false wording ("no unread mail") for unmet preview rows.
-			desc = describeCondition(models.Condition{Field: c.Field, Op: "is_false"}, merged, cur, prev)
+			desc = describeCondition(models.Condition{Field: c.Field, Op: "is_false"}, merged, cur, prev, trends)
 		default:
-			desc = describeCondition(c, merged, cur, prev)
+			desc = describeCondition(c, merged, cur, prev, trends)
 		}
 		parts = append(parts, desc+mark)
 	}

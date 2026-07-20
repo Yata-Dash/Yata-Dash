@@ -5,7 +5,12 @@
   "abbr": "SP",
   "url": "https://speedapp.io",
   "type": "custom",
-  "last_updated": "2026-07-19",
+  "last_updated": "2026-07-20",
+  "approved_by": {
+    "name": "ovrflo",
+    "role": "Staff",
+    "date": "2026-07-19"
+  },
   "api": {
     "path": "/api/me",
     "auth_method": "api_key_header",

@@ -16,6 +16,8 @@ func registerNotifications(r chi.Router, d *Deps) {
 	r.Post("/notifications/test", testNotification(d))
 	r.Post("/notifications/dryrun", dryRunNotification(d))
 	r.Get("/notifications/export", exportNotifications(d))
+	r.Get("/notifications/digest/preview", previewDigest(d))
+	r.Post("/notifications/digest/send", sendDigestNow(d))
 }
 
 // exportNotifications streams the alert config (destinations + rules) as a
@@ -57,16 +59,29 @@ func putNotifications(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		// The editor only ever round-trips destinations/rules — it doesn't know
+		// about seeded_default_rules, so a decode always leaves it false. Carry
+		// the existing value forward: otherwise a user who clears every rule and
+		// destination (both empty, exactly the seeding trigger) would get the
+		// starter rules silently reinjected on the next server restart.
+		existing := d.Cfg.Notifications()
+		n.SeededDefaultRules = existing.SeededDefaultRules
+		// Digest LastSentAt/LastReadyTargets are server-maintained (updated only
+		// by config.Manager.UpdateDigestState after a send) — the editor sends
+		// the schedule fields (enabled/weekday/hour/destinations) but never
+		// these, so preserve them exactly like SeededDefaultRules above.
+		n.Digest.LastSentAt = existing.Digest.LastSentAt
+		n.Digest.LastReadyTargets = existing.Digest.LastReadyTargets
 		// Backfill secrets for known destinations arriving with none — this is
 		// how re-importing a share-safe export (URL/token/chat id stripped) into
 		// the same instance keeps its webhooks working.
-		existing := map[string]models.NotifyDestination{}
-		for _, dst := range d.Cfg.Notifications().Destinations {
-			existing[dst.ID] = dst
+		existingDests := map[string]models.NotifyDestination{}
+		for _, dst := range existing.Destinations {
+			existingDests[dst.ID] = dst
 		}
 		for i := range n.Destinations {
 			dst := &n.Destinations[i]
-			if old, ok := existing[dst.ID]; ok &&
+			if old, ok := existingDests[dst.ID]; ok &&
 				dst.URL == "" && dst.Token == "" && dst.ChatID == "" {
 				dst.URL, dst.Token, dst.ChatID = old.URL, old.Token, old.ChatID
 			}
@@ -106,7 +121,7 @@ func putNotifications(d *Deps) http.HandlerFunc {
 				d.Alerts.Announce(newRules, d.Cfg.Trackers(), func(id string) models.MergedStats {
 					m, _ := d.Stats.Merged(id)
 					return m
-				})
+				}, trendFnFor(d))
 			}
 		}
 		jsonOK(w, d.Cfg.Notifications())
@@ -131,7 +146,7 @@ func dryRunNotification(d *Deps) http.HandlerFunc {
 		results := notify.DryRun(rule, d.Cfg.Trackers(), func(id string) models.MergedStats {
 			m, _ := d.Stats.Merged(id)
 			return m
-		})
+		}, trendFnFor(d))
 		jsonOK(w, map[string]any{"results": results})
 	}
 }

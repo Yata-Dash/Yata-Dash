@@ -2,9 +2,11 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtEtaDays, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
+import { computeGoalPacing } from '../utils/pacing';
+import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
 
 type ReorderFn = (srcId: string, dstId: string) => void;
@@ -340,6 +342,9 @@ type TgtRow = {
   etaApprox?: boolean; // true for projections that assume continuous activity (e.g. avg seed)
   etaExact?: boolean;  // true for account-age (exact countdown → "in X" not "≈ X")
   unavailable?: boolean; // requirement the tracker's API can't report — shown with an icon, no bar
+  key?: string;        // canonical target key — drives the goal-pacing lookup below
+  pacing?: Pacing;      // computed goal pacing, only when this row carries a deadline
+  deadline?: string;    // the row's raw deadline (YYYY-MM-DD), for display
 };
 
 /**
@@ -357,6 +362,7 @@ function targetRowsFor(
   stats: TrackerStatsResponse | undefined,
   minRatio: number | undefined,
   alwaysShow: boolean,
+  deadlines: Record<string, string> = {},
 ): TgtRow[] {
   const rows: TgtRow[] = [];
   const rates = stats?.rates ?? {};
@@ -381,31 +387,44 @@ function targetRowsFor(
     return isFinite(d) && d > 0 ? d : undefined;
   };
 
+  // Goal pacing (dated rows only) — computed once per key when the row
+  // carries a deadline; folded into the eta partial alongside etaDays so
+  // push() stores everything renderTargetRow/the detail pacing line need.
+  // Never called for "days" (account age) — its own block below never wires
+  // this in, matching the rule that age can't take a deadline.
+  const pacingFor = (key: string, tgtRaw: string): Partial<TgtRow> => {
+    const deadline = deadlines[key];
+    if (!deadline) return {};
+    const p = computeGoalPacing(key, tgtRaw, deadline, stats?.fields, rates);
+    return p ? { key, pacing: p, deadline } : {};
+  };
+
   // Uploaded
   if (targets['uploaded']) {
     const cur = strOf(stats, 'uploaded');
     const curV = parseSize(cur), tgtV = parseSize(targets['uploaded']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Uploaded', cur, targets['uploaded'], (curV / tgtV) * 100, 'green', { etaDays: rateEta(curV, tgtV, rates['uploaded']) });
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Uploaded', cur, targets['uploaded'], (curV / tgtV) * 100, 'green', { etaDays: rateEta(curV, tgtV, rates['uploaded']), ...pacingFor('uploaded', targets['uploaded']) });
     else miss('Uploaded', targets['uploaded'], 'green');
   }
   // Downloaded
   if (targets['downloaded']) {
     const cur = strOf(stats, 'downloaded');
     const curV = parseSize(cur), tgtV = parseSize(targets['downloaded']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Downloaded', cur, targets['downloaded'], (curV / tgtV) * 100, 'purple', { etaDays: rateEta(curV, tgtV, rates['downloaded']) });
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Downloaded', cur, targets['downloaded'], (curV / tgtV) * 100, 'purple', { etaDays: rateEta(curV, tgtV, rates['downloaded']), ...pacingFor('downloaded', targets['downloaded']) });
     else miss('Downloaded', targets['downloaded'], 'purple');
   }
-  // Ratio — no projection (can't sensibly project a ratio)
+  // Ratio — no projection (can't sensibly project a ratio); pacingFor covers
+  // the ratio_info needed-upload figure instead.
   if (targets['ratio']) {
     const curV = parseRatio(strOf(stats, 'ratio')), tgtV = parseFloat(targets['ratio']);
-    if (strOf(stats, 'ratio') && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Ratio', fmtRatio(curV), fmtRatio(tgtV), (curV / tgtV) * 100, ratioColorFor(curV, minRatio));
+    if (strOf(stats, 'ratio') && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Ratio', fmtRatio(curV), fmtRatio(tgtV), (curV / tgtV) * 100, ratioColorFor(curV, minRatio), pacingFor('ratio', targets['ratio']));
     else miss('Ratio', fmtRatio(parseFloat(targets['ratio'])), 'amber');
   }
   // Seed size
   if (targets['seed_size']) {
     const cur = strOf(stats, 'seed_size');
     const curV = parseSize(cur), tgtV = parseSize(targets['seed_size']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Seed Size', cur, targets['seed_size'], (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates['seed_size']) });
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Seed Size', cur, targets['seed_size'], (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates['seed_size']), ...pacingFor('seed_size', targets['seed_size']) });
     else miss('Seed Size', targets['seed_size'], 'teal');
   }
   // Total uploads (uploads_approved from merged fields)
@@ -413,7 +432,7 @@ function targetRowsFor(
     const curStr = strOf(stats, 'uploads_approved');
     const curV = parseInt(curStr.replace(/,/g, ''), 10);
     const tgtV = parseInt(targets['total_uploads'].replace(/,/g, ''), 10);
-    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Total Uploads', curStr, targets['total_uploads'], (curV / tgtV) * 100, 'orange');
+    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Total Uploads', curStr, targets['total_uploads'], (curV / tgtV) * 100, 'orange', pacingFor('total_uploads', targets['total_uploads']));
     else miss('Total Uploads', targets['total_uploads'], 'orange');
   }
   // Account age
@@ -443,7 +462,7 @@ function targetRowsFor(
     if (curV !== null && tgtV && tgtV > 0) {
       const remainSec = tgtV - curV;
       push('Avg Seed Time', fmtSeedTime(curV), fmtSeedTime(tgtV), (curV / tgtV) * 100, 'pink',
-        remainSec > 0 ? { etaDays: remainSec / 86400, etaApprox: true } : undefined);
+        { ...(remainSec > 0 ? { etaDays: remainSec / 86400, etaApprox: true } : {}), ...pacingFor('avg_seed', targets['avg_seed']) });
     }
     else if (tgtV && tgtV > 0) miss('Avg Seed Time', fmtSeedTime(tgtV), 'pink');
   }
@@ -452,7 +471,7 @@ function targetRowsFor(
     const curStr = strOf(stats, 'bonus_points');
     const curV = parseInt(curStr.replace(/,/g, ''), 10);
     const tgtV = parseInt(targets['bonus_points'].replace(/,/g, ''), 10);
-    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Bonus Points', curStr, targets['bonus_points'], (curV / tgtV) * 100, 'orange', { etaDays: rateEta(curV, tgtV, rates['bonus_points']) });
+    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Bonus Points', curStr, targets['bonus_points'], (curV / tgtV) * 100, 'orange', { etaDays: rateEta(curV, tgtV, rates['bonus_points']), ...pacingFor('bonus_points', targets['bonus_points']) });
     else miss('Bonus Points', targets['bonus_points'], 'orange');
   }
   // Adoptions — Gazelle adoption program (count; no rate to project)
@@ -460,7 +479,7 @@ function targetRowsFor(
     const curStr = strOf(stats, 'adoptions');
     const curV = parseInt(curStr.replace(/,/g, ''), 10);
     const tgtV = parseInt(targets['adoptions'].replace(/,/g, ''), 10);
-    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Adoptions', curStr, targets['adoptions'], (curV / tgtV) * 100, 'teal');
+    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Adoptions', curStr, targets['adoptions'], (curV / tgtV) * 100, 'teal', pacingFor('adoptions', targets['adoptions']));
     else miss('Adoptions', targets['adoptions'], 'teal');
   }
   // Snatched — Gazelle
@@ -468,7 +487,7 @@ function targetRowsFor(
     const curStr = strOf(stats, 'snatched');
     const curV = parseInt(curStr.replace(/,/g, ''), 10);
     const tgtV = parseInt(targets['snatched'].replace(/,/g, ''), 10);
-    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Snatched', curStr, targets['snatched'], (curV / tgtV) * 100, 'amber');
+    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Snatched', curStr, targets['snatched'], (curV / tgtV) * 100, 'amber', pacingFor('snatched', targets['snatched']));
     else miss('Snatched', targets['snatched'], 'amber');
   }
 
@@ -487,7 +506,7 @@ function targetRowsFor(
       tgtV = isNaN(g) ? null : g;
     }
     if (curStr && curV !== null && tgtV !== null && tgtV > 0) {
-      push(label, curStr, tgt, (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]) });
+      push(label, curStr, tgt, (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]), ...pacingFor(key, tgt) });
     } else {
       miss(label, tgt, 'teal');
     }
@@ -518,7 +537,70 @@ const UNAVAIL_ICON =
 
 const UNAVAIL_TIP = 'This tracker’s API doesn’t report this stat, so progress can’t be tracked — the requirement still applies.';
 
-const renderTargetRow = (r: TgtRow): string => {
+/** Compact on-track/behind/overdue/neutral chip after a dated row's ETA
+ *  chip — gated by show_goal_chips (default on). "done" rows render nothing
+ *  (the bar already reads met); no_rate/ratio_info fall back to a neutral
+ *  "by <date>" chip since neither has a verdict to show. */
+function goalChip(r: TgtRow, settings: AppSettings): string {
+  if (settings.show_goal_chips === false) return '';
+  const p = r.pacing;
+  if (!p || p.state === 'done') return '';
+  const due = r.deadline ? fmtDueDate(r.deadline) : '';
+  const rateBits = () => `needs ${fmtGoalRate(r.key ?? '', p.required)} · doing ${fmtGoalRate(r.key ?? '', p.rate)}${due ? ` · due ${due}` : ''}`;
+
+  switch (p.state) {
+    case 'on_track':
+      return ` <span class="goal-chip goal-chip--ontrack" title="${esc(rateBits())}">on track</span>`;
+    case 'behind':
+      return ` <span class="goal-chip goal-chip--behind" title="${esc(rateBits())}">behind</span>`;
+    case 'overdue':
+      return ` <span class="goal-chip goal-chip--overdue" title="${esc(due ? `was due ${due}` : 'overdue')}">overdue</span>`;
+    case 'no_rate':
+    case 'ratio_info': {
+      if (!due) return '';
+      const tip = p.state === 'ratio_info' && p.neededUploadGiB > 0
+        ? `needs +${fmtGib(p.neededUploadGiB)} upload · due ${due}`
+        : `due ${due}`;
+      return ` <span class="goal-chip goal-chip--neutral" title="${esc(tip)}">by ${esc(due)}</span>`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** Detail view's full pacing line under a dated row — gated by
+ *  show_goal_pacing (default on). Spells out the same states as the compact
+ *  chip: "needs X/day · doing Y/day · on track (≈ date)", "behind — needs
+ *  X/day, doing Y/day", "overdue — was due date", or the ratio row's "needs
+ *  +N GiB upload · by date". */
+function goalPacingLine(r: TgtRow, settings: AppSettings): string {
+  if (settings.show_goal_pacing === false) return '';
+  const p = r.pacing;
+  if (!p || p.state === 'done') return '';
+  const due = r.deadline ? fmtDueDate(r.deadline) : '';
+  let text = '';
+  switch (p.state) {
+    case 'on_track':
+      text = `needs ${fmtGoalRate(r.key ?? '', p.required)} · doing ${fmtGoalRate(r.key ?? '', p.rate)} · on track${due ? ` (≈ ${due})` : ''}`;
+      break;
+    case 'behind':
+      text = `behind — needs ${fmtGoalRate(r.key ?? '', p.required)}, doing ${fmtGoalRate(r.key ?? '', p.rate)}`;
+      break;
+    case 'overdue':
+      text = due ? `overdue — was due ${due}` : 'overdue';
+      break;
+    case 'no_rate':
+      text = `needs ${fmtGoalRate(r.key ?? '', p.required)}${due ? ` · by ${due}` : ''}`;
+      break;
+    case 'ratio_info':
+      if (p.neededUploadGiB > 0) text = `needs +${fmtGib(p.neededUploadGiB)} upload${due ? ` · by ${due}` : ''}`;
+      else if (due) text = `by ${due}`;
+      break;
+  }
+  return text ? `<div class="target-goal-line">${esc(text)}</div>` : '';
+}
+
+const renderTargetRow = (r: TgtRow, settings: AppSettings = appSettings, mode: 'chip' | 'full' = 'chip'): string => {
   if (r.unavailable) return `<div class="target-row target-row--unavail" title="${esc(UNAVAIL_TIP)}">
   <div class="target-header">
     <span class="target-lbl">${esc(r.label)}</span>
@@ -529,21 +611,26 @@ const renderTargetRow = (r: TgtRow): string => {
   return `<div class="target-row">
   <div class="target-header">
     <span class="target-lbl">${esc(r.label)}</span>
-    <span class="target-vals">${esc(r.cur)} <span class="tgt">/ ${esc(r.tgt)}</span>${targetEtaChip(r)}</span>
+    <span class="target-vals">${esc(r.cur)} <span class="tgt">/ ${esc(r.tgt)}</span>${targetEtaChip(r)}${mode === 'chip' ? goalChip(r, settings) : ''}</span>
   </div>
   <div class="progress-track"><div class="progress-fill ${r.color}" style="width:${r.pct.toFixed(1)}%"></div></div>
+  ${mode === 'full' ? goalPacingLine(r, settings) : ''}
 </div>`;
 };
 
-/** Build the progress-bar targets section (shared by grid cards and table). */
+/** Build the progress-bar targets section (shared by grid cards and table).
+ *  mode drives goal pacing's two independent Display toggles: 'chip'
+ *  (default — cards/table) shows the compact on-track/behind chip after the
+ *  ETA chip; 'full' (Tracker Detail) shows the muted pacing line instead. */
 export function buildTargets(
   tracker: Tracker,
   stats: TrackerStatsResponse | undefined,
   settings: AppSettings,
   groupDefs: TrackerGroupMap | undefined,
   tKey: string,
+  mode: 'chip' | 'full' = 'chip',
 ): string {
-  const rows = targetRowsFor(tracker.targets ?? {}, stats, tracker.min_ratio, false);
+  const rows = targetRowsFor(tracker.targets ?? {}, stats, tracker.min_ratio, false, tracker.target_deadlines ?? {});
 
   const defGroups = (groupDefs && tKey) ? (groupDefs[tKey] ?? []) : [];
   const hasGroups = defGroups.length > 0;
@@ -576,7 +663,7 @@ export function buildTargets(
     ? `<div class="anyof-wrap">
         <div class="anyof-label">One of</div>
         ${anyOf.map(req =>
-          `<div class="anyof-alt">${targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true).map(renderTargetRow).join('')}</div>`
+          `<div class="anyof-alt">${targetRowsFor(groupRequirementsToTargets(req), stats, tracker.min_ratio, true).map(r => renderTargetRow(r, settings, mode)).join('')}</div>`
         ).join('<div class="anyof-or">or</div>')}
       </div>`
     : '';
@@ -673,7 +760,7 @@ export function buildTargets(
   return `<div class="exp-targets">
     <div class="exp-section-title" style="margin-bottom:${(groupBadgeHtml || promoEtaHtml) ? '4px' : '8px'}">Targets${pencil}${promoEtaHtml}</div>
     ${groupBadgeHtml}
-    ${rows.map(renderTargetRow).join('')}
+    ${rows.map(r => renderTargetRow(r, settings, mode)).join('')}
     ${anyOfHtml}
     ${emptyHint}
   </div>`;

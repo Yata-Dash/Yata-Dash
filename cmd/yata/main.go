@@ -174,6 +174,19 @@ func main() {
 		}
 	}()
 
+	// Weekly digest scheduler — its own 5-minute tick, deliberately separate
+	// from the refresh loop above: that cadence is user-variable, and tying
+	// the digest to it would either delay delivery by up to that interval or
+	// require reasoning about drift. RunDigestIfDue is a cheap no-op check
+	// (digestDueAt) when the digest is disabled or not yet due.
+	go func() {
+		time.Sleep(20 * time.Second) // let startup settle before the first check
+		for {
+			api.RunDigestIfDue(deps)
+			time.Sleep(5 * time.Minute)
+		}
+	}()
+
 	// Opt-in daily update check (versions.json on the repo); off by default.
 	api.StartUpdateChecker(deps)
 

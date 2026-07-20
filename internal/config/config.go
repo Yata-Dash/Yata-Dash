@@ -7,6 +7,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +34,8 @@ func Open(path string) (*Manager, error) {
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		m.cfg = defaultConfig()
+		seedDefaultAlertRules(&m.cfg.Notifications)
+		normalizeDigest(&m.cfg.Notifications.Digest)
 		if err := m.saveLocked(); err != nil {
 			return nil, fmt.Errorf("create config: %w", err)
 		}
@@ -42,8 +46,73 @@ func Open(path string) (*Manager, error) {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 		m.applyDefaults()
+		// Runs once per install: seedDefaultAlertRules is a no-op after the
+		// flag is set, so this costs an extra write only on the very first
+		// load of a pre-existing config.json that predates event alerts.
+		if !m.cfg.Notifications.SeededDefaultRules {
+			seedDefaultAlertRules(&m.cfg.Notifications)
+			if err := m.saveLocked(); err != nil {
+				return nil, fmt.Errorf("seed default alert rules: %w", err)
+			}
+		}
 	}
 	return m, nil
+}
+
+// seedDefaultAlertRules gives a brand-new install (no destinations AND no
+// rules — nobody has touched Alerts yet) three starter rules so promotion/
+// demotion/target-met/standing-guard notifications aren't invisible until
+// someone discovers the Alerts tab: "Promotions & demotions" (promoted OR
+// demoted), "Target met", and "Ratio approaching minimum" (the
+// ratio_min_eta_days standing guard). All three are enabled, unscoped (all
+// trackers), destination-less (all enabled destinations). The ratio guard
+// gets a day-long cooldown — its ETA jitters with rate noise, so a shorter
+// cooldown would flap; the other two have none. A user who already has ANY
+// destination or rule is left alone — that setup was deliberate — only the
+// flag is set so this never runs again. Idempotent: called on every load, a
+// no-op once SeededDefaultRules is true.
+func seedDefaultAlertRules(n *models.NotificationConfig) {
+	if n.SeededDefaultRules {
+		return
+	}
+	if len(n.Destinations) == 0 && len(n.Rules) == 0 {
+		n.Rules = append(n.Rules,
+			models.AlertRule{
+				ID:      newRuleID(),
+				Name:    "Promotions & demotions",
+				Enabled: true,
+				Match:   "any",
+				Conditions: []models.Condition{
+					{Field: "promoted", Op: "is_true"},
+					{Field: "demoted", Op: "is_true"},
+				},
+			},
+			models.AlertRule{
+				ID:         newRuleID(),
+				Name:       "Target met",
+				Enabled:    true,
+				Match:      "all",
+				Conditions: []models.Condition{{Field: "target_met", Op: "is_true"}},
+			},
+			models.AlertRule{
+				ID:           newRuleID(),
+				Name:         "Ratio approaching minimum",
+				Enabled:      true,
+				Match:        "all",
+				Conditions:   []models.Condition{{Field: "ratio_min_eta_days", Op: "lte", Value: "14"}},
+				CooldownMins: 1440,
+			},
+		)
+	}
+	n.SeededDefaultRules = true
+}
+
+// newRuleID mints a random ID for a seeded rule — same shape as the IDs the
+// /api/notifications handler assigns to rules saved without one.
+func newRuleID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func defaultConfig() models.Config {
@@ -72,6 +141,21 @@ func (m *Manager) applyDefaults() {
 		m.cfg.Trackers = []models.Tracker{}
 	}
 	normalizeBackup(&m.cfg.Settings)
+	normalizeDigest(&m.cfg.Notifications.Digest)
+}
+
+// normalizeDigest defaults the weekly digest schedule to Monday 09:00 the
+// first time an install loads it — detected by every field still being at
+// its Go zero value (slices can't join a == struct comparison, so this is
+// checked field-by-field rather than against a literal models.DigestConfig{}).
+// Once the user has touched Alerts at all (even just to enable it, or pick a
+// destination) at least one field is non-zero and this never fires again.
+func normalizeDigest(dig *models.DigestConfig) {
+	if !dig.Enabled && dig.Weekday == 0 && dig.Hour == 0 &&
+		len(dig.Destinations) == 0 && dig.LastSentAt == 0 && len(dig.LastReadyTargets) == 0 {
+		dig.Weekday = 1
+		dig.Hour = 9
+	}
 }
 
 // normalizeBackup applies safe defaults/bounds to the backup settings.
@@ -183,15 +267,33 @@ func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
 	if n.Rules == nil {
 		n.Rules = []models.AlertRule{}
 	}
+	if n.Digest.Destinations == nil {
+		n.Digest.Destinations = []string{}
+	}
 	m.cfg.Notifications = n
+	return m.saveLocked()
+}
+
+// UpdateDigestState persists only the weekly digest's server-maintained
+// fields (LastSentAt/LastReadyTargets) after a send — used instead of
+// UpdateNotifications so it never round-trips the whole client-shaped
+// NotificationConfig (which would clobber destinations/rules edited
+// concurrently in another tab).
+func (m *Manager) UpdateDigestState(lastSentAt int64, lastReadyTargets []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cfg.Notifications.Digest.LastSentAt = lastSentAt
+	m.cfg.Notifications.Digest.LastReadyTargets = append([]string(nil), lastReadyTargets...)
 	return m.saveLocked()
 }
 
 func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 	// make (not append-to-nil) so empty marshals as [] rather than null.
 	out := models.NotificationConfig{
-		Destinations: make([]models.NotifyDestination, len(n.Destinations)),
-		Rules:        make([]models.AlertRule, len(n.Rules)),
+		Destinations:       make([]models.NotifyDestination, len(n.Destinations)),
+		Rules:              make([]models.AlertRule, len(n.Rules)),
+		SeededDefaultRules: n.SeededDefaultRules,
+		Digest:             n.Digest,
 	}
 	copy(out.Destinations, n.Destinations)
 	for i, r := range n.Rules {
@@ -199,6 +301,8 @@ func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 		r.Destinations = append([]string(nil), r.Destinations...)
 		out.Rules[i] = r
 	}
+	out.Digest.Destinations = append([]string(nil), n.Digest.Destinations...)
+	out.Digest.LastReadyTargets = append([]string(nil), n.Digest.LastReadyTargets...)
 	return out
 }
 

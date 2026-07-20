@@ -37,6 +37,13 @@ type Tracker struct {
 	// "" = targets entered manually.
 	TargetGroup string `json:"target_group,omitempty"`
 
+	// TargetDeadlines maps a target field key to an optional "reach it by"
+	// date (YYYY-MM-DD) — goal pacing (see internal/api/pacing.go). Account
+	// age ("days") can never carry one: hitting an age by a date isn't
+	// something the user controls. Sanitized on save (internal/api/trackers.go):
+	// an entry survives only while its field still has a target value.
+	TargetDeadlines map[string]string `json:"target_deadlines,omitempty"`
+
 	// MockScenario selects the demo dataset for trackers of a "demo" kind type.
 	MockScenario string `json:"mock_scenario,omitempty"`
 
@@ -50,20 +57,21 @@ type Tracker struct {
 // TrackerView is the safe public representation of a Tracker sent to the
 // frontend. Credentials are masked/boolean-ised.
 type TrackerView struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Abbr         string            `json:"abbr"`    // from def; "" for manual trackers
-	DefKey       string            `json:"def_key"` // matched def key; "" for manual
-	URL          string            `json:"url"`
-	Type         string            `json:"type"`
-	Enabled      bool              `json:"enabled"`
-	HasKey       bool              `json:"has_key"`
-	APIKeyMasked string            `json:"api_key_masked"`
-	HasSession   bool              `json:"has_session"`
-	Username     string            `json:"username"`
-	Targets      map[string]string `json:"targets"`
-	TargetGroup  string            `json:"target_group"`
-	JoinDate     string            `json:"join_date"` // user-entered fallback (YYYY-MM-DD)
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Abbr            string            `json:"abbr"`    // from def; "" for manual trackers
+	DefKey          string            `json:"def_key"` // matched def key; "" for manual
+	URL             string            `json:"url"`
+	Type            string            `json:"type"`
+	Enabled         bool              `json:"enabled"`
+	HasKey          bool              `json:"has_key"`
+	APIKeyMasked    string            `json:"api_key_masked"`
+	HasSession      bool              `json:"has_session"`
+	Username        string            `json:"username"`
+	Targets         map[string]string `json:"targets"`
+	TargetGroup     string            `json:"target_group"`
+	TargetDeadlines map[string]string `json:"target_deadlines"`
+	JoinDate        string            `json:"join_date"` // user-entered fallback (YYYY-MM-DD)
 
 	MinScrapeIntervalMinutes int    `json:"min_scrape_interval_minutes"`
 	MaxScrapesPerDay         int    `json:"max_scrapes_per_day"`
@@ -153,6 +161,14 @@ type Settings struct {
 	// never clear (permanent record) — off shows a neutral colour instead so
 	// it doesn't read as an ongoing alarm.
 	HighlightHnR *bool `json:"highlight_hnr"`
+	// ShowGoalPacing toggles the full pacing line ("needs X/day · doing
+	// Y/day · verdict") under each dated target row in the Tracker Detail
+	// Targets section. nil = true. Independent of ShowGoalChips.
+	ShowGoalPacing *bool `json:"show_goal_pacing"`
+	// ShowGoalChips toggles the compact on-track/behind/overdue chip after a
+	// dated target row's ETA chip on grid cards and the table's expanded
+	// targets. nil = true. Independent of ShowGoalPacing.
+	ShowGoalChips *bool `json:"show_goal_chips"`
 	// PathwayFavorites / PathwayNotInterested are pathway-target lists (by
 	// dataset tracker name). Favourites sort first in the Pathways picker;
 	// not-interested entries sort last and are excluded from the
@@ -269,6 +285,29 @@ type Config struct {
 type NotificationConfig struct {
 	Destinations []NotifyDestination `json:"destinations"`
 	Rules        []AlertRule         `json:"rules"`
+	// SeededDefaultRules marks that the one-time default-rules seeding (see
+	// config.seedDefaultAlertRules) has already run for this install, so a
+	// user who deletes the starter rules never gets them re-injected.
+	SeededDefaultRules bool `json:"seeded_default_rules,omitempty"`
+	// Digest schedules the weekly summary notification (internal/api/digest.go).
+	Digest DigestConfig `json:"digest"`
+}
+
+// DigestConfig schedules the weekly summary notification: per-tracker
+// deltas, target/goal progress, this week's promotions/demotions, and newly
+// requirements-met pathway targets, pushed through the existing webhook
+// destinations.
+type DigestConfig struct {
+	Enabled      bool     `json:"enabled"`
+	Weekday      int      `json:"weekday"`      // 0=Sunday … 6=Saturday; default 1 (Monday)
+	Hour         int      `json:"hour"`         // 0-23 server-local; default 9
+	Destinations []string `json:"destinations"` // destination IDs; empty = all enabled
+
+	// Server-maintained state — the client never sends these; PUT
+	// /api/notifications must carry the stored values forward (same rule as
+	// SeededDefaultRules).
+	LastSentAt       int64    `json:"last_sent_at,omitempty"`       // unix seconds
+	LastReadyTargets []string `json:"last_ready_targets,omitempty"` // pathway targets ready at last digest
 }
 
 // NotifyDestination is one webhook target. Type selects the payload format.

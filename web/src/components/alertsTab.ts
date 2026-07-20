@@ -7,7 +7,7 @@
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { trackers } from '../state';
-import type { AlertCondition, AlertRule, DryRunResult, NotifyDestination } from '../types';
+import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotifyDestination } from '../types';
 import type { ToastType } from './toast';
 
 type Toast = (msg: string, type?: ToastType) => void;
@@ -15,15 +15,17 @@ let toast: Toast = () => {};
 
 let destinations: NotifyDestination[] = [];
 let rules: AlertRule[] = [];
+let digest: DigestConfig = { enabled: false, weekday: 1, hour: 9, destinations: [] };
 let editingDest = -1;   // index of the destination shown in its edit form (-1 = none)
 let editingRule = -1;   // index of the rule shown in its edit form (-1 = none)
 let pendingDelete: string | null = null; // dest/rule id awaiting inline delete confirm
 let dryRunFor: string | null = null;          // rule id whose dry-run box is shown
 let dryRunResults: DryRunResult[] | null = null; // null while the request is in flight
+let digestPreviewText: string | null = null; // null = no preview shown; '' is a valid (quiet-week) preview
 let wired = false;
 
 // ── Field & operator catalogs (mirror internal/notify/engine.go) ────────────
-type FieldType = 'numeric' | 'size' | 'bool' | 'string';
+type FieldType = 'numeric' | 'size' | 'bool' | 'string' | 'event';
 interface FieldDef { value: string; label: string; type: FieldType; }
 
 const FIELDS: FieldDef[] = [
@@ -37,11 +39,23 @@ const FIELDS: FieldDef[] = [
   { value: 'seeding',          label: 'Seeding',            type: 'numeric' },
   { value: 'leeching',         label: 'Leeching',           type: 'numeric' },
   { value: 'avg_seed_time',    label: 'Avg seed time (days)', type: 'numeric' },
+  // Standing guards — predictive decline signals (internal/stats's
+  // DeclineSignals). Silent (never match) until enough history exists.
+  { value: 'ratio_min_eta_days',   label: 'Ratio hits tracker min within (days)', type: 'numeric' },
+  { value: 'buffer_zero_eta_days', label: 'Buffer runs out within (days)',        type: 'numeric' },
+  { value: 'seed_size_drop_7d_pct', label: 'Seed size drop over 7d (%)',          type: 'numeric' },
+  { value: 'seeding_drop_7d_pct',  label: 'Seeding count drop over 7d (%)',       type: 'numeric' },
   { value: 'freeleech_active', label: 'Active event (freeleech / announcement)', type: 'bool' },
   { value: 'unread_mail',          label: 'Unread mail (inbox)', type: 'bool' },
   { value: 'unread_notifications', label: 'Unread notifications (bell)', type: 'bool' },
   { value: 'reachable',        label: 'Tracker reachable',  type: 'bool' },
+  { value: 'goal_behind_pace', label: 'Behind goal pace',   type: 'bool' },
   { value: 'group',            label: 'Group / class',      type: 'string' },
+  // One-shot events (fire at the moment they happen, not polled) — see
+  // notify.EvaluateEvent/EvaluateTargets.
+  { value: 'promoted',   label: 'Promoted (group moved up)',   type: 'event' },
+  { value: 'demoted',    label: 'Demoted (group moved down)',  type: 'event' },
+  { value: 'target_met', label: 'Target met (any target row)', type: 'event' },
 ];
 
 const NUM_OPS = [
@@ -51,9 +65,12 @@ const NUM_OPS = [
 ];
 const BOOL_OPS = [{ value: 'is_true', label: 'is true' }, { value: 'is_false', label: 'is false' }];
 const STR_OPS = [{ value: 'changed', label: 'changed' }];
+const EVENT_OPS = [{ value: 'is_true', label: 'occurs' }];
 
 function fieldDef(name: string): FieldDef { return FIELDS.find(f => f.value === name) ?? FIELDS[0]; }
-function opsFor(type: FieldType) { return type === 'bool' ? BOOL_OPS : type === 'string' ? STR_OPS : NUM_OPS; }
+function opsFor(type: FieldType) {
+  return type === 'bool' ? BOOL_OPS : type === 'string' ? STR_OPS : type === 'event' ? EVENT_OPS : NUM_OPS;
+}
 function genId(): string { return Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6); }
 function opt(value: string, label: string, sel: string): string {
   return `<option value="${esc(value)}"${value === sel ? ' selected' : ''}>${esc(label)}</option>`;
@@ -61,18 +78,24 @@ function opt(value: string, label: string, sel: string): string {
 const DEST_TYPE_LABEL: Record<string, string> = { discord: 'Discord', telegram: 'Telegram', gotify: 'Gotify', generic: 'Generic JSON' };
 
 // ── Reusable searchable multi-select (chips + dropdown) ─────────────────────
+// 'digest-dest' reuses the exact same component as a rule's 'dest' select,
+// but reads/writes the standalone digest.destinations array instead of a
+// rule's — ri is unused for it (callers pass -1).
+type MsKind = 'tracker' | 'dest' | 'digest-dest';
 interface MsOption { id: string; label: string; }
 
-function msOptions(kind: 'tracker' | 'dest'): MsOption[] {
+function msOptions(kind: MsKind): MsOption[] {
   return kind === 'tracker'
     ? trackers.map(t => ({ id: t.id, label: t.name }))
     : destinations.map(d => ({ id: d.id, label: d.name || DEST_TYPE_LABEL[d.type] || d.type }));
 }
-function msArr(kind: 'tracker' | 'dest', ri: number): string[] {
-  return kind === 'tracker' ? rules[ri].tracker_ids : rules[ri].destinations;
+function msArr(kind: MsKind, ri: number): string[] {
+  if (kind === 'tracker') return rules[ri].tracker_ids;
+  if (kind === 'digest-dest') return digest.destinations;
+  return rules[ri].destinations;
 }
 
-function msChips(kind: 'tracker' | 'dest', ri: number, placeholder: string): string {
+function msChips(kind: MsKind, ri: number, placeholder: string): string {
   const arr = msArr(kind, ri);
   const opts = msOptions(kind);
   if (!arr.length) return `<span class="ms-placeholder">${esc(placeholder)}</span>`;
@@ -83,7 +106,7 @@ function msChips(kind: 'tracker' | 'dest', ri: number, placeholder: string): str
   }).join('');
 }
 
-function msHtml(kind: 'tracker' | 'dest', ri: number, placeholder: string): string {
+function msHtml(kind: MsKind, ri: number, placeholder: string): string {
   const arr = new Set(msArr(kind, ri));
   const opts = msOptions(kind);
   const optsHtml = opts.length
@@ -101,7 +124,7 @@ function msHtml(kind: 'tracker' | 'dest', ri: number, placeholder: string): stri
 /** Refresh one multi-select's chips + option highlights in place (keeps the
  *  dropdown open and the search text intact). */
 function msRefresh(msEl: HTMLElement): void {
-  const kind = msEl.dataset['kind'] as 'tracker' | 'dest';
+  const kind = msEl.dataset['kind'] as MsKind;
   const ri = Number(msEl.dataset['rule']);
   const arr = new Set(msArr(kind, ri));
   const chips = msEl.querySelector('.ms-chips');
@@ -137,6 +160,8 @@ async function reload(): Promise<void> {
       destinations: r.destinations ?? [],
       conditions: r.conditions ?? [],
     }));
+    digest = data.digest ?? { enabled: false, weekday: 1, hour: 9, destinations: [] };
+    digest.destinations = digest.destinations ?? [];
     loaded = true;
   }
   editingDest = -1;
@@ -144,6 +169,7 @@ async function reload(): Promise<void> {
   pendingDelete = null;
   dryRunFor = null;
   dryRunResults = null;
+  digestPreviewText = null;
   render();
 }
 
@@ -157,7 +183,7 @@ function confirmDeleteHtml(kind: 'dest' | 'rule', idx: number, name: string): st
 
 export async function saveAlerts(): Promise<void> {
   collectFromDOM();
-  const { ok } = await api.saveNotifications({ destinations, rules });
+  const { ok } = await api.saveNotifications({ destinations, rules, digest });
   toast(ok ? 'Alerts saved' : 'Failed to save alerts', ok ? 'success' : 'error');
 }
 
@@ -176,7 +202,10 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
     toast('Import failed: not an alerts file', 'error'); return;
   }
   if (!confirm('Import alerts?\n\nThis REPLACES your current destinations and rules. Any new rule already met will notify immediately.')) return;
-  const { ok } = await api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [] });
+  // digest isn't part of the share-safe export/import format (it has no
+  // secrets to strip) — carry the CURRENT schedule forward so importing an
+  // alerts file never resets the weekly digest as a side effect.
+  const { ok } = await api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest });
   if (ok) { toast('Alerts imported', 'success'); await reload(); }
   else toast('Import failed', 'error');
 }
@@ -191,10 +220,38 @@ function render(): void {
     ${destinations.map((d, i) => i === editingDest ? renderDestEdit(d, i) : renderDestRow(d, i)).join('') || '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:6px">No destinations yet.</div>'}
     <button type="button" class="btn btn-ghost btn-sm" data-action="add-dest">+ Add destination</button>
 
+    ${renderDigestCard()}
+
     <div class="alerts-subhead" style="margin-top:20px">Rules</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Each rule fires when its conditions become true for a tracker (it won't re-fire until the condition clears). A newly-added rule that's already true notifies immediately.</div>
     ${rules.map((r, ri) => ri === editingRule ? renderRule(r, ri) : renderRuleRow(r, ri)).join('') || '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:6px">No rules yet.</div>'}
     <button type="button" class="btn btn-ghost btn-sm" data-action="add-rule">+ Add rule</button>`;
+}
+
+// ── Weekly digest card ───────────────────────────────────────────────────────
+const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function renderDigestCard(): string {
+  const dayOpts = WEEKDAY_LABELS.map((label, i) => opt(String(i), label, String(digest.weekday))).join('');
+  const hourOpts = Array.from({ length: 24 }, (_, h) => opt(String(h), `${String(h).padStart(2, '0')}:00`, String(digest.hour))).join('');
+  return `<div class="alerts-subhead" style="margin-top:20px">Weekly digest</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">A weekly summary of per-tracker deltas, target/goal progress, promotions/demotions, and newly requirements-met pathway targets. A quiet week still sends a short heartbeat so silence never means "it broke".</div>
+    <div class="alerts-card">
+      <div class="alerts-row" style="align-items:center;gap:12px">
+        <label class="alerts-inline"><input type="checkbox" id="digest-enabled" ${digest.enabled ? 'checked' : ''}/> Enabled</label>
+        <select class="form-input" id="digest-weekday" style="width:auto">${dayOpts}</select>
+        <select class="form-input" id="digest-hour" style="width:auto">${hourOpts}</select>
+      </div>
+      <div class="alerts-row" style="margin-top:8px;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--text3);width:60px">Send to</span>
+        ${msHtml('digest-dest', -1, 'All enabled destinations')}
+      </div>
+      <div class="alerts-row" style="margin-top:8px;justify-content:flex-end;gap:6px;align-items:center">
+        <button type="button" class="btn btn-ghost btn-sm" data-action="digest-preview">Preview</button>
+        <button type="button" class="btn btn-primary btn-sm" data-action="digest-send">Send now</button>
+      </div>
+    </div>
+    ${digestPreviewText !== null ? `<div class="alerts-dryrun"><pre style="white-space:pre-wrap;margin:0;font:inherit">${esc(digestPreviewText)}</pre></div>` : ''}`;
 }
 
 // ── Rule scope callouts (collapsed rows) ─────────────────────────────────────
@@ -384,6 +441,18 @@ function collectFromDOM(): void {
       cooldown_minutes: parseInt(q<HTMLInputElement>('.rule-cooldown')?.value ?? '0', 10) || 0,
     };
   });
+
+  // Digest: destinations are managed in place by the multi-select (see
+  // msArr's 'digest-dest' case) — only the plain fields need reading here.
+  const digestEnabled = root.querySelector<HTMLInputElement>('#digest-enabled');
+  if (digestEnabled) {
+    digest = {
+      ...digest,
+      enabled: digestEnabled.checked,
+      weekday: Number(root.querySelector<HTMLSelectElement>('#digest-weekday')?.value ?? digest.weekday),
+      hour: Number(root.querySelector<HTMLSelectElement>('#digest-hour')?.value ?? digest.hour),
+    };
+  }
 }
 
 // ── Event delegation ─────────────────────────────────────────────────────────
@@ -399,7 +468,7 @@ function wire(): void {
     const ri = Number(el.dataset['rule']);
     const ci = Number(el.dataset['cond']);
     const di = Number(el.dataset['dest']);
-    const kind = el.dataset['kind'] as 'tracker' | 'dest';
+    const kind = el.dataset['kind'] as MsKind;
     const id = el.dataset['id'] ?? '';
     switch (action) {
       // ── multi-select (in place; no re-render so the dropdown stays open) ──
@@ -467,6 +536,9 @@ function wire(): void {
       case 'add-cond': collectFromDOM(); rules[ri]?.conditions.push({ field: 'ratio', op: 'lt', value: '1.0' }); render(); break;
       case 'remove-cond': collectFromDOM(); rules[ri]?.conditions.splice(ci, 1); render(); break;
       case 'save-alerts': void saveAlerts(); break;
+      // ── weekly digest ──
+      case 'digest-preview': void previewDigest(); break;
+      case 'digest-send': void sendDigestNowClick(); break;
     }
   });
 
@@ -543,4 +615,25 @@ async function testDest(i: number): Promise<void> {
   toast('Sending test…', 'success');
   const { ok, data } = await api.testNotification(d);
   toast(ok && data.ok ? `Test sent to ${d.name || d.type}` : `Test failed: ${data.error ?? 'error'}`, ok && data.ok ? 'success' : 'error');
+}
+
+/** Builds the digest text server-side (against LIVE stats, not the unsaved
+ *  form) and shows it in an inline <pre> box, like the rule dry-run box.
+ *  Sends nothing and touches no server state. */
+async function previewDigest(): Promise<void> {
+  collectFromDOM();
+  const { ok, data } = await api.fetchDigestPreview();
+  if (!ok) { toast('Preview failed', 'error'); return; }
+  digestPreviewText = data.text;
+  render();
+}
+
+/** Builds and sends the digest right now, independent of the schedule. */
+async function sendDigestNowClick(): Promise<void> {
+  collectFromDOM();
+  toast('Sending digest…', 'success');
+  const { ok, data } = await api.sendDigestNow();
+  toast(ok && data.ok
+    ? `Digest sent to ${data.sent_to} destination${data.sent_to === 1 ? '' : 's'}`
+    : `Send failed: ${data.error ?? 'error'}`, ok && data.ok ? 'success' : 'error');
 }

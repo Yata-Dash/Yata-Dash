@@ -165,6 +165,19 @@ html{overflow-x:clip}
 .target-edit-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .target-edit-label{flex:0 0 150px;font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.2px}
 .target-edit-row .form-input{flex:1;min-width:0}
+/* Goal-date control (goal pacing): a small icon button per row — the date
+   input itself lives in an anchored pop so it never squeezes the value. */
+.goal-date-wrap{position:relative;display:inline-flex;flex-shrink:0}
+.goal-date-btn{color:var(--text3)}
+.goal-date-btn:hover{color:var(--text)}
+.goal-date-btn--set{color:var(--accent)}
+.goal-date-btn--set:hover{color:var(--accent)}
+.goal-date-pop{position:absolute;top:calc(100% + 4px);right:0;z-index:40;display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 6px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.goal-date-pop[hidden]{display:none}
+.goal-date-input{font-size:11px;width:132px}
+.targets-popover-groupgoal,.modal-group-goal{display:flex;align-items:center;gap:8px;margin:2px 0 10px}
+.modal-group-goal{margin:8px 0 0}
+.targets-popover-groupgoal-hint{font-weight:400;color:var(--text3)}
 .target-edit-remove{flex-shrink:0;font-size:14px;line-height:1;color:var(--text3)}
 .target-edit-remove:hover{color:var(--red)}
 .target-add-row{display:flex;align-items:center;gap:8px;margin-top:2px}
@@ -328,6 +341,15 @@ html{overflow-x:clip}
 .target-unavail-icon{flex:none;color:var(--text3);vertical-align:-2px}
 .target-unavail-txt{font-style:italic;letter-spacing:.2px}
 .progress-track--unavail{background:transparent;border:1px dashed var(--border);height:5px;border-radius:3px}
+/* Goal pacing — compact chip after the ETA chip (cards/table, show_goal_chips)
+   and the muted full line under a dated row on the Detail page
+   (show_goal_pacing). Independent toggles; never both on the same row. */
+.goal-chip{font-size:11px;font-weight:600;font-family:'Geist Mono',monospace;white-space:nowrap}
+.goal-chip--ontrack{color:var(--green)}
+.goal-chip--behind{color:var(--amber)}
+.goal-chip--overdue{color:var(--red)}
+.goal-chip--neutral{color:var(--text3);font-weight:500}
+.target-goal-line{font-size:10px;color:var(--text3);font-family:'Geist Mono',monospace;margin-top:1px}
 .progress-pct{font-size:10px;font-weight:600;font-family:'Geist Mono',monospace;color:var(--text3);text-align:right}
 .card-footer{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);gap:8px;flex-wrap:wrap}
 .card-last-updated{font-size:11px;color:var(--text3)}
@@ -1448,13 +1470,18 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .log-lvl-chip.log-lvl-warn.selected{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 40%,transparent)}
 .log-lvl-chip.log-lvl-error.selected{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
 
-/* Per-tracker scraping: operator-requested limits (emphasised) + invalid field */
+/* Per-tracker scraping: operator-requested limits — an informational notice
+   (amber), never red: it doesn't block saving, and red is reserved for the
+   blocking validation errors under the inputs. */
 .modal-scrape-req{
-  font-size:12.5px;font-weight:500;color:var(--red);
-  background:var(--error-bg-md);border:1px solid var(--error-border-md);
+  font-size:12.5px;font-weight:500;color:var(--amber);
+  background:var(--amber-bg);border:1px solid var(--amber-border);
   border-radius:var(--radius-sm);padding:7px 11px;margin-bottom:4px;
 }
 .form-input.input-error{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
+/* Muted unit suffix beside a numeric input ("min", "per UTC day") — units
+   live next to the field, constraints in ONE helper line under it. */
+.input-unit{font-size:11px;color:var(--text3);font-weight:500;white-space:nowrap}
 
 /* Login lockout recovery + first-run security nudge */
 .login-locked{

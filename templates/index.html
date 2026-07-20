@@ -517,6 +517,24 @@
               </label>
             </div>
             <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-goal-pacing-track" onclick="toggleSettingsGoalPacing()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Goal pacing on Detail</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">On the Tracker Detail page, shows a line under each target with a deadline: the rate you need vs. your recent rate, and an on-track/behind verdict (or the extra upload needed for a ratio goal).</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-goal-chips-track" onclick="toggleSettingsGoalChips()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Goal chips on cards/table</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">A compact "on track" / "behind" / "overdue" chip after a target's time estimate, on grid cards and the table's expanded targets — independent of the Detail pacing line above.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Duration format</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:10px">How you want trend estimates displayed. Effects dashboard and pathway views.
               </div>
@@ -594,21 +612,24 @@
               </label>
             </div>
             <div class="form-group" style="margin-bottom:4px" id="s-scrape-interval-group">
-              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Scrape Interval (minutes)</label>
-              <div style="display:flex;align-items:center;gap:10px">
+              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Scrape Interval</label>
+              <div style="display:flex;align-items:center;gap:8px">
                 <input type="number" id="s-scrape-interval" class="form-input" min="60" style="width:100px"
-                  placeholder="120" oninput="this.value=Math.max(60,parseInt(this.value)||60)">
+                  placeholder="120" oninput="_softValidateScrapeInterval()" onchange="_commitScrapeInterval()">
+                <span class="input-unit">min</span>
                 <span id="s-scrape-interval-lock" style="font-size:11px;color:var(--amber);display:none">🔒 locked — derived from max scrapes</span>
-                <span id="s-scrape-interval-hint" style="font-size:11px;color:var(--text3)">Min 60 min — how often each tracker profile is scraped</span>
               </div>
+              <span id="s-scrape-interval-hint" style="display:block;font-size:11px;color:var(--text3);margin-top:4px">Minimum 60 min. Each tracker scrapes at this interval or its own limit &mdash; whichever is longer.</span>
+              <span id="s-scrape-interval-error" style="display:none;font-size:11px;color:var(--red);margin-top:2px">Minimum is 60 minutes &mdash; the value is raised to 60 when you leave the field.</span>
             </div>
             <div class="form-group" style="margin-bottom:4px" id="s-max-scrapes-group">
-              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Max Scrapes Per Day <span style="font-size:11px;font-weight:400;color:var(--text3)">(per tracker, UTC day — 0 = unlimited)</span></label>
-              <div style="display:flex;align-items:center;gap:10px">
+              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Max Scrapes Per Day</label>
+              <div style="display:flex;align-items:center;gap:8px">
                 <input type="number" id="s-max-scrapes" class="form-input" min="0" style="width:100px"
                   placeholder="0" oninput="_onMaxScrapesChange()">
-                <span style="font-size:11px;color:var(--text3)">Resets at UTC midnight</span>
+                <span class="input-unit">per tracker, per UTC day</span>
               </div>
+              <span style="display:block;font-size:11px;color:var(--text3);margin-top:4px">0 = no global cap &mdash; each tracker still honours its own or its operator&rsquo;s cap, whichever is lower. Resets at UTC midnight.</span>
             </div>
             <div class="form-group" style="margin-bottom:10px" id="s-auto-interval-group">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -832,18 +853,22 @@
                   <!-- Scrape options (greyed when API-only) -->
                   <div id="modal-scrape-opts">
                     <div class="form-group" id="modal-min-scrape-group">
-                      <label class="form-label">Min Scrape Interval <span class="opt">(minutes, 0 = use global)</span></label>
-                      <div style="display:flex;align-items:center;gap:10px">
+                      <label class="form-label">Min Scrape Interval</label>
+                      <div style="display:flex;align-items:center;gap:8px">
                         <input class="form-input" type="number" id="modal-min-scrape-interval" placeholder="0" min="0" style="max-width:140px" oninput="modalValidateInterval()"/>
+                        <span class="input-unit">min</span>
                         <span id="modal-min-scrape-lock" style="font-size:11px;color:var(--amber);display:none">🔒 derived from max scrapes</span>
                       </div>
-                      <span class="form-hint" id="modal-min-scrape-hint">0 = use global setting.</span>
+                      <span class="form-hint" id="modal-min-scrape-hint">0 = follow the global interval or this tracker&rsquo;s limit &mdash; whichever is longer.</span>
                       <span class="form-error" id="modal-min-scrape-error" style="display:none;font-size:11px;color:var(--red);margin-top:4px"></span>
                     </div>
                     <div class="form-group" id="modal-max-scrapes-group">
-                      <label class="form-label">Max Scrapes Per Day <span class="opt">(0 = unlimited)</span></label>
-                      <input class="form-input" type="number" id="modal-max-scrapes" placeholder="0" min="0" style="max-width:140px" oninput="modalOnMaxScrapesChange()"/>
-                      <span class="form-hint">Per UTC day for this tracker. Still subject to global / operator caps.</span>
+                      <label class="form-label">Max Scrapes Per Day</label>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <input class="form-input" type="number" id="modal-max-scrapes" placeholder="0" min="0" style="max-width:140px" oninput="modalOnMaxScrapesChange()"/>
+                        <span class="input-unit">per UTC day</span>
+                      </div>
+                      <span class="form-hint">0 = follow the global cap or this tracker&rsquo;s limit &mdash; whichever is lower.</span>
                       <span class="form-error" id="modal-max-scrapes-error" style="display:none;font-size:11px;color:var(--red);margin-top:4px"></span>
                     </div>
                     <div class="form-group">
@@ -1125,7 +1150,7 @@ function _applyScrapeLockouts() {
   var locked = autoOn && !apiOnly;
   if (intInput) intInput.style.opacity = locked ? '0.6' : '';
   if (lockHint)   lockHint.style.display = locked ? '' : 'none';
-  if (normalHint) normalHint.style.display = locked ? 'none' : '';
+  if (normalHint) normalHint.style.display = locked ? 'none' : 'block';
 }
 function toggleSettingsFavicon()  { _settingsToggle('s-favicon-track'); }
 function toggleSettingsSync()     { _settingsToggle('s-profile-sync-track'); }
@@ -1139,6 +1164,8 @@ function toggleSettingsTrackerRules() { _settingsToggle('s-tracker-rules-track')
 function toggleSettingsUnreadMail() { _settingsToggle('s-unread-mail-track'); }
 function toggleSettingsUnreadNotif() { _settingsToggle('s-unread-notif-track'); }
 function toggleSettingsHnrHighlight() { _settingsToggle('s-hnr-highlight-track'); }
+function toggleSettingsGoalPacing() { _settingsToggle('s-goal-pacing-track'); }
+function toggleSettingsGoalChips() { _settingsToggle('s-goal-chips-track'); }
 function toggleSettingsBackup() { _settingsToggle('s-backup-track'); _applyBackupLock(); }
 function _applyBackupLock() {
   var on = !!(document.getElementById('s-backup-track') && document.getElementById('s-backup-track').classList.contains('on'));
@@ -1153,6 +1180,24 @@ function _applyBackupLock() {
 function _onMaxScrapesChange() {
   var cb = document.getElementById('s-auto-interval');
   if (cb && cb.checked) _updateAutoInterval();
+}
+/* Interval field: NEVER clamp mid-keystroke (the old oninput clamp made
+   typing "120" impossible — the leading "1" snapped to 60 before the "20").
+   While typing, show a soft red state; the value only clamps on change
+   (blur/Enter), and Save Settings clamps again server-side regardless. */
+function _softValidateScrapeInterval() {
+  var el  = document.getElementById('s-scrape-interval');
+  var err = document.getElementById('s-scrape-interval-error');
+  if (!el) return;
+  var bad = (parseInt(el.value, 10) || 0) < 60;
+  el.classList.toggle('input-error', bad);
+  if (err) err.style.display = bad ? 'block' : 'none';
+}
+function _commitScrapeInterval() {
+  var el = document.getElementById('s-scrape-interval');
+  if (!el) return;
+  el.value = Math.max(60, parseInt(el.value, 10) || 60);
+  _softValidateScrapeInterval();
 }
 function _updateAutoInterval() {
   var maxEl = document.getElementById('s-max-scrapes');

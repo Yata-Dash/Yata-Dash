@@ -5,18 +5,18 @@
   "abbr": "YUS",
   "url": "https://yu-scene.net",
   "type": "unit3d",
-  "last_updated": "2026-07-18",
+  "last_updated": "2026-07-20",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "suncokret",
+    "role": "Technical Lead",
+    "date": "2026-07-20"
   },
   "scrape": {
     "stat_card_classes": {
       "label": "profile-stats-ribbon__label",
       "value": "profile-stats-ribbon__value"
     },
-    "max_scrapes_per_day": 1
+    "min_interval_minutes": 180
   },
     "rules": {
     "min_ratio": 0.7,

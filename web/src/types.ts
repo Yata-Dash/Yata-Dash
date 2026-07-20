@@ -19,6 +19,9 @@ export interface Tracker {
   /** Canonical field -> target value, e.g. {"uploaded": "10 TiB", "ratio": "1.05"} */
   targets: Record<string, string>;
   target_group: string;    // group name whose requirements are used as targets; "" = manual
+  /** Field key -> optional "reach it by" date (YYYY-MM-DD) — goal pacing.
+   *  Account age ("days") never has one. Absent/empty entry = no deadline. */
+  target_deadlines?: Record<string, string>;
   /** User-entered account creation date (YYYY-MM-DD); fallback when the
    *  tracker reports none. "" = unset. */
   join_date?: string;
@@ -78,6 +81,7 @@ export interface TrackerPayload {
   api_only?: boolean;
   targets?: Record<string, string>;
   target_group?: string;
+  target_deadlines?: Record<string, string>;
   join_date?: string;
   mock_scenario?: string;
 }
@@ -233,6 +237,8 @@ export interface AppSettings {
   show_unread_notifications?: boolean | null; // null = true — unread bell icons
   show_tracker_rules?: boolean | null;        // null = true — compact rules line on grid cards
   highlight_hnr?: boolean | null;             // null = true — red colouring for a nonzero H&R count
+  show_goal_pacing?: boolean | null;          // null = true — full pacing line on Detail's Targets section
+  show_goal_chips?: boolean | null;           // null = true — compact on-track/behind chip on cards/table
   update_check_auto?: boolean;                 // opt-in daily update check (default false)
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
@@ -282,6 +288,20 @@ export interface AlertRule {
 export interface NotificationConfig {
   destinations: NotifyDestination[];
   rules: AlertRule[];
+  digest: DigestConfig;
+}
+
+/** Weekly digest schedule (Settings → Alerts). last_sent_at/last_ready_targets
+ *  are server-maintained — round-trip them but never edit; the backend
+ *  ignores/overwrites them on save (see internal/api/notifications.go's
+ *  putNotifications). */
+export interface DigestConfig {
+  enabled: boolean;
+  weekday: number;          // 0=Sunday … 6=Saturday
+  hour: number;             // 0-23 server-local
+  destinations: string[];   // destination ids; empty = all enabled
+  last_sent_at?: number;          // unix seconds
+  last_ready_targets?: string[];  // pathway targets ready at last digest
 }
 
 // ── Update check (GET /api/updates, POST /api/updates/check) ────────────────

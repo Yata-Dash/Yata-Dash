@@ -24,6 +24,7 @@ export function friendlyDetail(detail?: string): string {
     daily_limit: 'Daily scrape cap reached — try again tomorrow',
     // Failures
     session_expired: 'Session cookie expired — log in again and re-copy it',
+    empty_scrape: 'Profile page returned no recognisable stats — likely an anti-bot or maintenance page',
     forbidden: 'Forbidden (403) — cookie likely invalid or expired',
     user_not_found: 'Profile page not found — check the username',
     timeout: 'Request timed out',

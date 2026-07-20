@@ -5,14 +5,14 @@
   "abbr": "DP",
   "url": "https://darkpeers.org/",
   "type": "unit3d",
-  "last_updated": "2026-07-18",
+  "last_updated": "2026-07-20",
   "approved_by": {
-    "name": "",
-    "role": "",
-    "date": ""
+    "name": "haXXy",
+    "role": "Owner",
+    "date": "2026-07-20"
   },
   "scrape": {
-    "max_scrapes_per_day": 1
+    "min_interval_minutes": 180
   },
   "invite_requirements": {
     "min_class": "ExtremeUser"

@@ -88,6 +88,13 @@ export const dryRunRule = (rule: AlertRule) =>
   call<{ results: DryRunResult[]; error?: string }>('/api/notifications/dryrun', { method: 'POST', body: JSON.stringify(rule) });
 export const notificationsExportUrl = () => '/api/notifications/export';
 
+/** Builds the weekly digest text without sending or mutating any state. */
+export const fetchDigestPreview = () => call<{ text: string }>('/api/notifications/digest/preview');
+
+/** Builds and sends the digest right now, independent of the schedule. */
+export const sendDigestNow = () =>
+  call<{ ok: boolean; sent_to: number; error?: string }>('/api/notifications/digest/send', { method: 'POST' });
+
 // ── Trackers ──────────────────────────────────────────────────────────────
 
 export const fetchTrackers = () => call<Tracker[]>('/api/trackers');

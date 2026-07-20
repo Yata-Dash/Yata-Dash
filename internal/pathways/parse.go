@@ -72,11 +72,11 @@ var durWordRe = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)\s*(years?|yrs?|months?|m
 // misread as a month. Y/W/D accept either case.
 var durLetterRe = regexp.MustCompile(`(\d+(?:\.\d+)?)\s*([YyMWwDd])`)
 
-// parseDurationDays parses durations in either the community word form
+// ParseDurationDays parses durations in either the community word form
 // ("1 month 2 weeks 1 day") or the Unit3D single-letter form ("1M 2W 1D",
 // "8M", "1Y 3M"), or a plain number of days. Returns ok=false when nothing
 // parses, so callers can skip a requirement rather than treating it as zero.
-func parseDurationDays(s string) (float64, bool) {
+func ParseDurationDays(s string) (float64, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, false
@@ -164,7 +164,7 @@ func parseToken(tok string) Req {
 		return Req{Kind: "bonus", Value: n, Raw: tok}
 	}
 	if m := stRe.FindStringSubmatch(tok); m != nil {
-		if days, ok := parseDurationDays(m[1]); ok {
+		if days, ok := ParseDurationDays(m[1]); ok {
 			return Req{Kind: "seedtime", Value: days * 86400, Raw: tok}
 		}
 	}

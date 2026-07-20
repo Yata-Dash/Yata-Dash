@@ -74,6 +74,65 @@ func Send(dest models.NotifyDestination, title, message string) error {
 	return postWithRetry(url, headers, payload)
 }
 
+// chunkSendLimit bounds each message SendChunked hands to Send. Discord hard-
+// caps message bodies at 2000 characters; 1800 leaves headroom for the
+// title Send prepends ("**title**\n...") plus per-type formatting (e.g.
+// Telegram's Markdown wrapping) so no destination's real limit is at risk.
+const chunkSendLimit = 1800
+
+// SendChunked sends a long message to one destination, splitting text on
+// LINE boundaries into chunks under chunkSendLimit so no destination's
+// payload limit (Discord: 2000 chars) is exceeded — used by the weekly
+// digest, which can run long with many trackers. A single chunk keeps title
+// unchanged; multiple chunks get " (i/N)" appended so the reader knows a
+// message was split. Chunks are delivered in order via Send; delivery stops
+// at the first error rather than sending the rest out of order.
+func SendChunked(dest models.NotifyDestination, title, text string) error {
+	chunks := chunkLines(text, chunkSendLimit)
+	for i, chunk := range chunks {
+		t := title
+		if len(chunks) > 1 {
+			t = fmt.Sprintf("%s (%d/%d)", title, i+1, len(chunks))
+		}
+		if err := Send(dest, t, chunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// chunkLines splits text into chunks no longer than limit, breaking only at
+// line boundaries so a wrapped digest section never gets cut mid-line. A
+// single line longer than limit is kept whole and sent alone rather than cut
+// mid-word.
+func chunkLines(text string, limit int) []string {
+	lines := strings.Split(text, "\n")
+	var chunks []string
+	var cur strings.Builder
+	flush := func() {
+		if cur.Len() > 0 {
+			chunks = append(chunks, cur.String())
+			cur.Reset()
+		}
+	}
+	for _, line := range lines {
+		add := line
+		if cur.Len() > 0 {
+			add = "\n" + line
+		}
+		if cur.Len() > 0 && cur.Len()+len(add) > limit {
+			flush()
+			add = line
+		}
+		cur.WriteString(add)
+	}
+	flush()
+	if len(chunks) == 0 {
+		chunks = []string{""}
+	}
+	return chunks
+}
+
 func postWithRetry(url string, headers map[string]string, payload map[string]any) error {
 	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("missing URL")
