@@ -51,7 +51,13 @@ export function renderAggCards(
   const deltaUp    = edgeDelta(agg.up);
   const deltaDown  = edgeDelta(agg.down);
   const deltaBuf   = edgeDelta(agg.buffer);
-  const deltaRatio = edgeDelta(agg.ratio);
+  // Ratio's delta + sparkline use the POOLED ratio (Σup/Σdown per bucket) —
+  // the SAME quantity the big number shows — not buildAggSeries' mean-of-
+  // per-tracker-ratios. The two disagree (a pooled 3.60 vs a mean that can
+  // swing to 10 when one tracker reports), which made the chip read as a
+  // nonsensical "+7.28" against a 3.60 value.
+  const ratioTrend = pooledRatioSeries(agg.up, agg.down);
+  const deltaRatio = edgeDelta(ratioTrend);
   const deltaSeed  = edgeDelta(agg.avgSeed);
 
   for (const pfx of ['g', 't']) {
@@ -86,7 +92,7 @@ export function renderAggCards(
     renderSparkline(`${pfx}-spark-up`,       agg.up,     '--green');
     renderSparkline(`${pfx}-spark-down`,     agg.down,   '--purple');
     renderSparkline(`${pfx}-spark-buf`,      agg.buffer, '--blue');
-    renderSparkline(`${pfx}-spark-ratio`,    agg.ratio,  '--amber');
+    renderSparkline(`${pfx}-spark-ratio`,    ratioTrend, '--amber');
     // Overall-ratio trend (up÷down), not raw up/down — a meaningful
     // trajectory for "is health improving or worsening", coloured by the
     // CURRENT health state rather than the trend's own sign.
@@ -98,6 +104,18 @@ export function renderAggCards(
 function set(id: string, val: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+/** Pooled overall-ratio series (Σuploaded / Σdownloaded per bucket) — the
+ *  same quantity the Overall Ratio card's big number shows, so its delta and
+ *  sparkline stay consistent with it. Buckets with nothing downloaded yet are
+ *  skipped so an early divide-by-zero can't distort the trend. */
+function pooledRatioSeries(up: number[], down: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < up.length; i++) {
+    if (down[i] > 0) out.push(up[i] / down[i]);
+  }
+  return out;
 }
 
 /** Last − first of an aggregate series, or null when there aren't at least

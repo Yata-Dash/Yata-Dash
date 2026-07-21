@@ -7,6 +7,11 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 ## [Unreleased]
 
 ### Added
+
+## [Beta-20260721]
+
+### Added
+
 - **"Don't warn me again" for the login-protection banner.** The dashboard
   banner shown when no login is configured now offers a persistent opt-out
   alongside the session-only ×, for users who deliberately run without login
@@ -17,51 +22,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   off"). This replaces the earlier ask for a way to disable session
   expiration: rather than weakening the auth model, it just quiets the
   reminder for those who've decided they don't need it.
-
-### Changed
-- **Top aggregate cards reworked onto the 7-day history series feed.** The 6
-  headline cards (grid + table views) and the table's expanded-row
-  sparklines now read `/api/history/series` (7-day window) instead of the
-  retired `/api/history` list endpoint, and each card except Tracker Health
-  gets a small signed "+X · 7d" change chip next to its value. The legacy
-  `GET /api/history` endpoint has been removed.
-- **Scrape-limit fields untangled (edit tracker + Settings → Scraping).**
-  Users read the red "This tracker operator requests ≥ N min between
-  scrapes" banner as an error blocking their save — it never blocked
-  anything, it's information. It's now an amber info notice (ⓘ) and says so
-  outright: "Applied automatically — your values below can only add further
-  limits." Red is reserved for the actual blocking validation messages
-  under the fields. The fields themselves lost their double hints: units
-  now sit beside the input ("min", "per UTC day") and each field keeps ONE
-  helper line, reworded to say what 0 really does — the per-tracker
-  interval follows the global setting or the tracker's limit *whichever is
-  longer*, while the per-tracker cap follows the global cap or the
-  tracker's limit *whichever is lower* (an interval is a floor, a cap is a
-  ceiling — the previous wording implied they merged the same way). The
-  global Scraping page gets the same treatment, plus its interval field no
-  longer fights the keyboard: it used to clamp to 60 on every keystroke, so
-  typing "120" snapped to 60 at the "1" — it now shows a soft red state
-  while a value is under the minimum and only clamps when you leave the
-  field.
-
-### Fixed
-- **History-driven charts no longer flat-line when a tracker's ratio is
-  infinite.** A tracker with downloaded=0 reports its ratio as "∞"; recording
-  that wrote a literal +Inf into the history table, and a later
-  `/api/history` read failed to JSON-encode it — the resulting `http 0`
-  silently emptied every top aggregate card and table sparkline for the whole
-  install, not just that one tracker. Non-finite values are no longer
-  recorded, and any already-stored +Inf/NaN rows are skipped on read instead
-  of breaking the response.
-- **Goal-date picker now has a clear way to close.** Setting a target's goal
-  date left the little date pop open with no obvious "done" — you had to
-  click the calendar icon again. It now has a ✓ button, and Enter or Escape
-  close it too (Enter no longer leaks through to submit the surrounding
-  editor). The value is still applied when you save the target, same as
-  before.
-
-### Added
-
 - **Weekly digest.** A scheduled webhook summary — Settings → Alerts gets a
   "Weekly digest" card with its own enable toggle, weekday + hour picker
   (server-local, default Monday 09:00), and a destination multi-select
@@ -146,6 +106,54 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   doesn't return a ratio field (SpeedApp is the first such tracker). A ratio
   mapped directly from the API still wins; nothing downloaded yet renders as
   ∞, and a 0/0 account shows no ratio rather than a misleading 0.
+  
+### Changed
+- **Top aggregate cards reworked onto the 7-day history series feed.** The 6
+  headline cards (grid + table views) and the table's expanded-row
+  sparklines now read `/api/history/series` (7-day window) instead of the
+  retired `/api/history` list endpoint, and each card except Tracker Health
+  gets a small signed "+X · 7d" change chip next to its value. The Overall
+  Ratio card's chip and sparkline use the pooled ratio (total up ÷ total
+  down) — the same quantity its big number shows — rather than an average of
+  each tracker's individual ratio, so the change reads consistently with the
+  value instead of a figure that could look unrelated to it. The Tracker
+  Health card, which has no chip, reserves the same blank line so its
+  sparkline stays aligned with the others. The legacy `GET /api/history`
+  endpoint has been removed.
+- **Scrape-limit fields untangled (edit tracker + Settings → Scraping).**
+  Users read the red "This tracker operator requests ≥ N min between
+  scrapes" banner as an error blocking their save — it never blocked
+  anything, it's information. It's now an amber info notice (ⓘ) and says so
+  outright: "Applied automatically — your values below can only add further
+  limits." Red is reserved for the actual blocking validation messages
+  under the fields. The fields themselves lost their double hints: units
+  now sit beside the input ("min", "per UTC day") and each field keeps ONE
+  helper line, reworded to say what 0 really does — the per-tracker
+  interval follows the global setting or the tracker's limit *whichever is
+  longer*, while the per-tracker cap follows the global cap or the
+  tracker's limit *whichever is lower* (an interval is a floor, a cap is a
+  ceiling — the previous wording implied they merged the same way). The
+  global Scraping page gets the same treatment, plus its interval field no
+  longer fights the keyboard: it used to clamp to 60 on every keystroke, so
+  typing "120" snapped to 60 at the "1" — it now shows a soft red state
+  while a value is under the minimum and only clamps when you leave the
+  field.
+
+### Fixed
+- **History-driven charts no longer flat-line when a tracker's ratio is
+  infinite.** A tracker with downloaded=0 reports its ratio as "∞"; recording
+  that wrote a literal +Inf into the history table, and a later
+  `/api/history` read failed to JSON-encode it — the resulting `http 0`
+  silently emptied every top aggregate card and table sparkline for the whole
+  install, not just that one tracker. Non-finite values are no longer
+  recorded, and any already-stored +Inf/NaN rows are skipped on read instead
+  of breaking the response.
+- **Goal-date picker now has a clear way to close.** Setting a target's goal
+  date left the little date pop open with no obvious "done" — you had to
+  click the calendar icon again. It now has a ✓ button, and Enter or Escape
+  close it too (Enter no longer leaks through to submit the surrounding
+  editor). The value is still applied when you save the target, same as
+  before.
 
 ## [Beta-20260717]
 
