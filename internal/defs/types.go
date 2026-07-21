@@ -160,6 +160,22 @@ type TrackerDef struct {
 	Rules *TrackerRules `json:"rules,omitempty"`
 }
 
+// LadderIndex returns a group's position in a def's ascending ladder (Groups
+// is lowest-first — see TrackerDef.Groups), matched case-insensitively, or -1
+// if the name isn't one of that def's ranks. Only positions of two names in
+// the SAME def's ladder are comparable, and only meaningfully so for earned
+// ranks: the upper end of many ladders holds staff/uploader classes that are
+// appointed rather than climbed to.
+func LadderIndex(groups []GroupDef, name string) int {
+	name = strings.TrimSpace(name)
+	for i, g := range groups {
+		if strings.EqualFold(g.Name, name) {
+			return i
+		}
+	}
+	return -1
+}
+
 // InviteReqs are a tracker's site-wide invite-system requirements (see
 // TrackerDef.InviteRequirements). The embedded GroupRequirements fields
 // (min_uploaded, min_ratio, min_age, …) carry the stat thresholds.
@@ -167,6 +183,12 @@ type InviteReqs struct {
 	// MinClass is a user class that must ADDITIONALLY be held (must match a
 	// Groups entry by name for live evaluation, e.g. "Power User").
 	MinClass string `json:"min_class,omitempty"`
+	// MinClassAnyOf lists classes where holding ANY ONE of them opens the
+	// invite forum — for trackers whose ladder forks into parallel tracks that
+	// unlock it at different rungs (LST: "Sailboat OR Whale", the standard and
+	// upload-heavy branches). Names must match Groups entries. Set alongside
+	// MinClass only when BOTH rules apply; use one or the other normally.
+	MinClassAnyOf []string `json:"min_class_any_of,omitempty"`
 	GroupRequirements
 	// Note is free text always shown alongside (e.g. "some invite threads
 	// additionally require VIP"). Keep it short and cite-worthy.

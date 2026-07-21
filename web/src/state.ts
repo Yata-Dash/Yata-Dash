@@ -51,7 +51,7 @@ export let appSettings: AppSettings = {
   scrape_interval_minutes: 120, max_scrapes_per_day: 0, auto_interval: false,
   refresh_interval_minutes: 30, qui_refresh_seconds: 10,
   qui_url: 'http://localhost:7476', qui_api_key: '',
-  qui_enabled_instances: [], qui_bars_visible: true,
+  qui_enabled_instances: [], qui_bars_visible: true, qui_seedsize_mode: 'off',
   backup_enabled: false, backup_frequency: 'weekly', backup_keep: 5,
   prowlarr_url: '', prowlarr_api_key: '', jackett_url: '', jackett_admin_password: '',
 };

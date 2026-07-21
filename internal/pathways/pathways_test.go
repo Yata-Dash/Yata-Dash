@@ -498,3 +498,360 @@ func TestFindPathsNoRouteSuggestions(t *testing.T) {
 
 // noInviteReqs is the default inviteReqsFor for tests (no def-level rules).
 func noInviteReqs(string) *defs.InviteReqs { return nil }
+
+// ─── "A or B and C" route requirements ───────────────────────────────────────
+
+// TestParseAlternatives: the token grammar reads alternatives and conjuncts,
+// and — critically — refuses to half-read the community data's prose.
+func TestParseAlternatives(t *testing.T) {
+	// Parsed as alternatives: kinds of each atom, per alternative.
+	for _, tc := range []struct {
+		in   string
+		want [][]string
+	}{
+		{"9 months or 6 months and 10+ uploads", [][]string{{"age"}, {"age", "uploads"}}},
+		{"9 months or 10+ uploads", [][]string{{"age"}, {"uploads"}}},
+		{"3 years or 300 uploads", [][]string{{"age"}, {"uploads"}}},
+		{"12 months or Elite+", [][]string{{"age"}, {"class"}}},
+		{"Elite or 6 months", [][]string{{"class"}, {"age"}}},
+		{"50 uploads or 75 adopted torrents + 5 uploads", [][]string{{"uploads"}, {"adoptions", "uploads"}}},
+	} {
+		got := ParseReqs(tc.in)
+		if len(got) != 1 || got[0].Kind != "any_of" {
+			t.Errorf("%q: expected one any_of token, got %+v", tc.in, got)
+			continue
+		}
+		sets := got[0].AnyOf
+		if len(sets) != len(tc.want) {
+			t.Errorf("%q: %d alternatives, want %d", tc.in, len(sets), len(tc.want))
+			continue
+		}
+		for i, want := range tc.want {
+			if len(sets[i]) != len(want) {
+				t.Errorf("%q alt %d: %+v, want kinds %v", tc.in, i, sets[i], want)
+				continue
+			}
+			for j, k := range want {
+				if sets[i][j].Kind != k {
+					t.Errorf("%q alt %d atom %d: kind %q, want %q", tc.in, i, j, sets[i][j].Kind, k)
+				}
+			}
+		}
+	}
+
+	// NOT alternatives — every one of these must keep its existing shape.
+	for _, tc := range []struct {
+		in   string
+		kind string
+		why  string
+	}{
+		{"Whale or Sailboat", "class", "class-only ORs stay a single class requirement (the def-ladder dedupe depends on it)"},
+		{"Elite+ or VIP", "class", "class-only, with the + preserved"},
+		{"BluArchivist or higher", "class", `"or higher" is the + modifier, not an alternative`},
+		{"Profile link and screenshots", "class", "prose: 'screenshots' is not a class name"},
+		{"3 profile links and screenshots", "unknown", "prose: no atom parses"},
+		{"500GB download on MAM or 6 month account age", "unknown", "prose: the first clause doesn't parse"},
+		{"2 years with either 250 movie uploads or 30 completed subtitle pots", "unknown", "prose"},
+		{"90%+ seeding percentage OR 100GB seedsize", "unknown", "percent-seeding is not a stat Yata has"},
+	} {
+		got := ParseReqs(tc.in)
+		if len(got) != 1 || got[0].Kind != tc.kind {
+			t.Errorf("%q: got %+v, want a single %q token — %s", tc.in, got, tc.kind, tc.why)
+		}
+	}
+
+	// "Prometheus+" keeps meaning "or higher" without an alternative.
+	if q := ParseReqs("BluArchivist or higher")[0]; !q.Plus || len(q.Classes) != 1 || q.Classes[0] != "BluArchivist" {
+		t.Errorf("or-higher: %+v", q)
+	}
+	// A token with conjuncts but no alternatives is just several
+	// requirements written without a comma.
+	if got := ParseReqs("Elite + 6 months"); len(got) != 2 || got[0].Kind != "class" || got[1].Kind != "age" {
+		t.Errorf("pure conjunction should flatten: %+v", got)
+	}
+}
+
+// TestAnyOfEvaluation: met when ANY alternative is fully met; the headline
+// ETA is the fastest alternative that can be estimated end to end.
+func TestAnyOfEvaluation(t *testing.T) {
+	d := &Data{Source: SourceInfo{Name: "test"}, Routes: []Route{
+		{From: "Seed", To: "Mam", Reqs: "9 months or 6 months and 10+ uploads", Active: true},
+	}}
+	d.index()
+	base := Stats{AgeDays: 0, UploadedGiB: 100, Ratio: 2, SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, BonusPoints: -1}
+
+	step := func(ageDays, uploads float64) Step {
+		u := UserTracker{TrackerID: "t1", PathwayName: "Seed", Stats: base}
+		u.Stats.AgeDays, u.Stats.Uploads = ageDays, uploads
+		return DirectRoutesFrom(d, u, map[string]bool{}, ladderGroups, noInviteReqs)[0]
+	}
+
+	// 7 months + 12 uploads → the SECOND alternative is met in full.
+	s := step(213, 12)
+	if len(s.Reqs) != 1 || !s.Reqs[0].Met || s.Reqs[0].ETADays != 0 {
+		t.Fatalf("second alternative met → requirement met: %+v", s.Reqs)
+	}
+	if len(s.Reqs[0].AnyOf) != 2 {
+		t.Fatalf("both alternatives should still render: %+v", s.Reqs[0].AnyOf)
+	}
+	if s.ETADays != 0 || s.HasUnknown {
+		t.Errorf("route should be fully met: eta=%v unknown=%v", s.ETADays, s.HasUnknown)
+	}
+
+	// 7 months, no uploads → alt 2 needs uploads (no ETA), alt 1 is 2 months
+	// of pure account age away. The known age path drives the estimate.
+	s = step(213, 0)
+	q := s.Reqs[0]
+	if q.Met {
+		t.Fatal("nothing is met yet")
+	}
+	if want := 274.0 - 213.0; q.ETADays < want-1 || q.ETADays > want+1 {
+		t.Errorf("ETA should be the remaining age on alternative 1 (%v), got %v", want, q.ETADays)
+	}
+	if q.HasUnknown {
+		t.Error("alternative 1 is fully estimable, so the ETA is not a floor")
+	}
+	// The uploads row inside alternative 2 still shows its own progress.
+	if r := q.AnyOf[1][1]; r.Kind != "uploads" || r.Met || r.Need != 10 {
+		t.Errorf("alt 2 uploads row: %+v", r)
+	}
+}
+
+// ─── def invite requirements merged into the community data ──────────────────
+
+// inviteData is a tracker whose route texts state the invite-forum class in
+// every possible relation to the def's own min_class: the same class, a
+// higher one, a lower one, and not at all.
+func inviteData() *Data {
+	d := &Data{
+		Source: SourceInfo{Name: "test"},
+		Routes: []Route{
+			{From: "Seed", To: "Same", Reqs: "Gold", Active: true},
+			{From: "Seed", To: "Higher", Reqs: "Platinum+", Active: true},
+			{From: "Seed", To: "Lower", Reqs: "Silver+", Active: true},
+			{From: "Seed", To: "Either", Reqs: "Platinum or Bronze", Active: true},
+			{From: "Seed", To: "Silent", Reqs: "No requirement", Active: true},
+			{From: "Seed", To: "Stats", Reqs: "1 TiB upload", Active: true},
+			{From: "Seed", To: "Aged", Reqs: "6 months", Active: true},
+		},
+	}
+	d.index()
+	return d
+}
+
+// ladderGroups is a four-rung ascending ladder (lowest first), no stat
+// requirements — the class rows in these tests are about identity, not
+// progress.
+func ladderGroups(name string) []defs.GroupDef {
+	if name != "Seed" {
+		return nil
+	}
+	return []defs.GroupDef{{Name: "Bronze"}, {Name: "Silver"}, {Name: "Gold"}, {Name: "Platinum"}}
+}
+
+func inviteUser() UserTracker {
+	return UserTracker{TrackerID: "t1", PathwayName: "Seed", Stats: Stats{
+		AgeDays: 400, UploadedGiB: 2048, Ratio: 2, SeedSizeGiB: -1,
+		AvgSeedSec: -1, Uploads: -1, BonusPoints: -1,
+	}}
+}
+
+// stepsByTarget evaluates every direct route from the user's tracker.
+func stepsByTarget(d *Data, ir func(string) *defs.InviteReqs) map[string]Step {
+	out := map[string]Step{}
+	for _, s := range DirectRoutesFrom(d, inviteUser(), map[string]bool{}, ladderGroups, ir) {
+		out[s.To] = s
+	}
+	return out
+}
+
+func reqLabels(s Step) []string {
+	var out []string
+	for _, q := range s.Reqs {
+		out = append(out, q.Label)
+	}
+	return out
+}
+
+// TestInviteReqsClassDedupe: a def min_class the route text already demands
+// must not produce a second identical row (seedpool's "SuperPool" route text
+// vs its SuperPool invite forum), while a class the route does NOT guarantee
+// keeps its own row.
+func TestInviteReqsClassDedupe(t *testing.T) {
+	gold := func(name string) *defs.InviteReqs {
+		if name != "Seed" {
+			return nil
+		}
+		return &defs.InviteReqs{MinClass: "Gold"}
+	}
+	steps := stepsByTarget(inviteData(), gold)
+
+	for _, tc := range []struct {
+		to   string
+		want []string
+	}{
+		{"Same", []string{"Gold"}},                         // identical → one row
+		{"Higher", []string{"Platinum+"}},                  // above Gold on the ladder → implies it
+		{"Lower", []string{"Silver+", "Gold"}},             // below Gold → both rows carry information
+		{"Either", []string{"Platinum or Bronze", "Gold"}}, // one alternative is below Gold
+		{"Silent", []string{"Gold"}},                       // "No requirement" contradicted → dropped
+	} {
+		got := reqLabels(steps[tc.to])
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: got rows %q, want %q", tc.to, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("%s: got rows %q, want %q", tc.to, got, tc.want)
+				break
+			}
+		}
+	}
+	if s := steps["Silent"]; s.ETADays != 0 || s.HasUnknown {
+		t.Errorf("Silent: class met, no other reqs — expected a clean zero ETA, got %+v", s)
+	}
+}
+
+// TestInviteReqsStatDedupe: a def stat threshold and a route stat threshold of
+// the same kind collapse to ONE row at the stricter of the two.
+func TestInviteReqsStatDedupe(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		ir       defs.InviteReqs
+		to       string
+		wantKind string
+		wantNeed float64
+	}{
+		{"def stricter", defs.InviteReqs{GroupRequirements: defs.GroupRequirements{MinUploaded: "5 TiB"}}, "Stats", "uploaded", 5 * 1024},
+		{"route stricter", defs.InviteReqs{GroupRequirements: defs.GroupRequirements{MinUploaded: "500 GiB"}}, "Stats", "uploaded", 1024},
+		{"age merged", defs.InviteReqs{GroupRequirements: defs.GroupRequirements{MinAge: "1Y"}}, "Aged", "age", 365},
+	} {
+		ir := tc.ir
+		steps := stepsByTarget(inviteData(), func(name string) *defs.InviteReqs {
+			if name != "Seed" {
+				return nil
+			}
+			return &ir
+		})
+		var rows []ReqProgress
+		for _, q := range steps[tc.to].Reqs {
+			if q.Kind == tc.wantKind {
+				rows = append(rows, q)
+			}
+		}
+		if len(rows) != 1 {
+			t.Errorf("%s: want exactly one %s row, got %+v", tc.name, tc.wantKind, rows)
+			continue
+		}
+		if rows[0].Need != tc.wantNeed {
+			t.Errorf("%s: want need %v, got %v (%q)", tc.name, tc.wantNeed, rows[0].Need, rows[0].Label)
+		}
+	}
+}
+
+// TestInviteReqsMinClassAnyOf: a def whose invite forum opens on ANY of
+// several classes (LST's "Sailboat OR Whale" — parallel branches of the same
+// ladder) is satisfied by a route that guarantees any one of them.
+func TestInviteReqsMinClassAnyOf(t *testing.T) {
+	d := &Data{Source: SourceInfo{Name: "test"}, Routes: []Route{
+		{From: "Seed", To: "Both", Reqs: "Gold or Silver", Active: true},
+		{From: "Seed", To: "One", Reqs: "Platinum", Active: true},
+		{From: "Seed", To: "Mixed", Reqs: "Gold or Bronze", Active: true},
+		{From: "Seed", To: "Silent", Reqs: "No requirement", Active: true},
+	}}
+	d.index()
+	anyOf := func(name string) *defs.InviteReqs {
+		if name != "Seed" {
+			return nil
+		}
+		return &defs.InviteReqs{MinClassAnyOf: []string{"Silver", "Gold"}}
+	}
+	steps := stepsByTarget(d, anyOf)
+
+	for _, tc := range []struct {
+		to   string
+		want []string
+	}{
+		{"Both", []string{"Gold or Silver"}},                    // exactly the def's pair
+		{"One", []string{"Platinum"}},                           // outranks both alternatives
+		{"Mixed", []string{"Gold or Bronze", "Silver or Gold"}}, // Bronze satisfies neither
+		{"Silent", []string{"Silver or Gold"}},                  // def token stands alone
+	} {
+		got := reqLabels(steps[tc.to])
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: got rows %q, want %q", tc.to, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("%s: got rows %q, want %q", tc.to, got, tc.want)
+				break
+			}
+		}
+	}
+	// The def token evaluates as a real class row, not an opaque one.
+	if rows := steps["Silent"].Reqs; len(rows) != 1 || len(rows[0].Classes) != 2 {
+		t.Errorf("expected both alternatives evaluated: %+v", rows)
+	}
+}
+
+// TestUnavailReasons: rows that can't be measured say WHY, so the UI can
+// render them like an untrackable target instead of a bare "?".
+func TestUnavailReasons(t *testing.T) {
+	d := &Data{Source: SourceInfo{Name: "test"}, Routes: []Route{
+		{From: "Seed", To: "Text", Reqs: "2 more proofs", Active: true},
+		{From: "Seed", To: "Stat", Reqs: "5 uploads", Active: true},
+		{From: "Seed", To: "Class", Reqs: "Mystery", Active: true},
+	}}
+	d.index()
+	steps := stepsByTarget(d, noInviteReqs)
+
+	want := map[string]string{"Text": "text", "Stat": "stat", "Class": "class"}
+	for to, reason := range want {
+		rows := steps[to].Reqs
+		if len(rows) != 1 {
+			t.Errorf("%s: expected one row, got %+v", to, rows)
+			continue
+		}
+		if rows[0].Unavail != reason {
+			t.Errorf("%s: unavail = %q, want %q", to, rows[0].Unavail, reason)
+		}
+		if rows[0].Met || rows[0].Note == "" {
+			t.Errorf("%s: unavailable rows are never met and must explain why: %+v", to, rows[0])
+		}
+		if !steps[to].HasUnknown {
+			t.Errorf("%s: an unmeasurable requirement must keep the step's ETA a floor", to)
+		}
+	}
+	// A stat the tracker DOES report is never flagged unavailable, even when
+	// there's no rate to project a date from.
+	u := inviteUser()
+	u.Stats.Uploads = 2
+	for _, s := range DirectRoutesFrom(d, u, map[string]bool{}, ladderGroups, noInviteReqs) {
+		if s.To == "Stat" && s.Reqs[0].Unavail != "" {
+			t.Errorf("uploads 2/5 is trackable progress, not unavailable: %+v", s.Reqs[0])
+		}
+	}
+}
+
+// TestInviteReqsAddedWhenAbsent: a def requirement the community text doesn't
+// mention is still added — this is what stops "No requirement" routes from
+// reading as ready for a user who hasn't reached the invite-forum class.
+func TestInviteReqsAddedWhenAbsent(t *testing.T) {
+	newbie := inviteUser()
+	newbie.Stats.AgeDays = 10
+	ir := &defs.InviteReqs{GroupRequirements: defs.GroupRequirements{MinAge: "1Y"}}
+	steps := map[string]Step{}
+	for _, s := range DirectRoutesFrom(inviteData(), newbie, map[string]bool{}, ladderGroups,
+		func(string) *defs.InviteReqs { return ir }) {
+		steps[s.To] = s
+	}
+	s := steps["Silent"]
+	if len(s.Reqs) != 1 || s.Reqs[0].Kind != "age" || s.Reqs[0].Met {
+		t.Fatalf("expected a single unmet age row on the requirement-less route, got %+v", s.Reqs)
+	}
+	if s.ETADays != 355 {
+		t.Errorf("expected 355 days of account age left, got %v", s.ETADays)
+	}
+}

@@ -92,6 +92,17 @@ func quiStats(d *Deps) http.HandlerFunc {
 		if ts == nil {
 			ts = map[string]any{}
 		}
+		// Unregistered count (torrents the tracker no longer knows) lives in
+		// counts.status, not the stats block. Absent on older qui versions —
+		// the response then simply omits the key and the bar hides the pill.
+		var unregistered any
+		if counts, ok := data["counts"].(map[string]any); ok {
+			if status, ok := counts["status"].(map[string]any); ok {
+				if v, ok := status["unregistered"]; ok {
+					unregistered = v
+				}
+			}
+		}
 		jsonOK(w, map[string]any{
 			"instance_id":          instID,
 			"connection_status":    ss["connection_status"],
@@ -106,6 +117,7 @@ func quiStats(d *Deps) http.HandlerFunc {
 			"downloading":          ts["downloading"],
 			"paused":               ts["paused"],
 			"errors":               ts["error"],
+			"unregistered":         unregistered,
 			"checking":             ts["checking"],
 			"total_torrents":       ts["total"],
 			"total_size":           ts["totalSize"],

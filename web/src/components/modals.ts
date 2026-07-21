@@ -1609,6 +1609,7 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   // stored — saving sends it back unchanged; typing replaces; clearing clears.
   (document.getElementById('s-qui-key') as HTMLInputElement).value = settings.qui_api_key ?? '';
   setPlaceholder('s-qui-key', settings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your QUI API key');
+  (document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement).value = settings.qui_seedsize_mode ?? 'off';
 
   const syncTrack    = document.getElementById('s-profile-sync-track');
   const faviconTrack = document.getElementById('s-favicon-track');
@@ -1907,6 +1908,7 @@ export async function saveSettings(deps: SettingsDeps) {
     qui_api_key:           quiKey,
     qui_enabled_instances: enabledIds,
     qui_bars_visible:      isOn('s-qui-bars-track', true),
+    qui_seedsize_mode:     ((document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement)?.value ?? 'off') as AppSettings['qui_seedsize_mode'],
     profile_auto_sync:     isOn('s-profile-sync-track', true),
     show_favicons:         isOn('s-favicon-track', false),
     private_mode:          isOn('s-private-track', false),

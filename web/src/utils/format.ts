@@ -285,12 +285,14 @@ export function fieldLabel(key: string): string {
 export function srcDot(field: StatField | undefined, settings: AppSettings): string {
   if (!settings.show_stat_sources || !field?.source) return '';
   const src = field.source === 'scrape' ? 'scrape'
-    : field.source === 'manual' ? 'manual' : 'api';
+    : field.source === 'manual' ? 'manual'
+    : field.source === 'qui' ? 'qui' : 'api';
   const when = field.updated_at
     ? ` · updated ${new Date(field.updated_at * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
     : '';
   const label = src === 'api' ? 'From API'
     : src === 'scrape' ? 'From profile scrape'
+    : src === 'qui' ? 'From qui'
     : 'Entered manually';
   return `<span class="stat-src stat-src--${src}" title="${label}${when}"></span>`;
 }

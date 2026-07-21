@@ -74,6 +74,7 @@ export function buildQuiBarHTML(instId: number, instName: string): string {
       <div class="qui-count-pill"><span class="qui-count-label" style="color:var(--blue)">Checking</span><span class="qui-count-value qi-checking" style="color:var(--blue)">—</span></div>
       <div class="qui-count-pill"><span class="qui-count-label" style="color:var(--amber)">Paused</span><span class="qui-count-value qi-paused" style="color:var(--amber)">—</span></div>
       <div class="qui-count-pill"><span class="qui-count-label" style="color:var(--red)">Error</span><span class="qui-count-value qi-error" style="color:var(--red)">—</span></div>
+      <div class="qui-count-pill qi-unregistered-pill"><span class="qui-count-label" style="color:var(--red)">Unregistered</span><span class="qui-count-value qi-unregistered" style="color:var(--red)">—</span></div>
     </div>
   </div>`;
 }
@@ -114,7 +115,7 @@ export function updateQuiBar(bar: Element, data: Record<string, unknown>): void 
     set('.qi-conn-label', data?.['error'] === 'connection_error' ? 'Not reachable' : (data?.['error'] ?? '—'));
     ['.qi-dl-speed', '.qi-ul-speed', '.qi-free-space', '.qi-global-ratio',
      '.qi-seeding', '.qi-downloading', '.qi-checking', '.qi-paused', '.qi-error',
-     '.qi-total-torrents', '.qi-total-size'].forEach(c => set(c, '—'));
+     '.qi-unregistered', '.qi-total-torrents', '.qi-total-size'].forEach(c => set(c, '—'));
     setStyle('.qi-global-ratio', 'color', 'var(--text3)');
     setStyle('.qi-ratio-icon', 'fill', 'var(--text3)');
     return;
@@ -140,6 +141,11 @@ export function updateQuiBar(bar: Element, data: Record<string, unknown>): void 
   set('.qi-checking',       data['checking'] ?? 0);
   set('.qi-paused',         data['paused'] ?? '—');
   set('.qi-error',          data['errors'] ?? 0);
+  // Unregistered — absent on qui versions that predate the counter; hide the
+  // pill rather than show a fake 0.
+  const unregPill = bar.querySelector('.qi-unregistered-pill') as HTMLElement | null;
+  if (unregPill) unregPill.style.display = data['unregistered'] == null ? 'none' : '';
+  set('.qi-unregistered',   data['unregistered'] ?? '—');
   set('.qi-total-torrents', data['total_torrents'] ?? '—');
   set('.qi-total-size',     fmtBytes(Number(data['total_size']) || 0));
 }

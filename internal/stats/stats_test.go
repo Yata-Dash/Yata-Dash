@@ -9,6 +9,64 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
+// TestMergedQUISeedsizeModes: where the qui layer's seed_size lands for each
+// QUISeedsizeMode — and that qui NEVER beats the tracker's own API.
+func TestMergedQUISeedsizeModes(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "q.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+	mode := "off"
+	e.QUISeedMode = func() string { return mode }
+
+	// Three layers disagree about seed_size; API also has a field qui lacks.
+	_ = e.SaveAPI("t1", map[string]any{"uploaded": "5.00 TiB"})
+	_ = e.SaveScrape("t1", map[string]any{"seed_size": "2.00 TiB"})
+	_ = e.SaveQUI("t1", map[string]any{"seed_size": "9.00 TiB"})
+
+	seedFrom := func(wantVal string, wantSrc models.Source) {
+		t.Helper()
+		m, err := e.Merged("t1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := m["seed_size"]
+		if f.Value != wantVal || f.Source != wantSrc {
+			t.Errorf("mode %s: seed_size = %v from %s, want %v from %s",
+				mode, f.Value, f.Source, wantVal, wantSrc)
+		}
+	}
+
+	seedFrom("2.00 TiB", models.SourceScrape) // off: qui layer invisible
+	mode = "missing"
+	seedFrom("2.00 TiB", models.SourceScrape) // scrape has it → qui only fills gaps
+	mode = "prefer"
+	seedFrom("9.00 TiB", models.SourceQUI) // beats the scrape
+
+	// Scrape loses the stat (returns zero) → "missing" now fills from qui.
+	_ = e.SaveScrape("t1", map[string]any{"seed_size": "0 B"})
+	mode = "missing"
+	seedFrom("9.00 TiB", models.SourceQUI)
+
+	// The tracker's API starts reporting seed_size → it wins in EVERY mode.
+	_ = e.SaveAPI("t1", map[string]any{"uploaded": "5.00 TiB", "seed_size": "3.00 TiB"})
+	for _, m := range []string{"off", "missing", "prefer"} {
+		mode = m
+		seedFrom("3.00 TiB", models.SourceAPI)
+	}
+
+	// Clearing the qui layer removes the stat when nothing else has it.
+	_ = e.SaveAPI("t1", map[string]any{"uploaded": "5.00 TiB"})
+	_ = e.SaveQUI("t1", map[string]any{})
+	mode = "prefer"
+	m, _ := e.Merged("t1")
+	if f, ok := m["seed_size"]; ok && meaningful(f.Value) {
+		t.Errorf("cleared qui layer + zero scrape should leave no seed_size, got %+v", f)
+	}
+}
+
 func TestGrowthRatesFromDailyRollups(t *testing.T) {
 	db, err := store.Open(filepath.Join(t.TempDir(), "r.db"))
 	if err != nil {

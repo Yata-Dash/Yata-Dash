@@ -22,6 +22,11 @@ type Req struct {
 	// Value: GiB for uploaded/seed_size, plain number for ratio/uploads/
 	// bonus, seconds for seedtime.
 	Value float64 `json:"value,omitempty"`
+	// AnyOf holds the alternative requirement SETS of kind "any_of", parsed
+	// from "A or B and C": the token is satisfied when every atom of ANY ONE
+	// set is met ("9 months or 6 months and 10+ uploads" → [[9mo], [6mo, 10
+	// uploads]]).
+	AnyOf [][]Req `json:"any_of,omitempty"`
 	// Raw is the original token text.
 	Raw string `json:"raw"`
 }
@@ -30,7 +35,9 @@ var (
 	durRe   = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)\s*(years?|yrs?|y|months?|mos?|weeks?|wks?|w|days?|d)$`)
 	ratioRe = regexp.MustCompile(`(?i)^ratio\s*>?=?\s*(\d+(?:\.\d+)?)$`)
 	sizeRe  = regexp.MustCompile(`(?i)^(?:upload\s+)?(\d+(?:\.\d+)?)\s*(TiB|TB|GiB|GB|MiB|MB)\s*(upload(?:ed)?|seed\s*size|buffer)?$`)
-	countRe = regexp.MustCompile(`(?i)^(\d+)\s*(uploads?|torrents?|adoptions?)$`)
+	// countRe: "200 uploads", "10+ uploads" (the "+" is part of the quantity —
+	// "at least" — never a conjunction), "75 adopted torrents".
+	countRe = regexp.MustCompile(`(?i)^(\d+)\+?\s*(adopted\s+torrents?|adoptions?|uploads?|torrents?)$`)
 	bpRe    = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)\s*([km])?\s*BP$`)
 	stRe    = regexp.MustCompile(`(?i)^avg\.?\s*seed\s*time\s*>?=?\s*(.+)$`)
 )
@@ -125,12 +132,118 @@ func ParseReqs(text string) []Req {
 		if tok == "" {
 			continue
 		}
-		out = append(out, parseToken(tok))
+		q := parseToken(tok)
+		// A token with no alternatives, only conjuncts ("Elite + 6 months"),
+		// is just several requirements written without a comma — flatten it
+		// so each gets its own row, exactly as a comma would have produced.
+		if q.Kind == "any_of" && len(q.AnyOf) == 1 {
+			out = append(out, q.AnyOf[0]...)
+			continue
+		}
+		out = append(out, q)
 	}
 	return out
 }
 
+// Token grammar, one level above the atoms below:
+//
+//	token       := alternative ("or" alternative)*   — ANY ONE must be met
+//	alternative := atom (("and" | " + ") atom)*      — ALL must be met
+//	atom        := one of the regex forms in parseAtom
+//
+// It is deliberately all-or-nothing: if a single atom anywhere in the token
+// fails to parse, the whole token falls back to parseAtom and (normally)
+// stays "unknown", shown verbatim for the user to check by hand. The
+// community data is mostly prose — "2 years with either 250 movie uploads or
+// 30 completed subtitle pots", "…write 1 short paragraph…" — and half-reading
+// a sentence would be worse than not reading it.
+var (
+	orRe = regexp.MustCompile(`(?i)\s+or\s+`)
+	// The "+" conjunction must be SPACED: an attached one is part of the
+	// quantity ("10+ uploads") or a class suffix ("Prometheus+").
+	andRe = regexp.MustCompile(`(?i)\s+(?:and|\+)\s+`)
+)
+
 func parseToken(tok string) Req {
+	// "X or higher" / "X or above" is the "+" modifier written out, NOT an
+	// alternative — "higher" is not a class name.
+	if m := regexp.MustCompile(`(?i)\s+or\s+(?:higher|above)\s*$`).FindString(tok); m != "" {
+		q := parseAtom(strings.TrimSuffix(tok, m) + "+")
+		q.Raw = tok
+		return q
+	}
+	if sets, ok := parseAltSets(tok); ok {
+		return Req{Kind: "any_of", AnyOf: sets, Raw: tok}
+	}
+	return parseAtom(tok)
+}
+
+// parseAltSets splits a token into its alternative × conjunct sets. ok is
+// false — meaning the caller should fall back to the single-atom parse —
+// when the token has no "or"/"and" structure, when any atom fails to parse,
+// or when every alternative is a lone class name: "Whale or Sailboat" is
+// already expressed as one class requirement with several Classes, and that
+// shape carries the def-ladder dedupe (see classImplies).
+func parseAltSets(tok string) ([][]Req, bool) {
+	alts := orRe.Split(tok, -1)
+	var sets [][]Req
+	allLoneClass := true
+	for _, alt := range alts {
+		var set []Req
+		for _, part := range andRe.Split(alt, -1) {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				return nil, false
+			}
+			q := parseAtom(part)
+			if q.Kind == "unknown" || q.Kind == "none" {
+				return nil, false
+			}
+			// parseAtom's class branch is a catch-all: ANY letter-leading
+			// text becomes a "class". That is fine for a whole token shown
+			// verbatim, but inside this grammar it would let a clause of
+			// prose ("Profile link", "seedsize > 2TB") pass as a real
+			// requirement and split a sentence into nonsense rows.
+			if q.Kind == "class" && !looksLikeClassName(part) {
+				return nil, false
+			}
+			set = append(set, q)
+		}
+		if len(set) != 1 || set[0].Kind != "class" {
+			allLoneClass = false
+		}
+		sets = append(sets, set)
+	}
+	if allLoneClass {
+		return nil, false
+	}
+	// A single alternative means the token was a pure conjunction ("Elite +
+	// 6 months"); one atom means no structure at all. Both are handled by
+	// ParseReqs / parseAtom rather than as an "any_of".
+	if len(sets) == 0 || (len(sets) == 1 && len(sets[0]) < 2) {
+		return nil, false
+	}
+	return sets, true
+}
+
+// classNameRe: letters/digits and the punctuation real rank names use, with
+// the optional "+" suffix. No comparison operators, brackets or quotes —
+// those mark prose or an unparsed threshold, never a class.
+var classNameRe = regexp.MustCompile(`^[A-Z][A-Za-z0-9.\-' ]*\+?$`)
+
+// looksLikeClassName gates what the token grammar will accept as a user
+// class. Real ranks are short, capitalised and at most a few words
+// ("Elite", "Power User", "BluArchivist"); the community data's prose
+// clauses ("screenshots", "seedsize > 2TB") are not.
+func looksLikeClassName(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 40 || !classNameRe.MatchString(s) {
+		return false
+	}
+	return len(strings.Fields(s)) <= 3
+}
+
+func parseAtom(tok string) Req {
 	// Duration → account age.
 	if m := durRe.FindStringSubmatch(tok); m != nil {
 		n, _ := strconv.ParseFloat(m[1], 64)
@@ -151,7 +264,11 @@ func parseToken(tok string) Req {
 	}
 	if m := countRe.FindStringSubmatch(tok); m != nil {
 		n, _ := strconv.ParseFloat(m[1], 64)
-		return Req{Kind: "uploads", Value: n, Raw: tok}
+		kind := "uploads"
+		if strings.Contains(strings.ToLower(m[2]), "adopt") {
+			kind = "adoptions"
+		}
+		return Req{Kind: kind, Value: n, Raw: tok}
 	}
 	if m := bpRe.FindStringSubmatch(tok); m != nil {
 		n, _ := strconv.ParseFloat(m[1], 64)

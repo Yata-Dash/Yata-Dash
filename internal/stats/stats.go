@@ -23,6 +23,11 @@ import (
 // Engine persists stat layers and produces merged views.
 type Engine struct {
 	DB *store.DB
+	// QUISeedMode returns the current Settings.QUISeedsizeMode ("off" |
+	// "missing" | "prefer") — a callback so the engine needn't depend on
+	// config and mode changes apply to the next Merged call immediately.
+	// Nil is treated as "off": the qui layer is ignored entirely.
+	QUISeedMode func() string
 }
 
 // New creates an Engine.
@@ -47,6 +52,14 @@ func (e *Engine) SaveManual(trackerID string, data map[string]any) error {
 	return e.DB.ReplaceLayer(trackerID, string(models.SourceManual), stripMeta(data), time.Now().UTC())
 }
 
+// SaveQUI replaces the qui layer (seed_size computed by a linked qui
+// instance). Pass an empty map to clear it — done for every tracker qui no
+// longer reports, so a stale value can't outlive its source. Where the layer
+// sits in the merge is decided at read time by QUISeedMode, never here.
+func (e *Engine) SaveQUI(trackerID string, data map[string]any) error {
+	return e.DB.ReplaceLayer(trackerID, string(models.SourceQUI), stripMeta(data), time.Now().UTC())
+}
+
 func stripMeta(data map[string]any) map[string]any {
 	out := make(map[string]any, len(data))
 	for k, v := range data {
@@ -65,9 +78,21 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 		return nil, err
 	}
 	out := models.MergedStats{}
-	// Priority order: api > scrape > manual. Each layer only fills fields a
-	// higher-priority layer left empty (or zero-ish).
-	for _, src := range []models.Source{models.SourceAPI, models.SourceScrape, models.SourceManual} {
+	// Priority order: api > scrape > manual, with the qui layer slotted in by
+	// the seedsize mode ("off" leaves it out entirely). Each layer only fills
+	// fields a higher-priority layer left empty (or zero-ish). qui never
+	// outranks the tracker's own API in any mode — the tracker's number is
+	// the truth; qui's is a client-side estimate.
+	priority := []models.Source{models.SourceAPI, models.SourceScrape, models.SourceManual}
+	if e.QUISeedMode != nil {
+		switch e.QUISeedMode() {
+		case "missing": // fills only what both API and scrape lack
+			priority = []models.Source{models.SourceAPI, models.SourceScrape, models.SourceQUI, models.SourceManual}
+		case "prefer": // beats scrapes, still loses to the API
+			priority = []models.Source{models.SourceAPI, models.SourceQUI, models.SourceScrape, models.SourceManual}
+		}
+	}
+	for _, src := range priority {
 		for field, fv := range layers[string(src)] {
 			if !meaningful(fv.Value) {
 				continue

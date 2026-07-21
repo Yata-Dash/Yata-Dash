@@ -88,7 +88,7 @@ export interface TrackerPayload {
 
 // ── Unified stats ─────────────────────────────────────────────────────────
 
-export type StatSource = 'api' | 'scrape' | 'manual';
+export type StatSource = 'api' | 'scrape' | 'manual' | 'qui';
 
 /** One merged stat value with provenance. */
 export interface StatField {
@@ -251,6 +251,9 @@ export interface AppSettings {
   qui_api_key: string;
   qui_enabled_instances: number[];
   qui_bars_visible: boolean | null; // null = true
+  /** Where qui's per-tracker seeding totals slot into the seed_size merge.
+   *  Never beats the tracker's own API in any mode. */
+  qui_seedsize_mode: 'off' | 'missing' | 'prefer';
   backup_enabled: boolean;          // automatic config backups (opt-in)
   backup_frequency: 'daily' | 'weekly' | 'monthly' | string;
   backup_keep: number;              // retain last N backups (1–99)
@@ -532,8 +535,20 @@ export interface PathwayReqProgress {
   need_text?: string;
   /** eta_days is a LOWER BOUND (known components only) — render with "+". */
   has_unknown?: boolean;
+  /** Set when the requirement can't be measured at all, and why — rendered
+   *  like an untrackable target (dashed track, plain-language reason) rather
+   *  than a bare "?". Never means met.
+   *    'stat'  — a real stat this tracker doesn't report (a zero is often
+   *              simply omitted, so it can start tracking on its own later)
+   *    'text'  — community free text that will never be a stat ("2 more
+   *              proofs") — the user has to check it on the tracker
+   *    'class' — a class Yata has no group data for. */
+  unavail?: 'stat' | 'text' | 'class';
   /** Per-class breakdown for "reach class X (or Y)" requirements. */
   classes?: PathwayClassEval[];
+  /** Alternatives of an "A or B and C" requirement (kind 'any_of') — ONE
+   *  set must be met in full. met/eta_days describe the whole requirement. */
+  any_of?: PathwayReqProgress[][];
 }
 
 /** Full requirement breakdown for one group/class a route requires. */

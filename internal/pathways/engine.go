@@ -64,6 +64,19 @@ type ReqProgress struct {
 	HaveText string  `json:"have_text,omitempty"`
 	NeedText string  `json:"need_text,omitempty"`
 
+	// Unavail marks a row that cannot be measured against live stats at all,
+	// and why. The UI renders these the way an untrackable target renders —
+	// a dashed empty track and a plain-language reason — instead of a bare
+	// "?", because the three cases need different answers from the user:
+	//   "stat"  — a real stat this tracker doesn't report (note that a zero is
+	//             often simply omitted, so a requirement can start tracking
+	//             itself the moment the value moves off 0)
+	//   "text"  — community free text that will never be a stat ("2 more
+	//             proofs"): check it yourself on the tracker
+	//   "class" — a class with no group data in Yata's def for this tracker
+	// The requirement always still applies — unavailable is not "met".
+	Unavail string `json:"unavail,omitempty"`
+
 	// HasUnknown marks a class row whose ETADays is a LOWER BOUND: some
 	// component couldn't be projected but the known parts (account age in
 	// particular — always exact, never compressible) still give a floor.
@@ -73,6 +86,11 @@ type ReqProgress struct {
 	// Classes is the per-class breakdown for "reach class X (or Y)" reqs:
 	// every listed alternative with its full requirement bars.
 	Classes []ClassEval `json:"classes,omitempty"`
+
+	// AnyOf is the breakdown of an "A or B and C" requirement (Kind
+	// "any_of"): every alternative with its own rows, ONE of which must be
+	// met in full. Met/ETADays above describe the requirement as a whole.
+	AnyOf [][]ReqProgress `json:"any_of,omitempty"`
 }
 
 // ClassEval is the evaluation of one group/class a route requires.
@@ -320,17 +338,9 @@ func evalStep(r Route, u UserTracker, firstHop bool, d *Data,
 
 	// Def-level invite requirements of the FROM tracker (e.g. MAM's
 	// class-independent "Power User + 1 TB + 2.0 ratio + 6 months") AUGMENT
-	// the community data. A community "None" would contradict them — drop it.
+	// the community data.
 	if ir := inviteReqsFor(r.From); ir != nil {
-		if extra := inviteReqTokens(ir); len(extra) > 0 {
-			kept := reqs[:0]
-			for _, q := range reqs {
-				if q.Kind != "none" {
-					kept = append(kept, q)
-				}
-			}
-			reqs = append(kept, extra...)
-		}
+		reqs = mergeInviteReqs(reqs, inviteReqTokens(ir), groupsFor(r.From))
 		step.DefNote = ir.Note
 	}
 
@@ -395,13 +405,18 @@ func evalStep(r Route, u UserTracker, firstHop bool, d *Data,
 			ageNeed = math.Max(ageNeed, float64(q.Days))
 		case "class":
 			classRows = append(classRows, classProgress(q, u, groupsFor))
+		case "any_of":
+			otherRows = append(otherRows, anyOfProgress(q, u, groupsFor))
 		case "ratio", "uploaded", "downloaded", "seed_size", "uploads", "adoptions", "bonus", "seedtime":
 			if classCovers(classRows, q.Kind, q.Value) {
 				continue // every required class alternative already demands this
 			}
 			otherRows = append(otherRows, statProgress(q, u))
 		default: // unknown token — preserve verbatim
-			otherRows = append(otherRows, ReqProgress{Label: q.Raw, ETADays: -1})
+			otherRows = append(otherRows, ReqProgress{
+				Label: q.Raw, ETADays: -1, Unavail: "text",
+				Note: "not a stat Yata can measure — check this one on the tracker",
+			})
 		}
 	}
 	// Note: stat tokens can precede class tokens in the text, so re-check
@@ -434,7 +449,8 @@ func evalStep(r Route, u UserTracker, firstHop bool, d *Data,
 		}
 		isAge := p.Kind == "age"
 		isClass := len(p.Classes) > 0
-		if isAge || isClass {
+		isAnyOf := len(p.AnyOf) > 0 // ETA/HasUnknown already reduced to the best alternative
+		if isAge || isClass || isAnyOf {
 			if p.ETADays > 0 {
 				eta = math.Max(eta, p.ETADays)
 			}
@@ -515,7 +531,8 @@ func statProgress(q Req, u UserTracker) ReqProgress {
 	}
 	if have < 0 {
 		p.ETADays = -1
-		p.Note = "no data for this stat yet"
+		p.Unavail = "stat"
+		p.Note = "this tracker doesn't report this stat (a zero is often just omitted), so progress can't be tracked — the requirement still applies"
 		return p
 	}
 	if have >= q.Value {
@@ -542,6 +559,72 @@ func statProgress(q Req, u UserTracker) ReqProgress {
 	return p
 }
 
+// anyOfProgress evaluates an "A or B and C" requirement: every alternative
+// gets its own full row breakdown and the requirement is met as soon as ANY
+// ONE alternative is met in full. The headline ETA is the fastest alternative
+// that can be estimated end-to-end; if none can, the cheapest floor across
+// alternatives is still a real lower bound (with HasUnknown set, so it shows
+// as "N+"). Same rule as everywhere else in this file: only account age
+// contributes a number — every other unmet requirement is controllable and
+// only flags that the true wait may be longer.
+func anyOfProgress(q Req, u UserTracker, groupsFor func(string) []defs.GroupDef) ReqProgress {
+	p := ReqProgress{Label: q.Raw, Kind: "any_of", ETADays: -1}
+	if len(q.AnyOf) == 0 {
+		return p
+	}
+	best, floor := math.Inf(1), math.Inf(1)
+	bestKnown := false
+	for _, set := range q.AnyOf {
+		var rows []ReqProgress
+		eta := 0.0
+		unknown, met := false, true
+		for _, atom := range set {
+			var row ReqProgress
+			switch atom.Kind {
+			case "class":
+				row = classProgress(atom, u, groupsFor)
+				row.Label = "Reach " + row.Label
+			case "age":
+				row = ageProgress(float64(atom.Days), u.Stats.AgeDays)
+			default:
+				row = statProgress(atom, u)
+			}
+			rows = append(rows, row)
+			if row.Met {
+				continue
+			}
+			met = false
+			if row.Kind == "age" && row.ETADays >= 0 {
+				eta = math.Max(eta, row.ETADays)
+			} else {
+				unknown = true
+			}
+		}
+		p.AnyOf = append(p.AnyOf, rows)
+		if met {
+			p.Met = true
+			continue // keep going so every alternative still renders
+		}
+		if !unknown && eta < best {
+			best, bestKnown = eta, true
+		}
+		if eta < floor {
+			floor = eta
+		}
+	}
+	if p.Met {
+		p.ETADays = 0
+		return p
+	}
+	if bestKnown {
+		p.ETADays = best
+		return p
+	}
+	p.ETADays = floor
+	p.HasUnknown = true
+	return p
+}
+
 // classProgress evaluates "reach class X (or Y…)" against the source
 // tracker's def groups. Every listed alternative gets a full requirement
 // breakdown (Classes) so the UI can render progress bars; the fastest
@@ -552,9 +635,14 @@ func classProgress(q Req, u UserTracker, groupsFor func(string) []defs.GroupDef)
 		p.Note = plusNote
 	}
 	groups := groupsFor(u.PathwayName)
+	unavail := ReqProgress{
+		Label: p.Label, Note: p.Note, ETADays: -1, Unavail: "class",
+	}
+	if unavail.Note == "" {
+		unavail.Note = "Yata has no group requirements for this tracker, so progress toward this class can't be shown"
+	}
 	if len(groups) == 0 {
-		p.ETADays = -1
-		return p
+		return unavail
 	}
 	for _, want := range q.Classes {
 		for _, g := range groups {
@@ -564,8 +652,8 @@ func classProgress(q Req, u UserTracker, groupsFor func(string) []defs.GroupDef)
 		}
 	}
 	if len(p.Classes) == 0 {
-		p.ETADays = -1 // class names not in this tracker's def — truly unknown
-		return p
+		// Class names the def doesn't list — nothing to measure against.
+		return unavail
 	}
 	// Fastest fully-estimable alternative wins; if none, the cheapest FLOOR
 	// across alternatives is still a meaningful lower bound (e.g. "Titan in
@@ -634,7 +722,10 @@ func evalClass(g defs.GroupDef, u UserTracker) ClassEval {
 // returning the display rows plus the combined ETA / unknown flag.
 func evalGroupReqs(req defs.GroupRequirements, u UserTracker) ([]ReqProgress, float64, bool) {
 	if req.Description != "" {
-		return []ReqProgress{{Label: req.Description, ETADays: -1, Note: "not stat-based"}}, 0, true
+		return []ReqProgress{{
+			Label: req.Description, ETADays: -1, Unavail: "text",
+			Note: "not stat-based — check this one on the tracker",
+		}}, 0, true
 	}
 	var rows []ReqProgress
 	var eta float64
@@ -700,6 +791,16 @@ func inviteReqTokens(ir *defs.InviteReqs) []Req {
 	if ir.MinClass != "" {
 		out = append(out, Req{Kind: "class", Classes: []string{ir.MinClass}, Raw: ir.MinClass})
 	}
+	if len(ir.MinClassAnyOf) > 0 {
+		// One token with every alternative — the same shape the community
+		// parser produces for "Whale or Sailboat", so class evaluation,
+		// dedupe and display all take the existing path.
+		out = append(out, Req{
+			Kind:    "class",
+			Classes: append([]string(nil), ir.MinClassAnyOf...),
+			Raw:     strings.Join(ir.MinClassAnyOf, " or "),
+		})
+	}
 	if ir.MinUploaded != "" {
 		out = append(out, Req{Kind: "uploaded", Value: parseSizeGiB(ir.MinUploaded), Raw: "Upload " + ir.MinUploaded})
 	}
@@ -732,6 +833,118 @@ func inviteReqTokens(ir *defs.InviteReqs) []Req {
 		}
 	}
 	return out
+}
+
+// mergeInviteReqs folds a tracker's def-level invite requirements into the
+// community route tokens. Both sources routinely state the SAME rule —
+// seedpool's route text says "SuperPool" and its def gates the invite forum
+// on SuperPool — and appending them blindly rendered that requirement twice.
+// A def token is dropped when the route text already demands at least as
+// much; otherwise it is added, because it is real information the community
+// data omits.
+//
+// The def rules can never simply be deleted to stop the doubling: they are
+// what stops the many routes whose text is "No requirement" from reading as
+// "ready now" for a user who hasn't reached the invite-forum class yet.
+func mergeInviteReqs(community, def []Req, groups []defs.GroupDef) []Req {
+	if len(def) == 0 {
+		return community
+	}
+	out := append([]Req(nil), community...)
+	var added []Req
+	for _, dq := range def {
+		if dq.Kind == "class" && len(dq.Classes) > 0 {
+			covered := false
+			for _, q := range out {
+				if q.Kind == "class" && classImplies(q, dq, groups) {
+					covered = true
+					break
+				}
+			}
+			if !covered {
+				added = append(added, dq)
+			}
+			continue
+		}
+		// Stat and age tokens collapse to one row per kind at the strictest
+		// threshold. The community token's wording is not worth preserving
+		// over the def's: the route text is always shown verbatim above the
+		// evaluated rows (Step.ReqsRaw), so nothing is lost.
+		dup := false
+		for i, q := range out {
+			if q.Kind != dq.Kind {
+				continue
+			}
+			if reqThreshold(dq) > reqThreshold(q) {
+				out[i] = dq
+			}
+			dup = true
+			break
+		}
+		if !dup {
+			added = append(added, dq)
+		}
+	}
+	if len(added) == 0 {
+		return out
+	}
+	// The def demands something the route text doesn't list, so a community
+	// "no requirement" contradicts it — drop it.
+	kept := out[:0]
+	for _, q := range out {
+		if q.Kind != "none" {
+			kept = append(kept, q)
+		}
+	}
+	return append(kept, added...)
+}
+
+// classImplies reports whether the class requirement a ROUTE lists already
+// guarantees the def's invite-forum requirement. Both sides may list
+// alternatives and both are satisfied by ANY ONE of them, so this holds only
+// when EVERY class that would satisfy the route also satisfies the def:
+// "SuperPool" implies SuperPool, "Prometheus+" implies Prometheus, Aither's
+// "Titan+" implies it by rank, and LST's "Whale or Sailboat" implies a def
+// min_class_any_of of ["Sailboat", "Whale"].
+//
+// One route alternative that is lower or unranked makes it false — the route
+// can be satisfied by that alternative alone, leaving the def requirement
+// genuinely unmet and worth its own row (Aither's "Harmonia+", which sits
+// below Prometheus).
+func classImplies(have, want Req, groups []defs.GroupDef) bool {
+	if len(have.Classes) == 0 || len(want.Classes) == 0 {
+		return false
+	}
+	for _, alt := range have.Classes {
+		if !satisfiesAny(alt, want.Classes, groups) {
+			return false
+		}
+	}
+	return true
+}
+
+// satisfiesAny reports whether holding class `have` meets at least one of
+// `wants` — by name, or by outranking it on the def's ascending ladder.
+func satisfiesAny(have string, wants []string, groups []defs.GroupDef) bool {
+	haveIdx := defs.LadderIndex(groups, have)
+	for _, w := range wants {
+		if strings.EqualFold(strings.TrimSpace(have), strings.TrimSpace(w)) {
+			return true
+		}
+		if wi := defs.LadderIndex(groups, w); wi >= 0 && haveIdx > wi {
+			return true
+		}
+	}
+	return false
+}
+
+// reqThreshold is the comparable magnitude of a non-class token: age carries
+// its number in Days, everything else in Value.
+func reqThreshold(q Req) float64 {
+	if q.Kind == "age" {
+		return float64(q.Days)
+	}
+	return q.Value
 }
 
 // classCovers reports whether EVERY evaluated class alternative already

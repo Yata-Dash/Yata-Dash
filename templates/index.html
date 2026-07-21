@@ -1016,6 +1016,17 @@
                 <span class="form-hint">How often the qui bars update — local data, so it can stay fast. Min 1 s; use the toggle above to turn qui off entirely.</span>
               </div>
             </div>
+            <div class="form-row">
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Seed Size Fallback</label>
+                <select class="form-input" id="s-qui-seedsize-mode" style="width:auto;padding:4px 8px">
+                  <option value="off">Don't use qui seed size</option>
+                  <option value="missing">Only fill in missing data</option>
+                  <option value="prefer">Prefer qui over scrapes</option>
+                </select>
+                <span class="form-hint">Qui knows the total size each tracker's torrents are seeding. It's a calculation over the instances above — a tracker's own number is the truth (multi-client and seedbox setups undercount) — so even "Prefer" never overrides a tracker API that reports seed size; it only beats profile scrapes. "Missing" fills in only where neither the API nor a scrape has a value.</span>
+              </div>
+            </div>
             <div id="s-qui-instances-section">
               <div class="modal-divider" style="margin:14px 0 10px"><span class="modal-divider-label">Instances</span><div class="modal-divider-line"></div>
                 <button class="btn-autofill" id="s-qui-refresh-btn" type="button" onclick="loadQuiInstancesForSettings()" title="Reload instances using the URL/key typed above (works before saving)">

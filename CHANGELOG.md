@@ -7,6 +7,27 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 ## [Unreleased]
 
 ### Added
+- **Qui seed-size fallback.** Qui's torrents endpoint reports, per announce
+  host, the total size each tracker's torrents are currently seeding. A new
+  three-way setting (Settings → Integrations → "Seed Size Fallback") feeds
+  that into the seed_size stat as a fourth merge layer: **off** (default),
+  **only fill in missing data** (used when neither the tracker's API nor a
+  scrape has a value — API-only trackers without a seed-size endpoint, or
+  scrapes returning zero/nothing), or **prefer qui over scrapes**. In every
+  mode the tracker's own API wins — qui's figure is a client-side calculation
+  over the instances it can see, so multi-client and seedbox setups
+  undercount, and the tracker-reported number is the truth for progressions.
+  Announce hosts map to trackers by domain — including the def's alias
+  domains, so RetroFlix configured as retroflix.net still matches its
+  peer.retroflix.club announce host (subdomains match; a tracker's mirror
+  announce domains aren't double-counted; unrelated/public hosts never
+  match). Values sum across enabled qui instances, and a tracker qui stops
+  reporting is cleared rather than left stale. The per-stat source dot shows
+  a pink "qui" origin, and the layers refresh with the background cycle
+  (plus immediately on enabling).
+- **Unregistered count in the qui bar.** Qui now reports how many torrents
+  the tracker no longer recognises; the bar shows it in red next to Error.
+  Hidden on qui versions that predate the counter.
 
 ## [Beta-20260721]
 
