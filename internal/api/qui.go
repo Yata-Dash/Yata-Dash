@@ -40,7 +40,7 @@ func quiInstances(d *Deps) http.HandlerFunc {
 		}
 		body, status, err := quiFetch(url+"/api/instances", key)
 		if err != nil {
-			jsonError(w, err.Error(), status)
+			jsonError(w, err.Error(), upstreamStatus(status))
 			return
 		}
 		var instances []map[string]any

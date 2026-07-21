@@ -104,7 +104,7 @@ func TestPolicyBlocksAndCooldown(t *testing.T) {
 		t.Errorf("fresh tracker should be allowed: %+v", p)
 	}
 	// After a scrape: cooldown with next_allowed_at.
-	if err := db.RecordScrape("x", now); err != nil {
+	if err := db.RecordScrape("x", now, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	p = Evaluate(set, tr, defs.ResolvedScrape{}, db, now.Add(time.Minute))

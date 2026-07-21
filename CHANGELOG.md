@@ -29,6 +29,29 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   the tracker no longer recognises; the bar shows it in red next to Error.
   Hidden on qui versions that predate the counter.
 
+- **Expired session-cookie warnings + scrape health.** Scrape attempts now
+  record their outcome, so a dead tracker cookie is noticed before the data
+  gap hurts: an amber dismissible banner names the trackers whose session
+  cookies have expired ("re-copy them in Settings → Trackers"), grid-card
+  footers show a "Cookie expired" badge, table expanded rows gain a Scrape
+  Health line (failure streak + cause), and an optional extended "Scrape"
+  column (hidden by default, column customizer) shows ✓ / ✗ streaks across
+  all trackers at a glance. Explicit login signals (session_expired,
+  user_id_not_found) flag immediately; an empty scrape only counts as a
+  cookie problem after two in a row, so a one-off anti-bot or maintenance
+  page doesn't cry wolf. Everything clears itself on the next successful
+  scrape.
+
+### Fixed
+- **Spurious logouts.** Yata logins were never actually expiring (sessions
+  last 30 days and survive restarts), but the login screen re-appeared
+  whenever a tracker or integration returned an auth error: a profile scrape
+  hitting an expired *tracker* cookie answered the browser with 401, and the
+  app read any 401 as "session expired". Upstream 401/403s (tracker scrapes,
+  Prowlarr/Jackett/qui credential checks) are now relayed as 502 with the
+  real cause in the body, and the app only shows the login screen for its
+  own session check. One login per browser per 30 days, as designed.
+
 ## [Beta-20260721]
 
 ### Added

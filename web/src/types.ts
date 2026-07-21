@@ -159,6 +159,11 @@ export interface ScrapeStatus {
   last_scrape_at?: number;           // unix sec, 0/absent = never
   tracker_min_interval?: number;     // operator request, for UI explanation
   supports_html_scrape: boolean;
+  // Scrape health — absent while the latest attempt succeeded.
+  last_error_kind?: string;          // latest attempt's scrape error kind
+  last_error_at?: number;            // unix sec
+  consecutive_failures?: number;     // failures since the last success
+  cookie_expired?: boolean;          // latest failures look like a dead session cookie
 }
 
 export type ScrapeStatusMap = Record<string, ScrapeStatus>;

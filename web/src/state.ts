@@ -31,6 +31,7 @@ export const COL_DEFS: ColDef[] = [
   { key: 'total_uploads', label: 'Uploads',       sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  75 },
   { key: 'adoptions',     label: 'Adoptions',     sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  85 },
   { key: 'reqs_filled',   label: 'Reqs Filled',   sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  90 },
+  { key: 'scrape_health', label: 'Scrape',        sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  80 },
 ];
 
 // ── Runtime state ─────────────────────────────────────────────────────────

@@ -45,12 +45,12 @@ static/fontawesome/
 
 
 *.md
-# README.md + CHANGELOG.md are the user-facing docs that ship (CHANGELOG is also
-# read by the release workflow for the GitHub Release notes).
+# Ships publicly: README + CHANGELOG (CHANGELOG is also read by the release
+# workflow for the GitHub Release notes) + the API reference (linked from the
+# README and the in-app Integrations tab). Other docs/*.md stay internal.
 !/README.md
 !/CHANGELOG.md
 !/docs/API.md
-
 
 # OS noise
 .DS_Store

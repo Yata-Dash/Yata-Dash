@@ -242,7 +242,15 @@ export function renderCard(
       <span class="card-last-updated">API ${updated}</span>
       ${(() => {
         const ss = scrapeStatus[tracker.id];
-        if (!ss || ss.allowed) return '';
+        if (!ss) return '';
+        // A dead cookie outranks the policy text — it can coexist with
+        // allowed=true (the next attempt is permitted, it'll just fail too).
+        if (ss.cookie_expired) {
+          const n = ss.consecutive_failures ?? 0;
+          const tip = `Session cookie expired${n > 1 ? ` — ${n} failed scrapes` : ''} — re-copy your session cookie (Settings → Trackers)`;
+          return `<span class="scrape-limit-badge" title="${esc(tip)}">Cookie expired</span>`;
+        }
+        if (ss.allowed) return '';
         let tip: string;
         let setup = false; // setup states (missing credentials) — muted, not amber
         if (ss.reason === 'opted_out')              tip = 'Operator opted out';

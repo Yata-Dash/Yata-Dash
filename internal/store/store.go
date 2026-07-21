@@ -65,9 +65,14 @@ func (d *DB) migrate() error {
 			value      REAL NOT NULL,
 			PRIMARY KEY (tracker_id, day, field)
 		)`,
+		// One row per scrape ATTEMPT (success or failure) — the persistent
+		// rate-limit ledger, and since the outcome columns were added, the
+		// scrape-health record (failure streaks / dead-cookie detection).
 		`CREATE TABLE IF NOT EXISTS scrape_log (
 			tracker_id TEXT NOT NULL,
-			scraped_at INTEGER NOT NULL           -- unix seconds
+			scraped_at INTEGER NOT NULL,          -- unix seconds
+			ok         INTEGER NOT NULL DEFAULT 1,
+			error_kind TEXT NOT NULL DEFAULT ''   -- scrape.Error.Kind when ok=0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_scrape_log ON scrape_log (tracker_id, scraped_at)`,
 		// Single-user basic auth (id is pinned to 1 — at most one account).
@@ -106,6 +111,50 @@ func (d *DB) migrate() error {
 	}
 	for _, s := range stmts {
 		if _, err := d.sql.Exec(s); err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
+	}
+	// Column additions to pre-existing tables (CREATE IF NOT EXISTS skips them
+	// on old databases). Pre-migration scrape_log rows default to ok=1: they
+	// were rate-ledger entries whose outcome was never recorded.
+	if err := d.addColumns("scrape_log", map[string]string{
+		"ok":         "INTEGER NOT NULL DEFAULT 1",
+		"error_kind": "TEXT NOT NULL DEFAULT ''",
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// addColumns adds any of the given columns missing from table (name → type
+// clause). SQLite has no ADD COLUMN IF NOT EXISTS, so existing columns are
+// read from table_info first.
+func (d *DB) addColumns(table string, cols map[string]string) error {
+	rows, err := d.sql.Query(fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	have := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			rows.Close()
+			return fmt.Errorf("migrate: %w", err)
+		}
+		have[name] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	for name, clause := range cols {
+		if have[name] {
+			continue
+		}
+		if _, err := d.sql.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, name, clause)); err != nil {
 			return fmt.Errorf("migrate: %w", err)
 		}
 	}
@@ -458,13 +507,65 @@ func (d *DB) queryPoints(q string, args []any) ([]HistoryPoint, error) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scrape log (persistent rate limiting)
+// Scrape log (persistent rate limiting + scrape health)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// RecordScrape logs a successful scrape at time at.
-func (d *DB) RecordScrape(trackerID string, at time.Time) error {
-	_, err := d.sql.Exec(`INSERT INTO scrape_log (tracker_id, scraped_at) VALUES (?, ?)`, trackerID, at.Unix())
+// RecordScrape logs one scrape attempt — success or failure — at time at.
+// Every attempt counts toward the rate-limit ledger; the outcome feeds the
+// scrape-health view (failure streaks, dead-cookie detection).
+func (d *DB) RecordScrape(trackerID string, at time.Time, ok bool, errorKind string) error {
+	if ok {
+		errorKind = ""
+	}
+	_, err := d.sql.Exec(
+		`INSERT INTO scrape_log (tracker_id, scraped_at, ok, error_kind) VALUES (?, ?, ?, ?)`,
+		trackerID, at.Unix(), ok, errorKind)
 	return err
+}
+
+// ScrapeHealth is the outcome summary of a tracker's recent scrape attempts.
+type ScrapeHealth struct {
+	LastOK              bool   // latest attempt succeeded (true when no attempts)
+	LastKind            string // error kind of the latest attempt ("" when ok)
+	LastAt              int64  // unix time of the latest attempt (0 = none)
+	PrevFailKind        string // error kind of the attempt before it ("" if ok/none)
+	ConsecutiveFailures int    // failures since the last success (log retention caps it)
+}
+
+// GetScrapeHealth summarises the tail of the scrape log for one tracker.
+func (d *DB) GetScrapeHealth(trackerID string) (ScrapeHealth, error) {
+	h := ScrapeHealth{LastOK: true}
+	rows, err := d.sql.Query(
+		`SELECT ok, error_kind, scraped_at FROM scrape_log
+		 WHERE tracker_id = ? ORDER BY scraped_at DESC LIMIT 2`, trackerID)
+	if err != nil {
+		return h, err
+	}
+	defer rows.Close()
+	for i := 0; rows.Next(); i++ {
+		var ok bool
+		var kind string
+		var at int64
+		if err := rows.Scan(&ok, &kind, &at); err != nil {
+			return h, err
+		}
+		if i == 0 {
+			h.LastOK, h.LastKind, h.LastAt = ok, kind, at
+		} else if !ok {
+			h.PrevFailKind = kind
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return h, err
+	}
+	if h.LastOK {
+		return h, nil // streak is 0 by definition; skip the count query
+	}
+	err = d.sql.QueryRow(
+		`SELECT COUNT(*) FROM scrape_log WHERE tracker_id = ? AND scraped_at >
+		   COALESCE((SELECT MAX(scraped_at) FROM scrape_log WHERE tracker_id = ? AND ok = 1), 0)`,
+		trackerID, trackerID).Scan(&h.ConsecutiveFailures)
+	return h, err
 }
 
 // LastScrape returns the unix time of the most recent scrape (0 if none).

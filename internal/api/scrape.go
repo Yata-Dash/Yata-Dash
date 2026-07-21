@@ -8,6 +8,7 @@ import (
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
 func registerScrape(r chi.Router, d *Deps) {
@@ -16,14 +17,38 @@ func registerScrape(r chi.Router, d *Deps) {
 	r.Get("/scrape-status", scrapeStatus(d))
 }
 
-// scrapeStatusEntry is the per-tracker policy snapshot for the UI.
+// scrapeStatusEntry is the per-tracker policy + health snapshot for the UI.
 type scrapeStatusEntry struct {
 	scrape.Policy
 	SupportsHTMLScrape bool `json:"supports_html_scrape"`
+	// Scrape health — outcome of the tail of the scrape log.
+	LastErrorKind       string `json:"last_error_kind,omitempty"` // latest attempt's error ("" = ok/none)
+	LastErrorAt         int64  `json:"last_error_at,omitempty"`   // unix seconds
+	ConsecutiveFailures int    `json:"consecutive_failures,omitempty"`
+	CookieExpired       bool   `json:"cookie_expired,omitempty"`
+}
+
+// cookieExpired reports whether the health tail looks like a dead session
+// cookie: the latest attempt failed with an explicit login signal, or the
+// two latest attempts both came back as empty scrapes (a page that loads but
+// yields zero fields is usually a login/interstitial page — but a single one
+// can be anti-bot or maintenance, so one alone doesn't cry wolf).
+func cookieExpired(h store.ScrapeHealth) bool {
+	if h.LastOK {
+		return false
+	}
+	switch h.LastKind {
+	case "session_expired", "user_id_not_found":
+		return true
+	case "empty_scrape":
+		return h.PrevFailKind == "empty_scrape"
+	}
+	return false
 }
 
 // GET /api/scrape-status — policy snapshot for every tracker (UI indicators:
-// alert bar, disabled refresh buttons, next-allowed tooltips).
+// alert bar, disabled refresh buttons, next-allowed tooltips, expired-cookie
+// warnings).
 func scrapeStatus(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		set := d.Cfg.Settings()
@@ -31,10 +56,17 @@ func scrapeStatus(d *Deps) http.HandlerFunc {
 		out := map[string]scrapeStatusEntry{}
 		for _, t := range d.Cfg.Trackers() {
 			rs := d.Reg.ResolveScrape(t.URL, t.Type)
-			out[t.ID] = scrapeStatusEntry{
+			entry := scrapeStatusEntry{
 				Policy:             scrape.Evaluate(set, t, rs, d.DB, now),
 				SupportsHTMLScrape: !rs.SkipHTMLScrape && !rs.DisableScraping,
 			}
+			if h, err := d.DB.GetScrapeHealth(t.ID); err == nil && !h.LastOK {
+				entry.LastErrorKind = h.LastKind
+				entry.LastErrorAt = h.LastAt
+				entry.ConsecutiveFailures = h.ConsecutiveFailures
+				entry.CookieExpired = cookieExpired(h)
+			}
+			out[t.ID] = entry
 		}
 		jsonOK(w, out)
 	}
@@ -89,7 +121,7 @@ func runScrape(d *Deps) http.HandlerFunc {
 		recordScrapeAttempt(d, t.ID, serr)
 		if serr != nil {
 			d.logWarnf("scrape: %s (%s) failed — %s", t.Name, t.ID, serr.Kind)
-			jsonError(w, serr.Kind, serr.Status)
+			jsonError(w, serr.Kind, upstreamStatus(serr.Status))
 			return
 		}
 		d.logInfof("scrape: %s (%s) ok — %d fields", t.Name, t.ID, len(result))

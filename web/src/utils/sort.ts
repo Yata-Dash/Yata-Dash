@@ -1,6 +1,6 @@
 // utils/sort.ts — table sorting (reads from the merged stats fields)
 import type { SortDir, StatsMap, Tracker } from '../types';
-import { numOf, strOf } from '../state';
+import { numOf, scrapeStatus, strOf } from '../state';
 import { parseRatio } from './format';
 import { parseSize, parseSeedTime, memberDays } from './parse';
 
@@ -40,6 +40,12 @@ export function sortKey(
     case 'total_uploads': return numOf(s, 'uploads_approved') ?? 0;
     case 'adoptions':     return numOf(s, 'adoptions')        ?? 0;
     case 'reqs_filled':   return numOf(s, 'requests_filled')  ?? 0;
+    case 'scrape_health': {
+      // Worst first when descending: dead cookies above plain failure
+      // streaks, healthy trackers at 0.
+      const ss = scrapeStatus[tracker.id];
+      return (ss?.consecutive_failures ?? 0) + (ss?.cookie_expired ? 10000 : 0);
+    }
     default:              return 0;
   }
 }

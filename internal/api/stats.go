@@ -330,11 +330,17 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 // request actually reached the tracker — including failed ones. A profile
 // page that errors must not get re-hit on every refresh cycle; only
 // pre-flight failures (no username/key — nothing was sent) are exempt.
+// The outcome (ok / error kind) feeds the scrape-health surface: failure
+// streaks and the expired-session-cookie warning.
 func recordScrapeAttempt(d *Deps, trackerID string, serr *scrape.Error) {
 	if serr != nil && (serr.Kind == "no_username" || serr.Kind == "no_cookie" || serr.Kind == "no_key") {
 		return // pre-flight failure — no request reached the tracker
 	}
-	_ = d.DB.RecordScrape(trackerID, time.Now().UTC())
+	kind := ""
+	if serr != nil {
+		kind = serr.Kind
+	}
+	_ = d.DB.RecordScrape(trackerID, time.Now().UTC(), serr == nil, kind)
 }
 
 func toAnyMap(in map[string]string) map[string]any {
