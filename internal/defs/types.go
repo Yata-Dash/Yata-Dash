@@ -36,9 +36,10 @@ type TypeDef struct {
 
 // TypeAPI selects the built-in fetcher used for a tracker type.
 type TypeAPI struct {
-	// Kind is one of: "unit3d", "gazelle", "custom", "demo", "none".
+	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "custom", "demo", "none".
 	//   unit3d  — GET {url}/api/user?api_token={key}
-	//   gazelle — GET {url}/api.php?action=index with Authorization header
+	//   gazelle — username/query-key API used by legacy Gazelle integrations
+	//   gazelle_json — scoped ajax.php API with a raw Authorization header
 	//   custom  — fully described by the tracker def's "api" object
 	//   demo    — local mock data, no HTTP
 	//   none    — no API; scrape-only tracker type

@@ -92,4 +92,49 @@ func TestShippedDefsLoadClean(t *testing.T) {
 			t.Errorf("non-class group included: %s", group.Name)
 		}
 	}
+
+	red, ok := r.TrackerByURL("https://redacted.sh")
+	if !ok {
+		t.Fatal("redacted.sh def not found")
+	}
+	if kind := r.APIKind(red.URL, red.Type); kind != "gazelle_json" {
+		t.Fatalf("Redacted APIKind = %q, want gazelle_json", kind)
+	}
+	redType, ok := r.Type(red.Type)
+	if !ok || len(redType.API.RequiredFields) != 0 {
+		t.Fatalf("Redacted type must require only an API key: %+v", redType)
+	}
+	if !red.Scrape.DisableScraping || red.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("Redacted must be API-only and unapproved: scrape=%+v approval=%q", red.Scrape, red.ApprovalStatus())
+	}
+	if red.InviteRequirements == nil || red.InviteRequirements.MinClass != "Power User" {
+		t.Fatalf("Redacted invite requirements = %+v", red.InviteRequirements)
+	}
+	wantPrimary := []string{"User", "Member", "Power User", "Elite", "Torrent Master", "Power TM", "Elite TM"}
+	if len(red.Groups) != 15 {
+		t.Fatalf("Redacted groups = %d, want 15", len(red.Groups))
+	}
+	for i, name := range wantPrimary {
+		group := red.Groups[i]
+		if group.Name != name {
+			t.Errorf("Redacted group %d = %q, want %q", i, group.Name, name)
+		}
+	}
+	for _, group := range red.Groups {
+		if group.Style.Color != "" || group.Style.Icon != "" {
+			t.Errorf("Redacted %s style must be empty: %+v", group.Name, group.Style)
+		}
+		switch group.Name {
+		case "First Line Support", "Interviewer", "Torrent Celebrity", "Progress Team", "Design Team", "Beta Team", "Artist", "Alpha Team":
+			t.Errorf("secondary Redacted class included in primary ladder: %s", group.Name)
+		}
+	}
+	powerTM := red.Groups[5].Requirements
+	if powerTM.MinUploads != 500 || len(powerTM.MinCounts) != 1 || powerTM.MinCounts[0].Field != "groups_uploaded" {
+		t.Errorf("unexpected Power TM requirements: %+v", powerTM)
+	}
+	eliteTM := red.Groups[6].Requirements
+	if len(eliteTM.MinCounts) != 2 || eliteTM.MinCounts[1].Field != "perfect_flacs" {
+		t.Errorf("unexpected Elite TM requirements: %+v", eliteTM)
+	}
 }

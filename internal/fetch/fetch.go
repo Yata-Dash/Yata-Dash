@@ -66,6 +66,8 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		data, ferr = c.fetchDemo(t)
 	case "gazelle":
 		data, ferr = c.fetchGazelle(t)
+	case "gazelle_json":
+		data, ferr = c.fetchGazelleJSON(t)
 	case "custom":
 		data, ferr = c.fetchCustom(t)
 	case "none":
@@ -195,11 +197,11 @@ func (c *Client) fetchGazelle(t models.Tracker) (map[string]any, *Error) {
 		return nil, errf("parse_error", err)
 	}
 	if raw.Status != "success" {
-		msg := raw.Error
-		if msg == "" {
-			msg = "api_error"
+		message := raw.Error
+		if message == "" {
+			message = "api_error"
 		}
-		return nil, errf("api_error", fmt.Errorf("%s", msg))
+		return nil, errf("api_error", fmt.Errorf("%s", message))
 	}
 	r := raw.Response
 
@@ -207,27 +209,159 @@ func (c *Client) fetchGazelle(t models.Tracker) (map[string]any, *Error) {
 	if r.Downloaded > 0 {
 		ratio = float64(r.Uploaded) / float64(r.Downloaded)
 	}
-	bufBytes := max(r.Uploaded-r.Downloaded, 0)
+	bufferBytes := max(r.Uploaded-r.Downloaded, 0)
 	joinDate := r.JoinDate
 	if len(joinDate) >= 10 {
-		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
+		joinDate = joinDate[:10]
 	}
 	out := map[string]any{
 		"username":   r.Username,
 		"group":      r.Class,
 		"uploaded":   parse.BytesToSize(r.Uploaded),
 		"downloaded": parse.BytesToSize(r.Downloaded),
-		"buffer":     parse.BytesToSize(bufBytes),
+		"buffer":     parse.BytesToSize(bufferBytes),
 		"ratio":      ratio,
 		"seeding":    r.SeedCount,
 		"invites":    fmt.Sprintf("%d", r.Invites),
 		"snatched":   fmt.Sprintf("%d", r.Snatched),
 		"join_date":  joinDate,
 	}
-	// user_id drives the ID-based profile URL (/user.php?id=N). Not rendered as
-	// a stat row (frontend NON_ROW_FIELDS) — consumed by profileURL().
 	if r.ID > 0 {
 		out["user_id"] = fmt.Sprintf("%d", r.ID)
+	}
+	return out, nil
+}
+
+// Gazelle JSON is the ajax.php API used by Redacted-style Gazelle sites.
+type gazelleJSONEnvelope struct {
+	Status   string          `json:"status"`
+	Response json.RawMessage `json:"response"`
+	Error    string          `json:"error,omitempty"`
+}
+
+type gazelleJSONIndex struct {
+	Username    string  `json:"username"`
+	ID          int     `json:"id"`
+	GiftTokens  float64 `json:"giftTokens"`
+	MeritTokens float64 `json:"meritTokens"`
+}
+
+type gazelleJSONUser struct {
+	Username string `json:"username"`
+	Stats    struct {
+		JoinedDate    string  `json:"joinedDate"`
+		Uploaded      int64   `json:"uploaded"`
+		Downloaded    int64   `json:"downloaded"`
+		Ratio         float64 `json:"ratio"`
+		Buffer        int64   `json:"buffer"`
+		RequiredRatio float64 `json:"requiredRatio"`
+	} `json:"stats"`
+	Personal struct {
+		Class   string `json:"class"`
+		Warned  bool   `json:"warned"`
+		Enabled bool   `json:"enabled"`
+	} `json:"personal"`
+	Community struct {
+		Posts          int `json:"posts"`
+		RequestsFilled int `json:"requestsFilled"`
+		PerfectFLACs   int `json:"perfectFlacs"`
+		Uploaded       int `json:"uploaded"`
+		Groups         int `json:"groups"`
+		Seeding        int `json:"seeding"`
+		Leeching       int `json:"leeching"`
+		Snatched       int `json:"snatched"`
+		Invited        int `json:"invited"`
+	} `json:"community"`
+}
+
+type gazelleJSONCommunityStats struct {
+	Leeching    any `json:"leeching"`
+	Seeding     any `json:"seeding"`
+	Snatched    any `json:"snatched"`
+	SeedingSize any `json:"seedingsize"`
+}
+
+func (c *Client) getGazelleJSON(url, key, identify string, out any) *Error {
+	body, ferr := c.getBody(url, map[string]string{
+		"Accept":        "application/json",
+		"Authorization": key,
+	}, identify)
+	if ferr != nil {
+		return ferr
+	}
+	var env gazelleJSONEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return errf("parse_error", err)
+	}
+	if env.Status != "success" {
+		message := env.Error
+		if message == "" {
+			message = "api_error"
+		}
+		return errf("api_error", fmt.Errorf("%s", message))
+	}
+	if err := json.Unmarshal(env.Response, out); err != nil {
+		return errf("parse_error", err)
+	}
+	return nil
+}
+
+func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
+	if strings.TrimSpace(t.APIKey) == "" {
+		return nil, errf("no_key", nil)
+	}
+	base := strings.TrimRight(t.URL, "/") + "/ajax.php?action="
+	identify := c.identify(t)
+	key := strings.TrimSpace(t.APIKey)
+
+	var index gazelleJSONIndex
+	if ferr := c.getGazelleJSON(base+"index", key, identify, &index); ferr != nil {
+		return nil, ferr
+	}
+	if index.ID <= 0 {
+		return nil, errf("api_error", fmt.Errorf("index response missing user id"))
+	}
+
+	var user gazelleJSONUser
+	if ferr := c.getGazelleJSON(fmt.Sprintf("%suser&id=%d", base, index.ID), key, identify, &user); ferr != nil {
+		return nil, ferr
+	}
+	var community gazelleJSONCommunityStats
+	if ferr := c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), key, identify, &community); ferr != nil {
+		return nil, ferr
+	}
+
+	joinDate := user.Stats.JoinedDate
+	if len(joinDate) >= 10 {
+		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
+	}
+	out := map[string]any{
+		"username":         user.Username,
+		"user_id":          fmt.Sprintf("%d", index.ID),
+		"group":            user.Personal.Class,
+		"uploaded":         parse.BytesToSize(user.Stats.Uploaded),
+		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
+		"buffer":           parse.BytesToSize(user.Stats.Buffer),
+		"ratio":            user.Stats.Ratio,
+		"required_ratio":   user.Stats.RequiredRatio,
+		"fl_tokens":        index.GiftTokens + index.MeritTokens,
+		"join_date":        joinDate,
+		"warnings":         0,
+		"seeding":          user.Community.Seeding,
+		"leeching":         user.Community.Leeching,
+		"snatched":         user.Community.Snatched,
+		"users_invited":    user.Community.Invited,
+		"uploads_approved": user.Community.Uploaded,
+		"requests_filled":  user.Community.RequestsFilled,
+		"forum_posts":      user.Community.Posts,
+		"groups_uploaded":  user.Community.Groups,
+		"perfect_flacs":    user.Community.PerfectFLACs,
+	}
+	if user.Personal.Warned {
+		out["warnings"] = 1
+	}
+	if size, ok := community.SeedingSize.(string); ok && strings.TrimSpace(size) != "" {
+		out["seed_size"] = size
 	}
 	return out, nil
 }

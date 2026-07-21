@@ -209,6 +209,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
+| Redacted | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
@@ -232,7 +233,7 @@ internal/
   api/              HTTP handlers (chi), one file per route group
   config/           config.json (atomic writes, mutex-guarded)
   defs/             definition loading, validation, override-chain resolution
-  fetch/            API fetchers: unit3d, gazelle, custom (data-driven), demo
+  fetch/            API fetchers: unit3d, gazelle variants, custom (data-driven), demo
   scrape/           multi-strategy HTML profile scraper + rate-limit policy
   stats/            unified stats engine: api + scrape layers → merged view
   store/            SQLite: stat layers, history, scrape log, sessions

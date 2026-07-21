@@ -233,8 +233,12 @@ function buildCell(
     }
     case 'ratio': {
       const r = parseRatio(strOf(s, 'ratio'));
-      const rc = ratioColorFor(isNaN(r) ? 0 : r, t.min_ratio);
-      const tip = t.min_ratio && t.min_ratio > 0 ? ` title="Tracker minimum: ${t.min_ratio}"` : '';
+      const requiredRatio = parseRatio(strOf(s, 'required_ratio'));
+      const effectiveMinRatio = !isNaN(requiredRatio) && requiredRatio > 0 ? requiredRatio : t.min_ratio;
+      const rc = ratioColorFor(isNaN(r) ? 0 : r, effectiveMinRatio);
+      const tip = !isNaN(requiredRatio) && requiredRatio > 0
+        ? ` title="Your required ratio: ${requiredRatio}"`
+        : t.min_ratio && t.min_ratio > 0 ? ` title="Tracker minimum: ${t.min_ratio}"` : '';
       return `<td class="td-mono"${tip} style="color:var(--${rc})">${!isNaN(r) ? fmtRatio(r) + dot('ratio') : dash}</td>`;
     }
     case 'buffer': {

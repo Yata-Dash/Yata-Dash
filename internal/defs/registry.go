@@ -178,9 +178,9 @@ func validateType(td TypeDef) error {
 		return fmt.Errorf("missing required field: label")
 	}
 	switch td.API.Kind {
-	case "unit3d", "gazelle", "custom", "demo", "none":
+	case "unit3d", "gazelle", "gazelle_json", "custom", "demo", "none":
 	default:
-		return fmt.Errorf("api.kind must be one of unit3d|gazelle|custom|demo|none, got %q", td.API.Kind)
+		return fmt.Errorf("api.kind must be one of unit3d|gazelle|gazelle_json|custom|demo|none, got %q", td.API.Kind)
 	}
 	return nil
 }

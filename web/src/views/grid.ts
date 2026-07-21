@@ -174,7 +174,9 @@ export function renderCard(
     // STALE DATA RULE: render fields exactly like fresh data even when
     // stats.ok is false — the offline state only adds a banner + dimmed dot.
     const ratio    = parseRatio(strOf(stats, 'ratio'));
-    const rc       = ratioColorFor(ratio, tracker.min_ratio);
+    const requiredRatio = parseRatio(strOf(stats, 'required_ratio'));
+    const effectiveMinRatio = !isNaN(requiredRatio) && requiredRatio > 0 ? requiredRatio : tracker.min_ratio;
+    const rc       = ratioColorFor(ratio, effectiveMinRatio);
     const hnr      = parseInt(strOf(stats, 'hit_and_runs')) || 0;
     const updated  = fmtDateTime(stats.fetched_at);
     const ast      = parseSeedTime(strOf(stats, 'avg_seed_time'));
@@ -204,7 +206,9 @@ export function renderCard(
       `<div class="stat-item"${tip ? ` title="${esc(tip)}"` : ''}><div class="stat-label">${label}</div><div class="stat-value ${color}">${value}${srcDot(fieldOf(stats, key), settings)}</div></div>`;
 
     const warnings = numOf(stats, 'warnings');
-    const minRatioTip = tracker.min_ratio && tracker.min_ratio > 0 ? `Tracker minimum: ${tracker.min_ratio}` : '';
+    const minRatioTip = !isNaN(requiredRatio) && requiredRatio > 0
+      ? `Your required ratio: ${requiredRatio}`
+      : tracker.min_ratio && tracker.min_ratio > 0 ? `Tracker minimum: ${tracker.min_ratio}` : '';
     const totalUploads = strOf(stats, 'uploads_approved');
     const hnrColor = hnr < 1 ? 'green' : (settings.highlight_hnr !== false ? 'red' : 'text3');
     // Per-day trend rollover ("≈ 245.3 GiB per day") from the growth rates.

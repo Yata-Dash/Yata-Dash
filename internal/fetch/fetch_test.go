@@ -12,6 +12,159 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
+func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_json","label":"Gazelle JSON API",
+		"api":{"kind":"gazelle_json","required_fields":[]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"redacted",
+		"name":"Redacted","abbr":"RED","url":%q,"type":"gazelle_json"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_json.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "redacted.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func legacyGazelleRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle","label":"Gazelle",
+		"api":{"kind":"gazelle","required_fields":["username"]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"anthelion",
+		"name":"Anthelion","abbr":"ANT","url":%q,"type":"gazelle"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "anthelion.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {
+			t.Fatalf("unexpected legacy Gazelle request: %s", r.URL.String())
+		}
+		fmt.Fprint(w, `{"status":"success","response":{
+			"ID":7,"Username":"alice","Class":"Member","Uploaded":300,
+			"Downloaded":100,"SeedCount":4,"Invites":2,
+			"JoinDate":"2025-01-02 03:04:05","Snatched":9
+		}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(legacyGazelleRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "gazelle", APIKey: "sekrit", Username: "alice",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if data["username"] != "alice" || data["seeding"] != 4 {
+		t.Fatalf("unexpected legacy Gazelle data: %+v", data)
+	}
+}
+
+func TestFetchGazelleMergesStandardEndpoints(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "sekrit" {
+			t.Errorf("Authorization = %q, want raw API key", got)
+		}
+		action := r.URL.Query().Get("action")
+		seen[action]++
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,"giftTokens":30,"meritTokens":109,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Elite"}
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "42" {
+				t.Errorf("user id = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":3,"buffer":200,"requiredRatio":0.6},
+				"personal":{"class":"Elite","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":500,"uploaded":50,"groups":510,"seeding":20,"leeching":1,"snatched":30,"invited":4}
+			}}`)
+		case "community_stats":
+			if got := r.URL.Query().Get("userid"); got != "42" {
+				t.Errorf("community_stats userid = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":1,"seeding":"20","snatched":"30","seedingsize":"476.55 GB"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "listener", "user_id": "42", "group": "Elite",
+		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"ratio": 3.0, "required_ratio": 0.6, "fl_tokens": 139.0,
+		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
+		"leeching": 1, "snatched": 30, "users_invited": 4,
+		"uploads_approved": 50, "requests_filled": 2, "forum_posts": 1,
+		"groups_uploaded": 510, "perfect_flacs": 500, "seed_size": "476.55 GB",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, action := range []string{"index", "user", "community_stats"} {
+		if seen[action] != 1 {
+			t.Errorf("%s calls = %d, want 1", action, seen[action])
+		}
+	}
+}
+
+func TestFetchGazelleJSONRejectsFailureEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"status":"failure","error":"User scope required"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "User scope required" {
+		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
+	}
+}
+
 // hunoProfile is the documented HUNO GET /api/profile response shape —
 // a {success, data} envelope with per-bracket seed-division counts.
 const hunoProfile = `{
