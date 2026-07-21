@@ -87,6 +87,46 @@ func legacyGazelleRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
+func TestFetchUnit3DBlutopiaResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"BluUser",
+			"uploaded":400,"downloaded":100,"ratio":4,"buffer":900,
+			"seeding":12,"leeching":0,"seedbonus":"1234.50","hit_and_runs":0
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "BluUser",
+		"uploaded": 400.0, "downloaded": 100.0, "ratio": 4.0, "buffer": 900.0,
+		"seeding": 12.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["seedbonus"]; ok {
+		t.Errorf("seedbonus alias should be normalized: %+v", data)
+	}
+}
+
 func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {

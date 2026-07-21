@@ -175,4 +175,74 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if got := ggn.Groups[6].Requirements.MinCounts[0].Count; got != 6000 {
 		t.Errorf("Gaming God points = %d, want 6000", got)
 	}
+
+	blu, ok := r.TrackerByURL("https://blutopia.cc")
+	if !ok {
+		t.Fatal("blutopia.cc def not found")
+	}
+	if kind := r.APIKind(blu.URL, blu.Type); kind != "unit3d" {
+		t.Fatalf("Blutopia APIKind = %q, want unit3d", kind)
+	}
+	if !blu.Scrape.DisableScraping || blu.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("Blutopia must be API-only and unapproved: scrape=%+v approval=%q", blu.Scrape, blu.ApprovalStatus())
+	}
+	if blu.Rules == nil || blu.Rules.MinRatio != 0.4 || blu.Rules.MinSeedDays != 7 {
+		t.Fatalf("Blutopia rules = %+v, want ratio 0.4 and 7 seed days", blu.Rules)
+	}
+	if blu.InviteRequirements == nil || blu.InviteRequirements.MinClass != "BluMaster" {
+		t.Fatalf("Blutopia invite requirements = %+v", blu.InviteRequirements)
+	}
+	wantBLUGroups := []string{
+		"User", "BluUser", "BluMaster", "BluExtremist", "BluLegend", "Blutopian",
+		"BluSeeder", "BluCollector", "BluArchivist", "Junior Uploader", "Uploader",
+		"Trustee", "Internal", "Editor", "Torrent Moderator", "Moderator", "Super Mod",
+		"systemd", "Administrator", "Super Admin",
+	}
+	if len(blu.Groups) != len(wantBLUGroups) {
+		t.Fatalf("Blutopia groups = %d, want %d", len(blu.Groups), len(wantBLUGroups))
+	}
+	wantBLUStyles := map[string]GroupStyle{
+		"User":              {Color: "#c2d7fb", Icon: "fas fa-user"},
+		"BluUser":           {Color: "#b7c6f1", Icon: "fas fa-user-tie"},
+		"BluMaster":         {Color: "#9ba9e5", Icon: "fas fa-user-graduate"},
+		"BluExtremist":      {Color: "#707ed2", Icon: "fas fa-user-astronaut"},
+		"BluLegend":         {Color: "#515ec8", Icon: "fas fa-solid fa-user-bounty-hunter"},
+		"Blutopian":         {Color: "#2978d4", Icon: "fas fa-rocket-launch", Sparkle: true},
+		"BluSeeder":         {Color: "#0092e0", Icon: "fas fa-usb-drive"},
+		"BluCollector":      {Color: "#1fb0ff", Icon: "fas fa-hdd"},
+		"BluArchivist":      {Color: "#5cc6ff", Icon: "fas fa-server", Sparkle: true},
+		"Junior Uploader":   {Color: "#67dd99", Icon: "fas fa-angle-up"},
+		"Uploader":          {Color: "#2ecc71", Icon: "fas fa-angle-double-up"},
+		"Trustee":           {Color: "#bf55ec", Icon: "fas fa-user-shield"},
+		"Internal":          {Color: "#baaf92", Icon: "fas fa-wand-magic-sparkles"},
+		"Editor":            {Color: "#15b097", Icon: "fas fa-user-pen"},
+		"Torrent Moderator": {Color: "#15b097", Icon: "fas fa-badge-check"},
+		"Moderator":         {Color: "#0beac5", Icon: "fas fa-gavel"},
+		"Super Mod":         {Color: "#ea7c0b", Icon: "fas fa-dragon"},
+		"systemd":           {Color: "#3fd475", Icon: "fas fa-code-compare"},
+		"Administrator":     {Color: "#e30b5d", Icon: "fas fa-chess-queen"},
+		"Super Admin":       {Color: "#ff0000", Icon: "fas fa-chess-king"},
+	}
+	for i, name := range wantBLUGroups {
+		group := blu.Groups[i]
+		if group.Name != name {
+			t.Errorf("Blutopia group %d = %q, want %q", i, group.Name, name)
+		}
+		if group.Style != wantBLUStyles[name] {
+			t.Errorf("Blutopia %s style = %+v, want %+v", name, group.Style, wantBLUStyles[name])
+		}
+		switch group.Name {
+		case "Pruned", "Banned", "Disabled", "Validating", "Leech", "Supporter":
+			t.Errorf("Blutopia account state/supporter overlay included as class: %s", group.Name)
+		}
+	}
+	if req := blu.Groups[1].Requirements; req.MinUploaded != "1 TiB" || req.MinAge != "1M" {
+		t.Errorf("BluUser requirements = %+v", req)
+	}
+	if req := blu.Groups[6].Requirements; req.MinSeedSize != "5 TiB" || req.MinAge != "1M" || req.MinSeedtime != "1M" {
+		t.Errorf("BluSeeder requirements = %+v", req)
+	}
+	if req := blu.Groups[8].Requirements; req.MinSeedSize != "20 TiB" || req.MinAge != "3M" || req.MinSeedtime != "3M" {
+		t.Errorf("BluArchivist requirements = %+v", req)
+	}
 }
