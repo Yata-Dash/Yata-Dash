@@ -303,4 +303,77 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if req := rfx.Groups[9].Requirements; req.MinMonthlyUploads != 25 || req.MinUploaded != "500 GiB" {
 		t.Errorf("ReelFliX Uploader requirements = %+v", req)
 	}
+
+	ulcx, ok := r.TrackerByURL("https://upload.cx")
+	if !ok {
+		t.Fatal("upload.cx def not found")
+	}
+	if kind := r.APIKind(ulcx.URL, ulcx.Type); kind != "unit3d" {
+		t.Fatalf("Upload.cx APIKind = %q, want unit3d", kind)
+	}
+	if !ulcx.Scrape.DisableScraping || ulcx.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("Upload.cx must be API-only and unapproved: scrape=%+v approval=%q", ulcx.Scrape, ulcx.ApprovalStatus())
+	}
+	if ulcx.Rules == nil || ulcx.Rules.MinRatio != 0.6 || ulcx.Rules.MinSeedDays != 2 {
+		t.Fatalf("Upload.cx rules = %+v, want ratio 0.6 and 2 seed days", ulcx.Rules)
+	}
+	if ulcx.InviteRequirements == nil || ulcx.InviteRequirements.MinClass != "Seeder" {
+		t.Fatalf("Upload.cx invite requirements = %+v", ulcx.InviteRequirements)
+	}
+	wantULCXGroups := []string{
+		"Leech", "Parked", "User", "Seeder", "Collector", "Archivist", "Hoarder",
+		"Sharer", "Provider", "Distributor", "Supplier", "Adept", "Master", "Veteran",
+		"Champion", "Legend", "Network Affiliate", "Junior Uploader", "Uploader", "Trustee",
+		"Internal", "Editor", "Torrent Moderator",
+	}
+	if len(ulcx.Groups) != len(wantULCXGroups) {
+		t.Fatalf("Upload.cx groups = %d, want %d", len(ulcx.Groups), len(wantULCXGroups))
+	}
+	wantULCXStyles := map[string]GroupStyle{
+		"Leech":             {Color: "#c07a3a", Icon: "fas fa-virus-covid"},
+		"Parked":            {Icon: "fas fa-box-open-full"},
+		"User":              {Color: "#9aa0a6", Icon: "fas fa-cube"},
+		"Seeder":            {Color: "#4daf52", Icon: "fas fa-seedling"},
+		"Collector":         {Color: "#4d96af", Icon: "fas fa-hand-holding-box"},
+		"Archivist":         {Color: "#598bf7", Icon: "fas fa-file-zipper", Sparkle: true},
+		"Hoarder":           {Color: "#595cf7", Icon: "fas fa-warehouse-full", Sparkle: true},
+		"Sharer":            {Color: "#c9e127", Icon: "fas fa-person-walking-luggage"},
+		"Provider":          {Color: "#91e127", Icon: "fas fa-forklift"},
+		"Distributor":       {Color: "#59e127", Icon: "fas fa-truck-field", Sparkle: true},
+		"Supplier":          {Color: "#2df833", Icon: "fas fa-ship", Sparkle: true},
+		"Adept":             {Color: "#ed7b9c", Icon: "fas fa-scroll-old"},
+		"Master":            {Color: "#f44d7f", Icon: "fas fa-graduation-cap", Sparkle: true},
+		"Veteran":           {Color: "#db148b", Icon: "fas fa-helmet-safety", Sparkle: true},
+		"Champion":          {Color: "#00b4f0", Icon: "fas fa-award", Sparkle: true},
+		"Legend":            {Color: "#fb9c18", Icon: "fas fa-chess-queen-piece", Sparkle: true},
+		"Network Affiliate": {Color: "#78bdbf", Icon: "fas fa-sitemap"},
+		"Junior Uploader":   {Color: "#2ecc71", Icon: "fas fa-file-arrow-up"},
+		"Uploader":          {Color: "#2ecca0", Icon: "fas fa-cloud-arrow-up", Sparkle: true},
+		"Trustee":           {Color: "#bf55ec", Icon: "fas fa-badge-check", Sparkle: true},
+		"Internal":          {Color: "#ffce2e", Icon: "fas fa-cards", Sparkle: true},
+		"Editor":            {Color: "#159ab0", Icon: "fas fa-square-quote"},
+		"Torrent Moderator": {Color: "#15b097", Icon: "fas fa-clipboard-list"},
+	}
+	for i, name := range wantULCXGroups {
+		group := ulcx.Groups[i]
+		if group.Name != name {
+			t.Errorf("Upload.cx group %d = %q, want %q", i, group.Name, name)
+		}
+		if group.Style != wantULCXStyles[name] {
+			t.Errorf("Upload.cx %s style = %+v, want %+v", name, group.Style, wantULCXStyles[name])
+		}
+		switch group.Name {
+		case "Pruned", "Banned", "Disabled", "Validating":
+			t.Errorf("Upload.cx account state included as class: %s", group.Name)
+		}
+	}
+	if req := ulcx.Groups[3].Requirements; req.MinUploaded != "10 TiB" || req.MinRatio != 0.8 || req.MinAge != "1M" || req.MinSeedtime != "1M" || req.MinSeedSize != "5 TiB" {
+		t.Errorf("Upload.cx Seeder requirements = %+v", req)
+	}
+	if req := ulcx.Groups[10].Requirements; req.MinRatio != 1.8 || req.MinAge != "1Y" || req.MinSeedtime != "4M" || req.MinUploads != 500 {
+		t.Errorf("Upload.cx Supplier requirements = %+v", req)
+	}
+	if req := ulcx.Groups[15].Requirements; req.MinUploaded != "150 TiB" || req.MinRatio != 2.0 || req.MinAge != "2Y" || req.MinSeedtime != "6M" || req.MinSeedSize != "50 TiB" || req.MinUploads != 1000 {
+		t.Errorf("Upload.cx Legend requirements = %+v", req)
+	}
 }
