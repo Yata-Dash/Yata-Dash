@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "key": "gazelle_games",
+  "label": "GazelleGames API",
+  "last_updated": "2026-07-21",
+  "description": "GazelleGames' scoped api.php JSON API. The API key identifies the current user and is sent in the X-API-Key header. HTML profile scraping is not required.",
+  "api": {
+    "kind": "gazelle_games",
+    "required_fields": []
+  },
+  "scrape": {
+    "skip_html_scrape": true
+  }
+}

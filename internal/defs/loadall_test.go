@@ -137,4 +137,42 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if len(eliteTM.MinCounts) != 2 || eliteTM.MinCounts[1].Field != "perfect_flacs" {
 		t.Errorf("unexpected Elite TM requirements: %+v", eliteTM)
 	}
+
+	ggn, ok := r.TrackerByURL("https://gazellegames.net")
+	if !ok {
+		t.Fatal("gazellegames.net def not found")
+	}
+	if kind := r.APIKind(ggn.URL, ggn.Type); kind != "gazelle_games" {
+		t.Fatalf("GazelleGames APIKind = %q, want gazelle_games", kind)
+	}
+	if !ggn.Scrape.DisableScraping || ggn.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("GazelleGames must be API-only and unapproved: scrape=%+v approval=%q", ggn.Scrape, ggn.ApprovalStatus())
+	}
+	if ggn.InviteRequirements == nil || ggn.InviteRequirements.MinClass != "Gamer" {
+		t.Fatalf("GazelleGames invite requirements = %+v", ggn.InviteRequirements)
+	}
+	if ggn.Rules == nil || ggn.Rules.MinSeedHours != 80 {
+		t.Fatalf("GazelleGames minimum seed rule = %+v, want 80 hours", ggn.Rules)
+	}
+	wantGGnPrimary := []string{"Amateur", "Gamer", "Pro Gamer", "Elite Gamer", "Legendary Gamer", "Master Gamer", "Gaming God"}
+	if len(ggn.Groups) != 21 {
+		t.Fatalf("GazelleGames groups = %d, want 21", len(ggn.Groups))
+	}
+	for i, name := range wantGGnPrimary {
+		group := ggn.Groups[i]
+		if group.Name != name {
+			t.Errorf("GazelleGames group %d = %q, want %q", i, group.Name, name)
+		}
+		if group.Style.Color != "" || group.Style.Icon != "" {
+			t.Errorf("GazelleGames %s style must be empty: %+v", group.Name, group.Style)
+		}
+		if i > 0 {
+			if len(group.Requirements.MinCounts) != 1 || group.Requirements.MinCounts[0].Field != "achievement_points" {
+				t.Errorf("GazelleGames %s point requirement = %+v", group.Name, group.Requirements.MinCounts)
+			}
+		}
+	}
+	if got := ggn.Groups[6].Requirements.MinCounts[0].Count; got != 6000 {
+		t.Errorf("Gaming God points = %d, want 6000", got)
+	}
 }

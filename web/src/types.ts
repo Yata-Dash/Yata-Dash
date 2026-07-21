@@ -51,6 +51,7 @@ export interface Tracker {
   /** Tracker's minimum per-torrent seed time in days (0/absent = unknown).
    *  Display-only reference from the def — no calculations. */
   min_seed_days?: number;
+  min_seed_hours?: number;
   /** Category-specific seed times, used instead of min_seed_days when set. */
   min_seed_days_episode?: number;
   min_seed_days_season?: number;

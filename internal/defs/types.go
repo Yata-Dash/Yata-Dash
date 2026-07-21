@@ -36,10 +36,11 @@ type TypeDef struct {
 
 // TypeAPI selects the built-in fetcher used for a tracker type.
 type TypeAPI struct {
-	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "custom", "demo", "none".
+	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "gazelle_games", "custom", "demo", "none".
 	//   unit3d  — GET {url}/api/user?api_token={key}
 	//   gazelle — username/query-key API used by legacy Gazelle integrations
 	//   gazelle_json — scoped ajax.php API with a raw Authorization header
+	//   gazelle_games — scoped api.php API with an X-API-Key header
 	//   custom  — fully described by the tracker def's "api" object
 	//   demo    — local mock data, no HTTP
 	//   none    — no API; scrape-only tracker type
@@ -252,6 +253,10 @@ type TrackerRules struct {
 	// no per-torrent tracking or calculations with it, and the fine print
 	// (partial-download thresholds, exemptions, …) stays on the tracker.
 	MinSeedDays int `json:"min_seed_days,omitempty"`
+	// MinSeedHours represents exact minimums that are not a whole number of
+	// days (e.g. GazelleGames requires 80 hours). It takes precedence over
+	// MinSeedDays in the UI.
+	MinSeedHours int `json:"min_seed_hours,omitempty"`
 	// Category-specific minimums are used when episode and season torrents
 	// have different requirements. They take precedence over MinSeedDays in
 	// the UI when present.

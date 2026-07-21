@@ -35,7 +35,7 @@
   "aliases": ["https://mytracker-mirror.example"],
 
   // [REQUIRED] Tracker type key — must match a file in defs/types/.
-  // Built-in types: "unit3d", "gazelle", "gazelle_json", "custom", "test".
+  // Built-in types: "unit3d", "gazelle", "gazelle_json", "gazelle_games", "custom", "test".
   "type": "unit3d",
 
   // [OPTIONAL — recommended] Date (YYYY-MM-DD) this def's data was last
@@ -129,7 +129,7 @@
   },
 
   // [OPTIONAL — REQUIRED for type "custom"] Describes a non-standard API
-  // entirely as data. Omit for unit3d/gazelle/gazelle_json/test trackers.
+  // entirely as data. Omit for unit3d/gazelle/gazelle_json/gazelle_games/test trackers.
   "api": {
     // Endpoint path appended to the base URL. Use {username} when an API
     // needs the configured tracker username in its query; Yata URL-encodes

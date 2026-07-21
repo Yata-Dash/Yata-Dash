@@ -105,6 +105,8 @@ type TrackerView struct {
 	// MinSeedDays is the tracker's minimum per-torrent seed time in days
 	// (0 = unknown). Display-only reference from the def — no calculations.
 	MinSeedDays int `json:"min_seed_days,omitempty"`
+	// MinSeedHours is used when the exact rule is not a whole number of days.
+	MinSeedHours int `json:"min_seed_hours,omitempty"`
 	// Category-specific minimum seed times take precedence over MinSeedDays
 	// when a tracker distinguishes episode and season torrents.
 	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`

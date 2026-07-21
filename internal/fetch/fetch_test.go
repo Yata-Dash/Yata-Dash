@@ -37,6 +37,31 @@ func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
+func gazelleGamesRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_games","label":"GazelleGames API",
+		"api":{"kind":"gazelle_games","required_fields":[]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"gazellegames",
+		"name":"GazelleGames","abbr":"GGn","url":%q,"type":"gazelle_games"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_games.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "gazellegames.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
 func legacyGazelleRegistry(t *testing.T, baseURL string) *defs.Registry {
 	t.Helper()
 	dir := t.TempDir()
@@ -161,6 +186,97 @@ func TestFetchGazelleJSONRejectsFailureEnvelope(t *testing.T) {
 		t.Fatalf("Fetch error = %v, want api_error", ferr)
 	}
 	if ferr.Err == nil || ferr.Err.Error() != "User scope required" {
+		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
+	}
+}
+
+func TestFetchGazelleGamesMergesAccountEndpoints(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-API-Key"); got != "sekrit" {
+			t.Errorf("X-API-Key = %q, want API key", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want empty", got)
+		}
+		request := r.URL.Query().Get("request")
+		seen[request]++
+		w.Header().Set("Content-Type", "application/json")
+		switch request {
+		case "quick_user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player","id":24,
+				"userstats":{"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,"requiredratio":0.6,"class":"Legendary Gamer"}
+			}}`)
+		case "user_stats_ratio":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,
+				"buffer":3298534883328,"disposable":3848290697216,"reqratio":0.6
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "24" {
+				t.Errorf("user id = %q, want 24", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player",
+				"stats":{"joinedDate":"2025-01-02 03:04:05","ratio":"4.0","requiredRatio":0.6,"shareScore":1.25,"gold":1000},
+				"personal":{"class":"Legendary Gamer","hnrs":null,"warned":false,"invites":2},
+				"community":{"hourlyGold":2.5,"actualPosts":0,"ircActualLines":14,"seeding":20,"leeching":null,"snatched":100,"uniqueSnatched":90,"seedSize":34359738368},
+				"achievements":{"userLevel":"Legendary Gamer","nextLevel":"Master Gamer","totalPoints":3000,"pointsToNextLvl":1200}
+			}}`)
+		default:
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "player", "user_id": "24", "group": "Legendary Gamer",
+		"uploaded": "4.00 TiB", "downloaded": "1.00 TiB", "buffer": "3.00 TiB",
+		"ratio": 4.0, "required_ratio": 0.6,
+		"disposable": "3.50 TiB", "join_date": "2025-01-02",
+		"bonus_points": 1000.0, "share_score": 1.25, "invites": 2,
+		"warnings": 0, "seeding": 20, "snatched": 100,
+		"unique_snatched": 90, "seed_size": "32.00 GiB",
+		"hourly_gold": 2.5, "forum_posts": 0, "irc_lines": 14,
+		"achievement_points": 3000, "points_to_next_level": 1200,
+		"next_group": "Master Gamer",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["hit_and_runs"]; ok {
+		t.Errorf("hit_and_runs should be omitted when API returns null: %+v", data)
+	}
+	if _, ok := data["leeching"]; ok {
+		t.Errorf("leeching should be omitted when API returns null: %+v", data)
+	}
+	for _, request := range []string{"quick_user", "user_stats_ratio", "user"} {
+		if seen[request] != 1 {
+			t.Errorf("%s calls = %d, want 1", request, seen[request])
+		}
+	}
+}
+
+func TestFetchGazelleGamesRejectsFailureEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"status":"failure","error":"User permission required"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "User permission required" {
 		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
 	}
 }

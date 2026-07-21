@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "key": "gazellegames",
+  "name": "GazelleGames",
+  "abbr": "GGn",
+  "url": "https://gazellegames.net",
+  "type": "gazelle_games",
+  "last_updated": "2026-07-21",
+  "api": {
+    "api_key_hint": "Profile Settings → API Keys. Create a key with the User permission; it is shown only once."
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_seed_hours": 80
+  },
+  "invite_requirements": {
+    "min_class": "Gamer",
+    "note": "Gamer can send invites when invite tokens are available; Gaming God can send unlimited invites."
+  },
+  "groups": [
+    {
+      "name": "Amateur",
+      "style": {},
+      "requirements": {},
+      "perks": [
+        { "icon": "", "label": "Default starting class" }
+      ]
+    },
+    {
+      "name": "Gamer",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 600, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "Send invites when invite tokens are available" },
+        { "icon": "", "label": "Download all torrents from a torrent group" },
+        { "icon": "", "label": "Create requests and collections" },
+        { "icon": "", "label": "Access Top 10, peer lists, Gamer forums, and Mass Torrent Downloader" },
+        { "icon": "", "label": "Create forum polls and forum games" }
+      ]
+    },
+    {
+      "name": "Pro Gamer",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 1200, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "One invite at promotion, up to a maximum of two" },
+        { "icon": "", "label": "Edit unchecked groups and their torrents" },
+        { "icon": "", "label": "Add external links and view Top 10 torrents by tag" },
+        { "icon": "", "label": "Trade items with Pro Gamer+ users" },
+        { "icon": "", "label": "Access Pro Gamer and Invites forums; Invites forum requires one month account age" },
+        { "icon": "", "label": "Immune from inactivity pruning" }
+      ]
+    },
+    {
+      "name": "Elite Gamer",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 2100, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "Two invites at promotion, up to a maximum of two" },
+        { "icon": "", "label": "Edit descriptions for any group, torrent, or collection" },
+        { "icon": "", "label": "Add internal links and delete tags" },
+        { "icon": "", "label": "View anonymized download and snatch lists" },
+        { "icon": "", "label": "Edit custom title with BBCode and double-post in forums" },
+        { "icon": "", "label": "Immune from Hit 'n' Runs" }
+      ]
+    },
+    {
+      "name": "Legendary Gamer",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 3000, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "Two invites monthly, up to a maximum of two" },
+        { "icon": "", "label": "Search with more than 5,000 results" },
+        { "icon": "", "label": "Access Legendary Gamer forum, full site log, statistics, and BBCode sandbox" },
+        { "icon": "", "label": "Access Legendary Gamer Invites forum after 90 days" }
+      ]
+    },
+    {
+      "name": "Master Gamer",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 4200, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "Two invites monthly, up to a maximum of four" },
+        { "icon": "", "label": "Delete and recover collections" },
+        { "icon": "", "label": "Send re-seed requests regardless of timing" },
+        { "icon": "", "label": "Add torrent recommendations" },
+        { "icon": "", "label": "Access special forums and item statistics" }
+      ]
+    },
+    {
+      "name": "Gaming God",
+      "style": {},
+      "requirements": {
+        "min_counts": [
+          { "field": "achievement_points", "count": 6000, "label": "Achievement Points" }
+        ],
+        "note": "Achievement points do not stack across tiers. Automatic promotion is disabled while warned; demotion can still occur."
+      },
+      "perks": [
+        { "icon": "", "label": "Send unlimited invites" },
+        { "icon": "", "label": "Access Torrent Bump tool" },
+        { "icon": "", "label": "Automatic voice in the GazelleGames IRC channel" }
+      ]
+    },
+    {
+      "name": "VIP",
+      "style": {},
+      "requirements": { "description": "Special users; similar to Elite Gamer with additional privileges." },
+      "perks": [
+        { "icon": "", "label": "Access special forums" },
+        { "icon": "", "label": "Add torrent recommendations" }
+      ]
+    },
+    {
+      "name": "Uploader",
+      "style": {},
+      "requirements": { "description": "Member of the dedicated internal upload team." }
+    },
+    {
+      "name": "Legend",
+      "style": {},
+      "requirements": { "description": "Former senior staff member." }
+    },
+    {
+      "name": "VIP+",
+      "style": {},
+      "requirements": { "description": "Hand-picked members who played an integral role in GazelleGames' development." }
+    },
+    {
+      "name": "Staff Trainee",
+      "style": {},
+      "requirements": { "description": "Entry-level moderator learning staff responsibilities." }
+    },
+    {
+      "name": "Moderator",
+      "style": {},
+      "requirements": { "description": "Journeyman staff moderating site areas." }
+    },
+    {
+      "name": "Community Moderator",
+      "style": {},
+      "requirements": { "description": "Moderator responsible for community involvement." }
+    },
+    {
+      "name": "Torrent Moderator",
+      "style": {},
+      "requirements": { "description": "Moderator responsible for torrent quality." }
+    },
+    {
+      "name": "Junior Developer",
+      "style": {},
+      "requirements": { "description": "Developer whose live changes require senior approval." }
+    },
+    {
+      "name": "Senior Moderator",
+      "style": {},
+      "requirements": { "description": "Experienced moderator who also assists with account management." }
+    },
+    {
+      "name": "Team Leaders",
+      "style": {},
+      "requirements": { "description": "Staff responsible for major site areas and junior teams." }
+    },
+    {
+      "name": "Senior Developer",
+      "style": {},
+      "requirements": { "description": "Senior site developer who reviews junior developers' work." }
+    },
+    {
+      "name": "Administrators",
+      "style": {},
+      "requirements": { "description": "Staff overseeing the site, accounts, donations, and staff team." }
+    },
+    {
+      "name": "Sysop",
+      "style": {},
+      "requirements": { "description": "Staff responsible for site operations, development, infrastructure, finances, and legal matters." }
+    }
+  ]
+}

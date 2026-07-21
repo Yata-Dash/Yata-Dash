@@ -455,7 +455,9 @@ function buildExpanded(
     rulesRows.push(['Episode Seed Time', `${tracker.min_seed_days_episode} day${tracker.min_seed_days_episode === 1 ? '' : 's'}`]);
   if (tracker.min_seed_days_season && tracker.min_seed_days_season > 0)
     rulesRows.push(['Season Seed Time', `${tracker.min_seed_days_season} day${tracker.min_seed_days_season === 1 ? '' : 's'}`]);
-  if (!tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
+  if (tracker.min_seed_hours && tracker.min_seed_hours > 0)
+    rulesRows.push(['Min Seed Time', `${tracker.min_seed_hours} hours`]);
+  if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`]);
   const rulesHtml = rulesRows.length ? `<div style="margin-top:10px">
       <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>

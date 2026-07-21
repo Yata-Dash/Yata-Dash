@@ -68,6 +68,8 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		data, ferr = c.fetchGazelle(t)
 	case "gazelle_json":
 		data, ferr = c.fetchGazelleJSON(t)
+	case "gazelle_games":
+		data, ferr = c.fetchGazelleGames(t)
 	case "custom":
 		data, ferr = c.fetchCustom(t)
 	case "none":
@@ -362,6 +364,161 @@ func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
 	}
 	if size, ok := community.SeedingSize.(string); ok && strings.TrimSpace(size) != "" {
 		out["seed_size"] = size
+	}
+	return out, nil
+}
+
+// GazelleGames exposes a scoped Gazelle-derived API at api.php. It differs
+// from the ajax.php API in both authentication and endpoint names, so it has
+// its own fetcher rather than risking changes to Redacted-style trackers.
+type gazelleGamesQuickUser struct {
+	Username  string `json:"username"`
+	ID        int    `json:"id"`
+	UserStats struct {
+		Class string `json:"class"`
+	} `json:"userstats"`
+}
+
+type gazelleGamesRatio struct {
+	Uploaded      any `json:"uploaded"`
+	Downloaded    any `json:"downloaded"`
+	Ratio         any `json:"ratio"`
+	Buffer        any `json:"buffer"`
+	Disposable    any `json:"disposable"`
+	RequiredRatio any `json:"reqratio"`
+}
+
+type gazelleGamesUser struct {
+	Stats struct {
+		JoinedDate string  `json:"joinedDate"`
+		ShareScore float64 `json:"shareScore"`
+		Gold       float64 `json:"gold"`
+	} `json:"stats"`
+	Personal struct {
+		HNRs    *int `json:"hnrs"`
+		Warned  bool `json:"warned"`
+		Invites *int `json:"invites"`
+	} `json:"personal"`
+	Community struct {
+		HourlyGold     *float64 `json:"hourlyGold"`
+		ActualPosts    *int     `json:"actualPosts"`
+		IRCActualLines *int     `json:"ircActualLines"`
+		Seeding        *int     `json:"seeding"`
+		Leeching       *int     `json:"leeching"`
+		Snatched       *int     `json:"snatched"`
+		UniqueSnatched *int     `json:"uniqueSnatched"`
+		SeedSize       *int64   `json:"seedSize"`
+	} `json:"community"`
+	Achievements struct {
+		NextLevel       string `json:"nextLevel"`
+		TotalPoints     int    `json:"totalPoints"`
+		PointsToNextLvl int    `json:"pointsToNextLvl"`
+	} `json:"achievements"`
+}
+
+func (c *Client) getGazelleGames(url, key, identify string, out any) *Error {
+	body, ferr := c.getBody(url, map[string]string{
+		"Accept":    "application/json",
+		"X-API-Key": key,
+	}, identify)
+	if ferr != nil {
+		return ferr
+	}
+	var env gazelleJSONEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return errf("parse_error", err)
+	}
+	if env.Status != "success" {
+		message := env.Error
+		if message == "" {
+			message = "api_error"
+		}
+		return errf("api_error", fmt.Errorf("%s", message))
+	}
+	if err := json.Unmarshal(env.Response, out); err != nil {
+		return errf("parse_error", err)
+	}
+	return nil
+}
+
+func (c *Client) fetchGazelleGames(t models.Tracker) (map[string]any, *Error) {
+	key := strings.TrimSpace(t.APIKey)
+	if key == "" {
+		return nil, errf("no_key", nil)
+	}
+	base := strings.TrimRight(t.URL, "/") + "/api.php?request="
+	identify := c.identify(t)
+
+	var quick gazelleGamesQuickUser
+	if ferr := c.getGazelleGames(base+"quick_user", key, identify, &quick); ferr != nil {
+		return nil, ferr
+	}
+	if quick.ID <= 0 {
+		return nil, errf("api_error", fmt.Errorf("quick_user response missing user id"))
+	}
+	var ratio gazelleGamesRatio
+	if ferr := c.getGazelleGames(base+"user_stats_ratio", key, identify, &ratio); ferr != nil {
+		return nil, ferr
+	}
+	var user gazelleGamesUser
+	if ferr := c.getGazelleGames(fmt.Sprintf("%suser&id=%d", base, quick.ID), key, identify, &user); ferr != nil {
+		return nil, ferr
+	}
+
+	joinDate := user.Stats.JoinedDate
+	if len(joinDate) >= 10 {
+		joinDate = joinDate[:10]
+	}
+	out := map[string]any{
+		"username":             quick.Username,
+		"user_id":              fmt.Sprintf("%d", quick.ID),
+		"group":                quick.UserStats.Class,
+		"uploaded":             parse.BytesToSize(int64(parse.AnyFloat(ratio.Uploaded))),
+		"downloaded":           parse.BytesToSize(int64(parse.AnyFloat(ratio.Downloaded))),
+		"buffer":               parse.BytesToSize(int64(parse.AnyFloat(ratio.Buffer))),
+		"disposable":           parse.BytesToSize(int64(parse.AnyFloat(ratio.Disposable))),
+		"ratio":                parse.AnyFloat(ratio.Ratio),
+		"required_ratio":       parse.AnyFloat(ratio.RequiredRatio),
+		"join_date":            joinDate,
+		"bonus_points":         user.Stats.Gold,
+		"share_score":          user.Stats.ShareScore,
+		"warnings":             0,
+		"achievement_points":   user.Achievements.TotalPoints,
+		"points_to_next_level": user.Achievements.PointsToNextLvl,
+		"next_group":           user.Achievements.NextLevel,
+	}
+	if user.Personal.Warned {
+		out["warnings"] = 1
+	}
+	if user.Personal.HNRs != nil {
+		out["hit_and_runs"] = *user.Personal.HNRs
+	}
+	if user.Personal.Invites != nil {
+		out["invites"] = *user.Personal.Invites
+	}
+	if user.Community.HourlyGold != nil {
+		out["hourly_gold"] = *user.Community.HourlyGold
+	}
+	if user.Community.ActualPosts != nil {
+		out["forum_posts"] = *user.Community.ActualPosts
+	}
+	if user.Community.IRCActualLines != nil {
+		out["irc_lines"] = *user.Community.IRCActualLines
+	}
+	if user.Community.Seeding != nil {
+		out["seeding"] = *user.Community.Seeding
+	}
+	if user.Community.Leeching != nil {
+		out["leeching"] = *user.Community.Leeching
+	}
+	if user.Community.Snatched != nil {
+		out["snatched"] = *user.Community.Snatched
+	}
+	if user.Community.UniqueSnatched != nil {
+		out["unique_snatched"] = *user.Community.UniqueSnatched
+	}
+	if user.Community.SeedSize != nil {
+		out["seed_size"] = parse.BytesToSize(*user.Community.SeedSize)
 	}
 	return out, nil
 }
