@@ -203,6 +203,88 @@ func TestFetchUnit3DUploadCXResponseShape(t *testing.T) {
 	}
 }
 
+func TestFetchAnimeBytesPersonalStats(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/stats/personal" {
+			t.Errorf("path = %q, want /api/stats/personal", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		fmt.Fprint(w, `{
+			"success":true,
+			"yen":{"current":4321,"per_day":24,"per_hour":1},
+			"hnrs":{"potential":1,"active":0},
+			"upload":{"raw":8589934592,"account":10737418240},
+			"download":{"raw":4294967296,"account":5368709120},
+			"torrents":{"uploaded":12,"pruned":2},
+			"tracker":{"seeding":9,"leeching":0,"snatched":15,"seed_size":21474836480,"avg_seed_time":2592000},
+			"class":"Power User"
+		}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(animeBytesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"group": "Power User", "uploaded": "10.00 GiB", "downloaded": "5.00 GiB",
+		"ratio": 2.0, "buffer": "5.00 GiB", "bonus_points": 4321.0,
+		"hit_and_runs": 0, "uploads_approved": 12, "seeding": 9,
+		"leeching": 0, "snatched": 15, "seed_size": "20.00 GiB",
+		"avg_seed_time": 2592000,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
+func animeBytesRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom"},"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"animebytes","name":"AnimeBytes","abbr":"AB",
+		"url":%q,"type":"custom",
+		"api":{
+			"path":"/api/stats/personal","auth_method":"api_key_header",
+			"success_field":"success","success_value":"true",
+			"field_map":{
+				"class":"group","yen.current":"bonus_points","hnrs.active":"hit_and_runs",
+				"torrents.uploaded":"uploads_approved","tracker.seeding":"seeding",
+				"tracker.leeching":"leeching","tracker.snatched":"snatched",
+				"tracker.avg_seed_time":"avg_seed_time"
+			},
+			"byte_fields":{
+				"upload.account":"uploaded","download.account":"downloaded",
+				"tracker.seed_size":"seed_size"
+			},
+			"buffer_from_bytes":true,"ratio_from_bytes":true
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "animebytes.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
 func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {

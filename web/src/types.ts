@@ -55,6 +55,8 @@ export interface Tracker {
   /** Category-specific seed times, used instead of min_seed_days when set. */
   min_seed_days_episode?: number;
   min_seed_days_season?: number;
+  /** Fine print for variable seed-time formulas, grace periods, or H&R rules. */
+  rule_note?: string;
   /** Def staff-approval status: approved | informal | pending | unknown.
    *  Manual trackers report "unknown"; the UI warns unless "approved". */
   def_approval?: string;

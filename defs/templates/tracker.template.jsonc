@@ -195,7 +195,10 @@
     // When episode and season requirements differ, use these instead of
     // min_seed_days so the UI labels both rules accurately.
     "min_seed_days_episode": 1,
-    "min_seed_days_season": 5
+    "min_seed_days_season": 5,
+    // Concise fine print for rules that do not fit fixed thresholds, such as
+    // size-based seed times, caps, partial-download thresholds, or H&R grace.
+    "note": "Seed time increases with torrent size; see the tracker rules."
   },
 
   // [OPTIONAL] Site-wide requirements to USE the invite system when they are

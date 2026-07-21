@@ -376,4 +376,50 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if req := ulcx.Groups[15].Requirements; req.MinUploaded != "150 TiB" || req.MinRatio != 2.0 || req.MinAge != "2Y" || req.MinSeedtime != "6M" || req.MinSeedSize != "50 TiB" || req.MinUploads != 1000 {
 		t.Errorf("Upload.cx Legend requirements = %+v", req)
 	}
+
+	ab, ok := r.TrackerByURL("https://animebytes.tv")
+	if !ok {
+		t.Fatal("animebytes.tv def not found")
+	}
+	if kind := r.APIKind(ab.URL, ab.Type); kind != "custom" {
+		t.Fatalf("AnimeBytes APIKind = %q, want custom", kind)
+	}
+	if ab.API == nil || ab.API.Path != "/api/stats/personal" || ab.API.AuthMethod != "api_key_header" || ab.API.SuccessField != "success" || ab.API.SuccessValue != "true" {
+		t.Fatalf("AnimeBytes API = %+v", ab.API)
+	}
+	if !ab.Scrape.DisableScraping || ab.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("AnimeBytes must be API-only and unapproved: scrape=%+v approval=%q", ab.Scrape, ab.ApprovalStatus())
+	}
+	if ab.Rules == nil || ab.Rules.MinRatio != 0.2 || ab.Rules.MinSeedHours != 72 || ab.Rules.Note == "" {
+		t.Fatalf("AnimeBytes rules = %+v", ab.Rules)
+	}
+	if ab.InviteRequirements == nil || ab.InviteRequirements.MinClass != "User" {
+		t.Fatalf("AnimeBytes invite requirements = %+v", ab.InviteRequirements)
+	}
+	wantABGroups := []string{
+		"Aka-chan", "User", "Power User", "Elite", "Torrent Master", "Legend",
+		"VIP", "Sensei", "Staff", "Editor", "Forum Staff", "App Reviewer",
+		"Torrent Support", "First Line Support", "Community Celebrity",
+	}
+	if len(ab.Groups) != len(wantABGroups) {
+		t.Fatalf("AnimeBytes groups = %d, want %d", len(ab.Groups), len(wantABGroups))
+	}
+	wantABColors := []string{"#a298e1", "#518fd6", "#2ac08c", "#7fae32", "#ff70ea", "#ff9752", "#ff473d", "#c36d50", "#ff1a1a"}
+	for i, name := range wantABGroups {
+		if ab.Groups[i].Name != name {
+			t.Errorf("AnimeBytes group %d = %q, want %q", i, ab.Groups[i].Name, name)
+		}
+		if i < len(wantABColors) && ab.Groups[i].Style.Color != wantABColors[i] {
+			t.Errorf("AnimeBytes %s color = %q, want %q", name, ab.Groups[i].Style.Color, wantABColors[i])
+		}
+		if ab.Groups[i].Style.Icon != "" {
+			t.Errorf("AnimeBytes %s icon must be omitted: %q", name, ab.Groups[i].Style.Icon)
+		}
+	}
+	if req := ab.Groups[1].Requirements; req.MinUploaded != "10.5 GB" || req.MinRatio != 0.5 || req.MinAge != "1W" {
+		t.Errorf("AnimeBytes User requirements = %+v", req)
+	}
+	if req := ab.Groups[5].Requirements; req.MinUploaded != "1 TB" || req.MinRatio != 1.0 || req.MinAge != "6M" || req.MinUploads != 500 {
+		t.Errorf("AnimeBytes Legend requirements = %+v", req)
+	}
 }

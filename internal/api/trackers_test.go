@@ -99,4 +99,15 @@ func TestToViewIncludesCategorySpecificSeedRules(t *testing.T) {
 	}
 }
 
+func TestToViewIncludesTrackerRuleNote(t *testing.T) {
+	d := testDeps(t)
+	v := toView(d, models.Tracker{URL: "https://animebytes.tv"})
+	if v.MinSeedHours != 72 {
+		t.Fatalf("seed hours = %d, want 72", v.MinSeedHours)
+	}
+	if v.RuleNote == "" {
+		t.Fatal("expected AnimeBytes rule note in tracker view")
+	}
+}
+
 func strp(s string) *string { return &s }

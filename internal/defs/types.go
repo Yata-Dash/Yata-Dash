@@ -262,6 +262,9 @@ type TrackerRules struct {
 	// the UI when present.
 	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
 	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
+	// Note carries concise fine print that cannot be represented by the fixed
+	// thresholds above, such as size-based seed-time formulas and H&R grace.
+	Note string `json:"note,omitempty"`
 }
 
 // ExtendedStatsSpec declares a supplementary UNIT3D stats endpoint. Field names

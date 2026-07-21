@@ -197,6 +197,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Tracker | Platform | Approved by tracker | Limit | Notes |
 |---|---|---|---|---|
 | Aither | Unit3D | Yes | 180min | New Upload groups note yet added, Monthly Uploads not retrevable |
+| AnimeBytes | Custom | No | API Only | Uses the personal stats API; account age is entered manually |
 | Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
 | Aura4K | Unit3D | Yes | 180min |  |
 | Blutopia | Unit3D | No | API Only | Seed-size and average-seedtime progress unavailable through the API |

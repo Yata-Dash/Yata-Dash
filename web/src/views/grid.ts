@@ -289,6 +289,7 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
     parts.push(`Seed ≥ ${tracker.min_seed_hours} hours`);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
+  if (tracker.rule_note) parts.push(tracker.rule_note);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
     <i class="fas fa-scale-balanced"></i><span>${parts.map(esc).join(' · ')}</span>

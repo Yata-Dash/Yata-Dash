@@ -111,6 +111,8 @@ type TrackerView struct {
 	// when a tracker distinguishes episode and season torrents.
 	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
 	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
+	// RuleNote is concise fine print supplied by the tracker definition.
+	RuleNote string `json:"rule_note,omitempty"`
 	// DefApproval is the def's staff-approval status (approved | informal |
 	// pending | unknown). Manual trackers (no def) report "unknown" — the UI
 	// warns for anything but "approved". Who/when details are never exposed.
