@@ -127,6 +127,44 @@ func TestFetchUnit3DBlutopiaResponseShape(t *testing.T) {
 	}
 }
 
+func TestFetchUnit3DReelFliXResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		w.Header().Set("X-RateLimit-Limit", "30")
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"User",
+			"uploaded":"80.00 GiB","downloaded":"10.00 GiB","ratio":"8.00","buffer":"90.00 GiB",
+			"seeding":3,"leeching":0,"seedbonus":"1234.50","hit_and_runs":0
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "User",
+		"uploaded": "80.00 GiB", "downloaded": "10.00 GiB", "ratio": "8.00", "buffer": "90.00 GiB",
+		"seeding": 3.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
 func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {

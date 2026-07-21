@@ -245,4 +245,62 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if req := blu.Groups[8].Requirements; req.MinSeedSize != "20 TiB" || req.MinAge != "3M" || req.MinSeedtime != "3M" {
 		t.Errorf("BluArchivist requirements = %+v", req)
 	}
+
+	rfx, ok := r.TrackerByURL("https://reelflix.cc")
+	if !ok {
+		t.Fatal("reelflix.cc def not found")
+	}
+	if kind := r.APIKind(rfx.URL, rfx.Type); kind != "unit3d" {
+		t.Fatalf("ReelFliX APIKind = %q, want unit3d", kind)
+	}
+	if !rfx.Scrape.DisableScraping || rfx.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("ReelFliX must be API-only and unapproved: scrape=%+v approval=%q", rfx.Scrape, rfx.ApprovalStatus())
+	}
+	if rfx.Rules == nil || rfx.Rules.MinRatio != 0.8 || rfx.Rules.MinSeedDays != 0 {
+		t.Fatalf("ReelFliX rules = %+v, want ratio 0.8 and no seed-time rule", rfx.Rules)
+	}
+	if rfx.InviteRequirements == nil || rfx.InviteRequirements.MinClass != "Elite" {
+		t.Fatalf("ReelFliX invite requirements = %+v", rfx.InviteRequirements)
+	}
+	wantRFXGroups := []string{
+		"Leech", "User", "Member", "Pro", "Expert", "Elite", "Distributor",
+		"Curator", "Archivist", "Uploader", "Celebrity", "Legend", "Internal", "Torrent Moderator",
+	}
+	if len(rfx.Groups) != len(wantRFXGroups) {
+		t.Fatalf("ReelFliX groups = %d, want %d", len(rfx.Groups), len(wantRFXGroups))
+	}
+	wantRFXStyles := map[string]GroupStyle{
+		"Leech":             {Color: "#96281b", Icon: "fal fa-user-ninja"},
+		"User":              {Color: "#adb0b7", Icon: "fal fa-user-large"},
+		"Member":            {Color: "#f2f2f2", Icon: "fal fa-user-graduate"},
+		"Pro":               {Color: "#50c878", Icon: "fal fa-user-helmet-safety"},
+		"Expert":            {Color: "#b2f7b2", Icon: "fal fa-user-astronaut"},
+		"Elite":             {Color: "#39ff14", Icon: "fal fa-user-crown"},
+		"Distributor":       {Color: "#580aff", Icon: "fal fa-hat-wizard"},
+		"Curator":           {Color: "#5c95ff", Icon: "fal fa-helmet-battle"},
+		"Archivist":         {Color: "#0aefff", Icon: "fal fa-crown"},
+		"Uploader":          {Color: "#ff5f1f", Icon: "fal fa-video-plus"},
+		"Celebrity":         {Color: "#af7ac5", Icon: "fal fa-martini-glass-citrus"},
+		"Legend":            {Color: "#dbb42c", Icon: "fal fa-star-shooting", Sparkle: true},
+		"Internal":          {Color: "#c40018", Icon: "far fa-cassette-vhs"},
+		"Torrent Moderator": {Color: "#15b097", Icon: "fal fa-badge-check"},
+	}
+	for i, name := range wantRFXGroups {
+		group := rfx.Groups[i]
+		if group.Name != name {
+			t.Errorf("ReelFliX group %d = %q, want %q", i, group.Name, name)
+		}
+		if group.Style != wantRFXStyles[name] {
+			t.Errorf("ReelFliX %s style = %+v, want %+v", name, group.Style, wantRFXStyles[name])
+		}
+	}
+	if req := rfx.Groups[2].Requirements; req.MinUploaded != "100 GiB" || req.MinRatio != 0.9 || req.MinAge != "5D" || req.MinSeedtime != "1D" {
+		t.Errorf("ReelFliX Member requirements = %+v", req)
+	}
+	if req := rfx.Groups[8].Requirements; req.MinUploaded != "25 TiB" || req.MinRatio != 1.75 || req.MinAge != "2Y" || req.MinSeedtime != "6M" || req.MinSeedSize != "5 TiB" {
+		t.Errorf("ReelFliX Archivist requirements = %+v", req)
+	}
+	if req := rfx.Groups[9].Requirements; req.MinMonthlyUploads != 25 || req.MinUploaded != "500 GiB" {
+		t.Errorf("ReelFliX Uploader requirements = %+v", req)
+	}
 }

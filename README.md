@@ -212,6 +212,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
 | Redacted | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| ReelFliX | Unit3D | No | API Only | Seed-size, average-seedtime, and rolling-upload progress unavailable through the API |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
