@@ -6,7 +6,25 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+- **"Don't warn me again" for the login-protection banner.** The dashboard
+  banner shown when no login is configured now offers a persistent opt-out
+  alongside the session-only ×, for users who deliberately run without login
+  (trusted LAN, password-protected reverse proxy, etc.). It stays a warning
+  by default — enabling login is still the safer posture — but the choice to
+  hide it is remembered server-side and is reversible from Settings →
+  General → Account ("Warn me on the dashboard while login protection is
+  off"). This replaces the earlier ask for a way to disable session
+  expiration: rather than weakening the auth model, it just quiets the
+  reminder for those who've decided they don't need it.
+
 ### Changed
+- **Top aggregate cards reworked onto the 7-day history series feed.** The 6
+  headline cards (grid + table views) and the table's expanded-row
+  sparklines now read `/api/history/series` (7-day window) instead of the
+  retired `/api/history` list endpoint, and each card except Tracker Health
+  gets a small signed "+X · 7d" change chip next to its value. The legacy
+  `GET /api/history` endpoint has been removed.
 - **Scrape-limit fields untangled (edit tracker + Settings → Scraping).**
   Users read the red "This tracker operator requests ≥ N min between
   scrapes" banner as an error blocking their save — it never blocked
@@ -25,6 +43,22 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   typing "120" snapped to 60 at the "1" — it now shows a soft red state
   while a value is under the minimum and only clamps when you leave the
   field.
+
+### Fixed
+- **History-driven charts no longer flat-line when a tracker's ratio is
+  infinite.** A tracker with downloaded=0 reports its ratio as "∞"; recording
+  that wrote a literal +Inf into the history table, and a later
+  `/api/history` read failed to JSON-encode it — the resulting `http 0`
+  silently emptied every top aggregate card and table sparkline for the whole
+  install, not just that one tracker. Non-finite values are no longer
+  recorded, and any already-stored +Inf/NaN rows are skipped on read instead
+  of breaking the response.
+- **Goal-date picker now has a clear way to close.** Setting a target's goal
+  date left the little date pop open with no obvious "done" — you had to
+  click the calendar icon again. It now has a ✓ button, and Enter or Escape
+  close it too (Enter no longer leaks through to submit the surrounding
+  editor). The value is still applied when you save the target, same as
+  before.
 
 ### Added
 

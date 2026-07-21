@@ -274,26 +274,6 @@ func (d *DB) AddHistory(trackerID string, at time.Time, fields map[string]float6
 	return tx.Commit()
 }
 
-// HistorySince returns all points recorded at or after since, oldest first.
-func (d *DB) HistorySince(since time.Time) ([]HistoryPoint, error) {
-	rows, err := d.sql.Query(
-		`SELECT tracker_id, recorded_at, field, value FROM history WHERE recorded_at >= ? ORDER BY recorded_at ASC`,
-		since.Unix())
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []HistoryPoint
-	for rows.Next() {
-		var p HistoryPoint
-		if err := rows.Scan(&p.TrackerID, &p.RecordedAt, &p.Field, &p.Value); err != nil {
-			return nil, err
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
-}
-
 // PruneHistory deletes points older than before.
 func (d *DB) PruneHistory(before time.Time) error {
 	_, err := d.sql.Exec(`DELETE FROM history WHERE recorded_at < ?`, before.Unix())
@@ -406,9 +386,9 @@ func (d *DB) PruneDaily(before time.Time) error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Filtered series (History view) — generalized HistorySince/DailySince with
-// optional tracker/field filters so payloads stay bounded server-side. The
-// unfiltered originals above stay intact for their existing callers.
+// Filtered series (History view) — generalized DailySince with optional
+// tracker/field filters so payloads stay bounded server-side. The unfiltered
+// original above stays intact for its existing callers.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SeriesFine returns fine-grained history points at or after since, oldest

@@ -1,10 +1,11 @@
 package api
 
 // History series endpoint — the data feed for the History/Growth view
-// (HISTORY_VIEW_PLAN.md §3.2). Purely additive: /api/history (sparklines)
-// is untouched, and nothing calls this until the view ships.
+// (HISTORY_VIEW_PLAN.md §3.2), the top aggregate cards, and the Tracker
+// Detail page. The legacy /api/history list endpoint has been retired.
 
 import (
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -120,6 +121,12 @@ func getHistorySeries(d *Deps) http.HandlerFunc {
 		byKey := map[[2]string]*historySeries{}
 		var order [][2]string
 		for _, p := range points {
+			// Guards against +Inf/NaN rows written before the NumericSnapshot
+			// sanitization existed (a downloaded=0 ratio) — undecodable by
+			// json.Encode, so a single old row would 500 the whole response.
+			if math.IsInf(p.Value, 0) || math.IsNaN(p.Value) {
+				continue
+			}
 			k := [2]string{p.TrackerID, p.Field}
 			s := byKey[k]
 			if s == nil {

@@ -1407,7 +1407,11 @@ export async function renderAccountSection(): Promise<void> {
         <input class="form-input" type="password" id="s-acct-password2" placeholder="Confirm password" autocomplete="new-password"/>
       </div>
       ${errBox}
-      <button type="button" class="btn btn-primary btn-sm" style="margin-top:12px" onclick="accountSetup()">Enable login protection</button>`;
+      <button type="button" class="btn btn-primary btn-sm" style="margin-top:12px" onclick="accountSetup()">Enable login protection</button>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text3);margin-top:16px">
+        <input type="checkbox" id="s-login-warn" ${appSettings.hide_login_warning ? '' : 'checked'} onchange="setLoginWarnVisible(this.checked)" style="accent-color:var(--accent)"/>
+        Warn me on the dashboard while login protection is off
+      </label>`;
     return;
   }
 

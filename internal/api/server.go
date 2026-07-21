@@ -85,7 +85,6 @@ func NewRouter(d *Deps) http.Handler {
 			registerSettings(pr, d)
 			registerDefs(pr, d)
 			registerThemes(pr, d)
-			registerHistory(pr, d)
 			registerQUI(pr, d)
 			registerProwlarr(pr, d)
 			registerJackett(pr, d)

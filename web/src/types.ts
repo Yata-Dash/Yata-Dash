@@ -171,7 +171,10 @@ export interface ScrapeBlocked {
 
 // ── History ───────────────────────────────────────────────────────────────
 
-/** Long-format numeric history point from GET /api/history. */
+/** Long-format numeric history point. Populated client-side by flattening
+ *  GET /api/history/series's per-tracker/field tuple series (see main.ts'
+ *  loadHistory) — buildAggSeries/trackerSeries in utils/history.ts still
+ *  consume this shape. */
 export interface HistoryPoint {
   tracker_id: string;
   recorded_at: number; // unix seconds
@@ -239,6 +242,7 @@ export interface AppSettings {
   highlight_hnr?: boolean | null;             // null = true — red colouring for a nonzero H&R count
   show_goal_pacing?: boolean | null;          // null = true — full pacing line on Detail's Targets section
   show_goal_chips?: boolean | null;           // null = true — compact on-track/behind chip on cards/table
+  hide_login_warning?: boolean;                // opt-out of the "login protection is off" banner (default false = warn)
   update_check_auto?: boolean;                 // opt-in daily update check (default false)
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker

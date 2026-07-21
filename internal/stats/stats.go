@@ -166,7 +166,10 @@ func NumericSnapshot(merged models.MergedStats) map[string]float64 {
 		if !ok {
 			continue
 		}
-		if n, ok := extract(sf.Value); ok {
+		// A non-finite ratio (downloaded=0 → parse.AnyFloat("Infinity") = +Inf)
+		// isn't a chartable number — skip it rather than poison the history
+		// table with a value that later breaks json.Encode on read.
+		if n, ok := extract(sf.Value); ok && !math.IsInf(n, 0) && !math.IsNaN(n) {
 			fields[field] = n
 		}
 	}

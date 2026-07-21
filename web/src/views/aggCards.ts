@@ -1,7 +1,8 @@
 // views/aggCards.ts — aggregate stat cards at the top of both views
 import type { AppSettings, HistoryPoint, StatsMap, Tracker } from '../types';
 import { numOf, strOf } from '../state';
-import { fmtGib, fmtRatio, fmtSeedTime, parseRatio } from '../utils/format';
+import { fmtGib, fmtRatio, fmtSeedTime, fmtSignedDelta, parseRatio } from '../utils/format';
+import type { DeltaUnit } from '../utils/format';
 import { parseSize, parseSeedTime } from '../utils/parse';
 import { renderSparkline } from '../components/sparkline';
 import { buildAggSeries } from '../utils/history';
@@ -44,6 +45,15 @@ export function renderAggCards(
   const agg        = buildAggSeries(historyData);
   const avgSeedTime = totalSeeding > 0 ? weightedSeedSec / totalSeeding : null;
 
+  // 7-day change per card, off the same series buildAggSeries just built —
+  // no separate fetch. null when the series is too thin to diff (a fresh
+  // install, or a stat that hasn't recorded twice in the window yet).
+  const deltaUp    = edgeDelta(agg.up);
+  const deltaDown  = edgeDelta(agg.down);
+  const deltaBuf   = edgeDelta(agg.buffer);
+  const deltaRatio = edgeDelta(agg.ratio);
+  const deltaSeed  = edgeDelta(agg.avgSeed);
+
   for (const pfx of ['g', 't']) {
     set(`${pfx}-agg-up`,    fmtGib(totalUpGiB));
     set(`${pfx}-agg-down`,  fmtGib(totalDownGiB));
@@ -62,10 +72,24 @@ export function renderAggCards(
     const astSubEl = document.getElementById(`${pfx}-agg-avg-seed-sub`);
     if (astSubEl) astSubEl.textContent = totalSeeding > 0 ? `across ${totalSeeding.toLocaleString()} seeds` : 'no data';
 
+    // Downloaded rising is normal, not a win or a warning — always muted.
+    // Everything else is signed: green when the change is the "good"
+    // direction (more uploaded/seed time, buffer/ratio up), red otherwise.
+    setDelta(`${pfx}-delta-up`,       deltaUp,    'GiB',     'signed');
+    setDelta(`${pfx}-delta-down`,     deltaDown,  'GiB',     'muted');
+    setDelta(`${pfx}-delta-buf`,      deltaBuf,   'GiB',     'signed');
+    setDelta(`${pfx}-delta-ratio`,    deltaRatio, 'ratio',   'signed');
+    setDelta(`${pfx}-delta-avg-seed`, deltaSeed,  'seconds', 'signed');
+    // No delta chip on Health: "healthy tracker count" has no recorded
+    // history series to diff — a delta here would be fabricated.
+
     renderSparkline(`${pfx}-spark-up`,       agg.up,     '--green');
     renderSparkline(`${pfx}-spark-down`,     agg.down,   '--purple');
     renderSparkline(`${pfx}-spark-buf`,      agg.buffer, '--blue');
     renderSparkline(`${pfx}-spark-ratio`,    agg.ratio,  '--amber');
+    // Overall-ratio trend (up÷down), not raw up/down — a meaningful
+    // trajectory for "is health improving or worsening", coloured by the
+    // CURRENT health state rather than the trend's own sign.
     renderSparkline(`${pfx}-spark-health`,   agg.up.map((v, i) => agg.down[i] ? v / agg.down[i] : 0), issueCount > 0 ? '--red' : '--green');
     renderSparkline(`${pfx}-spark-avg-seed`, agg.avgSeed, '--pink');
   }
@@ -74,4 +98,34 @@ export function renderAggCards(
 function set(id: string, val: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+/** Last − first of an aggregate series, or null when there aren't at least
+ *  two points to diff (mirrors the Detail delta-chip's "no chip when
+ *  nothing moved" rule — see statDeltaChip in views/detail.ts). */
+function edgeDelta(series: number[]): number | null {
+  if (series.length < 2) return null;
+  return series[series.length - 1] - series[0];
+}
+
+/** Renders one card's 7-day delta chip, or clears it (via :empty CSS the
+ *  chip then takes no layout space) when there's nothing worth showing:
+ *  no delta, or a delta that rounds away to nothing at display precision —
+ *  a brand-new install should show clean cards, not a wall of "+0". */
+function setDelta(id: string, dv: number | null, unit: DeltaUnit, tone: 'signed' | 'muted'): void {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (dv === null) { el.textContent = ''; return; }
+  const text = fmtSignedDelta(unit, dv);
+  if (roundsToZero(text)) { el.textContent = ''; return; }
+  el.textContent = `${text} · 7d`;
+  el.className = `agg-delta ${tone === 'muted' ? 'agg-delta--muted' : dv > 0 ? 'agg-delta--up' : 'agg-delta--down'}`;
+}
+
+/** True when a formatted signed delta's leading number is zero regardless of
+ *  unit suffix ("+0.00", "-0 KiB", "+0D") — the display-precision analogue of
+ *  the Detail chip's raw `!dv` check. */
+function roundsToZero(formatted: string): boolean {
+  const n = formatted.replace(/^[+-]/, '').match(/^[\d.]+/);
+  return !!n && parseFloat(n[0]) === 0;
 }

@@ -24,7 +24,7 @@ import * as alertsTab from './components/alertsTab';
 import * as tokensTab from './components/tokensTab';
 import { FEATURES } from './config';
 import { initPathways } from './views/pathways';
-import type { ColPref, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
+import type { ColPref, HistoryPoint, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
 
 // modals.ts is loaded dynamically (it's large); store the promise so route
 // handlers can await the module.
@@ -56,6 +56,7 @@ async function boot() {
   // show the login overlay and stop — boot resumes after a successful login.
   if (!(await ensureAuthenticated())) return;
   await loadSettings();
+  maybeShowAuthNudge(); // after settings so the persistent opt-out is honoured
   await loadTrackers();
   initHistoryFeature();       // flag-gated tab; no-op while FEATURES.history is off
   void initPathwaysFeature(); // independent of stats — don't block the refresh
@@ -81,22 +82,56 @@ async function ensureAuthenticated(): Promise<boolean> {
     showLogin();
     return false;
   }
-  // No account configured → show the first-run security nudge (once per session).
-  if (ok && !data.configured) showAuthNudge();
+  // Record whether login is unconfigured; the banner is shown later, AFTER
+  // loadSettings, so the persistent hide_login_warning opt-out is honoured
+  // (this runs before settings are loaded).
+  _noAccount = ok && !data.configured;
   return true;
 }
 
-function showAuthNudge() {
+let _noAccount = false;
+
+/** Show the "login protection is off" banner when login is unconfigured,
+ *  unless the user opted out permanently (hide_login_warning) or dismissed it
+ *  for this session. Called after settings load. */
+function maybeShowAuthNudge() {
+  if (!_noAccount) return;
+  if (state.appSettings.hide_login_warning) return;
   if (sessionStorage.getItem('yata-nudge-dismissed') === '1') return;
   const el = document.getElementById('auth-nudge');
   if (el) el.style.display = 'flex';
 }
-function dismissAuthNudge() {
-  sessionStorage.setItem('yata-nudge-dismissed', '1');
+function hideAuthNudgeEl() {
   const el = document.getElementById('auth-nudge');
   if (el) el.style.display = 'none';
 }
+/** The × — dismiss for this session only (returns next session). */
+function dismissAuthNudge() {
+  sessionStorage.setItem('yata-nudge-dismissed', '1');
+  hideAuthNudgeEl();
+}
+/** "Don't warn me again" — persist the opt-out server-side so the banner
+ *  never returns (reversible from Settings → General → Account). */
+async function dontWarnLogin() {
+  hideAuthNudgeEl();
+  const { ok } = await api.saveSettings({ ...state.appSettings, hide_login_warning: true });
+  if (ok) {
+    state.setAppSettings({ ...state.appSettings, hide_login_warning: true });
+    toast('Login-protection warning hidden. Re-enable it in Settings → General.', 'success');
+  }
+}
 (window as any).dismissAuthNudge = dismissAuthNudge;
+(window as any).dontWarnLogin = dontWarnLogin;
+/** Settings → General reversible control for the banner opt-out. show=true
+ *  means "warn me" (hide_login_warning=false). Reflects immediately on the
+ *  dashboard banner when login is still unconfigured. */
+(window as any).setLoginWarnVisible = async (show: boolean) => {
+  const { ok } = await api.saveSettings({ ...state.appSettings, hide_login_warning: !show });
+  if (!ok) return;
+  state.setAppSettings({ ...state.appSettings, hide_login_warning: !show });
+  sessionStorage.removeItem('yata-nudge-dismissed'); // an explicit choice overrides a session dismiss
+  if (show) maybeShowAuthNudge(); else hideAuthNudgeEl();
+};
 
 function showLogin() {
   const ov = document.getElementById('login-overlay');
@@ -457,10 +492,26 @@ async function refreshSingle(id: string) {
 };
 
 // ── History ───────────────────────────────────────────────────────────────
+// Feeds the top aggregate cards + the table's expanded-row sparklines. Reads
+// the robust /api/history/series endpoint (7-day window, all trackers) and
+// flattens its per-tracker/field tuple series back into the flat
+// {tracker_id, recorded_at, field, value} shape buildAggSeries/trackerSeries
+// already consume, so only the data source changed here.
 async function loadHistory() {
-  const { ok, data } = await api.fetchHistory(48);
-  if (ok && Array.isArray(data)) {
-    state.setHistoryData(data);
+  const { ok, data } = await api.fetchHistorySeries({
+    range: '7d',
+    fields: ['uploaded', 'downloaded', 'buffer', 'ratio', 'avg_seed_time'],
+    granularity: 'fine',
+  });
+  if (ok && Array.isArray(data.series)) {
+    const flat: HistoryPoint[] = [];
+    for (const s of data.series) {
+      for (const [recorded_at, value] of s.points) {
+        if (!Number.isFinite(value)) continue; // defensive: server already skips non-finite rows
+        flat.push({ tracker_id: s.tracker_id, recorded_at, field: s.field, value });
+      }
+    }
+    state.setHistoryData(flat);
     renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
     renderTable(); // expanded-row sparklines
   }

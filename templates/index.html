@@ -118,7 +118,8 @@
     <i class="fas fa-shield-halved" style="margin-right:8px"></i>
     <span><strong>Login protection is off.</strong> Anyone who can reach this page has full access to your trackers and credentials. Set up a username &amp; password.</span>
     <a class="btn btn-primary btn-sm" href="#/settings" onclick="switchSettingsTab&&setTimeout(()=>switchSettingsTab('general'),50)" style="margin-left:auto;white-space:nowrap">Set up login</a>
-    <button type="button" class="auth-nudge-x" onclick="dismissAuthNudge()" title="Dismiss">&times;</button>
+    <button type="button" class="btn btn-ghost btn-sm auth-nudge-dontwarn" onclick="dontWarnLogin()" title="Hide this warning permanently — I run without login on purpose">Don&rsquo;t warn me again</button>
+    <button type="button" class="auth-nudge-x" onclick="dismissAuthNudge()" title="Dismiss for this session">&times;</button>
   </div>
 
   <main class="main">
@@ -136,30 +137,35 @@
         <div class="stat-card" style="--card-accent:var(--green)">
           <div class="sc-label">Total Uploaded</div>
           <div class="sc-value" id="g-agg-up">—</div>
+          <span id="g-delta-up" class="agg-delta"></span>
           <div class="sc-sub">across all trackers</div>
           <div class="sc-spark" id="g-spark-up"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--purple)">
           <div class="sc-label">Total Downloaded</div>
           <div class="sc-value" id="g-agg-down">—</div>
+          <span id="g-delta-down" class="agg-delta"></span>
           <div class="sc-sub">across all trackers</div>
           <div class="sc-spark" id="g-spark-down"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--blue)">
           <div class="sc-label">Total Buffer</div>
           <div class="sc-value" id="g-agg-buf">—</div>
+          <span id="g-delta-buf" class="agg-delta"></span>
           <div class="sc-sub">upload − download</div>
           <div class="sc-spark" id="g-spark-buf"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--amber)">
           <div class="sc-label">Overall Ratio</div>
           <div class="sc-value" id="g-agg-ratio">—</div>
+          <span id="g-delta-ratio" class="agg-delta"></span>
           <div class="sc-sub">total up ÷ total down</div>
           <div class="sc-spark" id="g-spark-ratio"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--pink)">
           <div class="sc-label">Avg Seed Time</div>
           <div class="sc-value" id="g-agg-avg-seed" style="font-size:15px;line-height:1.5;margin-top:4px">—</div>
+          <span id="g-delta-avg-seed" class="agg-delta"></span>
           <div class="sc-sub" id="g-agg-avg-seed-sub">weighted by seeds</div>
           <div class="sc-spark" id="g-spark-avg-seed"></div>
         </div>
@@ -169,6 +175,7 @@
             <span class="sc-health-main" id="g-agg-health-num">—</span>
             <span class="sc-health-denom" id="g-agg-health-denom"></span>
           </div>
+          <span class="agg-delta"></span><!-- reserves the delta line so the sparkline aligns with the other cards -->
           <div class="sc-sub" id="g-agg-health-sub">loading…</div>
           <div class="sc-spark" id="g-spark-health"></div>
         </div>
@@ -187,30 +194,35 @@
         <div class="stat-card" style="--card-accent:var(--green)">
           <div class="sc-label">Total Uploaded</div>
           <div class="sc-value" id="t-agg-up">—</div>
+          <span id="t-delta-up" class="agg-delta"></span>
           <div class="sc-sub">across all trackers</div>
           <div class="sc-spark" id="t-spark-up"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--purple)">
           <div class="sc-label">Total Downloaded</div>
           <div class="sc-value" id="t-agg-down">—</div>
+          <span id="t-delta-down" class="agg-delta"></span>
           <div class="sc-sub">across all trackers</div>
           <div class="sc-spark" id="t-spark-down"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--blue)">
           <div class="sc-label">Total Buffer</div>
           <div class="sc-value" id="t-agg-buf">—</div>
+          <span id="t-delta-buf" class="agg-delta"></span>
           <div class="sc-sub">upload − download</div>
           <div class="sc-spark" id="t-spark-buf"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--amber)">
           <div class="sc-label">Overall Ratio</div>
           <div class="sc-value" id="t-agg-ratio">—</div>
+          <span id="t-delta-ratio" class="agg-delta"></span>
           <div class="sc-sub">total up ÷ total down</div>
           <div class="sc-spark" id="t-spark-ratio"></div>
         </div>
         <div class="stat-card" style="--card-accent:var(--pink)">
           <div class="sc-label">Avg Seed Time</div>
           <div class="sc-value" id="t-agg-avg-seed" style="font-size:15px;line-height:1.5;margin-top:4px">—</div>
+          <span id="t-delta-avg-seed" class="agg-delta"></span>
           <div class="sc-sub" id="t-agg-avg-seed-sub">weighted by seeds</div>
           <div class="sc-spark" id="t-spark-avg-seed"></div>
         </div>
@@ -220,6 +232,7 @@
             <span class="sc-health-main" id="t-agg-health-num">—</span>
             <span class="sc-health-denom" id="t-agg-health-denom"></span>
           </div>
+          <span class="agg-delta"></span><!-- reserves the delta line so the sparkline aligns with the other cards -->
           <div class="sc-sub" id="t-agg-health-sub">loading…</div>
           <div class="sc-spark" id="t-spark-health"></div>
         </div>

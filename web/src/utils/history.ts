@@ -1,7 +1,8 @@
 // utils/history.ts — groups long-format history points into sparkline series
-// GET /api/history returns flat points {tracker_id, recorded_at, field, value}
-// (oldest first). These helpers turn them into per-tracker and aggregate
-// series for sparklines and the aggregate cards.
+// Points originate from GET /api/history/series (flattened back into the
+// long-format {tracker_id, recorded_at, field, value} shape by main.ts'
+// loadHistory, oldest first). These helpers turn them into per-tracker and
+// aggregate series for sparklines and the aggregate cards.
 import type { HistoryPoint } from '../types';
 
 /** Series of values for one tracker + field, ordered oldest → newest. */
@@ -34,8 +35,10 @@ export function buildAggSeries(points: HistoryPoint[]): AggSeries {
   const empty: AggSeries = { up: [], down: [], buffer: [], ratio: [], avgSeed: [] };
   if (!points.length) return empty;
 
-  // Shared bucket axis across all fields we aggregate.
-  const FIELDS = ['uploaded', 'downloaded', 'ratio', 'avg_seed_time'];
+  // Shared bucket axis across all fields we aggregate. 'buffer' is optional —
+  // included when present so it doesn't shift the axis for older data that
+  // never recorded it (derived below instead).
+  const FIELDS = ['uploaded', 'downloaded', 'buffer', 'ratio', 'avg_seed_time'];
   const bucketSet = new Set<number>();
   for (const p of points) {
     if (FIELDS.includes(p.field)) bucketSet.add(Math.floor(p.recorded_at / BUCKET_SEC));
@@ -48,9 +51,13 @@ export function buildAggSeries(points: HistoryPoint[]): AggSeries {
 
   const up   = sumSeries('uploaded');
   const down = sumSeries('downloaded');
+  // Prefer recorded buffer points (accounts for tracker-reported buffer that
+  // isn't a pure up−down derivation); fall back to deriving it for older data
+  // recorded before buffer was tracked directly.
+  const hasBuffer = points.some(p => p.field === 'buffer');
+  const buffer = hasBuffer ? sumSeries('buffer') : up.map((v, i) => v - (down[i] ?? 0));
   return {
-    up, down,
-    buffer:  up.map((v, i) => v - (down[i] ?? 0)),
+    up, down, buffer,
     ratio:   avgSeries('ratio'),
     avgSeed: avgSeries('avg_seed_time'),
   };

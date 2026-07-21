@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"math"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -111,5 +112,38 @@ func TestHistorySeriesEndpoint(t *testing.T) {
 	}
 	if got := def.Range.To - def.Range.From; got < 29*86400 || got > 31*86400 {
 		t.Errorf("default window = %ds, want ~30d", got)
+	}
+}
+
+// TestHistorySeriesSkipsNonFiniteRows: a +Inf row (a downloaded=0 ratio,
+// recorded before NumericSnapshot filtered non-finite values) must not break
+// json.Encode for the rest of the response — the point is dropped, the finite
+// points around it still come through.
+func TestHistorySeriesSkipsNonFiniteRows(t *testing.T) {
+	d := testDeps(t)
+	now := time.Now().UTC()
+
+	if err := d.DB.AddHistory("tr-c", now.Add(-2*time.Hour), map[string]float64{"ratio": 2.0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.AddHistory("tr-c", now.Add(-time.Hour), map[string]float64{"ratio": math.Inf(1)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.AddHistory("tr-c", now, map[string]float64{"ratio": 3.0}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := callSeries(t, d, "?range=48h&trackers=tr-c&fields=ratio")
+	if len(resp.Series) != 1 {
+		t.Fatalf("series = %d, want 1", len(resp.Series))
+	}
+	pts := resp.Series[0].Points
+	if len(pts) != 2 {
+		t.Fatalf("points = %d, want 2 (the +Inf row skipped)", len(pts))
+	}
+	for _, p := range pts {
+		if math.IsInf(p[1], 0) || math.IsNaN(p[1]) {
+			t.Errorf("non-finite value leaked into response: %v", p)
+		}
 	}
 }

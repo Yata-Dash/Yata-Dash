@@ -31,6 +31,7 @@ export function goalDateControlHtml(key: string, deadline: string, defaultDate =
     <button type="button" class="btn btn-ghost btn-icon btn-sm goal-date-btn${deadline ? ' goal-date-btn--set' : ''}" data-goal-toggle title="${esc(goalTitle(deadline))}">${CAL_SVG}</button>
     <span class="goal-date-pop" hidden>
       <input class="form-input goal-date-input" type="date" data-target-deadline${defaultDate ? ` data-goal-default="${esc(defaultDate)}"` : ''} value="${esc(deadline)}"/>
+      <button type="button" class="btn btn-ghost btn-icon btn-sm goal-date-ok" data-goal-done title="Done">&#10003;</button>
       <button type="button" class="btn btn-ghost btn-icon btn-sm" data-goal-clear title="Remove goal date">&times;</button>
     </span>
   </span>`;
@@ -67,21 +68,40 @@ export function wireGoalDateUI(container: HTMLElement): void {
       }
       return;
     }
+    const done = tgt.closest<HTMLElement>('[data-goal-done]');
+    if (done) { closeGoalPop(done.closest<HTMLElement>('.goal-date-wrap')); return; }
     const clear = tgt.closest<HTMLElement>('[data-goal-clear]');
     if (clear) {
       const wrap = clear.closest<HTMLElement>('.goal-date-wrap');
       const input = wrap?.querySelector<HTMLInputElement>('[data-target-deadline]');
-      const pop = wrap?.querySelector<HTMLElement>('.goal-date-pop');
-      if (!wrap || !input || !pop) return;
+      if (!wrap || !input) return;
       input.value = '';
-      pop.hidden = true;
-      syncGoalBtn(wrap);
+      closeGoalPop(wrap);
     }
+  });
+  // Enter accepts the date and closes the pop; Escape closes it too. Both stop
+  // the key bubbling to the surrounding editor (its own Apply/Save persists) so
+  // the inline pop behaves as a self-contained mini-editor, not a form submit.
+  container.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    const input = (e.target as HTMLElement).closest<HTMLElement>('[data-target-deadline]');
+    if (!input) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeGoalPop(input.closest<HTMLElement>('.goal-date-wrap'));
   });
   container.addEventListener('change', e => {
     const input = (e.target as HTMLElement).closest<HTMLInputElement>('[data-target-deadline]');
     if (input) syncGoalBtn(input.closest<HTMLElement>('.goal-date-wrap'));
   });
+}
+
+/** Hide a goal-date pop and refresh its icon-button state. */
+function closeGoalPop(wrap: HTMLElement | null): void {
+  const pop = wrap?.querySelector<HTMLElement>('.goal-date-pop');
+  if (!pop) return;
+  pop.hidden = true;
+  syncGoalBtn(wrap);
 }
 
 function syncGoalBtn(wrap: HTMLElement | null): void {

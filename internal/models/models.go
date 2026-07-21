@@ -161,6 +161,11 @@ type Settings struct {
 	// never clear (permanent record) — off shows a neutral colour instead so
 	// it doesn't read as an ongoing alarm.
 	HighlightHnR *bool `json:"highlight_hnr"`
+	// HideLoginWarning suppresses the persistent "Login protection is off"
+	// dashboard banner for users who deliberately run without login (trusted
+	// LAN, etc.). Default false — the warning shows, since login is the safer
+	// posture; this is the explicit opt-out for those who've decided otherwise.
+	HideLoginWarning bool `json:"hide_login_warning"`
 	// ShowGoalPacing toggles the full pacing line ("needs X/day · doing
 	// Y/day · verdict") under each dated target row in the Tracker Detail
 	// Targets section. nil = true. Independent of ShowGoalChips.

@@ -63,6 +63,26 @@ export function fmtGoalRate(key: string, perDay: number): string {
   return `${amount}/day`;
 }
 
+/** Unit for the aggregate-card 7-day delta chips. Duplicates utils/series.ts's
+ *  SeriesUnit (minus 'count', unused here) rather than importing it — series.ts
+ *  already imports fmtEtaDays/fmtSeedTime from this file, so importing back
+ *  would be circular. */
+export type DeltaUnit = 'GiB' | 'ratio' | 'seconds';
+
+/** Sign-preserving delta formatting for the aggregate cards' 7-day change
+ *  chips (views/aggCards.ts) — mirrors views/detail.ts's per-stat delta chip
+ *  (fmtSignedDelta there, not exported) so the top cards and Detail read as
+ *  one system. Always shows a sign, unlike the plain formatters above. */
+export function fmtSignedDelta(unit: DeltaUnit, dv: number): string {
+  const sign = dv > 0 ? '+' : '-';
+  const abs = Math.abs(dv);
+  switch (unit) {
+    case 'GiB':     return sign + fmtGiBRate(abs);
+    case 'ratio':   return sign + abs.toFixed(2);
+    case 'seconds': return sign + fmtEtaDays(abs / 86400);
+  }
+}
+
 /** Format a goal deadline (YYYY-MM-DD) as "Dec 31" — parsed as a plain UTC
  *  date so it never shifts a day depending on the viewer's time zone. */
 export function fmtDueDate(dateStr: string): string {

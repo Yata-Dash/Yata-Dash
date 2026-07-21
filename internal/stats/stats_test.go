@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
@@ -196,5 +197,23 @@ func TestRateFromPointsGuards(t *testing.T) {
 	}
 	if _, ok := rateFromPoints(decl, 3600); ok {
 		t.Error("declining stat should yield no rate")
+	}
+}
+
+// TestNumericSnapshotSkipsNonFinite: a downloaded=0 tracker reports ratio as
+// the string "Infinity" (strconv.ParseFloat("Infinity") = +Inf). That field
+// must be dropped — an unrecorded ratio, not a poisoned history row — while
+// every other numeric field still records normally.
+func TestNumericSnapshotSkipsNonFinite(t *testing.T) {
+	merged := models.MergedStats{
+		"ratio":    {Value: "Infinity", Source: models.SourceAPI},
+		"uploaded": {Value: "10.00 GiB", Source: models.SourceAPI},
+	}
+	fields := NumericSnapshot(merged)
+	if _, ok := fields["ratio"]; ok {
+		t.Errorf("infinite ratio should be omitted, got %v", fields["ratio"])
+	}
+	if fields["uploaded"] != 10 {
+		t.Errorf("uploaded = %v, want 10", fields["uploaded"])
 	}
 }

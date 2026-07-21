@@ -1,7 +1,7 @@
 // api.ts — all HTTP calls to the Go backend (v2 unified-stats API)
 // To add a new endpoint: add a typed function here. Nothing else needs changing.
 import type {
-  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult, DryRunResult, HistoryPoint,
+  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult, DryRunResult,
   HistorySeriesResponse,
   LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
@@ -147,9 +147,6 @@ export const fetchScrapeStatus = () =>
   call<ScrapeStatusMap>('/api/scrape-status');
 
 // ── History ───────────────────────────────────────────────────────────────
-
-export const fetchHistory = (hours = 48) =>
-  call<HistoryPoint[]>(`/api/history?hours=${hours}`);
 
 /** History-view data feed. Omitted trackers/fields = all recorded. */
 export const fetchPathwaysFrom = (trackerId: string) =>
