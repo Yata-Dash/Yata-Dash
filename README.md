@@ -201,6 +201,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
 | Aura4K | Unit3D | Yes | 180min |  |
 | Blutopia | Unit3D | No | API Only | Seed-size and average-seedtime progress unavailable through the API |
+| BroadcastTheNet | Custom | No | API Only | JSON-RPC userInfo; 150 API calls per hour |
 | Darkpeers | Unit3D | Yes | 180min |  |
 | GazelleGames | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |

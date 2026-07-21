@@ -8,6 +8,7 @@
 package fetch
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -539,11 +540,39 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 		}
 		path = strings.ReplaceAll(path, "{username}", url.QueryEscape(strings.TrimSpace(t.Username)))
 	}
-	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(t.URL, "/")+path, nil)
+	method := http.MethodGet
+	var requestBody io.Reader
+	if api.AuthMethod == "api_key_json_rpc" {
+		if strings.TrimSpace(t.APIKey) == "" {
+			return nil, errf("no_key", nil)
+		}
+		if strings.TrimSpace(api.JSONRPCMethod) == "" {
+			return nil, errf("request_error", fmt.Errorf("missing JSON-RPC method"))
+		}
+		payload, marshalErr := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"method":  api.JSONRPCMethod,
+			"params":  []string{t.APIKey},
+			"id":      1,
+		})
+		if marshalErr != nil {
+			return nil, errf("request_error", marshalErr)
+		}
+		method = http.MethodPost
+		requestBody = bytes.NewReader(payload)
+	}
+	baseURL := t.URL
+	if strings.TrimSpace(api.BaseURL) != "" {
+		baseURL = api.BaseURL
+	}
+	req, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, requestBody)
 	if err != nil {
 		return nil, errf("request_error", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if api.AuthMethod == "api_key_json_rpc" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	ident.Apply(req, c.identify(t))
 
 	switch api.AuthMethod {
@@ -568,6 +597,8 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 			return nil, errf("no_key", nil)
 		}
 		req.Header.Set("Authorization", "Bearer "+t.APIKey)
+	case "api_key_json_rpc":
+		// The key is already embedded as the first positional request param.
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -586,7 +617,18 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, errf("parse_error", err)
 	}
-	if message, ok := raw["error"].(string); ok && strings.TrimSpace(message) != "" {
+	if apiErr, ok := raw["error"]; ok && apiErr != nil {
+		message := "API error"
+		switch value := apiErr.(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				message = value
+			}
+		case map[string]any:
+			if text, ok := value["message"].(string); ok && strings.TrimSpace(text) != "" {
+				message = text
+			}
+		}
 		return nil, errf("api_error", fmt.Errorf("%s", message))
 	}
 	if api.SuccessField != "" && fmt.Sprint(nested(raw, api.SuccessField)) != api.SuccessValue {
@@ -623,6 +665,18 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 			}
 		}
 		out[canonical] = int(total)
+	}
+
+	// Unix-second fields → YYYY-MM-DD.
+	for jsonPath, canonical := range api.UnixFields {
+		v := nested(raw, jsonPath)
+		if v == nil {
+			continue
+		}
+		seconds := int64(parse.AnyFloat(v))
+		if seconds > 0 {
+			out[canonical] = time.Unix(seconds, 0).UTC().Format("2006-01-02")
+		}
 	}
 
 	// Byte fields → size strings (raw values kept for buffer calc).

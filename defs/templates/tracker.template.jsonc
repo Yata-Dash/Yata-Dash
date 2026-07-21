@@ -135,12 +135,17 @@
     // needs the configured tracker username in its query; Yata URL-encodes
     // the value and marks username as required during tracker setup.
     "path": "/api/stats.php?summary",
+    // Optional dedicated API origin when it differs from the tracker URL.
+    "base_url": "https://api.tracker.example",
 
-    // One of: "session_cookie", "api_key_query", "api_key_header"
+    // One of: "session_cookie", "api_key_query", "api_key_header", "api_key_json_rpc"
     //   session_cookie — sends "Cookie: <cookie_name>=<user's session cookie>"
     //   api_key_query  — appends "?<api_key_param>=<user's API key>"
     //   api_key_header — sends "Authorization: Bearer <user's API key>"
+    //   api_key_json_rpc — POSTs JSON-RPC 2.0 with the API key as params[0]
     "auth_method": "api_key_query",
+    // Required only for api_key_json_rpc.
+    "json_rpc_method": "userInfo",
     "cookie_name": "",
     "api_key_param": "token",
 
@@ -164,6 +169,11 @@
     // Sum several byte-count paths into one human-readable size field.
     "sum_bytes_fields": {
       "seed_size": ["seedOk.size", "seedHnr.size"]
+    },
+
+    // Map Unix-second paths to YYYY-MM-DD canonical fields.
+    "unix_fields": {
+      "member_since": "join_date"
     },
 
     // Map byte-count paths → canonical fields, converting to size strings.
@@ -240,6 +250,7 @@
       "requirements": {
         "min_uploaded": "1 TiB",     // size string
         "min_downloaded": "50 GB",   // size string — TBDev-family trackers promote on download volume
+        "min_total_transfer": "2 TiB", // combined upload + download threshold
         "min_ratio": 1.0,            // number
         "min_seedtime": "1M",        // avg seedtime: 30D / 1M / 1Y style
         "min_seed_size": "5 TiB",    // concurrent seeding size

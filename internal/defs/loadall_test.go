@@ -422,4 +422,44 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if req := ab.Groups[5].Requirements; req.MinUploaded != "1 TB" || req.MinRatio != 1.0 || req.MinAge != "6M" || req.MinUploads != 500 {
 		t.Errorf("AnimeBytes Legend requirements = %+v", req)
 	}
+
+	btn, ok := r.TrackerByURL("https://broadcasthe.net")
+	if !ok {
+		t.Fatal("broadcasthe.net def not found")
+	}
+	if kind := r.APIKind(btn.URL, btn.Type); kind != "custom" {
+		t.Fatalf("BTN APIKind = %q, want custom", kind)
+	}
+	if btn.API == nil || btn.API.Path != "/" || btn.API.AuthMethod != "api_key_json_rpc" || btn.API.JSONRPCMethod != "userInfo" {
+		t.Fatalf("BTN API = %+v", btn.API)
+	}
+	if !btn.Scrape.DisableScraping || btn.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("BTN must be API-only and unapproved: scrape=%+v approval=%q", btn.Scrape, btn.ApprovalStatus())
+	}
+	if btn.Rules == nil || btn.Rules.MinRatio != 0 || btn.Rules.MinSeedDaysEpisode != 1 || btn.Rules.MinSeedDaysSeason != 5 || btn.Rules.Note == "" {
+		t.Fatalf("BTN rules = %+v", btn.Rules)
+	}
+	wantBTNGroups := []string{
+		"Sheep", "User", "Member", "Power User", "Extreme User", "Elite", "Guru",
+		"Master", "Overlord", "Encoder", "VIP", "Torrent Celebrity", "Legend",
+		"First-Line Support", "TV Technician", "Designer", "Junior Coder", "Moderator",
+		"Developer", "Team Leader", "Administrator", "Lead Developer", "SysOp",
+	}
+	if len(btn.Groups) != len(wantBTNGroups) {
+		t.Fatalf("BTN groups = %d, want %d", len(btn.Groups), len(wantBTNGroups))
+	}
+	for i, name := range wantBTNGroups {
+		if btn.Groups[i].Name != name {
+			t.Errorf("BTN group %d = %q, want %q", i, btn.Groups[i].Name, name)
+		}
+		if btn.Groups[i].Style.Color != "" || btn.Groups[i].Style.Icon != "" {
+			t.Errorf("BTN %s style must be omitted: %+v", name, btn.Groups[i].Style)
+		}
+	}
+	if req := btn.Groups[2].Requirements; req.MinTotalTransfer != "100 GB" || req.MinAge != "2W" || req.MinBonusPoints != 100000 || len(req.MinCounts) != 1 || req.MinCounts[0].Field != "snatched" || req.MinCounts[0].Count != 100 {
+		t.Errorf("BTN Member requirements = %+v", req)
+	}
+	if req := btn.Groups[8].Requirements; req.MinTotalTransfer != "100 TB" || req.MinAge != "3Y" || req.MinUploads != 500 || req.MinBonusPoints != 250000000 {
+		t.Errorf("BTN Overlord requirements = %+v", req)
+	}
 }

@@ -381,6 +381,8 @@ export interface GroupRequirements {
   min_uploaded?: string;
   /** Some trackers promote on download volume instead (TBDev family). */
   min_downloaded?: string;
+  /** Combined upload + download threshold. */
+  min_total_transfer?: string;
   min_ratio?: number;
   min_seedtime?: string;
   min_seed_size?: string;

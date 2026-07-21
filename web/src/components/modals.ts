@@ -2026,6 +2026,7 @@ function requirementPairs(req: GroupRequirements): [string, string][] {
   const pairs: [string, string][] = [];
   if (req.min_uploaded)     pairs.push(['Uploaded', req.min_uploaded]);
   if (req.min_downloaded)   pairs.push(['Downloaded', req.min_downloaded]);
+  if (req.min_total_transfer) pairs.push(['Total Transfer', req.min_total_transfer]);
   if (req.min_ratio)        pairs.push(['Ratio', String(req.min_ratio)]);
   if (req.min_seedtime)     pairs.push(['Seedtime', req.min_seedtime]);
   if (req.min_seed_size)    pairs.push(['Seed Size', req.min_seed_size]);

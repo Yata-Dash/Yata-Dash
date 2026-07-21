@@ -15,6 +15,7 @@ export function groupRequirementsToTargets(req: GroupRequirements): Record<strin
   const raw: Record<string, string> = {
     uploaded:      req.min_uploaded ?? '',
     downloaded:    req.min_downloaded ?? '',
+    total_transfer:req.min_total_transfer ?? '',
     ratio:         req.min_ratio != null ? String(req.min_ratio) : '',
     seed_size:     req.min_seed_size ?? '',
     total_uploads: req.min_uploads != null ? String(req.min_uploads) : '',

@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -276,6 +277,112 @@ func animeBytesRegistry(t *testing.T, baseURL string) *defs.Registry {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "trackers", "animebytes.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchBTNJSONRPCUserInfo(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/" {
+			t.Errorf("request = %s %s, want POST /", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+		var body struct {
+			JSONRPC string   `json:"jsonrpc"`
+			Method  string   `json:"method"`
+			Params  []string `json:"params"`
+			ID      int      `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.JSONRPC != "2.0" || body.Method != "userInfo" || body.ID != 1 || len(body.Params) != 1 || body.Params[0] != "sekrit" {
+			t.Errorf("JSON-RPC body = %+v", body)
+		}
+		fmt.Fprint(w, `{"id":1,"result":{
+			"UserID":"24","Username":"testuser","Email":"test@example.invalid",
+			"Upload":"429496729600","Download":"107374182400",
+			"Lumens":"3","Bonus":"100000.0","JoinDate":"1704067200",
+			"Title":"fixture title","Enabled":"1","Paranoia":"0","Invites":"2",
+			"Snatches":"40","UploadsSnatched":"60","Class":"Member",
+			"ClassLevel":"100","HnR":"0"
+		}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(btnRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: "https://broadcasthe.test", Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Member", "uploaded": "400.00 GiB",
+		"downloaded": "100.00 GiB", "total_transfer": "500.00 GiB",
+		"bonus_points": "100000.0", "join_date": "2024-01-01", "invites": "2",
+		"snatched": 100, "hit_and_runs": "0", "lumens": "3",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, sensitive := range []string{"UserID", "Email", "Title", "ClassLevel"} {
+		if _, ok := data[sensitive]; ok {
+			t.Errorf("sensitive/irrelevant field %s must not be returned", sensitive)
+		}
+	}
+}
+
+func TestFetchBTNJSONRPCErrorEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"invalid API key"}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(btnRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: "https://broadcasthe.test", Type: "custom", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+}
+
+func btnRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom"},"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"btn","name":"BroadcastTheNet","abbr":"BTN",
+		"url":"https://broadcasthe.test","type":"custom",
+		"api":{
+			"base_url":%q,"path":"/","auth_method":"api_key_json_rpc","json_rpc_method":"userInfo",
+			"field_map":{
+				"result.Username":"username","result.Class":"group",
+				"result.Bonus":"bonus_points","result.Invites":"invites",
+				"result.HnR":"hit_and_runs","result.Lumens":"lumens"
+			},
+			"sum_fields":{"snatched":["result.Snatches","result.UploadsSnatched"]},
+			"byte_fields":{"result.Upload":"uploaded","result.Download":"downloaded"},
+			"sum_bytes_fields":{"total_transfer":["result.Upload","result.Download"]},
+			"unix_fields":{"result.JoinDate":"join_date"}
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "btn.json"), []byte(trackerJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	reg, err := defs.Load(dir)

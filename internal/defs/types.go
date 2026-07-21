@@ -285,8 +285,14 @@ type ExtendedStatsSpec struct {
 type CustomAPI struct {
 	// Path is appended to the tracker base URL.
 	Path string `json:"path"`
-	// AuthMethod: "session_cookie" | "api_key_query" | "api_key_header".
+	// BaseURL overrides the tracker's canonical URL when its API uses a
+	// dedicated host. Empty means use the tracker URL.
+	BaseURL string `json:"base_url,omitempty"`
+	// AuthMethod: "session_cookie" | "api_key_query" | "api_key_header" |
+	// "api_key_json_rpc". JSON-RPC sends the key as the first positional param.
 	AuthMethod string `json:"auth_method"`
+	// JSONRPCMethod is required for auth_method "api_key_json_rpc".
+	JSONRPCMethod string `json:"json_rpc_method,omitempty"`
 	// CookieName for auth_method "session_cookie".
 	CookieName string `json:"cookie_name,omitempty"`
 	// APIKeyParam for auth_method "api_key_query".
@@ -305,6 +311,8 @@ type CustomAPI struct {
 	SumBytesFields map[string][]string `json:"sum_bytes_fields,omitempty"`
 	// ByteFields maps JSON paths → canonical fields, converting raw bytes to sizes.
 	ByteFields map[string]string `json:"byte_fields,omitempty"`
+	// UnixFields maps Unix-second JSON paths → canonical YYYY-MM-DD fields.
+	UnixFields map[string]string `json:"unix_fields,omitempty"`
 	// BufferFromBytes computes buffer = uploaded_bytes − downloaded_bytes,
 	// using the byte_fields entries mapped to "uploaded" and "downloaded".
 	BufferFromBytes bool `json:"buffer_from_bytes,omitempty"`
@@ -351,11 +359,13 @@ type GroupRequirements struct {
 	MinUploaded string `json:"min_uploaded,omitempty"`
 	// MinDownloaded — some trackers promote on download volume instead
 	// (e.g. TBDev-family sites where buying ratio proves participation).
-	MinDownloaded string  `json:"min_downloaded,omitempty"`
-	MinRatio      float64 `json:"min_ratio,omitempty"`
-	MinSeedtime   string  `json:"min_seedtime,omitempty"`
-	MinSeedSize   string  `json:"min_seed_size,omitempty"`
-	MinUploads    int     `json:"min_uploads,omitempty"`
+	MinDownloaded string `json:"min_downloaded,omitempty"`
+	// MinTotalTransfer is a combined upload + download threshold.
+	MinTotalTransfer string  `json:"min_total_transfer,omitempty"`
+	MinRatio         float64 `json:"min_ratio,omitempty"`
+	MinSeedtime      string  `json:"min_seedtime,omitempty"`
+	MinSeedSize      string  `json:"min_seed_size,omitempty"`
+	MinUploads       int     `json:"min_uploads,omitempty"`
 	// MinAdoptions — adopted-torrent count (e.g. ANT's adoption program,
 	// where classes accept "N uploads and/or 2N adoptions").
 	MinAdoptions   int    `json:"min_adoptions,omitempty"`

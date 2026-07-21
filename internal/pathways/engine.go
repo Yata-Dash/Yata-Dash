@@ -29,10 +29,11 @@ type Stats struct {
 
 // Rates are growth estimates from recent history (per day; 0 = unknown).
 type Rates struct {
-	UploadGiB   float64
-	DownloadGiB float64
-	SeedSizeGiB float64
-	Bonus       float64
+	UploadGiB        float64
+	DownloadGiB      float64
+	TotalTransferGiB float64
+	SeedSizeGiB      float64
+	Bonus            float64
 }
 
 // UserTracker is one of the user's configured trackers mapped into the
@@ -456,7 +457,7 @@ func fmtStat(kind string, v float64) string {
 		return "?"
 	}
 	switch kind {
-	case "uploaded", "downloaded", "seed_size":
+	case "uploaded", "downloaded", "total_transfer", "seed_size":
 		return parse.BytesToSize(int64(v * 1024 * 1024 * 1024))
 	case "ratio":
 		return strconv.FormatFloat(v, 'f', 2, 64)
@@ -497,6 +498,11 @@ func statProgress(q Req, u UserTracker) ReqProgress {
 		have, rate = u.Stats.UploadedGiB, u.Rates.UploadGiB
 	case "downloaded":
 		have, rate = u.Stats.DownloadedGiB, u.Rates.DownloadGiB
+	case "total_transfer":
+		if u.Stats.UploadedGiB >= 0 && u.Stats.DownloadedGiB >= 0 {
+			have = u.Stats.UploadedGiB + u.Stats.DownloadedGiB
+		}
+		rate = u.Rates.TotalTransferGiB
 	case "seed_size":
 		have, rate = u.Stats.SeedSizeGiB, u.Rates.SeedSizeGiB
 	case "uploads":
@@ -664,6 +670,9 @@ func evalGroupReqs(req defs.GroupRequirements, u UserTracker) ([]ReqProgress, fl
 	if req.MinDownloaded != "" {
 		add(statProgress(Req{Kind: "downloaded", Value: parseSizeGiB(req.MinDownloaded), Raw: "Download " + req.MinDownloaded}, u))
 	}
+	if req.MinTotalTransfer != "" {
+		add(statProgress(Req{Kind: "total_transfer", Value: parseSizeGiB(req.MinTotalTransfer), Raw: "Upload + download " + req.MinTotalTransfer}, u))
+	}
 	if req.MinSeedSize != "" {
 		add(statProgress(Req{Kind: "seed_size", Value: parseSizeGiB(req.MinSeedSize), Raw: "Seed size " + req.MinSeedSize}, u))
 	}
@@ -705,6 +714,9 @@ func inviteReqTokens(ir *defs.InviteReqs) []Req {
 	}
 	if ir.MinDownloaded != "" {
 		out = append(out, Req{Kind: "downloaded", Value: parseSizeGiB(ir.MinDownloaded), Raw: "Download " + ir.MinDownloaded})
+	}
+	if ir.MinTotalTransfer != "" {
+		out = append(out, Req{Kind: "total_transfer", Value: parseSizeGiB(ir.MinTotalTransfer), Raw: "Upload + download " + ir.MinTotalTransfer})
 	}
 	if ir.MinRatio > 0 {
 		out = append(out, Req{Kind: "ratio", Value: ir.MinRatio, Raw: "Ratio ≥ " + strconv.FormatFloat(ir.MinRatio, 'f', -1, 64)})

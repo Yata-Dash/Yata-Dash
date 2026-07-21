@@ -105,6 +105,7 @@ func meaningful(v any) bool {
 var numericExtractors = map[string]func(any) (float64, bool){
 	"uploaded":         sizeGiB,
 	"downloaded":       sizeGiB,
+	"total_transfer":   sizeGiB,
 	"buffer":           sizeGiB,
 	"seed_size":        sizeGiB,
 	"ratio":            numeric,
