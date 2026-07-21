@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -240,7 +241,14 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	}
 	api := td.API
 
-	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(t.URL, "/")+api.Path, nil)
+	path := api.Path
+	if strings.Contains(path, "{username}") {
+		if strings.TrimSpace(t.Username) == "" {
+			return nil, errf("no_username", nil)
+		}
+		path = strings.ReplaceAll(path, "{username}", url.QueryEscape(strings.TrimSpace(t.Username)))
+	}
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(t.URL, "/")+path, nil)
 	if err != nil {
 		return nil, errf("request_error", err)
 	}
@@ -286,6 +294,12 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	var raw map[string]any
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, errf("parse_error", err)
+	}
+	if message, ok := raw["error"].(string); ok && strings.TrimSpace(message) != "" {
+		return nil, errf("api_error", fmt.Errorf("%s", message))
+	}
+	if api.SuccessField != "" && fmt.Sprint(nested(raw, api.SuccessField)) != api.SuccessValue {
+		return nil, errf("api_error", fmt.Errorf("unexpected %s value", api.SuccessField))
 	}
 
 	out := map[string]any{}
@@ -416,7 +430,7 @@ func anyTruthy(v any) bool {
 func normalizeCustomString(canonical, v string) string {
 	switch canonical {
 	case "join_date":
-		if len(v) > 10 && v[10] == 'T' {
+		if len(v) > 10 && (v[10] == 'T' || v[10] == ' ') {
 			return v[:10]
 		}
 	case "ratio", "real_ratio":

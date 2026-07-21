@@ -57,4 +57,39 @@ func TestShippedDefsLoadClean(t *testing.T) {
 	if td.API.FieldMap["data.member_since"] != "join_date" {
 		t.Error("join_date mapping missing")
 	}
+
+	nbl, ok := r.TrackerByURL("https://nebulance.io")
+	if !ok {
+		t.Fatal("nebulance.io def not found")
+	}
+	if nbl.API == nil || nbl.API.AuthMethod != "api_key_query" || nbl.API.APIKeyParam != "api_key" {
+		t.Fatalf("unexpected Nebulance API block: %+v", nbl.API)
+	}
+	if nbl.API.SuccessField != "status" || nbl.API.SuccessValue != "success" {
+		t.Fatalf("unexpected Nebulance success envelope: %+v", nbl.API)
+	}
+	if nbl.Rules == nil || nbl.Rules.MinSeedDaysEpisode != 1 || nbl.Rules.MinSeedDaysSeason != 5 {
+		t.Fatalf("unexpected Nebulance seed rules: %+v", nbl.Rules)
+	}
+	if !nbl.Scrape.DisableScraping || nbl.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("Nebulance must be API-only and unapproved: scrape=%+v approval=%q", nbl.Scrape, nbl.ApprovalStatus())
+	}
+	if len(nbl.Groups) != 14 {
+		t.Fatalf("Nebulance groups = %d, want 14", len(nbl.Groups))
+	}
+	wantColors := map[string]string{
+		"Colonial": "#8ba8c1", "Ensign": "#4fc986", "Flattop": "#4fc986",
+		"Nugget": "#4fc986", "Raptor": "#33cc33", "Viper": "#01c3b7",
+		"Orion": "#1990ff", "Valkyrie": "#1990ff", "Torrent Celebrity": "#9933ff",
+		"Cylon": "#40bfff", "Legend": "#d59017", "Moderator": "#c63526",
+		"Administrator": "#bf5fff", "SysOp": "#33cc33",
+	}
+	for _, group := range nbl.Groups {
+		if group.Style.Color != wantColors[group.Name] || group.Style.Icon != "" {
+			t.Errorf("unexpected %s style: %+v", group.Name, group.Style)
+		}
+		if group.Name == "RAS" || group.Name == "Donor" || group.Name == "Customised title" {
+			t.Errorf("non-class group included: %s", group.Name)
+		}
+	}
 }

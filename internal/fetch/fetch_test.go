@@ -88,6 +88,150 @@ func customRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
+func nebulanceRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom","required_fields":["username"]},
+		"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"nebulance","name":"Nebulance","abbr":"NBL",
+		"url":%q,"type":"custom",
+		"api":{
+			"path":"/api.php?action=user&method=getuserinfo&type=username&user={username}",
+			"auth_method":"api_key_query","api_key_param":"api_key",
+			"success_field":"status","success_value":"success",
+			"field_map":{
+				"response.Username":"username","response.Class":"group",
+				"response.JoinDate":"join_date","response.SeedCount":"seeding",
+				"response.HnR":"hit_and_runs","response.Invites":"invites",
+				"response.Grabbed":"grabbed","response.Snatched":"snatched",
+				"response.ForumPosts":"forum_posts"
+			},
+			"byte_fields":{
+				"response.Uploaded":"uploaded","response.Downloaded":"downloaded"
+			},
+			"buffer_from_bytes":true,"ratio_from_bytes":true
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "nebulance.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchCustomInterpolatesUsernameInQuery(t *testing.T) {
+	var gotQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("user")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"success","response":{"Username":"Star Buck"}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Star Buck",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if gotQuery != "Star Buck" {
+		t.Errorf("user query = %q, want %q", gotQuery, "Star Buck")
+	}
+	if got := data["username"]; got != "Star Buck" {
+		t.Errorf("username = %#v, want %q", got, "Star Buck")
+	}
+}
+
+func TestFetchCustomRejectsErrorEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":"API key lacks user permission"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+	})
+	if ferr == nil {
+		t.Fatal("Fetch succeeded, want api_error")
+	}
+	if ferr.Kind != "api_error" {
+		t.Fatalf("error kind = %q, want api_error", ferr.Kind)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "API key lacks user permission" {
+		t.Errorf("error = %v, want API response message", ferr.Err)
+	}
+}
+
+func TestFetchCustomRejectsUnsuccessfulEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"failed","response":{}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+	})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+}
+
+func TestFetchCustomNebulanceShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("api_key"); got != "sekrit" {
+			t.Errorf("api_key query = %q, want sekrit", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"status":"success",
+			"response":{
+				"Username":"testuser","Uploaded":300,"Downloaded":100,
+				"SeedCount":92,"HnR":0,"Invites":1,"Class":"Flattop",
+				"JoinDate":"2025-01-02 03:04:05","Grabbed":12,
+				"Snatched":34,"ForumPosts":7
+			}
+		}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "testuser",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Flattop", "join_date": "2025-01-02",
+		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"ratio": 3.0, "seeding": 92, "hit_and_runs": 0, "invites": 1,
+		"grabbed": 12, "snatched": 34, "forum_posts": 7,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
 // TestFetchCustomHUNOShape exercises the custom fetcher against the HUNO
 // /api/profile envelope: Bearer auth, dot-path field mapping into a nested
 // envelope, byte-field conversion, seed-division counts, and the string
@@ -115,24 +259,24 @@ func TestFetchCustomHUNOShape(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"username":        "hawke",
-		"group":           "Targaryen",
-		"join_date":       "2022-01-01", // ISO datetime trimmed to date
-		"uploaded":        "1.00 TiB",
-		"downloaded":      "512.00 GiB",
-		"buffer":          "512.00 GiB",
-		"ratio":           2.0,
-		"bonus_points":    1500.0,
-		"seeding":         42,
-		"leeching":        3,
-		"hit_and_runs":    0,
-		"warnings":        0,
-		"vanguard_seeds":  10,
-		"squire_seeds":    25,
-		"knight_seeds":    50,
-		"champion_seeds":  100,
-		"guardian_seeds":  3,
-		"legend_seeds":    5,
+		"username":       "hawke",
+		"group":          "Targaryen",
+		"join_date":      "2022-01-01", // ISO datetime trimmed to date
+		"uploaded":       "1.00 TiB",
+		"downloaded":     "512.00 GiB",
+		"buffer":         "512.00 GiB",
+		"ratio":          2.0,
+		"bonus_points":   1500.0,
+		"seeding":        42,
+		"leeching":       3,
+		"hit_and_runs":   0,
+		"warnings":       0,
+		"vanguard_seeds": 10,
+		"squire_seeds":   25,
+		"knight_seeds":   50,
+		"champion_seeds": 100,
+		"guardian_seeds": 3,
+		"legend_seeds":   5,
 	}
 	for k, w := range want {
 		if got, ok := data[k]; !ok {
@@ -236,19 +380,19 @@ func TestFetchCustomRetroflix(t *testing.T) {
 		t.Errorf("auth header = %q, want Bearer token", gotAuth)
 	}
 	want := map[string]any{
-		"username":      "MysteryZiLLA",
-		"group":         "Cinema Addicted", // class 3 via class_map
-		"unread_mail":   "true",            // count 2 → truthy
-		"join_date":     "2026-02-19",      // ISO trimmed
-		"uploaded":      "1.02 TiB",
-		"downloaded":    "148.93 GiB",
-		"buffer":        "891.27 GiB", // uploaded − downloaded
-		"ratio":         6.98,
-		"bonus_points":  "172236.2",
-		"snatched":      20,
-		"hit_and_runs":  0,
-		"invites":       3,
-		"avg_seed_time": 8285514,
+		"username":       "MysteryZiLLA",
+		"group":          "Cinema Addicted", // class 3 via class_map
+		"unread_mail":    "true",            // count 2 → truthy
+		"join_date":      "2026-02-19",      // ISO trimmed
+		"uploaded":       "1.02 TiB",
+		"downloaded":     "148.93 GiB",
+		"buffer":         "891.27 GiB", // uploaded − downloaded
+		"ratio":          6.98,
+		"bonus_points":   "172236.2",
+		"snatched":       20,
+		"hit_and_runs":   0,
+		"invites":        3,
+		"avg_seed_time":  8285514,
 		"total_seedtime": 257125525,
 	}
 	for k, w := range want {

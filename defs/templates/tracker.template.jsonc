@@ -131,7 +131,9 @@
   // [OPTIONAL — REQUIRED for type "custom"] Describes a non-standard API
   // entirely as data. Omit for unit3d/gazelle/test trackers.
   "api": {
-    // Endpoint path appended to the base URL.
+    // Endpoint path appended to the base URL. Use {username} when an API
+    // needs the configured tracker username in its query; Yata URL-encodes
+    // the value and marks username as required during tracker setup.
     "path": "/api/stats.php?summary",
 
     // One of: "session_cookie", "api_key_query", "api_key_header"
@@ -141,6 +143,11 @@
     "auth_method": "api_key_query",
     "cookie_name": "",
     "api_key_param": "token",
+
+    // Optional response-envelope validation. When set, a response is accepted
+    // only if this dot-notation field equals the configured string value.
+    "success_field": "status",
+    "success_value": "success",
 
     // Map JSON response paths (dot notation for nesting) → canonical fields.
     "field_map": {
@@ -184,7 +191,11 @@
     // InfinityHD 3). DISPLAY-ONLY reference shown in the card/detail Rules
     // section — no calculations; fine print (partial-download thresholds,
     // exemptions, …) stays on the tracker's rules page.
-    "min_seed_days": 10
+    "min_seed_days": 10,
+    // When episode and season requirements differ, use these instead of
+    // min_seed_days so the UI labels both rules accurately.
+    "min_seed_days_episode": 1,
+    "min_seed_days_season": 5
   },
 
   // [OPTIONAL] Site-wide requirements to USE the invite system when they are
@@ -234,6 +245,7 @@
         "min_bonus_points": 0,       // bonus point balance
         "min_age": "1M",             // account age
         "description": "",           // non-stat groups: text shown instead of bars
+        "note": "",                  // extra non-numeric conditions shown with bars
 
         // Alternative requirement sets: everything above must be met PLUS
         // at least ONE complete any_of entry (e.g. LST Whale needs

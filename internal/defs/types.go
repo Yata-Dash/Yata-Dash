@@ -251,6 +251,11 @@ type TrackerRules struct {
 	// no per-torrent tracking or calculations with it, and the fine print
 	// (partial-download thresholds, exemptions, …) stays on the tracker.
 	MinSeedDays int `json:"min_seed_days,omitempty"`
+	// Category-specific minimums are used when episode and season torrents
+	// have different requirements. They take precedence over MinSeedDays in
+	// the UI when present.
+	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
+	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
 }
 
 // ExtendedStatsSpec declares a supplementary UNIT3D stats endpoint. Field names
@@ -277,6 +282,10 @@ type CustomAPI struct {
 	CookieName string `json:"cookie_name,omitempty"`
 	// APIKeyParam for auth_method "api_key_query".
 	APIKeyParam string `json:"api_key_param,omitempty"`
+	// SuccessField and SuccessValue optionally require a response-envelope
+	// field to equal a specific value before mappings are processed.
+	SuccessField string `json:"success_field,omitempty"`
+	SuccessValue string `json:"success_value,omitempty"`
 
 	// FieldMap maps JSON response paths (dot notation) → canonical field names.
 	FieldMap map[string]string `json:"field_map,omitempty"`
@@ -350,6 +359,8 @@ type GroupRequirements struct {
 	// lets defs record the requirement today.
 	MinMonthlyUploads int    `json:"min_monthly_uploads,omitempty"`
 	Description       string `json:"description,omitempty"`
+	// Note records non-numeric conditions that supplement trackable targets.
+	Note string `json:"note,omitempty"`
 
 	// AnyOf expresses alternative requirement sets: the fields above must
 	// ALL be met, plus AT LEAST ONE complete AnyOf entry. Example (LST

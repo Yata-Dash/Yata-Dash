@@ -51,6 +51,9 @@ export interface Tracker {
   /** Tracker's minimum per-torrent seed time in days (0/absent = unknown).
    *  Display-only reference from the def — no calculations. */
   min_seed_days?: number;
+  /** Category-specific seed times, used instead of min_seed_days when set. */
+  min_seed_days_episode?: number;
+  min_seed_days_season?: number;
   /** Def staff-approval status: approved | informal | pending | unknown.
    *  Manual trackers report "unknown"; the UI warns unless "approved". */
   def_approval?: string;
@@ -389,6 +392,7 @@ export interface GroupRequirements {
    *  row until Yata can estimate it from upload history. */
   min_monthly_uploads?: number;
   description?: string;  // non-empty = text-only / special group
+  note?: string;         // extra non-numeric conditions alongside targets
   /**
    * Alternative requirement sets: the base fields above must ALL be met,
    * PLUS at least ONE complete any_of entry. Entries never nest further.

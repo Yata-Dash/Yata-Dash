@@ -206,6 +206,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Luminarr | Unit3D | Yes | 120min |  |
 | MidnightScene | Unit3D | Yes | 60min |  |
 | MyAnonamouse | Custom | Yes | API Only | |
+| Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |

@@ -277,7 +277,11 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
   if (settings.show_tracker_rules === false) return '';
   const parts: string[] = [];
   if (tracker.min_ratio && tracker.min_ratio > 0) parts.push(`Ratio ≥ ${tracker.min_ratio}`);
-  if (tracker.min_seed_days && tracker.min_seed_days > 0)
+  if (tracker.min_seed_days_episode && tracker.min_seed_days_episode > 0)
+    parts.push(`Episode seed ≥ ${tracker.min_seed_days_episode} day${tracker.min_seed_days_episode === 1 ? '' : 's'}`);
+  if (tracker.min_seed_days_season && tracker.min_seed_days_season > 0)
+    parts.push(`Season seed ≥ ${tracker.min_seed_days_season} day${tracker.min_seed_days_season === 1 ? '' : 's'}`);
+  if (!tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
@@ -667,8 +671,11 @@ export function buildTargets(
         ).join('<div class="anyof-or">or</div>')}
       </div>`
     : '';
+  const requirementNoteHtml = targetGroupDef?.requirements?.note
+    ? `<div class="target-group-desc">${esc(targetGroupDef.requirements.note)}</div>`
+    : '';
 
-  if (!rows.length && !anyOfHtml && !hasGroups) return '';
+  if (!rows.length && !anyOfHtml && !requirementNoteHtml && !hasGroups) return '';
 
   // Quick-edit pencil — opens the dashboard targets popover. Hidden for
   // trackers without def groups (nothing to load from).
@@ -762,6 +769,7 @@ export function buildTargets(
     ${groupBadgeHtml}
     ${rows.map(r => renderTargetRow(r, settings, mode)).join('')}
     ${anyOfHtml}
+    ${requirementNoteHtml}
     ${emptyHint}
   </div>`;
 }

@@ -3,8 +3,20 @@ package api
 import (
 	"testing"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
+
+func TestRequiredFieldsIncludesCustomAPIPathInputs(t *testing.T) {
+	api := &defs.CustomAPI{
+		Path:     "/api.php?action=user&user={username}",
+		FieldMap: map[string]string{"response.JoinDate": "join_date"},
+	}
+	got := requiredFieldsFor([]string{"join_date"}, api)
+	if len(got) != 1 || got[0] != "username" {
+		t.Fatalf("required fields = %v, want [username]", got)
+	}
+}
 
 // TestApplyPayloadSanitizesTargetDeadlines covers target_deadlines' save-time
 // rules: an entry for a field with no target value is dropped, a "days"
@@ -75,6 +87,15 @@ func TestToViewRoundTripsTargetDeadlines(t *testing.T) {
 	v2 := toView(d, noDeadlines)
 	if v2.TargetDeadlines == nil {
 		t.Error("expected TargetDeadlines to normalize nil to an empty map, like Targets")
+	}
+}
+
+func TestToViewIncludesCategorySpecificSeedRules(t *testing.T) {
+	d := testDeps(t)
+	v := toView(d, models.Tracker{URL: "https://nebulance.io"})
+	if v.MinSeedDaysEpisode != 1 || v.MinSeedDaysSeason != 5 {
+		t.Fatalf("seed rules = episode %d, season %d; want 1 and 5",
+			v.MinSeedDaysEpisode, v.MinSeedDaysSeason)
 	}
 }
 

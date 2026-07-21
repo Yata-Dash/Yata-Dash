@@ -2095,6 +2095,7 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
     bodyPart = pairs.length
       ? chipRow(pairs)
       : `<div class="target-group-hint-desc">No stat requirements for this group.</div>`;
+    if (req.note) bodyPart += `<div class="target-group-hint-desc">${esc(req.note)}</div>`;
     // any_of alternatives — base requirements above PLUS at least one of these
     if (req.any_of?.length) {
       bodyPart += `<div class="target-chip-anyof"><span class="target-chip-anyof-label">plus one of</span>${

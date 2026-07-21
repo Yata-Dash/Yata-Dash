@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -43,17 +44,25 @@ type defInfo struct {
 // to enter a join date (HUNO), while MAM's API reports none so the type-level
 // requirement stands. Always returns a non-nil slice.
 func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
-	out := make([]string, 0, len(base))
-	if api == nil || len(api.FieldMap) == 0 {
-		return append(out, base...)
-	}
-	provided := make(map[string]bool, len(api.FieldMap))
-	for _, canonical := range api.FieldMap {
-		provided[canonical] = true
+	out := make([]string, 0, len(base)+1)
+	provided := make(map[string]bool)
+	if api != nil {
+		for _, canonical := range api.FieldMap {
+			provided[canonical] = true
+		}
 	}
 	for _, f := range base {
 		if !provided[f] {
 			out = append(out, f)
+		}
+	}
+	if api != nil && strings.Contains(api.Path, "{username}") {
+		hasUsername := false
+		for _, field := range out {
+			hasUsername = hasUsername || field == "username"
+		}
+		if !hasUsername {
+			out = append(out, "username")
 		}
 	}
 	return out
