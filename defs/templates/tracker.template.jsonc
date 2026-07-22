@@ -35,7 +35,8 @@
   "aliases": ["https://mytracker-mirror.example"],
 
   // [REQUIRED] Tracker type key — must match a file in defs/types/.
-  // Built-in types: "unit3d", "gazelle", "gazelle_json", "gazelle_games", "custom", "test".
+  // Built-in types: "unit3d", "gazelle", "gazelle_json", "gazelle_json_cookie",
+  // "gazelle_games", "custom", "test".
   "type": "unit3d",
 
   // [OPTIONAL — recommended] Date (YYYY-MM-DD) this def's data was last

@@ -157,3 +157,15 @@ func (r *Registry) APIKind(trackerURL, typeKey string) string {
 	}
 	return "unit3d" // sensible default for manual trackers with unknown type
 }
+
+// APICookieName returns the session-cookie name for a "gazelle_json_cookie"
+// type tracker (by URL + type key), defaulting to "session" when unset.
+func (r *Registry) APICookieName(trackerURL, typeKey string) string {
+	if td, hasDef := r.TrackerByURL(trackerURL); hasDef && td.Type != "" {
+		typeKey = td.Type
+	}
+	if tt, ok := r.Type(typeKey); ok && tt.API.CookieName != "" {
+		return tt.API.CookieName
+	}
+	return "session"
+}

@@ -197,6 +197,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Tracker | Platform | Approved by tracker | Limit | Notes |
 |---|---|---|---|---|
 | Aither | Unit3D | Yes | 180min | Monthly Uploads not currently retrievable |
+| AlphaRatio | Gazelle | No | API Only | No API token support; authenticates with a user-supplied session cookie |
 | AnimeBytes | Custom | No | API Only | Uses the personal stats API; account age is entered manually |
 | Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
 | Aura4K | Unit3D | Yes | 180min |  |

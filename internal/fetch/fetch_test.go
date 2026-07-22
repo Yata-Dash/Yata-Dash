@@ -38,6 +38,31 @@ func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
+func gazelleJSONCookieRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_json_cookie","label":"Gazelle JSON API (session cookie)",
+		"api":{"kind":"gazelle_json_cookie","cookie_name":"session","required_fields":["session_cookie"]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"alpharatio",
+		"name":"AlphaRatio","abbr":"AR","url":%q,"type":"gazelle_json_cookie"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_json_cookie.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "alpharatio.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
 func gazelleGamesRegistry(t *testing.T, baseURL string) *defs.Registry {
 	t.Helper()
 	dir := t.TempDir()
@@ -492,6 +517,95 @@ func TestFetchGazelleJSONRejectsFailureEnvelope(t *testing.T) {
 	}
 	if ferr.Err == nil || ferr.Err.Error() != "User scope required" {
 		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
+	}
+}
+
+// TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey verifies AlphaRatio's
+// auth mode (no API token support — cookie only) and the two verified
+// divergences from Redacted/Orpheus: no stats.buffer field (buffer must be
+// computed from uploaded−downloaded) and no index-level gift/merit tokens
+// (fl_tokens must be omitted, not reported as a false zero).
+func TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want empty (cookie auth only)", got)
+		}
+		if got := r.Header.Get("Cookie"); got != "session=cookievalue" {
+			t.Errorf("Cookie = %q, want session=cookievalue", got)
+		}
+		action := r.URL.Query().Get("action")
+		seen[action]++
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":1,"requiredratio":0,"class":"Sphinx"}
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "42" {
+				t.Errorf("user id = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":1,"requiredRatio":0},
+				"personal":{"class":"Sphinx","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":11,"groups":11,"seeding":20,"leeching":1,"snatched":30,"invited":0}
+			}}`)
+		case "community_stats":
+			if got := r.URL.Query().Get("userid"); got != "42" {
+				t.Errorf("community_stats userid = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":"1","seeding":"20","snatched":"30","seedingperc":52}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if _, ok := data["fl_tokens"]; ok {
+		t.Errorf("fl_tokens = %#v, want absent (AR has no gift/merit tokens)", data["fl_tokens"])
+	}
+	if _, ok := data["seed_size"]; ok {
+		t.Errorf("seed_size = %#v, want absent (AR community_stats has no seedingsize)", data["seed_size"])
+	}
+	want := map[string]any{
+		"username": "listener", "user_id": "42", "group": "Sphinx",
+		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"ratio": 1.0, "required_ratio": 0.0,
+		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
+		"leeching": 1, "snatched": 30, "users_invited": 0,
+		"uploads_approved": 11, "requests_filled": 2, "forum_posts": 1,
+		"groups_uploaded": 11, "perfect_flacs": 0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, action := range []string{"index", "user", "community_stats"} {
+		if seen[action] != 1 {
+			t.Errorf("%s calls = %d, want 1", action, seen[action])
+		}
+	}
+}
+
+func TestFetchGazelleJSONCookieRequiresSessionCookie(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be made without a session cookie")
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie"})
+	if ferr == nil || ferr.Kind != "no_key" {
+		t.Fatalf("Fetch error = %v, want no_key", ferr)
 	}
 }
 

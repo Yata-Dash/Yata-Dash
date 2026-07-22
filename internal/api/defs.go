@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -97,13 +98,17 @@ func listDefs(d *Deps) http.HandlerFunc {
 			}
 			if td.API != nil {
 				info.APIKeyHint = td.API.APIKeyHint
-				info.NeedsSessionCookie = td.API.AuthMethod == "session_cookie"
 			}
 			if tt, ok := d.Reg.Type(td.Type); ok {
 				info.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, td.API)
 			} else {
 				info.RequiredFields = []string{}
 			}
+			// The cookie field must stay visible even when scraping is off
+			// whenever the API itself needs it — both custom defs with
+			// auth_method "session_cookie" and types like gazelle_json_cookie
+			// resolve "session_cookie" into RequiredFields, so this covers both.
+			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
 			tout = append(tout, info)
 		}
 		types := d.Reg.Types()

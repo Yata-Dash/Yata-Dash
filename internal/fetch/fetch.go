@@ -67,8 +67,8 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		data, ferr = c.fetchDemo(t)
 	case "gazelle":
 		data, ferr = c.fetchGazelle(t)
-	case "gazelle_json":
-		data, ferr = c.fetchGazelleJSON(t)
+	case "gazelle_json", "gazelle_json_cookie":
+		data, ferr = c.fetchGazelleJSON(t, kind)
 	case "gazelle_games":
 		data, ferr = c.fetchGazelleGames(t)
 	case "custom":
@@ -284,11 +284,8 @@ type gazelleJSONCommunityStats struct {
 	SeedingSize any `json:"seedingsize"`
 }
 
-func (c *Client) getGazelleJSON(url, key, identify string, out any) *Error {
-	body, ferr := c.getBody(url, map[string]string{
-		"Accept":        "application/json",
-		"Authorization": key,
-	}, identify)
+func (c *Client) getGazelleJSON(url string, headers map[string]string, identify string, out any) *Error {
+	body, ferr := c.getBody(url, headers, identify)
 	if ferr != nil {
 		return ferr
 	}
@@ -309,16 +306,25 @@ func (c *Client) getGazelleJSON(url, key, identify string, out any) *Error {
 	return nil
 }
 
-func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
-	if strings.TrimSpace(t.APIKey) == "" {
-		return nil, errf("no_key", nil)
+func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any, *Error) {
+	identify := c.identify(t)
+	headers := map[string]string{"Accept": "application/json"}
+	if kind == "gazelle_json_cookie" {
+		if strings.TrimSpace(t.SessionCookie) == "" {
+			return nil, errf("no_key", nil)
+		}
+		cookieName := c.Registry.APICookieName(t.URL, t.Type)
+		headers["Cookie"] = cookieName + "=" + strings.TrimSpace(t.SessionCookie)
+	} else {
+		if strings.TrimSpace(t.APIKey) == "" {
+			return nil, errf("no_key", nil)
+		}
+		headers["Authorization"] = strings.TrimSpace(t.APIKey)
 	}
 	base := strings.TrimRight(t.URL, "/") + "/ajax.php?action="
-	identify := c.identify(t)
-	key := strings.TrimSpace(t.APIKey)
 
 	var index gazelleJSONIndex
-	if ferr := c.getGazelleJSON(base+"index", key, identify, &index); ferr != nil {
+	if ferr := c.getGazelleJSON(base+"index", headers, identify, &index); ferr != nil {
 		return nil, ferr
 	}
 	if index.ID <= 0 {
@@ -326,11 +332,11 @@ func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
 	}
 
 	var user gazelleJSONUser
-	if ferr := c.getGazelleJSON(fmt.Sprintf("%suser&id=%d", base, index.ID), key, identify, &user); ferr != nil {
+	if ferr := c.getGazelleJSON(fmt.Sprintf("%suser&id=%d", base, index.ID), headers, identify, &user); ferr != nil {
 		return nil, ferr
 	}
 	var community gazelleJSONCommunityStats
-	if ferr := c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), key, identify, &community); ferr != nil {
+	if ferr := c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), headers, identify, &community); ferr != nil {
 		return nil, ferr
 	}
 
@@ -338,16 +344,23 @@ func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
 	if len(joinDate) >= 10 {
 		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
 	}
+	// Cookie-auth forks (verified on AlphaRatio) don't return a stats.buffer
+	// field or index-level gift/merit tokens — compute buffer from the raw
+	// byte counts instead of trusting an absent field, and omit fl_tokens
+	// rather than reporting a false zero.
+	buffer := user.Stats.Buffer
+	if kind == "gazelle_json_cookie" {
+		buffer = max(user.Stats.Uploaded-user.Stats.Downloaded, 0)
+	}
 	out := map[string]any{
 		"username":         user.Username,
 		"user_id":          fmt.Sprintf("%d", index.ID),
 		"group":            user.Personal.Class,
 		"uploaded":         parse.BytesToSize(user.Stats.Uploaded),
 		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
-		"buffer":           parse.BytesToSize(user.Stats.Buffer),
+		"buffer":           parse.BytesToSize(buffer),
 		"ratio":            user.Stats.Ratio,
 		"required_ratio":   user.Stats.RequiredRatio,
-		"fl_tokens":        index.GiftTokens + index.MeritTokens,
 		"join_date":        joinDate,
 		"warnings":         0,
 		"seeding":          user.Community.Seeding,
@@ -359,6 +372,9 @@ func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
 		"forum_posts":      user.Community.Posts,
 		"groups_uploaded":  user.Community.Groups,
 		"perfect_flacs":    user.Community.PerfectFLACs,
+	}
+	if kind != "gazelle_json_cookie" {
+		out["fl_tokens"] = index.GiftTokens + index.MeritTokens
 	}
 	if user.Personal.Warned {
 		out["warnings"] = 1

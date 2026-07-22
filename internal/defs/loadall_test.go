@@ -185,6 +185,60 @@ func TestShippedDefsLoadClean(t *testing.T) {
 		t.Errorf("unexpected Orpheus Ultimate Torrent Master requirements: %+v", utm)
 	}
 
+	ar, ok := r.TrackerByURL("https://alpharatio.cc")
+	if !ok {
+		t.Fatal("alpharatio.cc def not found")
+	}
+	if kind := r.APIKind(ar.URL, ar.Type); kind != "gazelle_json_cookie" {
+		t.Fatalf("AlphaRatio APIKind = %q, want gazelle_json_cookie", kind)
+	}
+	arType, ok := r.Type(ar.Type)
+	if !ok || len(arType.API.RequiredFields) != 1 || arType.API.RequiredFields[0] != "session_cookie" {
+		t.Fatalf("AlphaRatio type must require a session cookie: %+v", arType)
+	}
+	if name := r.APICookieName(ar.URL, ar.Type); name != "session" {
+		t.Fatalf("AlphaRatio cookie name = %q, want session", name)
+	}
+	if !ar.Scrape.DisableScraping || ar.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("AlphaRatio must be API-only and unapproved: scrape=%+v approval=%q", ar.Scrape, ar.ApprovalStatus())
+	}
+	if ar.Rules == nil || ar.Rules.MinRatio != 1.0 || ar.Rules.Note == "" {
+		t.Fatalf("AlphaRatio rules = %+v, want min_ratio 1.0 and a note", ar.Rules)
+	}
+	if ar.InviteRequirements == nil || ar.InviteRequirements.MinClass != "Philosopher" {
+		t.Fatalf("AlphaRatio invite requirements = %+v", ar.InviteRequirements)
+	}
+	wantARPrimary := []string{
+		"Mortal", "Philosopher", "Gladiator", "Giant", "Centaur", "Sphinx",
+		"Harpy", "Satyr", "Adonis", "Cyclops", "Chimera",
+	}
+	if len(ar.Groups) != 22 {
+		t.Fatalf("AlphaRatio groups = %d, want 22", len(ar.Groups))
+	}
+	for i, name := range wantARPrimary {
+		group := ar.Groups[i]
+		if group.Name != name {
+			t.Errorf("AlphaRatio group %d = %q, want %q", i, group.Name, name)
+		}
+	}
+	for _, group := range ar.Groups {
+		if group.Style.Color != "" || group.Style.Icon != "" {
+			t.Errorf("AlphaRatio %s style must be empty: %+v", group.Name, group.Style)
+		}
+		switch group.Name {
+		case "Exiled", "Donor", "Custom Titles":
+			t.Errorf("non-class/account-state group included: %s", group.Name)
+		}
+	}
+	philosopher := ar.Groups[1].Requirements
+	if philosopher.MinUploaded != "80 GB" || philosopher.MinBonusPoints != 60000 || philosopher.MinAge != "4W" {
+		t.Errorf("unexpected AlphaRatio Philosopher requirements: %+v", philosopher)
+	}
+	spartan := ar.Groups[12].Requirements
+	if ar.Groups[12].Name != "Spartan" || spartan.MinUploaded != "10 TB" || spartan.MinBonusPoints != 6200000 {
+		t.Errorf("unexpected AlphaRatio Spartan (%s) requirements: %+v", ar.Groups[12].Name, spartan)
+	}
+
 	ggn, ok := r.TrackerByURL("https://gazellegames.net")
 	if !ok {
 		t.Fatal("gazellegames.net def not found")
