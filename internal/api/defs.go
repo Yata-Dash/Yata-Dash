@@ -66,6 +66,9 @@ func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
 			out = append(out, "username")
 		}
 	}
+	if api != nil && api.AuthMethod == "session_cookie" && !slices.Contains(out, "session_cookie") {
+		out = append(out, "session_cookie")
+	}
 	return out
 }
 

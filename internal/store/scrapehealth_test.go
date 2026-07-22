@@ -59,6 +59,33 @@ func TestScrapeHealth(t *testing.T) {
 	}
 }
 
+// TestScrapeHealthOrdersSameSecondAttemptsByInsertion: scraped_at only has
+// one-second resolution, so two attempts landing in the same second (a rapid
+// manual retry, or a fallback scrape right after an API failure) must still
+// resolve "latest" as the one actually recorded last, not an arbitrary one —
+// GetScrapeHealth's ordering needs a tiebreaker beyond scraped_at.
+func TestScrapeHealthOrdersSameSecondAttemptsByInsertion(t *testing.T) {
+	db := testDB(t)
+	same := time.Unix(5000, 0)
+
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(db.RecordScrape("x", same, false, "timeout"))
+	must(db.RecordScrape("x", same, true, ""))
+
+	h, err := db.GetScrapeHealth("x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.LastOK || h.ConsecutiveFailures != 0 {
+		t.Errorf("latest same-second attempt (success, inserted last) should win: %+v", h)
+	}
+}
+
 // TestScrapeLogMigration: a database created before the outcome columns
 // existed gains them on Open, and its old rows read back as successes.
 func TestScrapeLogMigration(t *testing.T) {

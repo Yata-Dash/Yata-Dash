@@ -18,6 +18,27 @@ func TestRequiredFieldsIncludesCustomAPIPathInputs(t *testing.T) {
 	}
 }
 
+// TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod: a custom def
+// whose API authenticates with a user-supplied session cookie
+// (auth_method: "session_cookie") must resolve "session_cookie" into its
+// required fields, the same way gazelle_json_cookie-typed trackers do —
+// that's what keeps the cookie input visible in the add/edit modal even
+// with scraping off.
+func TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod(t *testing.T) {
+	api := &defs.CustomAPI{
+		Path:       "/api.php?action=user",
+		AuthMethod: "session_cookie",
+	}
+	got := requiredFieldsFor(nil, api)
+	found := false
+	for _, f := range got {
+		found = found || f == "session_cookie"
+	}
+	if !found {
+		t.Fatalf("required fields = %v, want to include session_cookie", got)
+	}
+}
+
 // TestApplyPayloadSanitizesTargetDeadlines covers target_deadlines' save-time
 // rules: an entry for a field with no target value is dropped, a "days"
 // (account age) entry is always dropped even if one somehow arrives, and a

@@ -679,6 +679,46 @@ func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
 	}
 }
 
+// TestFetchGazelleJSONCookieToleratesStringRequiredRatio covers the same
+// GreatPosterWall shape as the string-ratio test above, but for
+// stats.requiredRatio — the sibling field, formatted the same string way,
+// that previously wasn't tolerant of a string and would have failed the
+// whole /user unmarshal.
+func TestFetchGazelleJSONCookieToleratesStringRequiredRatio(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Power User"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":"3.14159","requiredRatio":"0.60000"},
+				"personal":{"class":"Power User","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":26,"groups":26,"seeding":50,"leeching":0,"snatched":22,"invited":0}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":0,"seeding":"47","snatched":"22"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite string requiredRatio", ferr)
+	}
+	if data["required_ratio"] != 0.6 {
+		t.Errorf("required_ratio = %#v, want 0.6", data["required_ratio"])
+	}
+}
+
 func TestFetchGazelleJSONCookieRequiresSessionCookie(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no request should be made without a session cookie")
@@ -764,6 +804,54 @@ func TestFetchGazelleGamesMergesAccountEndpoints(t *testing.T) {
 		if seen[request] != 1 {
 			t.Errorf("%s calls = %d, want 1", request, seen[request])
 		}
+	}
+}
+
+// TestFetchGazelleGamesToleratesUserEndpointFailure mirrors
+// fetchGazelleJSON's community_stats resilience: quick_user and
+// user_stats_ratio already carry the core uploaded/downloaded/ratio numbers,
+// so a broken/unsupported "user" endpoint (join date, gold, achievements,
+// HNRs/invites) must not fail the whole fetch.
+func TestFetchGazelleGamesToleratesUserEndpointFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := r.URL.Query().Get("request")
+		w.Header().Set("Content-Type", "application/json")
+		switch request {
+		case "quick_user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player","id":24,
+				"userstats":{"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,"requiredratio":0.6,"class":"Legendary Gamer"}
+			}}`)
+		case "user_stats_ratio":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,
+				"buffer":3298534883328,"disposable":3848290697216,"reqratio":0.6
+			}}`)
+		case "user":
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		default:
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite user endpoint failure", ferr)
+	}
+	want := map[string]any{
+		"username": "player", "user_id": "24", "group": "Legendary Gamer",
+		"uploaded": "4.00 TiB", "downloaded": "1.00 TiB", "buffer": "3.00 TiB",
+		"ratio": 4.0, "required_ratio": 0.6, "join_date": "",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["invites"]; ok {
+		t.Errorf("invites should be absent when user endpoint fails: %+v", data)
 	}
 }
 

@@ -255,11 +255,11 @@ type gazelleJSONUser struct {
 		JoinedDate string `json:"joinedDate"`
 		Uploaded   int64  `json:"uploaded"`
 		Downloaded int64  `json:"downloaded"`
-		// Ratio is a number on Redacted/Orpheus/AlphaRatio but a JSON string
-		// on GreatPosterWall ("38.17869") — accept either.
-		Ratio         any     `json:"ratio"`
-		Buffer        int64   `json:"buffer"`
-		RequiredRatio float64 `json:"requiredRatio"`
+		// Ratio and requiredRatio are numbers on Redacted/Orpheus/AlphaRatio but
+		// JSON strings on GreatPosterWall ("38.17869") — accept either.
+		Ratio         any   `json:"ratio"`
+		Buffer        int64 `json:"buffer"`
+		RequiredRatio any   `json:"requiredRatio"`
 	} `json:"stats"`
 	Personal struct {
 		Class   string `json:"class"`
@@ -368,7 +368,7 @@ func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any
 		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
 		"buffer":           parse.BytesToSize(buffer),
 		"ratio":            parse.AnyFloat(user.Stats.Ratio),
-		"required_ratio":   user.Stats.RequiredRatio,
+		"required_ratio":   parse.AnyFloat(user.Stats.RequiredRatio),
 		"join_date":        joinDate,
 		"warnings":         0,
 		"seeding":          user.Community.Seeding,
@@ -485,10 +485,11 @@ func (c *Client) fetchGazelleGames(t models.Tracker) (map[string]any, *Error) {
 	if ferr := c.getGazelleGames(base+"user_stats_ratio", key, identify, &ratio); ferr != nil {
 		return nil, ferr
 	}
+	// user is supplementary (join date, gold/share score, achievements,
+	// HNRs/invites) — the core uploaded/downloaded/ratio/buffer numbers above
+	// already succeeded, so a failure here must not discard them.
 	var user gazelleGamesUser
-	if ferr := c.getGazelleGames(fmt.Sprintf("%suser&id=%d", base, quick.ID), key, identify, &user); ferr != nil {
-		return nil, ferr
-	}
+	_ = c.getGazelleGames(fmt.Sprintf("%suser&id=%d", base, quick.ID), key, identify, &user)
 
 	joinDate := user.Stats.JoinedDate
 	if len(joinDate) >= 10 {
