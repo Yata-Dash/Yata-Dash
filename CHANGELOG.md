@@ -8,6 +8,51 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Connection health.** The dashboard's Tracker Health card is now
+  **Connection Health**: how many trackers Yata could actually reach, rather
+  than how many had a ratio above 1. Every contact attempt — API fetch or
+  profile scrape — is recorded, so the card's number, its sparkline and a new
+  **Connection (7d)** strip in each table row's expanded view all read from
+  real history instead of standing in for it (the old sparkline plotted the
+  overall upload/download ratio, which had nothing to do with health). The
+  strip shows one block per day: green for a clean day, amber when some
+  contacts failed, red when none got through, and a faint outline for days
+  with no contact at all — a paused or newly-added tracker never reads as an
+  outage.
+
+  The two ways Yata reaches a tracker are judged separately. A tracker whose
+  API has been failing for days but whose profile scrape still works is not
+  dark, yet its stats are running on the fallback — so it now reports
+  "API failing … using scrape fallback" in amber rather than counting as
+  healthy just because something got through. Red is reserved for trackers
+  nothing reaches at all, so it stays meaningful. Expired session cookies
+  count the same way, as the scrape half being broken.
+
+  Trackers with no API key configured are left out entirely: a scrape-only
+  tracker was never going to answer an API call, so counting that as an
+  outage would hold the card red forever. Ratio and hit-and-run problems
+  remain visible per tracker and through alert rules. Recording starts with
+  this build, so the strip fills in over the first week.
+
+### Changed
+
+- **Expanded table rows: 48-hour upload/download charts replaced.** Those two
+  sparklines duplicated the History view and the Tracker Detail page, which
+  both chart the same numbers over longer ranges with axes and tooltips. Their
+  space now holds the connection strip, which shows something neither view
+  does. Removing them also evens out the row's column heights, closing the
+  large blank area that used to sit under the Stats column, and the expanded
+  row now stacks into a single column on narrow screens and phones instead of
+  leaving one short column beside a tall one.
+
+### Fixed
+
+- **Expanded table rows could collapse to a narrow strip.** The row's width is
+  driven by a CSS variable measured from the table, which was being written as
+  `0` when the measurement ran while the table view was still hidden — as it is
+  at startup. Opening a row before anything else re-measured left its contents
+  crushed into a sliver. The zero measurement is now ignored.
+
 - **Expired session-cookie warnings + scrape health.** Scrape attempts now
   record their outcome, so a dead tracker cookie is noticed before the data
   gap hurts: an amber dismissible banner names the trackers whose session

@@ -26,6 +26,81 @@ type scrapeStatusEntry struct {
 	LastErrorAt         int64  `json:"last_error_at,omitempty"`   // unix seconds
 	ConsecutiveFailures int    `json:"consecutive_failures,omitempty"`
 	CookieExpired       bool   `json:"cookie_expired,omitempty"`
+	// Connection health — could Yata REACH this tracker (API or scrape),
+	// as opposed to whether the numbers it returned look good. Uptime runs
+	// oldest→newest over connectionDays, one entry per UTC day: 0..1 = the
+	// fraction of that day's contacts that succeeded, -1 = no contact
+	// attempted (a paused or newly-added tracker must not read as down).
+	Uptime []float64 `json:"uptime,omitempty"`
+	// Unreachable is the CURRENT verdict: the most recent day with any
+	// contact ended with every attempt failing. Drives the Health card count.
+	Unreachable  bool   `json:"unreachable,omitempty"`
+	LastDownKind string `json:"last_down_kind,omitempty"` // failure kind behind Unreachable
+	// APIDown means every API call on the last day the API was tried failed,
+	// while something still got through (usually the scrape fallback). The
+	// tracker is not dark, but half of how Yata reaches it is broken and its
+	// stats are running on the fallback — worth showing, not worth alarming.
+	APIDown     bool   `json:"api_down,omitempty"`
+	APIDownKind string `json:"api_down_kind,omitempty"`
+}
+
+// connectionDays is the width of the uptime strip in the expanded row and the
+// span of the Health card's sparkline. Seven days reads as "this week" at a
+// glance and stays legible as discrete blocks on a phone.
+const connectionDays = 7
+
+// buildUptime turns one tracker's daily rollups into a fixed-width strip
+// ending today, filling days with no recorded contact with -1 ("no data").
+// A fixed width matters: the strip is rendered as blocks, so every tracker's
+// row must line up regardless of when it was added.
+// connVerdict is the current state derived from the tail of the strip.
+type connVerdict struct {
+	Uptime      []float64
+	Unreachable bool
+	LastKind    string
+	APIDown     bool
+	APIDownKind string
+}
+
+func buildUptime(days []store.ConnectionDay, today int64) connVerdict {
+	byDay := make(map[int64]store.ConnectionDay, len(days))
+	for _, c := range days {
+		byDay[c.Day] = c
+	}
+	v := connVerdict{Uptime: make([]float64, connectionDays)}
+	seen := false
+	for i := range connectionDays {
+		day := today - int64((connectionDays-1-i))*86400
+		c, ok := byDay[day]
+		if !ok {
+			v.Uptime[i] = -1
+			continue
+		}
+		v.Uptime[i] = c.Uptime()
+		// Each verdict follows the most recent day that actually exercised
+		// that channel, so a tracker last contacted two days ago still
+		// reports that outcome rather than being silently forgiven by
+		// today's empty row. The two are tracked independently: the API can
+		// be down for days while the scrape fallback keeps the tracker
+		// reachable, which is precisely the case the combined count hides.
+		if c.Attempts() > 0 {
+			v.Unreachable, v.LastKind, seen = c.OKCount == 0, c.LastKind, true
+		}
+		if c.APIAttempts() > 0 {
+			v.APIDown = c.APIDown()
+			if v.APIDown {
+				v.APIDownKind = c.LastKind
+			}
+		}
+	}
+	if !seen {
+		return connVerdict{Uptime: v.Uptime}
+	}
+	// Fully dark already says everything; don't also report the API half.
+	if v.Unreachable {
+		v.APIDown, v.APIDownKind = false, ""
+	}
+	return v
 }
 
 // cookieExpired reports whether the health tail looks like a dead session
@@ -53,6 +128,17 @@ func scrapeStatus(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		set := d.Cfg.Settings()
 		now := time.Now()
+		// One query for every tracker's rollups, then indexed per tracker —
+		// the per-tracker alternative is N queries on every status poll.
+		since := now.UTC().AddDate(0, 0, -(connectionDays - 1))
+		conns := map[string][]store.ConnectionDay{}
+		if rows, err := d.DB.ConnectionDaily(nil, since); err == nil {
+			for _, c := range rows {
+				conns[c.TrackerID] = append(conns[c.TrackerID], c)
+			}
+		}
+		today := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC).Unix()
+
 		out := map[string]scrapeStatusEntry{}
 		for _, t := range d.Cfg.Trackers() {
 			rs := d.Reg.ResolveScrape(t.URL, t.Type)
@@ -66,6 +152,9 @@ func scrapeStatus(d *Deps) http.HandlerFunc {
 				entry.ConsecutiveFailures = h.ConsecutiveFailures
 				entry.CookieExpired = cookieExpired(h)
 			}
+			v := buildUptime(conns[t.ID], today)
+			entry.Uptime, entry.Unreachable, entry.LastDownKind = v.Uptime, v.Unreachable, v.LastKind
+			entry.APIDown, entry.APIDownKind = v.APIDown, v.APIDownKind
 			out[t.ID] = entry
 		}
 		jsonOK(w, out)
@@ -118,7 +207,7 @@ func runScrape(d *Deps) http.HandlerFunc {
 			KnownUserID:     mergedString(d, t.ID, "user_id"),
 		}
 		result, serr := scrape.Profile(t, spec)
-		recordScrapeAttempt(d, t.ID, serr)
+		recordScrapeAttempt(d, t, serr)
 		if serr != nil {
 			d.logWarnf("scrape: %s (%s) failed — %s", t.Name, t.ID, serr.Kind)
 			jsonError(w, serr.Kind, upstreamStatus(serr.Status))

@@ -98,6 +98,26 @@ func (d *DB) migrate() error {
 			detail     TEXT NOT NULL             -- e.g. "Seeker→PowerPool"
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_events_tracker ON tracker_events (tracker_id, at)`,
+		// Connection health — one row per tracker per UTC day, counting the
+		// outcomes of every contact ATTEMPT (API fetch or profile scrape).
+		// A rollup rather than a per-attempt log because every consumer asks
+		// the same question ("what fraction of contacts succeeded that day?"):
+		// the uptime strip, the Health card's sparkline, and the timeline.
+		// One row/tracker/day keeps it negligible at any retention.
+		`CREATE TABLE IF NOT EXISTS connection_daily (
+			tracker_id     TEXT NOT NULL,
+			day            INTEGER NOT NULL,         -- unix seconds at UTC midnight
+			ok_count       INTEGER NOT NULL DEFAULT 0,
+			fail_count     INTEGER NOT NULL DEFAULT 0,
+			last_kind      TEXT NOT NULL DEFAULT '', -- most recent failure kind that day
+			-- The API channel's own tally, kept alongside the combined counts.
+			-- A tracker whose API is dead but whose scrape fallback works still
+			-- has successful contacts, so the combined figure alone reports it
+			-- as perfectly healthy and the broken half stays invisible.
+			api_ok_count   INTEGER NOT NULL DEFAULT 0,
+			api_fail_count INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (tracker_id, day)
+		)`,
 		// Read-only integration tokens (Settings → Integrations → API Tokens).
 		// Only the SHA-256 hash is stored; the plaintext token is shown once.
 		`CREATE TABLE IF NOT EXISTS api_tokens (
@@ -120,6 +140,16 @@ func (d *DB) migrate() error {
 	if err := d.addColumns("scrape_log", map[string]string{
 		"ok":         "INTEGER NOT NULL DEFAULT 1",
 		"error_kind": "TEXT NOT NULL DEFAULT ''",
+	}); err != nil {
+		return err
+	}
+	// Per-channel counts arrived after connection_daily shipped in a dev build.
+	// Pre-migration rows default to 0/0, which reads as "no API attempts
+	// recorded that day" — the same as a scrape-only tracker, so the degraded
+	// check simply stays quiet for them rather than guessing.
+	if err := d.addColumns("connection_daily", map[string]string{
+		"api_ok_count":   "INTEGER NOT NULL DEFAULT 0",
+		"api_fail_count": "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
 	}
@@ -262,6 +292,7 @@ func (d *DB) WipeData() error {
 		`DELETE FROM history_daily`,
 		`DELETE FROM scrape_log`,
 		`DELETE FROM tracker_events`,
+		`DELETE FROM connection_daily`,
 		`DELETE FROM api_tokens`, // a recovery reset revokes integrations too
 	} {
 		if _, err := d.sql.Exec(q); err != nil {
@@ -279,6 +310,7 @@ func (d *DB) DeleteTracker(trackerID string) error {
 		`DELETE FROM history_daily WHERE tracker_id = ?`,
 		`DELETE FROM scrape_log WHERE tracker_id = ?`,
 		`DELETE FROM tracker_events WHERE tracker_id = ?`,
+		`DELETE FROM connection_daily WHERE tracker_id = ?`,
 	} {
 		if _, err := d.sql.Exec(q, trackerID); err != nil {
 			return err

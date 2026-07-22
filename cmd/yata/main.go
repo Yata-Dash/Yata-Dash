@@ -140,8 +140,11 @@ func main() {
 			}
 			_ = db.PruneHistory(time.Now().UTC().Add(-14 * 24 * time.Hour))
 			_ = db.PruneDaily(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
-			// Events (group-change timeline) kept in step with the daily window.
+			// Events (group-change + connection timeline) and the connection
+			// rollups kept in step with the daily window, so the timeline and
+			// uptime strip cover the same span the charts can show.
 			_ = db.PruneEvents(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
+			_ = db.PruneConnectionDaily(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
 			_ = db.PruneScrapeLog(time.Now().UTC().Add(-30 * 24 * time.Hour))
 			_ = db.PruneSessions(time.Now())
 			time.Sleep(6 * time.Hour)

@@ -5,10 +5,8 @@ import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
-import { renderSparkline } from '../components/sparkline';
 import { buildStatsPanel } from '../components/profile';
 import { buildTargets, fmtDateTime, makeSdot } from './grid';
-import { trackerSeries } from '../utils/history';
 import { eventGlobeSvg } from '../utils/icons';
 
 interface TableCallbacks {
@@ -75,16 +73,42 @@ export function renderTable(
   const statusEl = document.getElementById('t-sum-status');
   if (statusEl) statusEl.textContent = `${active} / ${sorted.length} active`;
 
-  // Render sparklines for expanded rows
-  sorted.filter(t => expandedRows.has(t.id)).forEach(t => {
-    const up = trackerSeries(historyData, t.id, 'uploaded');
-    const dn = trackerSeries(historyData, t.id, 'downloaded');
-    if (up.length > 1 || dn.length > 1) {
-      const sid = t.id.slice(0, 8);
-      renderSparkline(`spark-t-up-${sid}`, up, '--green');
-      renderSparkline(`spark-t-dn-${sid}`, dn, '--purple');
-    }
-  });
+}
+
+/** Seven-day reachability strip: one block per UTC day, oldest→newest.
+ *  Rendered as blocks rather than a line because the interesting reading is
+ *  categorical ("which days broke"), and because a fixed block count keeps
+ *  every tracker's strip aligned however long it has been installed. */
+function buildUptimeStrip(trackerId: string): string {
+  const ss = scrapeStatus[trackerId];
+  const up = ss?.uptime ?? [];
+  if (!up.some(v => v >= 0)) return ''; // nothing recorded yet — show nothing
+
+  const today = new Date();
+  const blocks = up.map((v, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (up.length - 1 - i));
+    const when = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    // -1 is "no contact attempted", which must not read as an outage: it is
+    // the normal state for a paused tracker or one added mid-week.
+    const cls = v < 0 ? 'none' : v >= 1 ? 'ok' : v > 0 ? 'partial' : 'down';
+    const label = v < 0 ? 'no contact' : v >= 1 ? 'all contact succeeded'
+      : v > 0 ? `${Math.round(v * 100)}% succeeded` : 'all contact failed';
+    return `<span class="uptime-block uptime-block--${cls}" title="${esc(`${when} — ${label}`)}"></span>`;
+  }).join('');
+
+  const kind = ss?.last_down_kind ? ` · ${errLabel(ss.last_down_kind)}` : '';
+  const apiKind = ss?.api_down_kind ? ` · ${errLabel(ss.api_down_kind)}` : '';
+  const verdict = ss?.unreachable ? `<span style="color:var(--red)">Unreachable${esc(kind)}</span>`
+    : ss?.cookie_expired ? '<span style="color:var(--amber)">Session cookie expired</span>'
+    // Blocks stay mostly green here — the scrape fallback is succeeding — so
+    // say plainly that the stats are coming from the fallback, not the API.
+    : ss?.api_down ? `<span style="color:var(--amber)">API failing${esc(apiKind)} — using scrape fallback</span>`
+    : '<span style="color:var(--green)">Reachable</span>';
+
+  return `<div class="exp-section-title" title="Whether Yata could reach this tracker each day — API fetches and profile scrapes combined. Charted stats live in History and on the tracker's Detail page.">Connection (7d)</div>
+    <div class="uptime-strip">${blocks}</div>
+    <div class="uptime-legend">${verdict}</div>`;
 }
 
 function buildTableHeader(cols: ColDef[], sortCol: string, sortDir: string): string {
@@ -353,10 +377,6 @@ function buildExpanded(
     + `<button class="btn btn-ghost btn-sm" onclick="refreshSingle('${tracker.id}')">Retry</button></div>`
     : '';
 
-  const up  = trackerSeries(historyData, tracker.id, 'uploaded');
-  const dn  = trackerSeries(historyData, tracker.id, 'downloaded');
-  const sid = tracker.id.slice(0, 8);
-
   const joinDate = strOf(stats, 'join_date');
   const ss = scrapeStatus[tracker.id];
   const infoList: { l: string; v: string; warn?: boolean }[] = [
@@ -451,15 +471,11 @@ function buildExpanded(
     </div>`;
   })();
 
-  const sparkHTML = (up.length > 1 || dn.length > 1) ? `
-    <div style="margin-top:12px">
-      <div class="exp-section-title">Upload Trend (48h)</div>
-      <div id="spark-t-up-${sid}" style="height:44px;width:100%"></div>
-    </div>
-    <div style="margin-top:10px">
-      <div class="exp-section-title">Download Trend (48h)</div>
-      <div id="spark-t-dn-${sid}" style="height:44px;width:100%"></div>
-    </div>` : '';
+  // Connection strip (7d) — replaces the old 48h upload/download sparklines.
+  // Those duplicated History and the Tracker Detail page, which both chart the
+  // same numbers far better; reachability is the one thing neither shows at a
+  // glance, and it belongs next to "Last scrape" where a stale value is read.
+  const uptimeHTML = buildUptimeStrip(tracker.id);
 
   // Event banner — from merged fields (active_event / active_event_ends_at)
   const evText   = strOf(stats, 'active_event') || null;
@@ -502,8 +518,8 @@ function buildExpanded(
       ${scrapeSetupHint}
       ${rulesHtml}
       ${perksHtml}
-      ${sparkHTML}
     </div>
     ${targetsHtml ? `<div>${targetsHtml}</div>` : ''}
+    ${uptimeHTML ? `<div class="expanded-full">${uptimeHTML}</div>` : ''}
   </div>`;
 }

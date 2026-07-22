@@ -24,6 +24,14 @@ export function renderSparkline(containerId: string, values: number[], color: st
   const w = el.offsetWidth || 200;
   const h = 36;
 
+  // Drop holes and non-finite entries before anything measures the series.
+  // A sparse array reads as populated to .length and .every() (both skip
+  // holes) but collapses to undefined on indexed access, so without this a
+  // caller passing one would throw here and abort ITS whole render pass —
+  // which is exactly how one bad card once blanked every sparkline on the
+  // dashboard. Cheap insurance at the boundary.
+  values = values.filter(v => typeof v === 'number' && Number.isFinite(v));
+
   if (!values.length || values.every(v => v === 0)) {
     el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
       <line x1="0" y1="${h / 2}" x2="${w}" y2="${h / 2}"

@@ -322,9 +322,12 @@ async function loadScrapeStatus() {
     setScrapeStatus(data);
     updateScrapeAlert();
     // Per-card/-row "Profile scraping off" badges read scrapeStatus directly
-    // from state — re-render so they don't lag a full refresh cycle.
+    // from state — re-render so they don't lag a full refresh cycle. The
+    // Health card and the expanded rows' uptime strip read it too, so both
+    // views have to redraw here as well.
     renderGridFull();
     renderTable();
+    renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
   }
 }
 
@@ -880,7 +883,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sync inner width → mirror inner, so scrollbar range matches table
     const syncMirrorWidth = () => {
       mirrorInner.style.width = `${scrollEl.scrollWidth}px`;
-      scrollEl.style.setProperty('--table-scroll-w', `${scrollEl.clientWidth}px`);
+      // A hidden view measures 0. Writing that would pin
+      // --table-scroll-w at 0px and collapse every expanded row to a sliver
+      // (its inner is `width: var(--table-scroll-w, 100vw)`) until something
+      // else happened to re-measure — which is exactly what the app does at
+      // boot, when the table view has not been shown yet. Skip the write and
+      // let the 100vw fallback stand until there's a real width to report.
+      if (scrollEl.clientWidth > 0) {
+        scrollEl.style.setProperty('--table-scroll-w', `${scrollEl.clientWidth}px`);
+      }
     };
     syncMirrorWidth();
     const ro = new ResizeObserver(syncMirrorWidth);

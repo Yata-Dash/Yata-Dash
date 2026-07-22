@@ -331,7 +331,7 @@ func testScrape(d *Deps, t models.Tracker, persist bool) CheckResult {
 	}
 	result, serr := scrape.Profile(t, spec)
 	if persist {
-		recordScrapeAttempt(d, t.ID, serr)
+		recordScrapeAttempt(d, t, serr)
 	}
 	if serr != nil {
 		return CheckResult{Status: "fail", Detail: serr.Kind}

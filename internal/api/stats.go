@@ -85,6 +85,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		_ = d.Stats.SaveAPI(t.ID, data)
 		resp.OK = true
 		logFetchTransition(d, t, "")
+		recordConnection(d, t, "api", "")
 
 		// Auto-save username/join date the first time the API reveals them.
 		if u, ok := data["username"].(string); ok && u != "" && t.Username == "" {
@@ -94,6 +95,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.ErrorKind = ferr.Kind
 		resp.Error = ferr.Error()
 		logFetchTransition(d, t, ferr.Kind)
+		recordConnection(d, t, "api", ferr.Kind)
 		// API failed — try a policy-respecting scrape fallback for main stats.
 		tryScrapeFallback(d, t)
 	}
@@ -259,6 +261,44 @@ func logFetchTransition(d *Deps, t models.Tracker, errKind string) {
 	}
 }
 
+// recordConnection persists one contact attempt's outcome: the day's rollup
+// (uptime strip / Health card) plus, on a state CHANGE, a timeline event.
+//
+// De-duping goes through the stored event rather than lastFetchState, which
+// lives only in memory: after a restart that map is empty, so a tracker that
+// was already down would otherwise record a second "went down" event on the
+// first cycle. Comparing against the last persisted event makes restarts and
+// repeat failures both no-ops, the same trick recordGroupChange uses.
+func recordConnection(d *Deps, t models.Tracker, source, errKind string) {
+	// Pre-flight failures never touched the network, so they are a
+	// CONFIGURATION state, not a connection one. Recording them would pin
+	// every scrape-only tracker (no API key by design) permanently
+	// "unreachable" and hold the Health card red forever. Same exemption
+	// recordScrapeAttempt applies on its side.
+	if isPreflightKind(errKind) {
+		return
+	}
+	now := time.Now().UTC()
+	_ = d.DB.RecordConnection(t.ID, now, errKind == "", errKind, source)
+
+	detail := "up"
+	if errKind != "" {
+		detail = "down:" + errKind
+	}
+	last, err := d.DB.LatestEventDetail(t.ID, "connection")
+	if err != nil || last == detail {
+		return
+	}
+	// Never open the timeline with a recovery: with no prior event there was
+	// no outage to recover FROM, just a tracker that has always worked.
+	if last == "" && detail == "up" {
+		return
+	}
+	if err := d.DB.AddEvent(t.ID, now, "connection", detail); err == nil {
+		d.logDebugf("event: %s (%s) connection %s (%s)", t.Name, t.ID, detail, source)
+	}
+}
+
 // lastOptOutState remembers whether each tracker was opted-out on the previous
 // refresh so the loop logs the TRANSITION once (a warn when it starts being
 // skipped, an info if it later comes off the list) instead of every cycle.
@@ -319,11 +359,22 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
 	}
 	result, serr := scrape.Profile(t, spec)
-	recordScrapeAttempt(d, t.ID, serr)
+	recordScrapeAttempt(d, t, serr)
 	if serr != nil || len(result) == 0 {
 		return
 	}
 	_ = d.Stats.SaveScrape(t.ID, toAnyMap(result))
+}
+
+// isPreflightKind reports whether an error kind means "we never sent a
+// request" — missing credentials or no definition to fetch with. These say
+// nothing about whether the tracker is up.
+func isPreflightKind(kind string) bool {
+	switch kind {
+	case "no_key", "no_username", "no_cookie", "no_def":
+		return true
+	}
+	return false
 }
 
 // recordScrapeAttempt logs a scrape in the rate-limit ledger whenever an HTTP
@@ -331,8 +382,9 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 // page that errors must not get re-hit on every refresh cycle; only
 // pre-flight failures (no username/key — nothing was sent) are exempt.
 // The outcome (ok / error kind) feeds the scrape-health surface: failure
-// streaks and the expired-session-cookie warning.
-func recordScrapeAttempt(d *Deps, trackerID string, serr *scrape.Error) {
+// streaks and the expired-session-cookie warning, plus the connection-health
+// record shared with the API fetch path.
+func recordScrapeAttempt(d *Deps, t models.Tracker, serr *scrape.Error) {
 	if serr != nil && (serr.Kind == "no_username" || serr.Kind == "no_cookie" || serr.Kind == "no_key") {
 		return // pre-flight failure — no request reached the tracker
 	}
@@ -340,7 +392,8 @@ func recordScrapeAttempt(d *Deps, trackerID string, serr *scrape.Error) {
 	if serr != nil {
 		kind = serr.Kind
 	}
-	_ = d.DB.RecordScrape(trackerID, time.Now().UTC(), serr == nil, kind)
+	_ = d.DB.RecordScrape(t.ID, time.Now().UTC(), serr == nil, kind)
+	recordConnection(d, t, "scrape", kind)
 }
 
 func toAnyMap(in map[string]string) map[string]any {

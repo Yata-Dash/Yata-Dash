@@ -164,6 +164,18 @@ export interface ScrapeStatus {
   last_error_at?: number;            // unix sec
   consecutive_failures?: number;     // failures since the last success
   cookie_expired?: boolean;          // latest failures look like a dead session cookie
+  // Connection health — could Yata REACH the tracker (API or scrape), rather
+  // than whether the stats it returned look good. Oldest→newest, one entry
+  // per UTC day over the last week: 0..1 = fraction of that day's contacts
+  // that succeeded, -1 = nothing attempted (never render -1 as an outage).
+  uptime?: number[];
+  unreachable?: boolean;             // most recent day with contact failed outright
+  last_down_kind?: string;           // failure kind behind `unreachable`
+  // api_down: every API call on the last day it was tried failed, but the
+  // scrape fallback still got through. The tracker isn't dark — half of how
+  // Yata reaches it is broken and its stats are running on the fallback.
+  api_down?: boolean;
+  api_down_kind?: string;
 }
 
 export type ScrapeStatusMap = Record<string, ScrapeStatus>;
