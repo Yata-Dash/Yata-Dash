@@ -585,6 +585,15 @@
             </div>
             <div class="form-group" style="margin-bottom:10px">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-pw-disabled-track" onclick="toggleSettingsPathwayDisabled()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Include disabled trackers</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
                 <div class="toggle-track" id="s-trend-est-track" onclick="toggleSettingsTrendEstimates()"><div class="toggle-thumb"></div></div>
                 <div>
                   <div style="font-size:13px;font-weight:600;color:var(--text)">Stat trend estimates</div>
@@ -1181,6 +1190,7 @@ function toggleSettingsSync()     { _settingsToggle('s-profile-sync-track'); }
 function toggleSettingsPrivate()  { _settingsToggle('s-private-track'); }
 function toggleSettingsStatSources() { _settingsToggle('s-stat-src-track'); }
 function toggleSettingsPathwayEtas() { _settingsToggle('s-pw-eta-track'); }
+function toggleSettingsPathwayDisabled() { _settingsToggle('s-pw-disabled-track'); }
 function toggleSettingsTrendEstimates() { _settingsToggle('s-trend-est-track'); }
 function toggleSettingsTargetEtas() { _settingsToggle('s-target-eta-track'); }
 function toggleSettingsRateHovers() { _settingsToggle('s-rate-hover-track'); }

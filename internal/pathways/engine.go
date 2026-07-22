@@ -43,6 +43,11 @@ type UserTracker struct {
 	DefKey      string
 	Stats       Stats
 	Rates       Rates
+	// Disabled marks a tracker the user keeps as a membership record only
+	// (imported/def-less, stats never refresh). Its routes are still real, so
+	// it can start a path — but nothing about its progress is measurable, so
+	// evalStep forces HasUnknown and it can never read as "ready".
+	Disabled bool
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +139,10 @@ type Path struct {
 	Steps          []Step  `json:"steps"`
 	TotalETADays   float64 `json:"total_eta_days"`
 	HasUnknown     bool    `json:"has_unknown"` // some requirement couldn't be estimated → total is a floor
+	// StartDisabled: the path starts from a disabled tracker, so no stat is
+	// measurable. The UI badges it and shows no time estimate; these paths
+	// also rank below every enabled tracker's path.
+	StartDisabled bool `json:"start_disabled,omitempty"`
 }
 
 // Suggestion is an intermediate tracker that can reach the target, offered
@@ -213,6 +222,11 @@ func FindPaths(d *Data, users []UserTracker, target string,
 
 	sort.Slice(res.Paths, func(i, j int) bool {
 		a, b := res.Paths[i], res.Paths[j]
+		// Paths from disabled trackers rank below every measurable one, so
+		// they also lose first to the maxPaths truncation.
+		if a.StartDisabled != b.StartDisabled {
+			return !a.StartDisabled
+		}
 		if a.HasUnknown != b.HasUnknown {
 			return !a.HasUnknown
 		}
@@ -311,7 +325,10 @@ func DirectRoutesFrom(d *Data, u UserTracker, owned map[string]bool,
 }
 
 func buildPath(u UserTracker, steps []Step) Path {
-	p := Path{StartTrackerID: u.TrackerID, StartName: u.PathwayName, Steps: steps}
+	p := Path{
+		StartTrackerID: u.TrackerID, StartName: u.PathwayName,
+		Steps: steps, StartDisabled: u.Disabled,
+	}
 	for _, s := range steps {
 		p.TotalETADays += s.ETADays // known component always accumulates
 		if s.HasUnknown {
@@ -327,7 +344,25 @@ func buildPath(u UserTracker, steps []Step) Path {
 
 const plusNote = `"+" means this class or higher — official invites can carry extra requirements beyond the class itself`
 
+// evalStep evaluates one route for a user tracker. It is the single choke
+// point for FindPaths, DirectRoutesFrom and ReadyTargets, so the disabled
+// override below applies everywhere at once.
 func evalStep(r Route, u UserTracker, firstHop bool, d *Data,
+	groupsFor func(string) []defs.GroupDef,
+	inviteReqsFor func(string) *defs.InviteReqs) Step {
+	step := evalRouteReqs(r, u, firstHop, d, groupsFor, inviteReqsFor)
+	// A disabled tracker's stats never refresh, so nothing here is
+	// confirmable — not even a route that lists no requirements at all.
+	// Forcing the flag keeps it out of ReadyTargets (which tests
+	// ETADays == 0 && !HasUnknown) and off the digest, and makes the UI show
+	// "Timeline unknown" instead of a confident "Ready now".
+	if u.Disabled {
+		step.HasUnknown = true
+	}
+	return step
+}
+
+func evalRouteReqs(r Route, u UserTracker, firstHop bool, d *Data,
 	groupsFor func(string) []defs.GroupDef,
 	inviteReqsFor func(string) *defs.InviteReqs) Step {
 	step := Step{

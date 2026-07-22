@@ -252,6 +252,7 @@ export interface AppSettings {
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
   pathway_not_interested?: string[];           // pathway targets pushed to the bottom, excluded from reqs-met
+  pathways_include_disabled?: boolean;         // disabled trackers can start paths (stats always unknown)
   qui_url: string;
   qui_api_key: string;
   qui_enabled_instances: number[];
@@ -590,6 +591,9 @@ export interface PathwayPath {
   steps: PathwayStep[];
   total_eta_days: number;   // sum of step ETAs (a floor when has_unknown)
   has_unknown: boolean;     // render total with a "+" suffix
+  /** Path starts from a DISABLED tracker — no stats are measurable, so it is
+   *  badged and shows no time estimate. Ranked below all enabled paths. */
+  start_disabled?: boolean;
 }
 
 /** GET /api/pathways/from — active direct routes leaving one tracker,

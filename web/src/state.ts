@@ -47,7 +47,7 @@ export let appSettings: AppSettings = {
   show_rate_hovers: true, show_unread_mail: true, show_unread_notifications: true,
   show_tracker_rules: true, highlight_hnr: true,
   update_check_auto: false, trust_proxy_headers: false, duration_format: 'ym',
-  pathway_favorites: [], pathway_not_interested: [],
+  pathway_favorites: [], pathway_not_interested: [], pathways_include_disabled: false,
   profile_auto_sync: true, api_only_mode: false,
   scrape_interval_minutes: 120, max_scrapes_per_day: 0, auto_interval: false,
   refresh_interval_minutes: 30, qui_refresh_seconds: 10,

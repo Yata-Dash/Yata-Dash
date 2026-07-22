@@ -181,6 +181,12 @@ type Settings struct {
 	// and ride along in config export/import.
 	PathwayFavorites     []string `json:"pathway_favorites,omitempty"`
 	PathwayNotInterested []string `json:"pathway_not_interested,omitempty"`
+	// PathwaysIncludeDisabled lets DISABLED trackers act as pathway starting
+	// points — imported/def-less trackers a user keeps purely as a "I'm a
+	// member here" record. Their stats are ALWAYS treated as unknown (frozen
+	// numbers must never claim a requirement is met), so those paths carry no
+	// time estimate. Opt-in: default false.
+	PathwaysIncludeDisabled bool `json:"pathways_include_disabled"`
 
 	// TrustProxyHeaders makes Yata honor X-Forwarded-For (login rate
 	// limiting — otherwise every proxied client shares the proxy's lockout

@@ -311,6 +311,10 @@ function pathHasUnknownAge(p: PathwayPath): boolean {
 }
 
 function pathEtaLabel(p: PathwayPath): string {
+  // A disabled tracker has no stats at all — not even a "0D+ only stats left"
+  // reading is honest, and a no-requirement route would otherwise say
+  // "Ready now" off the back of nothing.
+  if (p.start_disabled) return 'Timeline unknown';
   if (p.total_eta_days === 0 && !p.has_unknown) return 'Ready now';
   if (p.total_eta_days === 0 && p.has_unknown) {
     // Can't compute the age floor (join date unknown) vs. age met, only
@@ -333,15 +337,20 @@ function etaExplainHtml(): string {
 }
 
 function renderPathCard(p: PathwayPath, idx: number): string {
-  const ready = p.total_eta_days === 0 && !p.has_unknown;
+  const disabled = !!p.start_disabled;
+  const ready = !disabled && p.total_eta_days === 0 && !p.has_unknown;
   const start = trackers.find(t => t.id === p.start_tracker_id);
   const favUrl = start?.url ? getFaviconUrl(start.url) : '';
   const startLabel = start?.name || p.start_name;
 
   const chips: string[] = [`
-    <span class="pw-chip pw-chip-start" title="Your tracker">
+    <span class="pw-chip pw-chip-start${disabled ? ' pw-chip-start--disabled' : ''}"
+          title="${disabled
+            ? 'This tracker is disabled — its routes are still listed, but no stats are available so progress and timing can\'t be estimated'
+            : 'Your tracker'}">
       ${favUrl ? `<img class="pw-chip-favicon" src="${esc(favUrl)}" alt="" onerror="this.style.display='none'">` : ''}
       ${esc(startLabel)}
+      ${disabled ? '<span class="pw-chip-disabled-tag">Disabled</span>' : ''}
     </span>`];
 
   p.steps.forEach((s, si) => {

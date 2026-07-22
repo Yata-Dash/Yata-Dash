@@ -318,7 +318,12 @@ const speedappMe = `{
   "need_seed": 1,
   "average_seed_time": 8640,
   "free_leech_tokens": 3,
-  "double_upload_tokens": 1
+  "double_upload_tokens": 1,
+  "seeding_count": 119,
+  "seeding_size": 53687091200,
+  "credits": 15.76,
+  "unread_notification_count": 0,
+  "unread_private_message_count": 3
 }`
 
 // speedappRegistry writes a custom type + a SpeedApp tracker def exercising
@@ -343,9 +348,11 @@ func speedappRegistry(t *testing.T, baseURL string) *defs.Registry {
 				"username":"username","id":"user_id","created_at":"join_date",
 				"snatch_count":"snatched","hit_and_run_count":"hit_and_runs",
 				"average_seed_time":"avg_seed_time","invites":"invites",
+				"seeding_count":"seeding","credits":"bonus_points",
 				"free_leech_tokens":"fl_tokens","need_seed":"need_seed"
 			},
-			"byte_fields":{"uploaded":"uploaded","downloaded":"downloaded"},
+			"byte_fields":{"uploaded":"uploaded","downloaded":"downloaded","seeding_size":"seed_size"},
+			"bool_fields":{"unread_private_message_count":"unread_mail","unread_notification_count":"unread_notifications"},
 			"buffer_from_bytes":true,
 			"ratio_from_bytes":true
 		}
@@ -394,6 +401,27 @@ func TestFetchCustomRatioFromBytes(t *testing.T) {
 		"need_seed":     1,
 		"avg_seed_time": 8640,
 		"fl_tokens":     3.0,
+	}
+	for k, w := range want {
+		if got, ok := data[k]; !ok {
+			t.Errorf("missing field %q", k)
+		} else if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+// TestFetchCustomSpeedappExtendedFields: the fields SpeedApp's /api/me added —
+// seeding size (bytes → size), seeding count, credits (→ bonus_points), and the
+// two unread counts (→ mail/notification flags) — map to their canonical names.
+func TestFetchCustomSpeedappExtendedFields(t *testing.T) {
+	data := fetchSpeedapp(t, 53687091200, 10737418240)
+	want := map[string]any{
+		"seed_size":            "50.00 GiB", // seeding_size bytes → size
+		"seeding":              119,         // seeding_count → seeding
+		"bonus_points":         15.76,       // credits → bonus_points (stays float)
+		"unread_mail":          "true",      // count 3 → truthy flag
+		"unread_notifications": "false",     // count 0 → falsy flag
 	}
 	for k, w := range want {
 		if got, ok := data[k]; !ok {

@@ -165,8 +165,10 @@ func matchDef(reg *defs.Registry, p *pathways.Data, name string) (defs.TrackerDe
 	return defs.TrackerDef{}, false
 }
 
-// mapUserTrackers converts the user's enabled trackers into pathway inputs:
+// mapUserTrackers converts the user's trackers into pathway inputs:
 // pathway-name mapping + current stats + growth rates from 7-day history.
+// Disabled trackers are included only when Settings.PathwaysIncludeDisabled
+// is on, and then always as stats-unknown (see below).
 func mapUserTrackers(d *Deps) []pathways.UserTracker {
 	var out []pathways.UserTracker
 	nameIndex := map[string]string{} // lowercase def name/key/abbr → pathway name
@@ -176,23 +178,30 @@ func mapUserTrackers(d *Deps) []pathways.UserTracker {
 			nameIndex[strings.ToLower(a)] = n
 		}
 	}
+	includeDisabled := d.Cfg.Settings().PathwaysIncludeDisabled
 
 	for _, t := range d.Cfg.Trackers() {
-		if !t.Enabled {
+		if !t.Enabled && !includeDisabled {
 			continue
 		}
-		// Resolve this tracker's pathway name via its def.
-		var pname string
-		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-			for _, candidate := range []string{td.Name, td.Key, td.Abbr} {
-				if n, hit := nameIndex[strings.ToLower(candidate)]; hit && candidate != "" {
-					pname = n
-					break
-				}
-			}
-		}
+		pname := pathwayNameFor(d, t, nameIndex)
 		if pname == "" {
 			continue // tracker not in the pathway dataset
+		}
+
+		// A disabled tracker isn't being refreshed, so any stored stats are
+		// frozen at whatever they were when it was switched off. Evaluating
+		// against those could claim a requirement is met long after it stopped
+		// being true, so it contributes NO stats at all — the routes are real,
+		// the progress simply isn't measurable.
+		if !t.Enabled {
+			out = append(out, pathways.UserTracker{
+				TrackerID:   t.ID,
+				PathwayName: pname,
+				Stats:       statsFromMerged(nil),
+				Disabled:    true,
+			})
+			continue
 		}
 
 		merged, err := d.Stats.Merged(t.ID)
@@ -214,6 +223,42 @@ func mapUserTrackers(d *Deps) []pathways.UserTracker {
 		out = append(out, u)
 	}
 	return out
+}
+
+// pathwayNameFor resolves a configured tracker to its name in the pathway
+// dataset ("" = not in the dataset). The def is preferred, but trackers
+// imported from Prowlarr/Jackett often have no def at all — those are still
+// real memberships with real routes, so fall back to the tracker's own name,
+// its abbreviation, and finally its URL's host label ("aither.cc" → aither).
+func pathwayNameFor(d *Deps, t models.Tracker, nameIndex map[string]string) string {
+	lookup := func(candidate string) string {
+		if candidate == "" {
+			return ""
+		}
+		return nameIndex[strings.ToLower(strings.TrimSpace(candidate))]
+	}
+	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
+		for _, candidate := range []string{td.Name, td.Key, td.Abbr} {
+			if n := lookup(candidate); n != "" {
+				return n
+			}
+		}
+	}
+	// Config trackers carry no abbreviation of their own (that comes from the
+	// def, which by definition is missing here) — the display name is it.
+	if n := lookup(t.Name); n != "" {
+		return n
+	}
+	// Host label: strip the public suffix ("lst.gg" → "lst"). Only the first
+	// label is used, so "tracker.example.org" tries "tracker".
+	if host := normalizeHost(hostOfURL(t.URL)); host != "" {
+		if label, _, found := strings.Cut(host, "."); found || label != "" {
+			if n := lookup(label); n != "" {
+				return n
+			}
+		}
+	}
+	return ""
 }
 
 // statsFromMerged extracts the numbers the engine needs (-1 = unknown).

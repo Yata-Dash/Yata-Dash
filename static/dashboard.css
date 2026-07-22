@@ -1228,6 +1228,18 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-chip-chev{flex-shrink:0;color:var(--text3);transition:transform .15s}
 .pw-chip-target{border-color:var(--accent-border-md);background:var(--accent-bg-sm)}
 .pw-chip-est{font-size:11px;color:var(--amber);font-weight:700;cursor:help}
+/* Start chip for a DISABLED tracker: muted + dashed so it reads as "listed,
+   but nothing here is measured". Pairs with the "Timeline unknown" ETA. */
+.pw-chip-start--disabled{
+  border-style:dashed;color:var(--text3);
+  background:color-mix(in srgb,var(--text3) 8%,var(--surface2));
+}
+.pw-chip-start--disabled .pw-chip-favicon{opacity:.55}
+.pw-chip-disabled-tag{
+  font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text3);border:1px solid var(--border2);border-radius:4px;
+  padding:1px 4px;margin-left:2px;
+}
 
 /* Expanded step details */
 .pw-step-detail{

@@ -1624,6 +1624,8 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   if (statSrcTrack) statSrcTrack.className = `toggle-track ${settings.show_stat_sources ? 'on' : ''}`;
   const pwEtaTrack = document.getElementById('s-pw-eta-track');
   if (pwEtaTrack) pwEtaTrack.className = `toggle-track ${settings.show_pathway_etas !== false ? 'on' : ''}`;
+  const pwDisabledTrack = document.getElementById('s-pw-disabled-track');
+  if (pwDisabledTrack) pwDisabledTrack.className = `toggle-track ${settings.pathways_include_disabled ? 'on' : ''}`;
   const trendTrack = document.getElementById('s-trend-est-track');
   if (trendTrack) trendTrack.className = `toggle-track ${settings.show_trend_estimates !== false ? 'on' : ''}`;
   const targetEtaTrack = document.getElementById('s-target-eta-track');
@@ -1914,6 +1916,7 @@ export async function saveSettings(deps: SettingsDeps) {
     private_mode:          isOn('s-private-track', false),
     show_stat_sources:     isOn('s-stat-src-track', false),
     show_pathway_etas:     isOn('s-pw-eta-track', true),
+    pathways_include_disabled: isOn('s-pw-disabled-track', false),
     show_trend_estimates:  isOn('s-trend-est-track', true),
     show_target_etas:      isOn('s-target-eta-track', true),
     show_rate_hovers:      isOn('s-rate-hover-track', true),
