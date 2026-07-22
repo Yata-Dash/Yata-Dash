@@ -130,7 +130,12 @@
   },
 
   // [OPTIONAL — REQUIRED for type "custom"] Describes a non-standard API
-  // entirely as data. Omit for unit3d/gazelle/gazelle_json/gazelle_games/test trackers.
+  // entirely as data. Omit for unit3d/gazelle/gazelle_json/gazelle_games/test
+  // trackers. A "gazelle_json_cookie" tracker may ALSO set a minimal api
+  // block containing only "cookie_name" (no "path") to override the type's
+  // default cookie name — e.g. GreatPosterWall uses PHPSESSID where Orpheus/
+  // AlphaRatio use the WhatCD/Gazelle-framework default "session"; omitting
+  // "path" here keeps the fetcher on gazelle_json_cookie instead of custom.
   "api": {
     // Endpoint path appended to the base URL. Use {username} when an API
     // needs the configured tracker username in its query; Yata URL-encodes

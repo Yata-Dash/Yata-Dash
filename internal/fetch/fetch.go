@@ -252,10 +252,12 @@ type gazelleJSONIndex struct {
 type gazelleJSONUser struct {
 	Username string `json:"username"`
 	Stats    struct {
-		JoinedDate    string  `json:"joinedDate"`
-		Uploaded      int64   `json:"uploaded"`
-		Downloaded    int64   `json:"downloaded"`
-		Ratio         float64 `json:"ratio"`
+		JoinedDate string `json:"joinedDate"`
+		Uploaded   int64  `json:"uploaded"`
+		Downloaded int64  `json:"downloaded"`
+		// Ratio is a number on Redacted/Orpheus/AlphaRatio but a JSON string
+		// on GreatPosterWall ("38.17869") — accept either.
+		Ratio         any     `json:"ratio"`
 		Buffer        int64   `json:"buffer"`
 		RequiredRatio float64 `json:"requiredRatio"`
 	} `json:"stats"`
@@ -291,7 +293,11 @@ func (c *Client) getGazelleJSON(url string, headers map[string]string, identify 
 	}
 	var env gazelleJSONEnvelope
 	if err := json.Unmarshal(body, &env); err != nil {
-		return errf("parse_error", err)
+		snippet := string(body)
+		if len(snippet) > 300 {
+			snippet = snippet[:300]
+		}
+		return errf("parse_error", fmt.Errorf("%w — body: %q", err, snippet))
 	}
 	if env.Status != "success" {
 		message := env.Error
@@ -361,7 +367,7 @@ func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any
 		"uploaded":         parse.BytesToSize(user.Stats.Uploaded),
 		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
 		"buffer":           parse.BytesToSize(buffer),
-		"ratio":            user.Stats.Ratio,
+		"ratio":            parse.AnyFloat(user.Stats.Ratio),
 		"required_ratio":   user.Stats.RequiredRatio,
 		"join_date":        joinDate,
 		"warnings":         0,

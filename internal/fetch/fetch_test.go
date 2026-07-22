@@ -640,6 +640,45 @@ func TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey(t *testing.T) {
 	}
 }
 
+// TestFetchGazelleJSONCookieToleratesStringRatio verifies GreatPosterWall's
+// shape: its user.stats.ratio comes back as a JSON string ("38.17869") where
+// every other observed gazelle_json fork sends a number, which would
+// otherwise fail json.Unmarshal into a float64 field.
+func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Power User"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":"3.14159","requiredRatio":0.6},
+				"personal":{"class":"Power User","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":26,"groups":26,"seeding":50,"leeching":0,"snatched":22,"invited":0}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":0,"seeding":"47","snatched":"22"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite string ratio", ferr)
+	}
+	if data["ratio"] != 3.14159 {
+		t.Errorf("ratio = %#v, want 3.14159", data["ratio"])
+	}
+}
+
 func TestFetchGazelleJSONCookieRequiresSessionCookie(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("no request should be made without a session cookie")

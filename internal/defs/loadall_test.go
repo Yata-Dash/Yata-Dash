@@ -239,6 +239,51 @@ func TestShippedDefsLoadClean(t *testing.T) {
 		t.Errorf("unexpected AlphaRatio Spartan (%s) requirements: %+v", ar.Groups[12].Name, spartan)
 	}
 
+	gpw, ok := r.TrackerByURL("https://greatposterwall.com")
+	if !ok {
+		t.Fatal("greatposterwall.com def not found")
+	}
+	if kind := r.APIKind(gpw.URL, gpw.Type); kind != "gazelle_json_cookie" {
+		t.Fatalf("GreatPosterWall APIKind = %q, want gazelle_json_cookie", kind)
+	}
+	// GPW uses the type's default cookie name ("session") — it also sets a
+	// PHPSESSID cookie, but that's the generic PHP session id (only valid
+	// as long as server-side session data hasn't expired); "session" is
+	// Gazelle's own durable auth cookie, same as Orpheus/AlphaRatio.
+	if name := r.APICookieName(gpw.URL, gpw.Type); name != "session" {
+		t.Fatalf("GreatPosterWall cookie name = %q, want session (type default)", name)
+	}
+	if !gpw.Scrape.DisableScraping || gpw.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("GreatPosterWall must be API-only and unapproved: scrape=%+v approval=%q", gpw.Scrape, gpw.ApprovalStatus())
+	}
+	if gpw.Rules == nil || gpw.Rules.Note == "" {
+		t.Fatalf("GreatPosterWall rules = %+v, want a dynamic-ratio note", gpw.Rules)
+	}
+	if gpw.InviteRequirements == nil || gpw.InviteRequirements.MinClass != "Power User" {
+		t.Fatalf("GreatPosterWall invite requirements = %+v", gpw.InviteRequirements)
+	}
+	wantGPWPrimary := []string{
+		"User", "Member", "Power User", "Elite", "Torrent Master",
+		"Power Torrent Master", "Elite Torrent Master", "Guru",
+	}
+	if len(gpw.Groups) != 25 {
+		t.Fatalf("GreatPosterWall groups = %d, want 25", len(gpw.Groups))
+	}
+	for i, name := range wantGPWPrimary {
+		group := gpw.Groups[i]
+		if group.Name != name {
+			t.Errorf("GreatPosterWall group %d = %q, want %q", i, group.Name, name)
+		}
+	}
+	gpwMember := gpw.Groups[1].Requirements
+	if gpwMember.MinDownloaded != "80 GiB" || gpwMember.MinRatio != 0.8 || gpwMember.MinAge != "1W" {
+		t.Errorf("unexpected GreatPosterWall Member requirements: %+v", gpwMember)
+	}
+	gpwPTM := gpw.Groups[5].Requirements
+	if len(gpwPTM.MinCounts) != 1 || gpwPTM.MinCounts[0].Field != "groups_uploaded" || gpwPTM.MinCounts[0].Count != 250 {
+		t.Errorf("unexpected GreatPosterWall Power Torrent Master requirements: %+v", gpwPTM)
+	}
+
 	ggn, ok := r.TrackerByURL("https://gazellegames.net")
 	if !ok {
 		t.Fatal("gazellegames.net def not found")

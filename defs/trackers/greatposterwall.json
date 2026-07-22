@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "key": "greatposterwall",
+  "name": "GreatPosterWall",
+  "abbr": "GPW",
+  "url": "https://greatposterwall.com",
+  "type": "gazelle_json_cookie",
+  "last_updated": "2026-07-22",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "note": "Required ratio is calculated dynamically per account from data downloaded and seeding activity (0.00–0.60, rising with more downloaded and falling with more concurrent seeding; see the live required ratio stat). Falling below required ratio starts a 2-week ratio watch; failing to clear it revokes leeching privileges (account stays enabled, restored the day after ratio recovers). The first 5 GB downloaded is exempt."
+  },
+  "invite_requirements": {
+    "min_class": "Power User"
+  },
+  "groups": [
+    {
+      "name": "User",
+      "style": {},
+      "requirements": {
+        "description": "Standard class for all new members."
+      },
+      "perks": [
+        { "icon": "", "label": "RSS Notification" },
+        { "icon": "", "label": "Read \"Chatting Room\" forum" }
+      ]
+    },
+    {
+      "name": "Member",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "80 GiB",
+        "min_ratio": 0.8,
+        "min_age": "1W",
+        "note": "Demoted to User when ratio drops below 0.65."
+      },
+      "perks": [
+        { "icon": "", "label": "Make requests" },
+        { "icon": "", "label": "View part of Top 10" },
+        { "icon": "", "label": "Full access to \"Chatting Room\" forum" }
+      ]
+    },
+    {
+      "name": "Power User",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "200 GiB",
+        "min_ratio": 1.2,
+        "min_age": "2W",
+        "min_uploads": 1,
+        "note": "Demoted to Member when ratio drops below 0.95, or uploaded torrent count drops below 1."
+      },
+      "perks": [
+        { "icon": "", "label": "Invite users (1 on promotion, 1-week cooldown)" },
+        { "icon": "", "label": "Wear 1 badge" },
+        { "icon": "", "label": "Create 1 personal collage" },
+        { "icon": "", "label": "Access Request/Send Invitations and Power User forums" },
+        { "icon": "", "label": "Full Top 10 access" },
+        { "icon": "", "label": "Immune to inactivity pruning" }
+      ]
+    },
+    {
+      "name": "Elite",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "500 GiB",
+        "min_ratio": 1.2,
+        "min_age": "4W",
+        "min_uploads": 25,
+        "note": "Demoted to Member when ratio drops below 0.95. Demoted to Power User when uploaded torrent count drops below 25."
+      },
+      "perks": [
+        { "icon": "", "label": "1 permanent invite on promotion" },
+        { "icon": "", "label": "Wear 2 badges" },
+        { "icon": "", "label": "Create 2 personal collages" },
+        { "icon": "", "label": "Access Elite forum" },
+        { "icon": "", "label": "Edit all torrents" }
+      ]
+    },
+    {
+      "name": "Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "1 TiB",
+        "min_ratio": 1.2,
+        "min_age": "8W",
+        "min_uploads": 100,
+        "note": "Demoted to Member when ratio drops below 0.95. Demoted to Elite when uploaded torrent count drops below 100."
+      },
+      "perks": [
+        { "icon": "", "label": "2 permanent invites on promotion" },
+        { "icon": "", "label": "1 temporary invite/month (2-week expiry, 72h cooldown)" },
+        { "icon": "", "label": "Wear 3 badges" },
+        { "icon": "", "label": "Create 3 personal collages" },
+        { "icon": "", "label": "Check own uploaded torrents" },
+        { "icon": "", "label": "Access Torrent Master forum" },
+        { "icon": "", "label": "Purchase Custom Title (No BBCode) at Bonus Points Shop" }
+      ]
+    },
+    {
+      "name": "Power Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "2 TiB",
+        "min_ratio": 1.2,
+        "min_age": "12W",
+        "min_counts": [
+          { "field": "groups_uploaded", "count": 250, "label": "Unique Groups" }
+        ],
+        "note": "Demoted to Member when ratio drops below 0.95. Demoted to Torrent Master when uploaded torrent count drops below 250."
+      },
+      "perks": [
+        { "icon": "", "label": "2 permanent invites on promotion" },
+        { "icon": "", "label": "2 temporary invites/month" },
+        { "icon": "", "label": "Wear 4 badges" },
+        { "icon": "", "label": "Create 4 personal collages" },
+        { "icon": "", "label": "Check all torrents" }
+      ]
+    },
+    {
+      "name": "Elite Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "5 TiB",
+        "min_ratio": 1.2,
+        "min_age": "16W",
+        "min_uploads": 500,
+        "note": "Demoted to Member when ratio drops below 0.95. Demoted to Power Torrent Master when uploaded torrent count drops below 500."
+      },
+      "perks": [
+        { "icon": "", "label": "3 permanent invites on promotion" },
+        { "icon": "", "label": "3 temporary invites/month, no cooldown" },
+        { "icon": "", "label": "Wear 5 badges" },
+        { "icon": "", "label": "Create 5 personal collages" },
+        { "icon": "", "label": "Access Elite Torrent Master forum" },
+        { "icon": "", "label": "Purchase Custom Title (BBCode allowed) at Bonus Points Shop" }
+      ]
+    },
+    {
+      "name": "Guru",
+      "style": {},
+      "requirements": {
+        "min_downloaded": "10 TiB",
+        "min_ratio": 1.2,
+        "min_age": "20W",
+        "min_uploads": 1000,
+        "note": "Demoted to Member when ratio drops below 0.95. Demoted to Elite Torrent Master when uploaded torrent count drops below 1000."
+      },
+      "perks": [
+        { "icon": "", "label": "Unlimited invites" },
+        { "icon": "", "label": "Wear 6 badges" },
+        { "icon": "", "label": "Create 6 personal collages" },
+        { "icon": "", "label": "Access Guru forum" },
+        { "icon": "", "label": "Access logs" }
+      ]
+    },
+    {
+      "name": "Interviewer",
+      "style": {},
+      "requirements": {
+        "description": "Selected by staff to conduct interviews and invite new members."
+      }
+    },
+    {
+      "name": "VIP",
+      "style": {},
+      "requirements": {
+        "description": "Member with extraordinary contributions to the site. Chosen by staff."
+      }
+    },
+    {
+      "name": "Legend",
+      "style": {},
+      "requirements": {
+        "description": "Member with extraordinary contributions to the site. Chosen by staff."
+      }
+    },
+    {
+      "name": "Torrent Inspector",
+      "style": {},
+      "requirements": {
+        "description": "Awarded monthly for checking ≥100 torrents that month; lost if fewer than 200 are checked over the latest 2 months. Earns bonus BP per torrent checked."
+      }
+    },
+    {
+      "name": "Uploader",
+      "style": {},
+      "requirements": {
+        "description": "Awarded monthly for uploading ≥30 torrents that month; lost if fewer than 60 are uploaded over the latest 2 months. Earns bonus BP per torrent uploaded."
+      }
+    },
+    {
+      "name": "Seeder",
+      "style": {},
+      "requirements": {
+        "description": "Awarded monthly for seeding ≥4 TiB that month; lost if the following month falls short. Earns bonus BP per GiB seeded."
+      }
+    },
+    {
+      "name": "Designer",
+      "style": {},
+      "requirements": {
+        "description": "Special team assigned by staff. Open to applications."
+      }
+    },
+    {
+      "name": "IRC Team",
+      "style": {},
+      "requirements": {
+        "description": "Special team assigned by staff."
+      }
+    },
+    {
+      "name": "Security",
+      "style": {},
+      "requirements": {
+        "description": "Special team assigned by staff."
+      }
+    },
+    {
+      "name": "First-Line Support",
+      "style": {},
+      "requirements": {
+        "description": "Helps with day-to-day site tasks and supports users. Selected by staff; open to applications."
+      }
+    },
+    {
+      "name": "Forum Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Supervises and moderates forums and torrent comments. Selected by staff."
+      }
+    },
+    {
+      "name": "Torrent Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Supervises and moderates torrents. Promoted from Torrent Inspectors."
+      }
+    },
+    {
+      "name": "Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Moderates torrents and general site content; supports and instructs secondary user classes. Selected by staff."
+      }
+    },
+    {
+      "name": "Developer",
+      "style": {},
+      "requirements": {
+        "description": "Designs and writes the site code. Selected by staff."
+      }
+    },
+    {
+      "name": "Administrator",
+      "style": {},
+      "requirements": {
+        "description": "General site control and oversight of other staff. Selected by SysOps."
+      }
+    },
+    {
+      "name": "SysOp",
+      "style": {},
+      "requirements": {
+        "description": "In charge of everything."
+      }
+    },
+    {
+      "name": "Donor",
+      "style": {},
+      "requirements": {
+        "description": "Has donated money to help keep the site running."
+      }
+    }
+  ]
+}

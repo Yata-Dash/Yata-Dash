@@ -205,6 +205,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | BroadcastTheNet | Custom | No | API Only | JSON-RPC userInfo; 150 API calls per hour |
 | Darkpeers | Unit3D | Yes | 180min |  |
 | GazelleGames | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| GreatPosterWall | Gazelle | No | API Only | No API token support; authenticates with a user-supplied session cookie (PHPSESSID) |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
 | InfinityHD | Unit3D | Yes | 60min |  |
 | LST | Unit3D | Yes | 180min |  |
