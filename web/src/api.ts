@@ -22,8 +22,13 @@ export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn; }
 async function call<T>(path: string, opts: RequestInit = {}): Promise<ApiResult<T>> {
   try {
     const res = await fetch(path, { headers: JSON_HEADERS, ...opts });
-    if (res.status === 401 && !path.startsWith('/api/auth/')) onUnauthorized?.();
     const data = await res.json().catch(() => ({}) as T);
+    // Only Yata's own auth middleware (body {"error":"unauthorized"}) means
+    // the session expired — a 401 relayed from a tracker or integration
+    // (e.g. an expired TRACKER cookie during a profile scrape) must not
+    // re-show the login gate.
+    if (res.status === 401 && !path.startsWith('/api/auth/') &&
+        (data as { error?: string })?.error === 'unauthorized') onUnauthorized?.();
     return { ok: res.ok, status: res.status, data: data as T };
   } catch {
     // Network failure (server unreachable) — callers must keep cached data.

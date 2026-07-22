@@ -94,7 +94,7 @@ export interface TrackerPayload {
 
 // ── Unified stats ─────────────────────────────────────────────────────────
 
-export type StatSource = 'api' | 'scrape' | 'manual';
+export type StatSource = 'api' | 'scrape' | 'manual' | 'qui';
 
 /** One merged stat value with provenance. */
 export interface StatField {
@@ -165,6 +165,11 @@ export interface ScrapeStatus {
   last_scrape_at?: number;           // unix sec, 0/absent = never
   tracker_min_interval?: number;     // operator request, for UI explanation
   supports_html_scrape: boolean;
+  // Scrape health — absent while the latest attempt succeeded.
+  last_error_kind?: string;          // latest attempt's scrape error kind
+  last_error_at?: number;            // unix sec
+  consecutive_failures?: number;     // failures since the last success
+  cookie_expired?: boolean;          // latest failures look like a dead session cookie
 }
 
 export type ScrapeStatusMap = Record<string, ScrapeStatus>;
@@ -253,10 +258,14 @@ export interface AppSettings {
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
   pathway_not_interested?: string[];           // pathway targets pushed to the bottom, excluded from reqs-met
+  pathways_include_disabled?: boolean;         // disabled trackers can start paths (stats always unknown)
   qui_url: string;
   qui_api_key: string;
   qui_enabled_instances: number[];
   qui_bars_visible: boolean | null; // null = true
+  /** Where qui's per-tracker seeding totals slot into the seed_size merge.
+   *  Never beats the tracker's own API in any mode. */
+  qui_seedsize_mode: 'off' | 'missing' | 'prefer';
   backup_enabled: boolean;          // automatic config backups (opt-in)
   backup_frequency: 'daily' | 'weekly' | 'monthly' | string;
   backup_keep: number;              // retain last N backups (1–99)
@@ -541,8 +550,20 @@ export interface PathwayReqProgress {
   need_text?: string;
   /** eta_days is a LOWER BOUND (known components only) — render with "+". */
   has_unknown?: boolean;
+  /** Set when the requirement can't be measured at all, and why — rendered
+   *  like an untrackable target (dashed track, plain-language reason) rather
+   *  than a bare "?". Never means met.
+   *    'stat'  — a real stat this tracker doesn't report (a zero is often
+   *              simply omitted, so it can start tracking on its own later)
+   *    'text'  — community free text that will never be a stat ("2 more
+   *              proofs") — the user has to check it on the tracker
+   *    'class' — a class Yata has no group data for. */
+  unavail?: 'stat' | 'text' | 'class';
   /** Per-class breakdown for "reach class X (or Y)" requirements. */
   classes?: PathwayClassEval[];
+  /** Alternatives of an "A or B and C" requirement (kind 'any_of') — ONE
+   *  set must be met in full. met/eta_days describe the whole requirement. */
+  any_of?: PathwayReqProgress[][];
 }
 
 /** Full requirement breakdown for one group/class a route requires. */
@@ -579,6 +600,9 @@ export interface PathwayPath {
   steps: PathwayStep[];
   total_eta_days: number;   // sum of step ETAs (a floor when has_unknown)
   has_unknown: boolean;     // render total with a "+" suffix
+  /** Path starts from a DISABLED tracker — no stats are measurable, so it is
+   *  badged and shows no time estimate. Ranked below all enabled paths. */
+  start_disabled?: boolean;
 }
 
 /** GET /api/pathways/from — active direct routes leaving one tracker,

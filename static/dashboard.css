@@ -831,6 +831,7 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .stat-src--api{background:var(--blue)}
 .stat-src--scrape{background:var(--amber)}
 .stat-src--manual{background:var(--text3)}
+.stat-src--qui{background:var(--pink)}
 
 /* ── Offline tracker indicator (stale data still rendered) ─────────────── */
 .sdot--offline{opacity:.45;filter:saturate(.55);cursor:help}
@@ -1227,6 +1228,18 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-chip-chev{flex-shrink:0;color:var(--text3);transition:transform .15s}
 .pw-chip-target{border-color:var(--accent-border-md);background:var(--accent-bg-sm)}
 .pw-chip-est{font-size:11px;color:var(--amber);font-weight:700;cursor:help}
+/* Start chip for a DISABLED tracker: muted + dashed so it reads as "listed,
+   but nothing here is measured". Pairs with the "Timeline unknown" ETA. */
+.pw-chip-start--disabled{
+  border-style:dashed;color:var(--text3);
+  background:color-mix(in srgb,var(--text3) 8%,var(--surface2));
+}
+.pw-chip-start--disabled .pw-chip-favicon{opacity:.55}
+.pw-chip-disabled-tag{
+  font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text3);border:1px solid var(--border2);border-radius:4px;
+  padding:1px 4px;margin-left:2px;
+}
 
 /* Expanded step details */
 .pw-step-detail{
@@ -1310,6 +1323,25 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-req-icon--eta { color: var(--amber); }
 .pw-req-icon--unknown { color: var(--text3); }
 .pw-class-section .anyof-wrap { margin-top: 6px; }
+
+/* A route-level "A or B and C" requirement: header line + the same "One of"
+   block the class breakdowns use, so alternatives read the same wherever
+   they appear. */
+.pw-req-anyof { display: block; }
+.pw-req-anyof .anyof-wrap { margin: 6px 0 4px 18px; }
+
+/* Pathways: requirements Yata can't measure — the tracker doesn't report the
+   stat, the text was never a stat ("2 more proofs"), or there's no group data
+   for the class. Same visual language as an untrackable target row (reason +
+   empty dashed track, no bar), kept as its own rules because these are invite
+   requirements rather than tracked targets and can diverge. Never green:
+   unmeasurable is not met. */
+.pw-req--unavail { display: block; padding: 4px 0; opacity: .72; cursor: help; }
+.pw-req--unavail .target-header { margin-bottom: 3px; }
+.pw-unavail-vals { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-family: 'Geist Mono', monospace; color: var(--text3); white-space: nowrap; }
+.pw-unavail-icon { flex: none; color: var(--text3); vertical-align: -2px; }
+.pw-unavail-txt { font-style: italic; letter-spacing: .2px; }
+.pw-track--unavail { height: 5px; border-radius: 3px; background: transparent; border: 1px dashed var(--border); }
 
 /* Pathways: estimates are amber (matching in-hop estimate chips); lower
    bounds carry a "+". Ready state stays green. */

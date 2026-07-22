@@ -7,6 +7,7 @@
 import * as api from '../api';
 import { appSettings, trackers } from '../state';
 import { esc, fmtEtaDays } from '../utils/format';
+import { unavailEyeSvg } from '../utils/icons';
 import { getFaviconUrl } from '../utils/parse';
 import type {
   PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayReqProgress,
@@ -94,7 +95,9 @@ function reqEtaChip(q: PathwayReqProgress, estimated: boolean): string {
  *  so requirements without a progress bar (e.g. "Uploads: 5") drop to the
  *  bottom of the list. */
 function reqSortKey(q: PathwayReqProgress): number {
-  if (q.classes?.length) return 0;
+  // Class and "one of" blocks stay at the top even when they can't be
+  // evaluated — they're the headline of the route, not a trailing detail.
+  if (q.classes?.length || q.any_of?.length || q.unavail === 'class') return 0;
   const isBar = !!q.kind && (q.need ?? 0) > 0 && (q.have ?? -1) >= 0;
   return isBar ? 0 : 1;
 }
@@ -301,12 +304,17 @@ function pathHasUnknownAge(p: PathwayPath): boolean {
       return q.classes.some(ce =>
         rowsUnknownAge(ce.reqs) || (ce.any_of ?? []).some(alt => rowsUnknownAge(alt)));
     }
+    if (q.any_of?.length) return !q.met && q.any_of.some(alt => rowsUnknownAge(alt));
     return q.kind === 'age' && !q.met && (q.eta_days < 0 || (q.have ?? -1) < 0);
   });
   return p.steps.some(s => rowsUnknownAge(s.reqs ?? []));
 }
 
 function pathEtaLabel(p: PathwayPath): string {
+  // A disabled tracker has no stats at all — not even a "0D+ only stats left"
+  // reading is honest, and a no-requirement route would otherwise say
+  // "Ready now" off the back of nothing.
+  if (p.start_disabled) return 'Timeline unknown';
   if (p.total_eta_days === 0 && !p.has_unknown) return 'Ready now';
   if (p.total_eta_days === 0 && p.has_unknown) {
     // Can't compute the age floor (join date unknown) vs. age met, only
@@ -329,15 +337,20 @@ function etaExplainHtml(): string {
 }
 
 function renderPathCard(p: PathwayPath, idx: number): string {
-  const ready = p.total_eta_days === 0 && !p.has_unknown;
+  const disabled = !!p.start_disabled;
+  const ready = !disabled && p.total_eta_days === 0 && !p.has_unknown;
   const start = trackers.find(t => t.id === p.start_tracker_id);
   const favUrl = start?.url ? getFaviconUrl(start.url) : '';
   const startLabel = start?.name || p.start_name;
 
   const chips: string[] = [`
-    <span class="pw-chip pw-chip-start" title="Your tracker">
+    <span class="pw-chip pw-chip-start${disabled ? ' pw-chip-start--disabled' : ''}"
+          title="${disabled
+            ? 'This tracker is disabled — its routes are still listed, but no stats are available so progress and timing can\'t be estimated'
+            : 'Your tracker'}">
       ${favUrl ? `<img class="pw-chip-favicon" src="${esc(favUrl)}" alt="" onerror="this.style.display='none'">` : ''}
       ${esc(startLabel)}
+      ${disabled ? '<span class="pw-chip-disabled-tag">Disabled</span>' : ''}
     </span>`];
 
   p.steps.forEach((s, si) => {
@@ -401,6 +414,26 @@ function reqRow(q: PathwayReqProgress, estimated: boolean): string {
       ${q.classes.map(ce => classSection(ce, estimated)).join('')}
     </li>`;
   }
+  // "9 months or 6 months and 10+ uploads" — alternatives, any ONE of which
+  // satisfies the route. Same block the class breakdowns use for their
+  // any_of sets, so the two read identically.
+  if (q.any_of?.length) {
+    return `<li class="pw-req pw-req-anyof">
+      <div class="pw-class-req-label"${q.note ? ` title="${esc(q.note)}"` : ''}>
+        ${statusIcon(q)} <span class="pw-req-label">${esc(q.label)}</span>
+        ${reqEtaChip(q, estimated)}
+      </div>
+      <div class="anyof-wrap">
+        <div class="anyof-label">One of</div>
+        ${q.any_of.map(alt =>
+          `<div class="anyof-alt">${sortedReqs(alt).map(r => barOrTextRow(r, 'div', estimated)).join('')}</div>`
+        ).join('<div class="anyof-or">or</div>')}
+      </div>
+    </li>`;
+  }
+  // Class requirement with no def data behind it — keep the "Reach X" wording
+  // of an evaluated class row, but render it as unavailable.
+  if (q.unavail === 'class') return barOrTextRow({ ...q, label: `Reach ${q.label}` }, 'li', estimated);
   return barOrTextRow(q, 'li', estimated);
 }
 
@@ -412,12 +445,41 @@ function statusIcon(q: { met: boolean; eta_days: number }): string {
   return '<span class="pw-req-icon pw-req-icon--unknown">?</span>';
 }
 
+/** Short reason shown in place of a progress bar, per unavailable kind. The
+ *  backend's note carries the long form as the row's tooltip. */
+const UNAVAIL_TEXT: Record<NonNullable<PathwayReqProgress['unavail']>, string> = {
+  stat: 'Not available',
+  text: 'Manual check',
+  class: 'No group data',
+};
+
+const UNAVAIL_FALLBACK_TIP: Record<NonNullable<PathwayReqProgress['unavail']>, string> = {
+  stat: 'This tracker doesn’t report this stat, so progress can’t be tracked — the requirement still applies.',
+  text: 'Not a stat Yata can measure — check this one on the tracker.',
+  class: 'Yata has no group requirements for this tracker, so class progress can’t be shown.',
+};
+
 /** A single requirement — quantitative bar when have/need are known,
  *  plain text row otherwise. */
 function barOrTextRow(q: PathwayReqProgress, tag: 'li' | 'div', estimated: boolean): string {
   const open = tag === 'li' ? '<li' : '<div';
   const close = tag === 'li' ? '</li>' : '</div>';
   const title = q.note ? ` title="${esc(q.note)}"` : '';
+
+  // Unmeasurable requirement — mirror an untrackable target row (reason +
+  // empty dashed track) instead of a bare "?". These are NOT met: an invite
+  // requirement Yata can't see still has to be satisfied on the tracker.
+  if (q.unavail) {
+    const tip = q.note || UNAVAIL_FALLBACK_TIP[q.unavail];
+    const need = q.need_text ? ` <span class="tgt">/ ${esc(q.need_text)}</span>` : '';
+    return `${open} class="pw-req pw-req--unavail" title="${esc(tip)}">
+      <div class="target-header">
+        <span class="target-lbl">${esc(q.label)}</span>
+        <span class="pw-unavail-vals">${unavailEyeSvg('pw-unavail-icon')}<span class="pw-unavail-txt">${UNAVAIL_TEXT[q.unavail]}</span>${need}</span>
+      </div>
+      <div class="pw-track--unavail"></div>
+    ${close}`;
+  }
 
   if (q.kind && (q.need ?? 0) > 0 && (q.have ?? -1) >= 0) {
     const pct = Math.min(100, ((q.have ?? 0) / (q.need ?? 1)) * 100);

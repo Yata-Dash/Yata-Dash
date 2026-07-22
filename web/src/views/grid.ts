@@ -1,7 +1,7 @@
 // views/grid.ts — tracker card grid view (reads merged stats fields)
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
-import { eventGlobeSvg } from '../utils/icons';
+import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
 import { esc, errLabel, fieldLabel, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
@@ -246,7 +246,15 @@ export function renderCard(
       <span class="card-last-updated">API ${updated}</span>
       ${(() => {
         const ss = scrapeStatus[tracker.id];
-        if (!ss || ss.allowed) return '';
+        if (!ss) return '';
+        // A dead cookie outranks the policy text — it can coexist with
+        // allowed=true (the next attempt is permitted, it'll just fail too).
+        if (ss.cookie_expired) {
+          const n = ss.consecutive_failures ?? 0;
+          const tip = `Session cookie expired${n > 1 ? ` — ${n} failed scrapes` : ''} — re-copy your session cookie (Settings → Trackers)`;
+          return `<span class="scrape-limit-badge" title="${esc(tip)}">Cookie expired</span>`;
+        }
+        if (ss.allowed) return '';
         let tip: string;
         let setup = false; // setup states (missing credentials) — muted, not amber
         if (ss.reason === 'opted_out')              tip = 'Operator opted out';
@@ -543,8 +551,7 @@ function targetEtaChip(r: TgtRow): string {
 }
 
 /** Eye-with-a-slash mark for a requirement this tracker's API can't report. */
-const UNAVAIL_ICON =
-  `<svg class="target-unavail-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>`;
+const UNAVAIL_ICON = unavailEyeSvg('target-unavail-icon');
 
 const UNAVAIL_TIP = 'This tracker’s API doesn’t report this stat, so progress can’t be tracked — the requirement still applies.';
 

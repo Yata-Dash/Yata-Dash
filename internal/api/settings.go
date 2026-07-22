@@ -60,6 +60,13 @@ func putSettings(d *Deps) http.HandlerFunc {
 		}
 		// Debug, not info — auto-save PUTs on every toggled setting.
 		d.logDebugf("settings: saved")
+		// Seedsize mode switched on (or its qui config changed): populate the
+		// qui layers now instead of waiting up to a refresh cycle. Async —
+		// settings saves must not block on a qui round-trip.
+		if ns := d.Cfg.Settings(); ns.QUISeedsizeMode != "off" &&
+			(ns.QUISeedsizeMode != stored.QUISeedsizeMode || ns.QUIURL != stored.QUIURL || ns.QUIAPIKey != stored.QUIAPIKey) {
+			go refreshQUISeedsize(d)
+		}
 		jsonOK(w, maskSettings(d.Cfg.Settings()))
 	}
 }

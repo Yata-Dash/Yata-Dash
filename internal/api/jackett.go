@@ -81,13 +81,13 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 			return
 		}
 		if errMsg, status := jackettLogin(client, req.URL, req.AdminPassword); errMsg != "" {
-			jsonError(w, errMsg, status)
+			jsonError(w, errMsg, upstreamStatus(status))
 			return
 		}
 
 		list, errMsg, status := jackettList(client, req.URL)
 		if errMsg != "" {
-			jsonError(w, errMsg, status)
+			jsonError(w, errMsg, upstreamStatus(status))
 			return
 		}
 

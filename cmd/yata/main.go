@@ -91,6 +91,9 @@ func main() {
 	defer db.Close()
 
 	statsEngine := stats.New(db)
+	// Read the qui seedsize mode live so a settings change re-slots the qui
+	// layer in the merge without a restart.
+	statsEngine.QUISeedMode = func() string { return cfg.Settings().QUISeedsizeMode }
 	deps := &api.Deps{
 		Cfg:       cfg,
 		DB:        db,

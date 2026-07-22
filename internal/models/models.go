@@ -189,6 +189,12 @@ type Settings struct {
 	// and ride along in config export/import.
 	PathwayFavorites     []string `json:"pathway_favorites,omitempty"`
 	PathwayNotInterested []string `json:"pathway_not_interested,omitempty"`
+	// PathwaysIncludeDisabled lets DISABLED trackers act as pathway starting
+	// points — imported/def-less trackers a user keeps purely as a "I'm a
+	// member here" record. Their stats are ALWAYS treated as unknown (frozen
+	// numbers must never claim a requirement is met), so those paths carry no
+	// time estimate. Opt-in: default false.
+	PathwaysIncludeDisabled bool `json:"pathways_include_disabled"`
 
 	// TrustProxyHeaders makes Yata honor X-Forwarded-For (login rate
 	// limiting — otherwise every proxied client shares the proxy's lockout
@@ -238,6 +244,14 @@ type Settings struct {
 	QUIAPIKey           string `json:"qui_api_key"`
 	QUIEnabledInstances []int  `json:"qui_enabled_instances"`
 	QUIBarsVisible      *bool  `json:"qui_bars_visible"` // nil = true
+	// QUISeedsizeMode controls whether qui's per-tracker seeding totals feed
+	// the seed_size stat. qui's number is a client-side calculation over the
+	// torrents it can see — the tracker's own figure is the truth for
+	// progression — so the strongest mode still loses to a tracker API:
+	//   "off"     (default) — never used
+	//   "missing" — fills in only when neither the API nor a scrape has it
+	//   "prefer"  — beats scrapes, still loses to the tracker's API
+	QUISeedsizeMode string `json:"qui_seedsize_mode"`
 
 	// ── Indexer-manager imports (saved on first successful fetch so the
 	//    import sections come prefilled; secrets are masked like QUIAPIKey) ──
@@ -390,6 +404,12 @@ const (
 	// doesn't provide). Lowest merge priority — only fills gaps API and
 	// scrape both leave empty.
 	SourceManual Source = "manual"
+	// SourceQUI is client-side data computed by a linked qui instance
+	// (currently seed_size only, from its per-tracker torrent totals). It's a
+	// calculation over the torrents qui can see — not the tracker's own
+	// number — so its merge position is a setting (see
+	// Settings.QUISeedsizeMode) and it NEVER beats the tracker's API.
+	SourceQUI Source = "qui"
 )
 
 // StatField is one merged stat value with provenance.

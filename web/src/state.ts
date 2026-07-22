@@ -31,6 +31,7 @@ export const COL_DEFS: ColDef[] = [
   { key: 'total_uploads', label: 'Uploads',       sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  75 },
   { key: 'adoptions',     label: 'Adoptions',     sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  85 },
   { key: 'reqs_filled',   label: 'Reqs Filled',   sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  90 },
+  { key: 'scrape_health', label: 'Scrape',        sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  80 },
 ];
 
 // ── Runtime state ─────────────────────────────────────────────────────────
@@ -46,12 +47,12 @@ export let appSettings: AppSettings = {
   show_rate_hovers: true, show_unread_mail: true, show_unread_notifications: true,
   show_tracker_rules: true, highlight_hnr: true,
   update_check_auto: false, trust_proxy_headers: false, duration_format: 'ym',
-  pathway_favorites: [], pathway_not_interested: [],
+  pathway_favorites: [], pathway_not_interested: [], pathways_include_disabled: false,
   profile_auto_sync: true, api_only_mode: false,
   scrape_interval_minutes: 120, max_scrapes_per_day: 0, auto_interval: false,
   refresh_interval_minutes: 30, qui_refresh_seconds: 10,
   qui_url: 'http://localhost:7476', qui_api_key: '',
-  qui_enabled_instances: [], qui_bars_visible: true,
+  qui_enabled_instances: [], qui_bars_visible: true, qui_seedsize_mode: 'off',
   backup_enabled: false, backup_frequency: 'weekly', backup_keep: 5,
   prowlarr_url: '', prowlarr_api_key: '', jackett_url: '', jackett_admin_password: '',
 };

@@ -17,7 +17,7 @@ import { toast } from './components/toast';
 import { openColCustomizer, toggleColVisible } from './components/cols';
 import { initTargetsPopover, openTargetsPopover, closeTargetsPopover } from './components/targetsPopover';
 import { loadColPrefs, resetColPrefs, setScrapeStatus, scrapeStatus } from './state';
-import { errLabel } from './utils/format';
+import { errLabel, esc } from './utils/format';
 import * as trackersTab from './components/trackersTab';
 import * as logsTab from './components/logs';
 import * as alertsTab from './components/alertsTab';
@@ -343,6 +343,16 @@ function updateScrapeAlert() {
   // it's dismissible for the session (like the login-protection nudge).
   const limitDismissed = sessionStorage.getItem('yata-scrape-limit-dismissed') === '1';
   if (limitedCount > 0 && !limitDismissed) parts.push(`<span style="color:var(--amber);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>${limitedCount} tracker${limitedCount > 1 ? 's have' : ' has'} hit the daily maximum scrapes<button type="button" class="auth-nudge-x" onclick="dismissScrapeLimitAlert()" title="Dismiss for this session">&times;</button></span>`);
+  // Expired session cookies — actionable (re-copy the cookie), so it names
+  // the trackers when few. Clears itself once a scrape succeeds again.
+  const cookieDismissed = sessionStorage.getItem('yata-cookie-expired-dismissed') === '1';
+  const expired = state.trackers.filter(t => t.enabled !== false && scrapeStatus[t.id]?.cookie_expired);
+  if (expired.length > 0 && !cookieDismissed) {
+    const who = expired.length <= 3
+      ? `${expired.map(t => esc(t.name)).join(', ')} session cookie${expired.length > 1 ? 's have' : ' has'} expired`
+      : `${expired.length} tracker session cookies have expired`;
+    parts.push(`<span style="color:var(--amber);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>${who} — re-copy ${expired.length > 1 ? 'them' : 'it'} in Settings → Trackers<button type="button" class="auth-nudge-x" onclick="dismissCookieExpiredAlert()" title="Dismiss for this session">&times;</button></span>`);
+  }
   if (parts.length > 0) { bar.innerHTML = parts.join('<span style="color:var(--border2);margin:0 8px">|</span>'); bar.style.display = 'flex'; }
   else { bar.style.display = 'none'; }
 }
@@ -352,6 +362,12 @@ function dismissScrapeLimitAlert() {
   updateScrapeAlert(); // re-derive — hides the bar unless API-only mode still needs it
 }
 (window as any).dismissScrapeLimitAlert = dismissScrapeLimitAlert;
+
+function dismissCookieExpiredAlert() {
+  sessionStorage.setItem('yata-cookie-expired-dismissed', '1');
+  updateScrapeAlert();
+}
+(window as any).dismissCookieExpiredAlert = dismissCookieExpiredAlert;
 
 // ── Trackers ──────────────────────────────────────────────────────────────
 async function loadTrackers() {

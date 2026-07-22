@@ -178,7 +178,7 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 	if !ok {
 		return
 	}
-	oldIdx, newIdx := groupLadderIndex(td.Groups, oldGroup), groupLadderIndex(td.Groups, newGroup)
+	oldIdx, newIdx := defs.LadderIndex(td.Groups, oldGroup), defs.LadderIndex(td.Groups, newGroup)
 	if oldIdx < 0 || newIdx < 0 || oldIdx == newIdx {
 		// Unranked (not in this def's ladder) or same rung either way — the
 		// neutral "group changed" rule still catches this via polling.
@@ -189,18 +189,6 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 	} else {
 		d.Alerts.EvaluateEvent(t, merged, notify.EventContext{Kind: "demoted", Detail: "demoted: " + oldGroup + " → " + newGroup}, trends)
 	}
-}
-
-// groupLadderIndex returns a group's position in the def's ascending ladder
-// (Groups is lowest-first — see defs.TrackerDef.Groups), matched case-
-// insensitively, or -1 if the name isn't one of this def's ranks.
-func groupLadderIndex(groups []defs.GroupDef, name string) int {
-	for i, g := range groups {
-		if strings.EqualFold(g.Name, name) {
-			return i
-		}
-	}
-	return -1
 }
 
 // evaluateTrackerTargets computes the tracker's current target rows (base
@@ -342,11 +330,17 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 // request actually reached the tracker — including failed ones. A profile
 // page that errors must not get re-hit on every refresh cycle; only
 // pre-flight failures (no username/key — nothing was sent) are exempt.
+// The outcome (ok / error kind) feeds the scrape-health surface: failure
+// streaks and the expired-session-cookie warning.
 func recordScrapeAttempt(d *Deps, trackerID string, serr *scrape.Error) {
 	if serr != nil && (serr.Kind == "no_username" || serr.Kind == "no_cookie" || serr.Kind == "no_key") {
 		return // pre-flight failure — no request reached the tracker
 	}
-	_ = d.DB.RecordScrape(trackerID, time.Now().UTC())
+	kind := ""
+	if serr != nil {
+		kind = serr.Kind
+	}
+	_ = d.DB.RecordScrape(trackerID, time.Now().UTC(), serr == nil, kind)
 }
 
 func toAnyMap(in map[string]string) map[string]any {
@@ -362,6 +356,9 @@ func toAnyMap(in map[string]string) map[string]any {
 // when no browser/homelab client is polling /api/stats. Sequential by design
 // (gentle on tracker APIs).
 func RunRefreshCycle(d *Deps) {
+	// One qui pull feeds every tracker's seedsize fallback for this cycle
+	// (cheap no-op when the mode is off; see quiseed.go).
+	refreshQUISeedsize(d)
 	for _, t := range d.Cfg.Trackers() {
 		if !t.Enabled {
 			continue

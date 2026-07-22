@@ -5,7 +5,7 @@
   "abbr": "SP",
   "url": "https://speedapp.io",
   "type": "custom",
-  "last_updated": "2026-07-20",
+  "last_updated": "2026-07-22",
   "approved_by": {
     "name": "ovrflo",
     "role": "Staff",
@@ -21,6 +21,8 @@
       "snatch_count": "snatched",
       "hit_and_run_count": "hit_and_runs",
       "average_seed_time": "avg_seed_time",
+      "seeding_count": "seeding",
+      "credits": "bonus_points",
       "invites": "invites",
       "free_leech_tokens": "fl_tokens",
       "double_upload_tokens": "double_upload_tokens",
@@ -28,7 +30,12 @@
     },
     "byte_fields": {
       "uploaded": "uploaded",
-      "downloaded": "downloaded"
+      "downloaded": "downloaded",
+      "seeding_size": "seed_size"
+    },
+    "bool_fields": {
+      "unread_private_message_count": "unread_mail",
+      "unread_notification_count": "unread_notifications"
     },
     "buffer_from_bytes": true,
     "ratio_from_bytes": true,

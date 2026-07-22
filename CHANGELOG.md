@@ -8,6 +8,70 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Expired session-cookie warnings + scrape health.** Scrape attempts now
+  record their outcome, so a dead tracker cookie is noticed before the data
+  gap hurts: an amber dismissible banner names the trackers whose session
+  cookies have expired ("re-copy them in Settings → Trackers"), grid-card
+  footers show a "Cookie expired" badge, table expanded rows gain a Scrape
+  Health line (failure streak + cause), and an optional extended "Scrape"
+  column (hidden by default, column customizer) shows ✓ / ✗ streaks across
+  all trackers at a glance. Explicit login signals (session_expired,
+  user_id_not_found) flag immediately; an empty scrape only counts as a
+  cookie problem after two in a row, so a one-off anti-bot or maintenance
+  page doesn't cry wolf. Everything clears itself on the next successful
+  scrape.
+
+- **Pathways: optionally include disabled trackers.** A new opt-in toggle
+  (Settings → Display → Pathways → "Include disabled trackers") lets trackers
+  you've disabled still show the invite routes leading out of them — for
+  trackers imported from Prowlarr/Jackett that Yata has no definition for
+  yet, kept around as a record that you're a member. Their paths are badged
+  **Disabled**, sort below every enabled tracker's path, and never show a
+  time estimate: a disabled tracker's stats are frozen, so they're treated as
+  unknown rather than risking a stale "Ready now" (this holds even on routes
+  listing no requirements at all). While the toggle is on they also count as
+  trackers you already have, so the target picker and weekly digest stop
+  suggesting them. Related fix: trackers with **no definition** are now
+  matched to the pathways dataset by their name or website address, so they
+  appear at all — previously only trackers with a Yata definition could.
+
+### Fixed
+- **Spurious logouts.** Yata logins were never actually expiring (sessions
+  last 30 days and survive restarts), but the login screen re-appeared
+  whenever a tracker or integration returned an auth error: a profile scrape
+  hitting an expired *tracker* cookie answered the browser with 401, and the
+  app read any 401 as "session expired". Upstream 401/403s (tracker scrapes,
+  Prowlarr/Jackett/qui credential checks) are now relayed as 502 with the
+  real cause in the body, and the app only shows the login screen for its
+  own session check. One login per browser per 30 days, as designed.
+
+
+## [Beta-20260722]
+
+### Added
+
+- **Qui seed-size fallback.** Qui's torrents endpoint reports, per announce
+  host, the total size each tracker's torrents are currently seeding. A new
+  three-way setting (Settings → Integrations → "Seed Size Fallback") feeds
+  that into the seed_size stat as a fourth merge layer: **off** (default),
+  **only fill in missing data** (used when neither the tracker's API nor a
+  scrape has a value — API-only trackers without a seed-size endpoint, or
+  scrapes returning zero/nothing), or **prefer qui over scrapes**. In every
+  mode the tracker's own API wins — qui's figure is a client-side calculation
+  over the instances it can see, so multi-client and seedbox setups
+  undercount, and the tracker-reported number is the truth for progressions.
+  Announce hosts map to trackers by domain — including the def's alias
+  domains, so RetroFlix configured as retroflix.net still matches its
+  peer.retroflix.club announce host (subdomains match; a tracker's mirror
+  announce domains aren't double-counted; unrelated/public hosts never
+  match). Values sum across enabled qui instances, and a tracker qui stops
+  reporting is cleared rather than left stale. The per-stat source dot shows
+  a pink "qui" origin, and the layers refresh with the background cycle
+  (plus immediately on enabling).
+- **Unregistered count in the qui bar.** Qui now reports how many torrents
+  the tracker no longer recognises; the bar shows it in red next to Error.
+  Hidden on qui versions that predate the counter.
+
 ## [Beta-20260721]
 
 ### Added

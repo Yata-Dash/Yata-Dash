@@ -392,7 +392,7 @@ func digestEventLines(d *Deps, trackersByID map[string]models.Tracker, since tim
 		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
 			groups = td.Groups
 		}
-		oldIdx, newIdx := groupLadderIndex(groups, oldGroup), groupLadderIndex(groups, newGroup)
+		oldIdx, newIdx := defs.LadderIndex(groups, oldGroup), defs.LadderIndex(groups, newGroup)
 		symbol, verb := "•", "changed"
 		switch {
 		case oldIdx >= 0 && newIdx >= 0 && newIdx > oldIdx:

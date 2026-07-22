@@ -82,7 +82,8 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusUnauthorized {
-			jsonError(w, "invalid Prowlarr API key", http.StatusUnauthorized)
+			// 502 not 401: a 401 from Yata means "session expired" to the SPA.
+			jsonError(w, "invalid Prowlarr API key", http.StatusBadGateway)
 			return
 		}
 		if resp.StatusCode != http.StatusOK {

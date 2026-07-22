@@ -1609,6 +1609,7 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   // stored — saving sends it back unchanged; typing replaces; clearing clears.
   (document.getElementById('s-qui-key') as HTMLInputElement).value = settings.qui_api_key ?? '';
   setPlaceholder('s-qui-key', settings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your QUI API key');
+  (document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement).value = settings.qui_seedsize_mode ?? 'off';
 
   const syncTrack    = document.getElementById('s-profile-sync-track');
   const faviconTrack = document.getElementById('s-favicon-track');
@@ -1623,6 +1624,8 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   if (statSrcTrack) statSrcTrack.className = `toggle-track ${settings.show_stat_sources ? 'on' : ''}`;
   const pwEtaTrack = document.getElementById('s-pw-eta-track');
   if (pwEtaTrack) pwEtaTrack.className = `toggle-track ${settings.show_pathway_etas !== false ? 'on' : ''}`;
+  const pwDisabledTrack = document.getElementById('s-pw-disabled-track');
+  if (pwDisabledTrack) pwDisabledTrack.className = `toggle-track ${settings.pathways_include_disabled ? 'on' : ''}`;
   const trendTrack = document.getElementById('s-trend-est-track');
   if (trendTrack) trendTrack.className = `toggle-track ${settings.show_trend_estimates !== false ? 'on' : ''}`;
   const targetEtaTrack = document.getElementById('s-target-eta-track');
@@ -1907,11 +1910,13 @@ export async function saveSettings(deps: SettingsDeps) {
     qui_api_key:           quiKey,
     qui_enabled_instances: enabledIds,
     qui_bars_visible:      isOn('s-qui-bars-track', true),
+    qui_seedsize_mode:     ((document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement)?.value ?? 'off') as AppSettings['qui_seedsize_mode'],
     profile_auto_sync:     isOn('s-profile-sync-track', true),
     show_favicons:         isOn('s-favicon-track', false),
     private_mode:          isOn('s-private-track', false),
     show_stat_sources:     isOn('s-stat-src-track', false),
     show_pathway_etas:     isOn('s-pw-eta-track', true),
+    pathways_include_disabled: isOn('s-pw-disabled-track', false),
     show_trend_estimates:  isOn('s-trend-est-track', true),
     show_target_etas:      isOn('s-target-eta-track', true),
     show_rate_hovers:      isOn('s-rate-hover-track', true),

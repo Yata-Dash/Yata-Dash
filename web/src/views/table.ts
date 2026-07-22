@@ -313,6 +313,22 @@ function buildCell(
       const v = strOf(s, 'requests_filled');
       return `<td class="td-mono td-center" style="color:var(--purple)">${v ? esc(v) + dot('requests_filled') : dash}</td>`;
     }
+    case 'scrape_health': {
+      // Reads scrapeStatus, not the merged stats — this column is about the
+      // scrape pipeline itself (failure streaks / dead cookies), not a stat.
+      const ss = scrapeStatus[t.id];
+      if (!ss || !ss.supports_html_scrape) return `<td class="td-center">${dash}</td>`;
+      if (ss.cookie_expired) {
+        const tip = 'Session cookie expired — re-copy your session cookie (Settings → Trackers)';
+        return `<td class="td-center" title="${esc(tip)}" style="color:var(--amber);font-size:12px">Cookie expired</td>`;
+      }
+      if (ss.last_error_kind) {
+        const n = ss.consecutive_failures ?? 1;
+        return `<td class="td-mono td-center" title="${esc(errLabel(ss.last_error_kind))}" style="color:var(--amber)">✗ ${n}</td>`;
+      }
+      if (ss.last_scrape_at) return `<td class="td-center" style="color:var(--green)">✓</td>`;
+      return `<td class="td-center">${dash}</td>`;
+    }
     default: return '<td>—</td>';
   }
 }
@@ -347,7 +363,7 @@ function buildExpanded(
 
   const joinDate = strOf(stats, 'join_date');
   const ss = scrapeStatus[tracker.id];
-  const infoList = [
+  const infoList: { l: string; v: string; warn?: boolean }[] = [
     { l: 'Join Date',    v: joinDate || '—' },
     { l: 'Account Age',  v: joinDate ? memberDur(joinDate) : '—' },
     { l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' },
@@ -367,6 +383,21 @@ function buildExpanded(
         return '—';
       })() },
   ];
+  // Scrape health — only rendered once there's an outcome to report, and
+  // amber when the failures look like a dead session cookie (the stale data
+  // and its cause belong on the same screen).
+  if (ss?.last_error_kind) {
+    const n = ss.consecutive_failures ?? 1;
+    infoList.push({
+      l: 'Scrape Health',
+      v: ss.cookie_expired
+        ? `Session cookie expired — ${n} consecutive failure${n > 1 ? 's' : ''} (re-copy it in Settings → Trackers)`
+        : `${n} consecutive failure${n > 1 ? 's' : ''} (${errLabel(ss.last_error_kind)})`,
+      warn: true,
+    });
+  } else if (ss?.last_scrape_at && ss.supports_html_scrape) {
+    infoList.push({ l: 'Scrape Health', v: 'OK' });
+  }
   if (ss && ss.effective_max_per_day > 0) {
     infoList.push({ l: 'Scrapes Today', v: `${ss.scrapes_today} / ${ss.effective_max_per_day}` });
   }
@@ -477,7 +508,7 @@ function buildExpanded(
       <div class="exp-section-title">Info</div>
       <div class="exp-stat-list">${infoList.map(r => `<div class="exp-stat">
         <span class="exp-stat-label">${esc(r.l)}</span>
-        <span class="exp-stat-value">${esc(r.v)}</span>
+        <span class="exp-stat-value"${r.warn ? ' style="color:var(--amber)"' : ''}>${esc(r.v)}</span>
       </div>`).join('')}${unreadRows}${profileLinkRow}</div>
       ${scrapeSetupHint}
       ${rulesHtml}

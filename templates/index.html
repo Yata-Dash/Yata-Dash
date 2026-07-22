@@ -585,6 +585,15 @@
             </div>
             <div class="form-group" style="margin-bottom:10px">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-pw-disabled-track" onclick="toggleSettingsPathwayDisabled()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Include disabled trackers</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
                 <div class="toggle-track" id="s-trend-est-track" onclick="toggleSettingsTrendEstimates()"><div class="toggle-thumb"></div></div>
                 <div>
                   <div style="font-size:13px;font-weight:600;color:var(--text)">Stat trend estimates</div>
@@ -1016,6 +1025,17 @@
                 <span class="form-hint">How often the qui bars update — local data, so it can stay fast. Min 1 s; use the toggle above to turn qui off entirely.</span>
               </div>
             </div>
+            <div class="form-row">
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Seed Size Fallback</label>
+                <select class="form-input" id="s-qui-seedsize-mode" style="width:auto;padding:4px 8px">
+                  <option value="off">Don't use qui seed size</option>
+                  <option value="missing">Only fill in missing data</option>
+                  <option value="prefer">Prefer qui over scrapes</option>
+                </select>
+                <span class="form-hint">Qui knows the total size each tracker's torrents are seeding. It's a calculation over the instances above — a tracker's own number is the truth (multi-client and seedbox setups undercount) — so even "Prefer" never overrides a tracker API that reports seed size; it only beats profile scrapes. "Missing" fills in only where neither the API nor a scrape has a value.</span>
+              </div>
+            </div>
             <div id="s-qui-instances-section">
               <div class="modal-divider" style="margin:14px 0 10px"><span class="modal-divider-label">Instances</span><div class="modal-divider-line"></div>
                 <button class="btn-autofill" id="s-qui-refresh-btn" type="button" onclick="loadQuiInstancesForSettings()" title="Reload instances using the URL/key typed above (works before saving)">
@@ -1170,6 +1190,7 @@ function toggleSettingsSync()     { _settingsToggle('s-profile-sync-track'); }
 function toggleSettingsPrivate()  { _settingsToggle('s-private-track'); }
 function toggleSettingsStatSources() { _settingsToggle('s-stat-src-track'); }
 function toggleSettingsPathwayEtas() { _settingsToggle('s-pw-eta-track'); }
+function toggleSettingsPathwayDisabled() { _settingsToggle('s-pw-disabled-track'); }
 function toggleSettingsTrendEstimates() { _settingsToggle('s-trend-est-track'); }
 function toggleSettingsTargetEtas() { _settingsToggle('s-target-eta-track'); }
 function toggleSettingsRateHovers() { _settingsToggle('s-rate-hover-track'); }

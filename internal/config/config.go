@@ -316,6 +316,9 @@ func (m *Manager) UpdateSettings(s models.Settings) error {
 	if s.QUIEnabledInstances == nil {
 		s.QUIEnabledInstances = []int{}
 	}
+	if s.QUISeedsizeMode != "missing" && s.QUISeedsizeMode != "prefer" {
+		s.QUISeedsizeMode = "off"
+	}
 	normalizeBackup(&s)
 	m.cfg.Settings = s
 	return m.saveLocked()

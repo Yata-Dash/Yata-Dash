@@ -259,6 +259,10 @@ export function errLabel(err: string): string {
     api_error:        'Tracker API error',
     auth_error:       'Authentication failed',
     session_expired:  'Session cookie expired — log in again and re-copy it',
+    user_id_not_found: 'Not logged in — session cookie likely expired',
+    user_not_found:   'Profile page not found',
+    forbidden:        'Access forbidden — cookie or permissions',
+    read_error:       'Could not read tracker response',
     empty_scrape:     'Profile page had no recognisable stats',
     store_error:      'Local storage error',
     http_401:         'Invalid API key (401)',
@@ -285,12 +289,14 @@ export function fieldLabel(key: string): string {
 export function srcDot(field: StatField | undefined, settings: AppSettings): string {
   if (!settings.show_stat_sources || !field?.source) return '';
   const src = field.source === 'scrape' ? 'scrape'
-    : field.source === 'manual' ? 'manual' : 'api';
+    : field.source === 'manual' ? 'manual'
+    : field.source === 'qui' ? 'qui' : 'api';
   const when = field.updated_at
     ? ` · updated ${new Date(field.updated_at * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
     : '';
   const label = src === 'api' ? 'From API'
     : src === 'scrape' ? 'From profile scrape'
+    : src === 'qui' ? 'From qui'
     : 'Entered manually';
   return `<span class="stat-src stat-src--${src}" title="${label}${when}"></span>`;
 }
