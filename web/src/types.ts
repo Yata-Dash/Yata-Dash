@@ -465,6 +465,8 @@ export interface TypeInfo {
   api_kind: string; // "unit3d" | "gazelle" | "custom" | "demo"
   /** Extra config fields this type needs (e.g. gazelle: ["username"]). */
   required_fields?: string[];
+  /** Session-cookie name for api_kind "gazelle_json_cookie" (e.g. "session"). */
+  cookie_name?: string;
 }
 
 export interface DefIssue {

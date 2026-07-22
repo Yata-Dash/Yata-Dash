@@ -335,10 +335,12 @@ func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any
 	if ferr := c.getGazelleJSON(fmt.Sprintf("%suser&id=%d", base, index.ID), headers, identify, &user); ferr != nil {
 		return nil, ferr
 	}
+	// community_stats is supplementary (its only live use below is seed_size —
+	// leeching/seeding/snatched already come from `user` above), and not every
+	// Gazelle fork supports it (verified failing on Orpheus). A failure here
+	// must not discard the index+user data that already succeeded.
 	var community gazelleJSONCommunityStats
-	if ferr := c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), headers, identify, &community); ferr != nil {
-		return nil, ferr
-	}
+	_ = c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), headers, identify, &community)
 
 	joinDate := user.Stats.JoinedDate
 	if len(joinDate) >= 10 {

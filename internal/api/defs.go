@@ -74,6 +74,10 @@ type typeInfo struct {
 	Label          string   `json:"label"`
 	APIKind        string   `json:"api_kind"`
 	RequiredFields []string `json:"required_fields,omitempty"`
+	// CookieName is the session-cookie name for kind "gazelle_json_cookie"
+	// (e.g. "session") — lets the UI tell users exactly which browser cookie
+	// to copy instead of a generic instruction.
+	CookieName string `json:"cookie_name,omitempty"`
 }
 
 // GET /api/defs — registry contents + load issues.
@@ -114,7 +118,10 @@ func listDefs(d *Deps) http.HandlerFunc {
 		types := d.Reg.Types()
 		tyout := make([]typeInfo, 0, len(types))
 		for _, tt := range types {
-			tyout = append(tyout, typeInfo{Key: tt.Key, Label: tt.Label, APIKind: tt.API.Kind, RequiredFields: tt.API.RequiredFields})
+			tyout = append(tyout, typeInfo{
+				Key: tt.Key, Label: tt.Label, APIKind: tt.API.Kind,
+				RequiredFields: tt.API.RequiredFields, CookieName: tt.API.CookieName,
+			})
 		}
 		jsonOK(w, map[string]any{
 			"trackers": tout,

@@ -520,6 +520,50 @@ func TestFetchGazelleJSONRejectsFailureEnvelope(t *testing.T) {
 	}
 }
 
+// TestFetchGazelleJSONCommunityStatsFailureIsNotFatal verifies a Gazelle fork
+// that doesn't support the community_stats action (verified on Orpheus,
+// which returns {"status":"failure","error":"failure","response":[]}) still
+// returns the index+user data instead of failing the whole fetch —
+// community_stats' only real contribution is the supplementary seed_size
+// field; its leeching/seeding/snatched are already sourced from `user`.
+func TestFetchGazelleJSONCommunityStatsFailureIsNotFatal(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Elite"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":3,"buffer":200,"requiredRatio":0.6},
+				"personal":{"class":"Elite","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":500,"uploaded":50,"groups":510,"seeding":20,"leeching":1,"snatched":30,"invited":4}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"failure","error":"failure","response":[]}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite community_stats failing", ferr)
+	}
+	if data["username"] != "listener" || data["seeding"] != 20 {
+		t.Errorf("core index/user data missing: %+v", data)
+	}
+	if _, ok := data["seed_size"]; ok {
+		t.Errorf("seed_size = %#v, want absent (community_stats failed)", data["seed_size"])
+	}
+}
+
 // TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey verifies AlphaRatio's
 // auth mode (no API token support — cookie only) and the two verified
 // divergences from Redacted/Orpheus: no stats.buffer field (buffer must be
