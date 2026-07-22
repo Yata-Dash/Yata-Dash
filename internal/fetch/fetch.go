@@ -97,6 +97,7 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
+	convertUnit3DCoreBytes(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
 	// trackers expose formerly scrape-only stats (seed size, seed times, unread
 	// flags, …) here, letting them turn scraping off entirely. Best-effort: a
@@ -124,6 +125,21 @@ func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 		return c.getJSON(url+"?api_token="+key, nil, identify)
 	}
 	return nil, ferr
+}
+
+// unit3dCoreByteFields are /api/user fields carrying byte counts. Standard
+// UNIT3D installs (Blutopia and most others) return these as raw integers;
+// some forks (ReelFliX, UploadCX) pre-format them as "X.XX GiB" strings
+// instead. convertUnit3DCoreBytes only touches values still in raw numeric
+// form, so already-formatted forks pass through untouched.
+var unit3dCoreByteFields = []string{"uploaded", "downloaded", "buffer"}
+
+func convertUnit3DCoreBytes(data map[string]any) {
+	for _, f := range unit3dCoreByteFields {
+		if n, ok := data[f].(float64); ok {
+			data[f] = parse.BytesToSize(int64(n))
+		}
+	}
 }
 
 // mergeExtended folds an extended-stats response into the core /api/user map.

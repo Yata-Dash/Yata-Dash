@@ -42,10 +42,8 @@ const RATE_SIZE_FIELDS = new Set(['uploaded', 'downloaded', 'buffer', 'seed_size
 function fmtGiBRate(gibPerDay: number): string {
   const sign = gibPerDay < 0 ? '-' : '';
   const g = Math.abs(gibPerDay);
-  if (g >= 1024)  return `${sign}${(g / 1024).toFixed(2)} TiB`;
-  if (g >= 1)     return `${sign}${g.toFixed(1)} GiB`;
-  if (g >= 1/1024) return `${sign}${(g * 1024).toFixed(1)} MiB`;
-  return `${sign}${(g * 1024 * 1024).toFixed(0)} KiB`;
+  if (g >= 1024) return `${sign}${(g / 1024).toFixed(2)} TiB`;
+  return `${sign}${g.toFixed(2)} GiB`;
 }
 
 /** Goal-pacing keys whose numbers are sizes (GiB/day) — the target keys

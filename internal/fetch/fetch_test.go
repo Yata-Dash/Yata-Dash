@@ -140,7 +140,7 @@ func TestFetchUnit3DBlutopiaResponseShape(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "testuser", "group": "BluUser",
-		"uploaded": 400.0, "downloaded": 100.0, "ratio": 4.0, "buffer": 900.0,
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "ratio": 4.0, "buffer": "0.00 GiB",
 		"seeding": 12.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
 	}
 	for key, expected := range want {
@@ -485,7 +485,7 @@ func TestFetchGazelleMergesStandardEndpoints(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "listener", "user_id": "42", "group": "Elite",
-		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
 		"ratio": 3.0, "required_ratio": 0.6, "fl_tokens": 139.0,
 		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
 		"leeching": 1, "snatched": 30, "users_invited": 4,
@@ -621,7 +621,7 @@ func TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "listener", "user_id": "42", "group": "Sphinx",
-		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
 		"ratio": 1.0, "required_ratio": 0.0,
 		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
 		"leeching": 1, "snatched": 30, "users_invited": 0,
@@ -1080,7 +1080,7 @@ func TestFetchCustomNebulanceShape(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "testuser", "group": "Flattop", "join_date": "2025-01-02",
-		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
 		"ratio": 3.0, "seeding": 92, "hit_and_runs": 0, "invites": 1,
 		"grabbed": 12, "snatched": 34, "forum_posts": 7,
 	}
