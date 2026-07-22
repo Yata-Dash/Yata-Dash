@@ -138,6 +138,53 @@ func TestShippedDefsLoadClean(t *testing.T) {
 		t.Errorf("unexpected Elite TM requirements: %+v", eliteTM)
 	}
 
+	ops, ok := r.TrackerByURL("https://orpheus.network")
+	if !ok {
+		t.Fatal("orpheus.network def not found")
+	}
+	if kind := r.APIKind(ops.URL, ops.Type); kind != "gazelle_json" {
+		t.Fatalf("Orpheus APIKind = %q, want gazelle_json", kind)
+	}
+	if !ops.Scrape.DisableScraping || ops.ApprovalStatus() != ApprovalUnknown {
+		t.Fatalf("Orpheus must be API-only and unapproved: scrape=%+v approval=%q", ops.Scrape, ops.ApprovalStatus())
+	}
+	if ops.Rules == nil || ops.Rules.MinRatio != 0 || ops.Rules.Note == "" {
+		t.Fatalf("Orpheus rules = %+v, want no fixed min_ratio and a dynamic-ratio note", ops.Rules)
+	}
+	if ops.InviteRequirements != nil {
+		t.Fatalf("Orpheus invite requirements = %+v, want none (no site-wide policy documented)", ops.InviteRequirements)
+	}
+	wantOPSPrimary := []string{
+		"User", "Member", "Power User", "Elite", "Torrent Master",
+		"Power Torrent Master", "Elite Torrent Master", "Ultimate Torrent Master",
+	}
+	if len(ops.Groups) != 22 {
+		t.Fatalf("Orpheus groups = %d, want 22", len(ops.Groups))
+	}
+	for i, name := range wantOPSPrimary {
+		group := ops.Groups[i]
+		if group.Name != name {
+			t.Errorf("Orpheus group %d = %q, want %q", i, group.Name, name)
+		}
+	}
+	for _, group := range ops.Groups {
+		if group.Style.Color != "" || group.Style.Icon != "" {
+			t.Errorf("Orpheus %s style must be empty: %+v", group.Name, group.Style)
+		}
+	}
+	ptm := ops.Groups[5].Requirements
+	if len(ptm.MinCounts) != 1 || ptm.MinCounts[0].Field != "groups_uploaded" || ptm.MinCounts[0].Count != 500 {
+		t.Errorf("unexpected Orpheus Power Torrent Master requirements: %+v", ptm)
+	}
+	etm := ops.Groups[6].Requirements
+	if len(etm.MinCounts) != 1 || etm.MinCounts[0].Field != "perfect_flacs" || etm.MinCounts[0].Count != 500 {
+		t.Errorf("unexpected Orpheus Elite Torrent Master requirements: %+v", etm)
+	}
+	utm := ops.Groups[7].Requirements
+	if len(utm.MinCounts) != 1 || utm.MinCounts[0].Field != "perfect_flacs" || utm.MinCounts[0].Count != 2000 {
+		t.Errorf("unexpected Orpheus Ultimate Torrent Master requirements: %+v", utm)
+	}
+
 	ggn, ok := r.TrackerByURL("https://gazellegames.net")
 	if !ok {
 		t.Fatal("gazellegames.net def not found")

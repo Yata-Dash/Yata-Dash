@@ -213,6 +213,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
+| Orpheus | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping; required ratio is calculated dynamically |
 | Redacted | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
 | ReelFliX | Unit3D | No | API Only | Seed-size, average-seedtime, and rolling-upload progress unavailable through the API |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
