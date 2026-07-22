@@ -233,8 +233,12 @@ function buildCell(
     }
     case 'ratio': {
       const r = parseRatio(strOf(s, 'ratio'));
-      const rc = ratioColorFor(isNaN(r) ? 0 : r, t.min_ratio);
-      const tip = t.min_ratio && t.min_ratio > 0 ? ` title="Tracker minimum: ${t.min_ratio}"` : '';
+      const requiredRatio = parseRatio(strOf(s, 'required_ratio'));
+      const effectiveMinRatio = !isNaN(requiredRatio) && requiredRatio > 0 ? requiredRatio : t.min_ratio;
+      const rc = ratioColorFor(isNaN(r) ? 0 : r, effectiveMinRatio);
+      const tip = !isNaN(requiredRatio) && requiredRatio > 0
+        ? ` title="Your required ratio: ${requiredRatio}"`
+        : t.min_ratio && t.min_ratio > 0 ? ` title="Tracker minimum: ${t.min_ratio}"` : '';
       return `<td class="td-mono"${tip} style="color:var(--${rc})">${!isNaN(r) ? fmtRatio(r) + dot('ratio') : dash}</td>`;
     }
     case 'buffer': {
@@ -478,8 +482,15 @@ function buildExpanded(
   // Display toggle instead.
   const rulesRows: Array<[string, string]> = [];
   if (tracker.min_ratio && tracker.min_ratio > 0) rulesRows.push(['Min Ratio', String(tracker.min_ratio)]);
-  if (tracker.min_seed_days && tracker.min_seed_days > 0)
+  if (tracker.min_seed_days_episode && tracker.min_seed_days_episode > 0)
+    rulesRows.push(['Episode Seed Time', `${tracker.min_seed_days_episode} day${tracker.min_seed_days_episode === 1 ? '' : 's'}`]);
+  if (tracker.min_seed_days_season && tracker.min_seed_days_season > 0)
+    rulesRows.push(['Season Seed Time', `${tracker.min_seed_days_season} day${tracker.min_seed_days_season === 1 ? '' : 's'}`]);
+  if (tracker.min_seed_hours && tracker.min_seed_hours > 0)
+    rulesRows.push(['Min Seed Time', `${tracker.min_seed_hours} hours`]);
+  if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`]);
+  if (tracker.rule_note) rulesRows.push(['Details', tracker.rule_note]);
   const rulesHtml = rulesRows.length ? `<div style="margin-top:10px">
       <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>
       <div class="exp-stat-list">${rulesRows.map(([l, v]) => `<div class="exp-stat">

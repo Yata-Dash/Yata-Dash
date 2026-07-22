@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "key": "gazelle_json",
+  "label": "Gazelle JSON API",
+  "last_updated": "2026-07-21",
+  "description": "Gazelle tracker using the scoped ajax.php JSON API. The API key identifies the current user; no username is required. Profile pages use ID-based URLs (/user.php?id=N).",
+  "api": {
+    "kind": "gazelle_json",
+    "required_fields": []
+  },
+  "scrape": {
+    "profile_path": "/user.php?id={id}",
+    "labels": {
+      "tokens": "fl_tokens",
+      "torrents uploaded": "uploads_approved"
+    }
+  }
+}

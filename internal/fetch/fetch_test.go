@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,864 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
+
+func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_json","label":"Gazelle JSON API",
+		"api":{"kind":"gazelle_json","required_fields":[]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"redacted",
+		"name":"Redacted","abbr":"RED","url":%q,"type":"gazelle_json"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_json.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "redacted.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func gazelleJSONCookieRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_json_cookie","label":"Gazelle JSON API (session cookie)",
+		"api":{"kind":"gazelle_json_cookie","cookie_name":"session","required_fields":["session_cookie"]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"alpharatio",
+		"name":"AlphaRatio","abbr":"AR","url":%q,"type":"gazelle_json_cookie"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_json_cookie.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "alpharatio.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func gazelleGamesRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle_games","label":"GazelleGames API",
+		"api":{"kind":"gazelle_games","required_fields":[]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"gazellegames",
+		"name":"GazelleGames","abbr":"GGn","url":%q,"type":"gazelle_games"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_games.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "gazellegames.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func legacyGazelleRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"gazelle","label":"Gazelle",
+		"api":{"kind":"gazelle","required_fields":["username"]}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"anthelion",
+		"name":"Anthelion","abbr":"ANT","url":%q,"type":"gazelle"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "anthelion.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchUnit3DBlutopiaResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"BluUser",
+			"uploaded":400,"downloaded":100,"ratio":4,"buffer":900,
+			"seeding":12,"leeching":0,"seedbonus":"1234.50","hit_and_runs":0
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "BluUser",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "ratio": 4.0, "buffer": "0.00 GiB",
+		"seeding": 12.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["seedbonus"]; ok {
+		t.Errorf("seedbonus alias should be normalized: %+v", data)
+	}
+}
+
+func TestFetchUnit3DReelFliXResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		w.Header().Set("X-RateLimit-Limit", "30")
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"User",
+			"uploaded":"80.00 GiB","downloaded":"10.00 GiB","ratio":"8.00","buffer":"90.00 GiB",
+			"seeding":3,"leeching":0,"seedbonus":"1234.50","hit_and_runs":0
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "User",
+		"uploaded": "80.00 GiB", "downloaded": "10.00 GiB", "ratio": "8.00", "buffer": "90.00 GiB",
+		"seeding": 3.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
+func TestFetchUnit3DUploadCXResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		w.Header().Set("X-RateLimit-Limit", "30")
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"User",
+			"uploaded":"96.00 GiB","downloaded":"24.00 GiB","ratio":"4.00","buffer":"72.00 GiB",
+			"seeding":7,"leeching":0,"seedbonus":"1234.50","hit_and_runs":0
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "User",
+		"uploaded": "96.00 GiB", "downloaded": "24.00 GiB", "ratio": "4.00", "buffer": "72.00 GiB",
+		"seeding": 7.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
+func TestFetchAnimeBytesPersonalStats(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/stats/personal" {
+			t.Errorf("path = %q, want /api/stats/personal", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		fmt.Fprint(w, `{
+			"success":true,
+			"yen":{"current":4321,"per_day":24,"per_hour":1},
+			"hnrs":{"potential":1,"active":0},
+			"upload":{"raw":8589934592,"account":10737418240},
+			"download":{"raw":4294967296,"account":5368709120},
+			"torrents":{"uploaded":12,"pruned":2},
+			"tracker":{"seeding":9,"leeching":0,"snatched":15,"seed_size":21474836480,"avg_seed_time":2592000},
+			"class":"Power User"
+		}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(animeBytesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"group": "Power User", "uploaded": "10.00 GiB", "downloaded": "5.00 GiB",
+		"ratio": 2.0, "buffer": "5.00 GiB", "bonus_points": 4321.0,
+		"hit_and_runs": 0, "uploads_approved": 12, "seeding": 9,
+		"leeching": 0, "snatched": 15, "seed_size": "20.00 GiB",
+		"avg_seed_time": 2592000,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
+func animeBytesRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom"},"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"animebytes","name":"AnimeBytes","abbr":"AB",
+		"url":%q,"type":"custom",
+		"api":{
+			"path":"/api/stats/personal","auth_method":"api_key_header",
+			"success_field":"success","success_value":"true",
+			"field_map":{
+				"class":"group","yen.current":"bonus_points","hnrs.active":"hit_and_runs",
+				"torrents.uploaded":"uploads_approved","tracker.seeding":"seeding",
+				"tracker.leeching":"leeching","tracker.snatched":"snatched",
+				"tracker.avg_seed_time":"avg_seed_time"
+			},
+			"byte_fields":{
+				"upload.account":"uploaded","download.account":"downloaded",
+				"tracker.seed_size":"seed_size"
+			},
+			"buffer_from_bytes":true,"ratio_from_bytes":true
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "animebytes.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchBTNJSONRPCUserInfo(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/" {
+			t.Errorf("request = %s %s, want POST /", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", got)
+		}
+		var body struct {
+			JSONRPC string   `json:"jsonrpc"`
+			Method  string   `json:"method"`
+			Params  []string `json:"params"`
+			ID      int      `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.JSONRPC != "2.0" || body.Method != "userInfo" || body.ID != 1 || len(body.Params) != 1 || body.Params[0] != "sekrit" {
+			t.Errorf("JSON-RPC body = %+v", body)
+		}
+		fmt.Fprint(w, `{"id":1,"result":{
+			"UserID":"24","Username":"testuser","Email":"test@example.invalid",
+			"Upload":"429496729600","Download":"107374182400",
+			"Lumens":"3","Bonus":"100000.0","JoinDate":"1704067200",
+			"Title":"fixture title","Enabled":"1","Paranoia":"0","Invites":"2",
+			"Snatches":"40","UploadsSnatched":"60","Class":"Member",
+			"ClassLevel":"100","HnR":"0"
+		}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(btnRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: "https://broadcasthe.test", Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Member", "uploaded": "400.00 GiB",
+		"downloaded": "100.00 GiB", "total_transfer": "500.00 GiB",
+		"bonus_points": "100000.0", "join_date": "2024-01-01", "invites": "2",
+		"snatched": 100, "hit_and_runs": "0", "lumens": "3",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, sensitive := range []string{"UserID", "Email", "Title", "ClassLevel"} {
+		if _, ok := data[sensitive]; ok {
+			t.Errorf("sensitive/irrelevant field %s must not be returned", sensitive)
+		}
+	}
+}
+
+func TestFetchBTNJSONRPCErrorEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"invalid API key"}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(btnRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: "https://broadcasthe.test", Type: "custom", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+}
+
+func btnRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom"},"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"btn","name":"BroadcastTheNet","abbr":"BTN",
+		"url":"https://broadcasthe.test","type":"custom",
+		"api":{
+			"base_url":%q,"path":"/","auth_method":"api_key_json_rpc","json_rpc_method":"userInfo",
+			"field_map":{
+				"result.Username":"username","result.Class":"group",
+				"result.Bonus":"bonus_points","result.Invites":"invites",
+				"result.HnR":"hit_and_runs","result.Lumens":"lumens"
+			},
+			"sum_fields":{"snatched":["result.Snatches","result.UploadsSnatched"]},
+			"byte_fields":{"result.Upload":"uploaded","result.Download":"downloaded"},
+			"sum_bytes_fields":{"total_transfer":["result.Upload","result.Download"]},
+			"unix_fields":{"result.JoinDate":"join_date"}
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "btn.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {
+			t.Fatalf("unexpected legacy Gazelle request: %s", r.URL.String())
+		}
+		fmt.Fprint(w, `{"status":"success","response":{
+			"ID":7,"Username":"alice","Class":"Member","Uploaded":300,
+			"Downloaded":100,"SeedCount":4,"Invites":2,
+			"JoinDate":"2025-01-02 03:04:05","Snatched":9
+		}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(legacyGazelleRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "gazelle", APIKey: "sekrit", Username: "alice",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if data["username"] != "alice" || data["seeding"] != 4 {
+		t.Fatalf("unexpected legacy Gazelle data: %+v", data)
+	}
+}
+
+func TestFetchGazelleMergesStandardEndpoints(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "sekrit" {
+			t.Errorf("Authorization = %q, want raw API key", got)
+		}
+		action := r.URL.Query().Get("action")
+		seen[action]++
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,"giftTokens":30,"meritTokens":109,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Elite"}
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "42" {
+				t.Errorf("user id = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":3,"buffer":200,"requiredRatio":0.6},
+				"personal":{"class":"Elite","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":500,"uploaded":50,"groups":510,"seeding":20,"leeching":1,"snatched":30,"invited":4}
+			}}`)
+		case "community_stats":
+			if got := r.URL.Query().Get("userid"); got != "42" {
+				t.Errorf("community_stats userid = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":1,"seeding":"20","snatched":"30","seedingsize":"476.55 GB"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "listener", "user_id": "42", "group": "Elite",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
+		"ratio": 3.0, "required_ratio": 0.6, "fl_tokens": 139.0,
+		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
+		"leeching": 1, "snatched": 30, "users_invited": 4,
+		"uploads_approved": 50, "requests_filled": 2, "forum_posts": 1,
+		"groups_uploaded": 510, "perfect_flacs": 500, "seed_size": "476.55 GB",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, action := range []string{"index", "user", "community_stats"} {
+		if seen[action] != 1 {
+			t.Errorf("%s calls = %d, want 1", action, seen[action])
+		}
+	}
+}
+
+func TestFetchGazelleJSONRejectsFailureEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"status":"failure","error":"User scope required"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "User scope required" {
+		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
+	}
+}
+
+// TestFetchGazelleJSONCommunityStatsFailureIsNotFatal verifies a Gazelle fork
+// that doesn't support the community_stats action (verified on Orpheus,
+// which returns {"status":"failure","error":"failure","response":[]}) still
+// returns the index+user data instead of failing the whole fetch —
+// community_stats' only real contribution is the supplementary seed_size
+// field; its leeching/seeding/snatched are already sourced from `user`.
+func TestFetchGazelleJSONCommunityStatsFailureIsNotFatal(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Elite"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":3,"buffer":200,"requiredRatio":0.6},
+				"personal":{"class":"Elite","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":500,"uploaded":50,"groups":510,"seeding":20,"leeching":1,"snatched":30,"invited":4}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"failure","error":"failure","response":[]}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite community_stats failing", ferr)
+	}
+	if data["username"] != "listener" || data["seeding"] != 20 {
+		t.Errorf("core index/user data missing: %+v", data)
+	}
+	if _, ok := data["seed_size"]; ok {
+		t.Errorf("seed_size = %#v, want absent (community_stats failed)", data["seed_size"])
+	}
+}
+
+// TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey verifies AlphaRatio's
+// auth mode (no API token support — cookie only) and the two verified
+// divergences from Redacted/Orpheus: no stats.buffer field (buffer must be
+// computed from uploaded−downloaded) and no index-level gift/merit tokens
+// (fl_tokens must be omitted, not reported as a false zero).
+func TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want empty (cookie auth only)", got)
+		}
+		if got := r.Header.Get("Cookie"); got != "session=cookievalue" {
+			t.Errorf("Cookie = %q, want session=cookievalue", got)
+		}
+		action := r.URL.Query().Get("action")
+		seen[action]++
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":1,"requiredratio":0,"class":"Sphinx"}
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "42" {
+				t.Errorf("user id = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":1,"requiredRatio":0},
+				"personal":{"class":"Sphinx","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":11,"groups":11,"seeding":20,"leeching":1,"snatched":30,"invited":0}
+			}}`)
+		case "community_stats":
+			if got := r.URL.Query().Get("userid"); got != "42" {
+				t.Errorf("community_stats userid = %q, want 42", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":"1","seeding":"20","snatched":"30","seedingperc":52}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if _, ok := data["fl_tokens"]; ok {
+		t.Errorf("fl_tokens = %#v, want absent (AR has no gift/merit tokens)", data["fl_tokens"])
+	}
+	if _, ok := data["seed_size"]; ok {
+		t.Errorf("seed_size = %#v, want absent (AR community_stats has no seedingsize)", data["seed_size"])
+	}
+	want := map[string]any{
+		"username": "listener", "user_id": "42", "group": "Sphinx",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
+		"ratio": 1.0, "required_ratio": 0.0,
+		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
+		"leeching": 1, "snatched": 30, "users_invited": 0,
+		"uploads_approved": 11, "requests_filled": 2, "forum_posts": 1,
+		"groups_uploaded": 11, "perfect_flacs": 0,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	for _, action := range []string{"index", "user", "community_stats"} {
+		if seen[action] != 1 {
+			t.Errorf("%s calls = %d, want 1", action, seen[action])
+		}
+	}
+}
+
+// TestFetchGazelleJSONCookieToleratesStringRatio verifies GreatPosterWall's
+// shape: its user.stats.ratio comes back as a JSON string ("38.17869") where
+// every other observed gazelle_json fork sends a number, which would
+// otherwise fail json.Unmarshal into a float64 field.
+func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Power User"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":"3.14159","requiredRatio":0.6},
+				"personal":{"class":"Power User","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":26,"groups":26,"seeding":50,"leeching":0,"snatched":22,"invited":0}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":0,"seeding":"47","snatched":"22"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite string ratio", ferr)
+	}
+	if data["ratio"] != 3.14159 {
+		t.Errorf("ratio = %#v, want 3.14159", data["ratio"])
+	}
+}
+
+// TestFetchGazelleJSONCookieToleratesStringRequiredRatio covers the same
+// GreatPosterWall shape as the string-ratio test above, but for
+// stats.requiredRatio — the sibling field, formatted the same string way,
+// that previously wasn't tolerant of a string and would have failed the
+// whole /user unmarshal.
+func TestFetchGazelleJSONCookieToleratesStringRequiredRatio(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		action := r.URL.Query().Get("action")
+		w.Header().Set("Content-Type", "application/json")
+		switch action {
+		case "index":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener","id":42,
+				"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Power User"}
+			}}`)
+		case "user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"listener",
+				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":"3.14159","requiredRatio":"0.60000"},
+				"personal":{"class":"Power User","warned":false,"enabled":true},
+				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":26,"groups":26,"seeding":50,"leeching":0,"snatched":22,"invited":0}
+			}}`)
+		case "community_stats":
+			fmt.Fprint(w, `{"status":"success","response":{"leeching":0,"seeding":"47","snatched":"22"}}`)
+		default:
+			http.Error(w, "unexpected action", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite string requiredRatio", ferr)
+	}
+	if data["required_ratio"] != 0.6 {
+		t.Errorf("required_ratio = %#v, want 0.6", data["required_ratio"])
+	}
+}
+
+func TestFetchGazelleJSONCookieRequiresSessionCookie(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request should be made without a session cookie")
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie"})
+	if ferr == nil || ferr.Kind != "no_key" {
+		t.Fatalf("Fetch error = %v, want no_key", ferr)
+	}
+}
+
+func TestFetchGazelleGamesMergesAccountEndpoints(t *testing.T) {
+	seen := map[string]int{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-API-Key"); got != "sekrit" {
+			t.Errorf("X-API-Key = %q, want API key", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("Authorization = %q, want empty", got)
+		}
+		request := r.URL.Query().Get("request")
+		seen[request]++
+		w.Header().Set("Content-Type", "application/json")
+		switch request {
+		case "quick_user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player","id":24,
+				"userstats":{"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,"requiredratio":0.6,"class":"Legendary Gamer"}
+			}}`)
+		case "user_stats_ratio":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,
+				"buffer":3298534883328,"disposable":3848290697216,"reqratio":0.6
+			}}`)
+		case "user":
+			if got := r.URL.Query().Get("id"); got != "24" {
+				t.Errorf("user id = %q, want 24", got)
+			}
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player",
+				"stats":{"joinedDate":"2025-01-02 03:04:05","ratio":"4.0","requiredRatio":0.6,"shareScore":1.25,"gold":1000},
+				"personal":{"class":"Legendary Gamer","hnrs":null,"warned":false,"invites":2},
+				"community":{"hourlyGold":2.5,"actualPosts":0,"ircActualLines":14,"seeding":20,"leeching":null,"snatched":100,"uniqueSnatched":90,"seedSize":34359738368},
+				"achievements":{"userLevel":"Legendary Gamer","nextLevel":"Master Gamer","totalPoints":3000,"pointsToNextLvl":1200}
+			}}`)
+		default:
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "player", "user_id": "24", "group": "Legendary Gamer",
+		"uploaded": "4.00 TiB", "downloaded": "1.00 TiB", "buffer": "3.00 TiB",
+		"ratio": 4.0, "required_ratio": 0.6,
+		"disposable": "3.50 TiB", "join_date": "2025-01-02",
+		"bonus_points": 1000.0, "share_score": 1.25, "invites": 2,
+		"warnings": 0, "seeding": 20, "snatched": 100,
+		"unique_snatched": 90, "seed_size": "32.00 GiB",
+		"hourly_gold": 2.5, "forum_posts": 0, "irc_lines": 14,
+		"achievement_points": 3000, "points_to_next_level": 1200,
+		"next_group": "Master Gamer",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["hit_and_runs"]; ok {
+		t.Errorf("hit_and_runs should be omitted when API returns null: %+v", data)
+	}
+	if _, ok := data["leeching"]; ok {
+		t.Errorf("leeching should be omitted when API returns null: %+v", data)
+	}
+	for _, request := range []string{"quick_user", "user_stats_ratio", "user"} {
+		if seen[request] != 1 {
+			t.Errorf("%s calls = %d, want 1", request, seen[request])
+		}
+	}
+}
+
+// TestFetchGazelleGamesToleratesUserEndpointFailure mirrors
+// fetchGazelleJSON's community_stats resilience: quick_user and
+// user_stats_ratio already carry the core uploaded/downloaded/ratio numbers,
+// so a broken/unsupported "user" endpoint (join date, gold, achievements,
+// HNRs/invites) must not fail the whole fetch.
+func TestFetchGazelleGamesToleratesUserEndpointFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := r.URL.Query().Get("request")
+		w.Header().Set("Content-Type", "application/json")
+		switch request {
+		case "quick_user":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"username":"player","id":24,
+				"userstats":{"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,"requiredratio":0.6,"class":"Legendary Gamer"}
+			}}`)
+		case "user_stats_ratio":
+			fmt.Fprint(w, `{"status":"success","response":{
+				"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,
+				"buffer":3298534883328,"disposable":3848290697216,"reqratio":0.6
+			}}`)
+		case "user":
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		default:
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v, want success despite user endpoint failure", ferr)
+	}
+	want := map[string]any{
+		"username": "player", "user_id": "24", "group": "Legendary Gamer",
+		"uploaded": "4.00 TiB", "downloaded": "1.00 TiB", "buffer": "3.00 TiB",
+		"ratio": 4.0, "required_ratio": 0.6, "join_date": "",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["invites"]; ok {
+		t.Errorf("invites should be absent when user endpoint fails: %+v", data)
+	}
+}
+
+func TestFetchGazelleGamesRejectsFailureEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"status":"failure","error":"User permission required"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(gazelleGamesRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_games", APIKey: "sekrit"})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "User permission required" {
+		t.Fatalf("Fetch error detail = %v, want API message", ferr.Err)
+	}
+}
 
 // hunoProfile is the documented HUNO GET /api/profile response shape —
 // a {success, data} envelope with per-bracket seed-division counts.
@@ -88,6 +947,150 @@ func customRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
+func nebulanceRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API",
+		"api":{"kind":"custom","required_fields":["username"]},
+		"scrape":{"skip_html_scrape":true}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"nebulance","name":"Nebulance","abbr":"NBL",
+		"url":%q,"type":"custom",
+		"api":{
+			"path":"/api.php?action=user&method=getuserinfo&type=username&user={username}",
+			"auth_method":"api_key_query","api_key_param":"api_key",
+			"success_field":"status","success_value":"success",
+			"field_map":{
+				"response.Username":"username","response.Class":"group",
+				"response.JoinDate":"join_date","response.SeedCount":"seeding",
+				"response.HnR":"hit_and_runs","response.Invites":"invites",
+				"response.Grabbed":"grabbed","response.Snatched":"snatched",
+				"response.ForumPosts":"forum_posts"
+			},
+			"byte_fields":{
+				"response.Uploaded":"uploaded","response.Downloaded":"downloaded"
+			},
+			"buffer_from_bytes":true,"ratio_from_bytes":true
+		}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "nebulance.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func TestFetchCustomInterpolatesUsernameInQuery(t *testing.T) {
+	var gotQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("user")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"success","response":{"Username":"Star Buck"}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Star Buck",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if gotQuery != "Star Buck" {
+		t.Errorf("user query = %q, want %q", gotQuery, "Star Buck")
+	}
+	if got := data["username"]; got != "Star Buck" {
+		t.Errorf("username = %#v, want %q", got, "Star Buck")
+	}
+}
+
+func TestFetchCustomRejectsErrorEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"error":"API key lacks user permission"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+	})
+	if ferr == nil {
+		t.Fatal("Fetch succeeded, want api_error")
+	}
+	if ferr.Kind != "api_error" {
+		t.Fatalf("error kind = %q, want api_error", ferr.Kind)
+	}
+	if ferr.Err == nil || ferr.Err.Error() != "API key lacks user permission" {
+		t.Errorf("error = %v, want API response message", ferr.Err)
+	}
+}
+
+func TestFetchCustomRejectsUnsuccessfulEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"failed","response":{}}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	_, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+	})
+	if ferr == nil || ferr.Kind != "api_error" {
+		t.Fatalf("Fetch error = %v, want api_error", ferr)
+	}
+}
+
+func TestFetchCustomNebulanceShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("api_key"); got != "sekrit" {
+			t.Errorf("api_key query = %q, want sekrit", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"status":"success",
+			"response":{
+				"Username":"testuser","Uploaded":300,"Downloaded":100,
+				"SeedCount":92,"HnR":0,"Invites":1,"Class":"Flattop",
+				"JoinDate":"2025-01-02 03:04:05","Grabbed":12,
+				"Snatched":34,"ForumPosts":7
+			}
+		}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(nebulanceRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "testuser",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Flattop", "join_date": "2025-01-02",
+		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
+		"ratio": 3.0, "seeding": 92, "hit_and_runs": 0, "invites": 1,
+		"grabbed": 12, "snatched": 34, "forum_posts": 7,
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+}
+
 // TestFetchCustomHUNOShape exercises the custom fetcher against the HUNO
 // /api/profile envelope: Bearer auth, dot-path field mapping into a nested
 // envelope, byte-field conversion, seed-division counts, and the string
@@ -115,24 +1118,24 @@ func TestFetchCustomHUNOShape(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"username":        "hawke",
-		"group":           "Targaryen",
-		"join_date":       "2022-01-01", // ISO datetime trimmed to date
-		"uploaded":        "1.00 TiB",
-		"downloaded":      "512.00 GiB",
-		"buffer":          "512.00 GiB",
-		"ratio":           2.0,
-		"bonus_points":    1500.0,
-		"seeding":         42,
-		"leeching":        3,
-		"hit_and_runs":    0,
-		"warnings":        0,
-		"vanguard_seeds":  10,
-		"squire_seeds":    25,
-		"knight_seeds":    50,
-		"champion_seeds":  100,
-		"guardian_seeds":  3,
-		"legend_seeds":    5,
+		"username":       "hawke",
+		"group":          "Targaryen",
+		"join_date":      "2022-01-01", // ISO datetime trimmed to date
+		"uploaded":       "1.00 TiB",
+		"downloaded":     "512.00 GiB",
+		"buffer":         "512.00 GiB",
+		"ratio":          2.0,
+		"bonus_points":   1500.0,
+		"seeding":        42,
+		"leeching":       3,
+		"hit_and_runs":   0,
+		"warnings":       0,
+		"vanguard_seeds": 10,
+		"squire_seeds":   25,
+		"knight_seeds":   50,
+		"champion_seeds": 100,
+		"guardian_seeds": 3,
+		"legend_seeds":   5,
 	}
 	for k, w := range want {
 		if got, ok := data[k]; !ok {
@@ -236,19 +1239,19 @@ func TestFetchCustomRetroflix(t *testing.T) {
 		t.Errorf("auth header = %q, want Bearer token", gotAuth)
 	}
 	want := map[string]any{
-		"username":      "MysteryZiLLA",
-		"group":         "Cinema Addicted", // class 3 via class_map
-		"unread_mail":   "true",            // count 2 → truthy
-		"join_date":     "2026-02-19",      // ISO trimmed
-		"uploaded":      "1.02 TiB",
-		"downloaded":    "148.93 GiB",
-		"buffer":        "891.27 GiB", // uploaded − downloaded
-		"ratio":         6.98,
-		"bonus_points":  "172236.2",
-		"snatched":      20,
-		"hit_and_runs":  0,
-		"invites":       3,
-		"avg_seed_time": 8285514,
+		"username":       "MysteryZiLLA",
+		"group":          "Cinema Addicted", // class 3 via class_map
+		"unread_mail":    "true",            // count 2 → truthy
+		"join_date":      "2026-02-19",      // ISO trimmed
+		"uploaded":       "1.02 TiB",
+		"downloaded":     "148.93 GiB",
+		"buffer":         "891.27 GiB", // uploaded − downloaded
+		"ratio":          6.98,
+		"bonus_points":   "172236.2",
+		"snatched":       20,
+		"hit_and_runs":   0,
+		"invites":        3,
+		"avg_seed_time":  8285514,
 		"total_seedtime": 257125525,
 	}
 	for k, w := range want {

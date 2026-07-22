@@ -537,7 +537,7 @@ func (d *DB) GetScrapeHealth(trackerID string) (ScrapeHealth, error) {
 	h := ScrapeHealth{LastOK: true}
 	rows, err := d.sql.Query(
 		`SELECT ok, error_kind, scraped_at FROM scrape_log
-		 WHERE tracker_id = ? ORDER BY scraped_at DESC LIMIT 2`, trackerID)
+		 WHERE tracker_id = ? ORDER BY scraped_at DESC, rowid DESC LIMIT 2`, trackerID)
 	if err != nil {
 		return h, err
 	}

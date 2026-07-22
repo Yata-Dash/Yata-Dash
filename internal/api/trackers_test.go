@@ -3,8 +3,41 @@ package api
 import (
 	"testing"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
+
+func TestRequiredFieldsIncludesCustomAPIPathInputs(t *testing.T) {
+	api := &defs.CustomAPI{
+		Path:     "/api.php?action=user&user={username}",
+		FieldMap: map[string]string{"response.JoinDate": "join_date"},
+	}
+	got := requiredFieldsFor([]string{"join_date"}, api)
+	if len(got) != 1 || got[0] != "username" {
+		t.Fatalf("required fields = %v, want [username]", got)
+	}
+}
+
+// TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod: a custom def
+// whose API authenticates with a user-supplied session cookie
+// (auth_method: "session_cookie") must resolve "session_cookie" into its
+// required fields, the same way gazelle_json_cookie-typed trackers do —
+// that's what keeps the cookie input visible in the add/edit modal even
+// with scraping off.
+func TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod(t *testing.T) {
+	api := &defs.CustomAPI{
+		Path:       "/api.php?action=user",
+		AuthMethod: "session_cookie",
+	}
+	got := requiredFieldsFor(nil, api)
+	found := false
+	for _, f := range got {
+		found = found || f == "session_cookie"
+	}
+	if !found {
+		t.Fatalf("required fields = %v, want to include session_cookie", got)
+	}
+}
 
 // TestApplyPayloadSanitizesTargetDeadlines covers target_deadlines' save-time
 // rules: an entry for a field with no target value is dropped, a "days"
@@ -75,6 +108,26 @@ func TestToViewRoundTripsTargetDeadlines(t *testing.T) {
 	v2 := toView(d, noDeadlines)
 	if v2.TargetDeadlines == nil {
 		t.Error("expected TargetDeadlines to normalize nil to an empty map, like Targets")
+	}
+}
+
+func TestToViewIncludesCategorySpecificSeedRules(t *testing.T) {
+	d := testDeps(t)
+	v := toView(d, models.Tracker{URL: "https://nebulance.io"})
+	if v.MinSeedDaysEpisode != 1 || v.MinSeedDaysSeason != 5 {
+		t.Fatalf("seed rules = episode %d, season %d; want 1 and 5",
+			v.MinSeedDaysEpisode, v.MinSeedDaysSeason)
+	}
+}
+
+func TestToViewIncludesTrackerRuleNote(t *testing.T) {
+	d := testDeps(t)
+	v := toView(d, models.Tracker{URL: "https://animebytes.tv"})
+	if v.MinSeedHours != 72 {
+		t.Fatalf("seed hours = %d, want 72", v.MinSeedHours)
+	}
+	if v.RuleNote == "" {
+		t.Fatal("expected AnimeBytes rule note in tracker view")
 	}
 }
 

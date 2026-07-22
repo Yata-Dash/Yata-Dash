@@ -339,7 +339,11 @@ function renderTargetsCol(t: Tracker): void {
   const targetsHtml = buildTargets(t, statsCache[t.id], appSettings, groupDefs, t.def_key ?? '', 'full');
   const rules: string[] = [];
   if (t.min_ratio && t.min_ratio > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Ratio</span><span class="exp-stat-value">${esc(String(t.min_ratio))}</span></div>`);
-  if (t.min_seed_days && t.min_seed_days > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_days} day${t.min_seed_days === 1 ? '' : 's'}</span></div>`);
+  if (t.min_seed_days_episode && t.min_seed_days_episode > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Episode Seed Time</span><span class="exp-stat-value">${t.min_seed_days_episode} day${t.min_seed_days_episode === 1 ? '' : 's'}</span></div>`);
+  if (t.min_seed_days_season && t.min_seed_days_season > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Season Seed Time</span><span class="exp-stat-value">${t.min_seed_days_season} day${t.min_seed_days_season === 1 ? '' : 's'}</span></div>`);
+  if (t.min_seed_hours && t.min_seed_hours > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_hours} hours</span></div>`);
+  if (!t.min_seed_hours && !t.min_seed_days_episode && !t.min_seed_days_season && t.min_seed_days && t.min_seed_days > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_days} day${t.min_seed_days === 1 ? '' : 's'}</span></div>`);
+  if (t.rule_note) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Details</span><span class="exp-stat-value">${esc(t.rule_note)}</span></div>`);
   el.innerHTML = (targetsHtml || '<div class="exp-section-title">Targets</div><div class="detail-empty">No targets set — add some from the edit screen.</div>')
     + (rules.length ? `<div style="margin-top:14px">
         <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>

@@ -73,6 +73,10 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		if td.Rules != nil {
 			v.MinRatio = td.Rules.MinRatio
 			v.MinSeedDays = td.Rules.MinSeedDays
+			v.MinSeedHours = td.Rules.MinSeedHours
+			v.MinSeedDaysEpisode = td.Rules.MinSeedDaysEpisode
+			v.MinSeedDaysSeason = td.Rules.MinSeedDaysSeason
+			v.RuleNote = td.Rules.Note
 		}
 		customAPI = td.API
 	}

@@ -51,6 +51,12 @@ export interface Tracker {
   /** Tracker's minimum per-torrent seed time in days (0/absent = unknown).
    *  Display-only reference from the def — no calculations. */
   min_seed_days?: number;
+  min_seed_hours?: number;
+  /** Category-specific seed times, used instead of min_seed_days when set. */
+  min_seed_days_episode?: number;
+  min_seed_days_season?: number;
+  /** Fine print for variable seed-time formulas, grace periods, or H&R rules. */
+  rule_note?: string;
   /** Def staff-approval status: approved | informal | pending | unknown.
    *  Manual trackers report "unknown"; the UI warns unless "approved". */
   def_approval?: string;
@@ -384,6 +390,8 @@ export interface GroupRequirements {
   min_uploaded?: string;
   /** Some trackers promote on download volume instead (TBDev family). */
   min_downloaded?: string;
+  /** Combined upload + download threshold. */
+  min_total_transfer?: string;
   min_ratio?: number;
   min_seedtime?: string;
   min_seed_size?: string;
@@ -398,6 +406,7 @@ export interface GroupRequirements {
    *  row until Yata can estimate it from upload history. */
   min_monthly_uploads?: number;
   description?: string;  // non-empty = text-only / special group
+  note?: string;         // extra non-numeric conditions alongside targets
   /**
    * Alternative requirement sets: the base fields above must ALL be met,
    * PLUS at least ONE complete any_of entry. Entries never nest further.
@@ -456,6 +465,8 @@ export interface TypeInfo {
   api_kind: string; // "unit3d" | "gazelle" | "custom" | "demo"
   /** Extra config fields this type needs (e.g. gazelle: ["username"]). */
   required_fields?: string[];
+  /** Session-cookie name for api_kind "gazelle_json_cookie" (e.g. "session"). */
+  cookie_name?: string;
 }
 
 export interface DefIssue {

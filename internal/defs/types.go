@@ -36,13 +36,24 @@ type TypeDef struct {
 
 // TypeAPI selects the built-in fetcher used for a tracker type.
 type TypeAPI struct {
-	// Kind is one of: "unit3d", "gazelle", "custom", "demo", "none".
+	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "gazelle_json_cookie",
+	// "gazelle_games", "custom", "demo", "none".
 	//   unit3d  — GET {url}/api/user?api_token={key}
-	//   gazelle — GET {url}/api.php?action=index with Authorization header
+	//   gazelle — username/query-key API used by legacy Gazelle integrations
+	//   gazelle_json — scoped ajax.php API with a raw Authorization header
+	//   gazelle_json_cookie — same ajax.php API as gazelle_json, for Gazelle
+	//     forks with no API token support: sends the user's session cookie
+	//     (name from CookieName) instead of an Authorization header.
+	//   gazelle_games — scoped api.php API with an X-API-Key header
 	//   custom  — fully described by the tracker def's "api" object
 	//   demo    — local mock data, no HTTP
 	//   none    — no API; scrape-only tracker type
 	Kind string `json:"kind"`
+
+	// CookieName is the session-cookie name for kind "gazelle_json_cookie"
+	// (e.g. "session" — the WhatCD/Gazelle framework default). Empty means
+	// use the default at the call site.
+	CookieName string `json:"cookie_name,omitempty"`
 
 	// RequiredFields lists tracker-config fields the user MUST fill at setup.
 	// Valid values: "username" (gazelle needs it for the API call),
@@ -273,6 +284,18 @@ type TrackerRules struct {
 	// no per-torrent tracking or calculations with it, and the fine print
 	// (partial-download thresholds, exemptions, …) stays on the tracker.
 	MinSeedDays int `json:"min_seed_days,omitempty"`
+	// MinSeedHours represents exact minimums that are not a whole number of
+	// days (e.g. GazelleGames requires 80 hours). It takes precedence over
+	// MinSeedDays in the UI.
+	MinSeedHours int `json:"min_seed_hours,omitempty"`
+	// Category-specific minimums are used when episode and season torrents
+	// have different requirements. They take precedence over MinSeedDays in
+	// the UI when present.
+	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
+	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
+	// Note carries concise fine print that cannot be represented by the fixed
+	// thresholds above, such as size-based seed-time formulas and H&R grace.
+	Note string `json:"note,omitempty"`
 }
 
 // ExtendedStatsSpec declares a supplementary UNIT3D stats endpoint. Field names
@@ -293,12 +316,22 @@ type ExtendedStatsSpec struct {
 type CustomAPI struct {
 	// Path is appended to the tracker base URL.
 	Path string `json:"path"`
-	// AuthMethod: "session_cookie" | "api_key_query" | "api_key_header".
+	// BaseURL overrides the tracker's canonical URL when its API uses a
+	// dedicated host. Empty means use the tracker URL.
+	BaseURL string `json:"base_url,omitempty"`
+	// AuthMethod: "session_cookie" | "api_key_query" | "api_key_header" |
+	// "api_key_json_rpc". JSON-RPC sends the key as the first positional param.
 	AuthMethod string `json:"auth_method"`
+	// JSONRPCMethod is required for auth_method "api_key_json_rpc".
+	JSONRPCMethod string `json:"json_rpc_method,omitempty"`
 	// CookieName for auth_method "session_cookie".
 	CookieName string `json:"cookie_name,omitempty"`
 	// APIKeyParam for auth_method "api_key_query".
 	APIKeyParam string `json:"api_key_param,omitempty"`
+	// SuccessField and SuccessValue optionally require a response-envelope
+	// field to equal a specific value before mappings are processed.
+	SuccessField string `json:"success_field,omitempty"`
+	SuccessValue string `json:"success_value,omitempty"`
 
 	// FieldMap maps JSON response paths (dot notation) → canonical field names.
 	FieldMap map[string]string `json:"field_map,omitempty"`
@@ -309,6 +342,8 @@ type CustomAPI struct {
 	SumBytesFields map[string][]string `json:"sum_bytes_fields,omitempty"`
 	// ByteFields maps JSON paths → canonical fields, converting raw bytes to sizes.
 	ByteFields map[string]string `json:"byte_fields,omitempty"`
+	// UnixFields maps Unix-second JSON paths → canonical YYYY-MM-DD fields.
+	UnixFields map[string]string `json:"unix_fields,omitempty"`
 	// BufferFromBytes computes buffer = uploaded_bytes − downloaded_bytes,
 	// using the byte_fields entries mapped to "uploaded" and "downloaded".
 	BufferFromBytes bool `json:"buffer_from_bytes,omitempty"`
@@ -355,11 +390,13 @@ type GroupRequirements struct {
 	MinUploaded string `json:"min_uploaded,omitempty"`
 	// MinDownloaded — some trackers promote on download volume instead
 	// (e.g. TBDev-family sites where buying ratio proves participation).
-	MinDownloaded string  `json:"min_downloaded,omitempty"`
-	MinRatio      float64 `json:"min_ratio,omitempty"`
-	MinSeedtime   string  `json:"min_seedtime,omitempty"`
-	MinSeedSize   string  `json:"min_seed_size,omitempty"`
-	MinUploads    int     `json:"min_uploads,omitempty"`
+	MinDownloaded string `json:"min_downloaded,omitempty"`
+	// MinTotalTransfer is a combined upload + download threshold.
+	MinTotalTransfer string  `json:"min_total_transfer,omitempty"`
+	MinRatio         float64 `json:"min_ratio,omitempty"`
+	MinSeedtime      string  `json:"min_seedtime,omitempty"`
+	MinSeedSize      string  `json:"min_seed_size,omitempty"`
+	MinUploads       int     `json:"min_uploads,omitempty"`
 	// MinAdoptions — adopted-torrent count (e.g. ANT's adoption program,
 	// where classes accept "N uploads and/or 2N adoptions").
 	MinAdoptions   int    `json:"min_adoptions,omitempty"`
@@ -372,6 +409,8 @@ type GroupRequirements struct {
 	// lets defs record the requirement today.
 	MinMonthlyUploads int    `json:"min_monthly_uploads,omitempty"`
 	Description       string `json:"description,omitempty"`
+	// Note records non-numeric conditions that supplement trackable targets.
+	Note string `json:"note,omitempty"`
 
 	// AnyOf expresses alternative requirement sets: the fields above must
 	// ALL be met, plus AT LEAST ONE complete AnyOf entry. Example (LST

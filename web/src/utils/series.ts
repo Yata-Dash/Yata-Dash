@@ -159,8 +159,7 @@ export function fmtGiB(gib: number, dp = 2): string {
   const a = Math.abs(gib);
   if (a >= 1024 * 1024) return `${sign}${(a / (1024 * 1024)).toFixed(dp)} PiB`;
   if (a >= 1024)        return `${sign}${(a / 1024).toFixed(dp)} TiB`;
-  if (a >= 1)           return `${sign}${a.toFixed(dp)} GiB`;
-  return `${sign}${(a * 1024).toFixed(1)} MiB`;
+  return `${sign}${a.toFixed(dp)} GiB`;
 }
 
 function trim1(v: number): string {

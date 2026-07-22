@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "key": "nebulance",
+  "name": "Nebulance",
+  "abbr": "NBL",
+  "url": "https://nebulance.io",
+  "type": "custom",
+  "last_updated": "2026-07-21",
+  "api": {
+    "path": "/api.php?action=user&method=getuserinfo&type=username&user={username}",
+    "auth_method": "api_key_query",
+    "api_key_param": "api_key",
+    "success_field": "status",
+    "success_value": "success",
+    "field_map": {
+      "response.Username": "username",
+      "response.Class": "group",
+      "response.JoinDate": "join_date",
+      "response.SeedCount": "seeding",
+      "response.HnR": "hit_and_runs",
+      "response.Invites": "invites",
+      "response.Grabbed": "grabbed",
+      "response.Snatched": "snatched",
+      "response.ForumPosts": "forum_posts"
+    },
+    "byte_fields": {
+      "response.Uploaded": "uploaded",
+      "response.Downloaded": "downloaded"
+    },
+    "buffer_from_bytes": true,
+    "ratio_from_bytes": true,
+    "api_key_hint": "User Settings → API Keys. Create a key with permission to access your own user information."
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_seed_days_episode": 1,
+    "min_seed_days_season": 5
+  },
+  "invite_requirements": {
+    "min_class": "Ensign",
+    "note": "Ensign grants access to the recruitment forum."
+  },
+  "groups": [
+    {
+      "name": "Colonial",
+      "style": { "color": "#8ba8c1" },
+      "requirements": {},
+      "perks": [
+        { "icon": "fas fa-magnifying-glass", "label": "Advanced search and expanded search results" },
+        { "icon": "fas fa-bookmark", "label": "Create bookmarks" },
+        { "icon": "fas fa-bell", "label": "Torrent notifications" },
+        { "icon": "fas fa-user-secret", "label": "Upload anonymously" }
+      ]
+    },
+    {
+      "name": "Ensign",
+      "style": { "color": "#4fc986" },
+      "requirements": {
+        "min_age": "4W",
+        "min_uploaded": "100 GB",
+        "min_bonus_points": 100000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 100, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-comments", "label": "Access recruitment forum" },
+        { "icon": "fas fa-clipboard-list", "label": "Submit, vote on, and view old requests" },
+        { "icon": "fas fa-trophy", "label": "Advanced Top 10" }
+      ]
+    },
+    {
+      "name": "Flattop",
+      "style": { "color": "#4fc986" },
+      "requirements": {
+        "min_age": "8W",
+        "min_uploaded": "250 GB",
+        "min_bonus_points": 250000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 250, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-square-poll-horizontal", "label": "Create forum polls" },
+        { "icon": "fas fa-tags", "label": "Add tags" }
+      ]
+    },
+    {
+      "name": "Nugget",
+      "style": { "color": "#4fc986" },
+      "requirements": {
+        "min_age": "16W",
+        "min_uploaded": "500 GB",
+        "min_bonus_points": 500000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 500, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-eye", "label": "View non-anonymous uploaders" },
+        { "icon": "fas fa-pen", "label": "Edit own torrents after the timelock" },
+        { "icon": "fas fa-signature", "label": "Set and use a torrent signature" }
+      ]
+    },
+    {
+      "name": "Raptor",
+      "style": { "color": "#33cc33" },
+      "requirements": {
+        "min_age": "32W",
+        "min_uploaded": "1 TB",
+        "min_bonus_points": 850000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 1000, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-dice", "label": "Play the slot machine" }
+      ]
+    },
+    {
+      "name": "Viper",
+      "style": { "color": "#01c3b7" },
+      "requirements": {
+        "min_age": "64W",
+        "min_uploaded": "2.5 TB",
+        "min_uploads": 50,
+        "min_bonus_points": 2500000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 2500, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-download", "label": "Download multiple torrents at once" },
+        { "icon": "fas fa-comments", "label": "Double-post in forums" }
+      ]
+    },
+    {
+      "name": "Orion",
+      "style": { "color": "#1990ff" },
+      "requirements": {
+        "min_age": "100W",
+        "min_uploaded": "8.5 TB",
+        "min_uploads": 150,
+        "min_bonus_points": 3000000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 8500, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-chart-line", "label": "View ratio and downloaded totals" },
+        { "icon": "fas fa-tags", "label": "Add multiple tags at once" }
+      ]
+    },
+    {
+      "name": "Valkyrie",
+      "style": { "color": "#1990ff" },
+      "requirements": {
+        "min_age": "150W",
+        "min_uploaded": "100 TB",
+        "min_uploads": 300,
+        "min_bonus_points": 250000000,
+        "note": "Promotions are purchased manually and require 0 H&Rs and no active warning.",
+        "min_counts": [
+          { "field": "snatched", "count": 35000, "label": "Snatches" }
+        ]
+      },
+      "perks": [
+        { "icon": "fas fa-chart-bar", "label": "View site and selected site statistics" },
+        { "icon": "fas fa-code", "label": "Use advanced BBCode tags" }
+      ]
+    },
+    {
+      "name": "Torrent Celebrity",
+      "style": { "color": "#9933ff" },
+      "requirements": {
+        "description": "Staff at a reputable tracker; appointed by Nebulance staff after profile proof. Cannot be automatically demoted."
+      }
+    },
+    {
+      "name": "Cylon",
+      "style": { "color": "#40bfff" },
+      "requirements": {
+        "description": "Uploader class appointed by staff discretion. Cannot be automatically demoted."
+      }
+    },
+    {
+      "name": "Legend",
+      "style": { "color": "#d59017" },
+      "requirements": {
+        "description": "Former Nebulance staff or members who have contributed in an exemplary way."
+      }
+    },
+    {
+      "name": "Moderator",
+      "style": { "color": "#c63526" },
+      "requirements": {
+        "description": "Nebulance moderator."
+      },
+      "perks": [
+        { "icon": "fas fa-shield-halved", "label": "Moderate torrents, forums, comments, warnings, and accounts" }
+      ]
+    },
+    {
+      "name": "Administrator",
+      "style": { "color": "#bf5fff" },
+      "requirements": {
+        "description": "Nebulance administrator, one step below SysOp."
+      }
+    },
+    {
+      "name": "SysOp",
+      "style": { "color": "#33cc33" },
+      "requirements": {
+        "description": "Nebulance site owner and founder."
+      }
+    }
+  ]
+}

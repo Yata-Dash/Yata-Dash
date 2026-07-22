@@ -80,6 +80,10 @@ func refreshQUISeedsize(d *Deps) {
 	if len(perInstance) == 0 {
 		return // qui unreachable — keep whatever layers exist rather than wiping
 	}
+	// If some (but not all) instances failed, a tracker legitimately seeding
+	// only on a down instance would otherwise read as total==0 and get its
+	// layer wiped. Treat that case as unknown rather than confirmed-empty.
+	partial := len(perInstance) < len(instances)
 
 	for _, t := range d.Cfg.Trackers() {
 		if !t.Enabled {
@@ -106,9 +110,11 @@ func refreshQUISeedsize(d *Deps) {
 		}
 		if total > 0 {
 			_ = d.Stats.SaveQUI(t.ID, map[string]any{"seed_size": parse.BytesToSize(total)})
-		} else {
+		} else if !partial {
 			_ = d.Stats.SaveQUI(t.ID, map[string]any{}) // clear — nothing seeding there now
 		}
+		// else: an instance is down and this tracker read zero — ambiguous,
+		// leave its existing layer alone rather than risk wiping real data.
 	}
 	d.logDebugf("qui seedsize: refreshed from %d instance(s)", len(perInstance))
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -43,18 +45,29 @@ type defInfo struct {
 // to enter a join date (HUNO), while MAM's API reports none so the type-level
 // requirement stands. Always returns a non-nil slice.
 func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
-	out := make([]string, 0, len(base))
-	if api == nil || len(api.FieldMap) == 0 {
-		return append(out, base...)
-	}
-	provided := make(map[string]bool, len(api.FieldMap))
-	for _, canonical := range api.FieldMap {
-		provided[canonical] = true
+	out := make([]string, 0, len(base)+1)
+	provided := make(map[string]bool)
+	if api != nil {
+		for _, canonical := range api.FieldMap {
+			provided[canonical] = true
+		}
 	}
 	for _, f := range base {
 		if !provided[f] {
 			out = append(out, f)
 		}
+	}
+	if api != nil && strings.Contains(api.Path, "{username}") {
+		hasUsername := false
+		for _, field := range out {
+			hasUsername = hasUsername || field == "username"
+		}
+		if !hasUsername {
+			out = append(out, "username")
+		}
+	}
+	if api != nil && api.AuthMethod == "session_cookie" && !slices.Contains(out, "session_cookie") {
+		out = append(out, "session_cookie")
 	}
 	return out
 }
@@ -64,6 +77,10 @@ type typeInfo struct {
 	Label          string   `json:"label"`
 	APIKind        string   `json:"api_kind"`
 	RequiredFields []string `json:"required_fields,omitempty"`
+	// CookieName is the session-cookie name for kind "gazelle_json_cookie"
+	// (e.g. "session") — lets the UI tell users exactly which browser cookie
+	// to copy instead of a generic instruction.
+	CookieName string `json:"cookie_name,omitempty"`
 }
 
 // GET /api/defs — registry contents + load issues.
@@ -88,19 +105,26 @@ func listDefs(d *Deps) http.HandlerFunc {
 			}
 			if td.API != nil {
 				info.APIKeyHint = td.API.APIKeyHint
-				info.NeedsSessionCookie = td.API.AuthMethod == "session_cookie"
 			}
 			if tt, ok := d.Reg.Type(td.Type); ok {
 				info.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, td.API)
 			} else {
 				info.RequiredFields = []string{}
 			}
+			// The cookie field must stay visible even when scraping is off
+			// whenever the API itself needs it — both custom defs with
+			// auth_method "session_cookie" and types like gazelle_json_cookie
+			// resolve "session_cookie" into RequiredFields, so this covers both.
+			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
 			tout = append(tout, info)
 		}
 		types := d.Reg.Types()
 		tyout := make([]typeInfo, 0, len(types))
 		for _, tt := range types {
-			tyout = append(tyout, typeInfo{Key: tt.Key, Label: tt.Label, APIKind: tt.API.Kind, RequiredFields: tt.API.RequiredFields})
+			tyout = append(tyout, typeInfo{
+				Key: tt.Key, Label: tt.Label, APIKind: tt.API.Kind,
+				RequiredFields: tt.API.RequiredFields, CookieName: tt.API.CookieName,
+			})
 		}
 		jsonOK(w, map[string]any{
 			"trackers": tout,

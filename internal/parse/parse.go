@@ -105,14 +105,16 @@ func AnyFloat(v any) float64 {
 
 // BytesToSize converts a raw byte count (as returned by the Gazelle API) to a
 // human-readable size string with exactly 2 decimal places, e.g. "25.52 GiB".
+// Torrent-tracker stat values are always sensibly read at GiB scale or above
+// (down to "0.00 GiB" for near-zero) — B/KiB/MiB tiers are never used, so
+// every tracker's stats display consistently regardless of how small a
+// fresh/near-zero value is.
 func BytesToSize(b int64) string {
 	if b <= 0 {
-		return "0.00 B"
+		return "0.00 GiB"
 	}
 	const (
-		kib = int64(1024)
-		mib = kib * 1024
-		gib = mib * 1024
+		gib = int64(1024) * 1024 * 1024
 		tib = gib * 1024
 		pib = tib * 1024
 	)
@@ -121,14 +123,8 @@ func BytesToSize(b int64) string {
 		return fmt.Sprintf("%.2f PiB", float64(b)/float64(pib))
 	case b >= tib:
 		return fmt.Sprintf("%.2f TiB", float64(b)/float64(tib))
-	case b >= gib:
-		return fmt.Sprintf("%.2f GiB", float64(b)/float64(gib))
-	case b >= mib:
-		return fmt.Sprintf("%.2f MiB", float64(b)/float64(mib))
-	case b >= kib:
-		return fmt.Sprintf("%.2f KiB", float64(b)/float64(kib))
 	default:
-		return fmt.Sprintf("%d B", b)
+		return fmt.Sprintf("%.2f GiB", float64(b)/float64(gib))
 	}
 }
 

@@ -164,6 +164,56 @@ func TestPendingDiscardedOnNonMatchingSave(t *testing.T) {
 	}
 }
 
+// (iv-b) A gazelle_json_cookie tracker (e.g. AlphaRatio, GreatPosterWall) has
+// no API key at all — its credential is the session cookie. testAPI's
+// pre-check must ask for THAT, not report a misleading "no API key set" for
+// a tracker type that has no key concept, and must not block the fetch once
+// the cookie is actually present.
+func TestAPICookieTypeChecksSessionCookieNotAPIKey(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+
+	noCookie := models.Tracker{
+		ID: "cookie1", Name: "Cookie Tracker", URL: "https://cookie-tracker.example",
+		Type: "gazelle_json_cookie", Enabled: true,
+	}
+	if err := d.Cfg.AddTracker(noCookie); err != nil {
+		t.Fatal(err)
+	}
+	rec := postJSON(t, router, "/api/trackers/cookie1/test", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("test: status %d, body %s", rec.Code, rec.Body.String())
+	}
+	var res TrackerTestResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if res.API.Status != "not_configured" || res.API.Detail != "no_cookie" {
+		t.Fatalf("API result = %+v, want not_configured/no_cookie", res.API)
+	}
+
+	// With a cookie set (still no API key), the pre-check must let it through
+	// to the real fetch attempt instead of reporting a false no_key.
+	withCookie := models.Tracker{
+		ID: "cookie2", Name: "Cookie Tracker 2", URL: "http://127.0.0.1:1",
+		Type: "gazelle_json_cookie", SessionCookie: "somecookie", Enabled: true,
+	}
+	if err := d.Cfg.AddTracker(withCookie); err != nil {
+		t.Fatal(err)
+	}
+	rec2 := postJSON(t, router, "/api/trackers/cookie2/test", "")
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("test: status %d, body %s", rec2.Code, rec2.Body.String())
+	}
+	var res2 TrackerTestResult
+	if err := json.Unmarshal(rec2.Body.Bytes(), &res2); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	if res2.API.Status == "not_configured" {
+		t.Fatalf("API result = %+v, want past the credential pre-check (cookie was set)", res2.API)
+	}
+}
+
 // (v) The ad-hoc endpoint (Add-mode Test) returns a result for a tracker
 // that was never added, and persists NOTHING: no config row, no cache
 // entry, no scrape-log row under its throwaway ID.

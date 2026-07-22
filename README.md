@@ -197,22 +197,33 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Tracker | Platform | Approved by tracker | Limit | Notes |
 |---|---|---|---|---|
 | Aither | Unit3D | Yes | 180min | Monthly Uploads not currently retrievable |
+| AlphaRatio | Gazelle | No | API Only | No API token support; authenticates with a user-supplied session cookie |
+| AnimeBytes | Custom | No | API Only | Uses the personal stats API; account age is entered manually |
 | Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
 | Aura4K | Unit3D | Yes | 180min |  |
+| Blutopia | Unit3D | No | API Only | Seed-size and average-seedtime progress unavailable through the API |
+| BroadcastTheNet | Custom | No | API Only | JSON-RPC userInfo; 150 API calls per hour |
 | Darkpeers | Unit3D | Yes | 180min |  |
+| GazelleGames | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| GreatPosterWall | Gazelle | No | API Only | No API token support; authenticates with a user-supplied session cookie |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
 | InfinityHD | Unit3D | Yes | 60min |  |
 | LST | Unit3D | Yes | 180min |  |
 | Luminarr | Unit3D | Yes | 120min |  |
 | MidnightScene | Unit3D | Yes | 60min |  |
 | MyAnonamouse | Custom | Yes | API Only | |
+| Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
+| Orpheus | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping; required ratio is calculated dynamically |
+| Redacted | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| ReelFliX | Unit3D | No | API Only | Seed-size, average-seedtime, and rolling-upload progress unavailable through the API |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
 | RocketHD | Unit3D | Yes | API Only |  |
 | Seedpool | Unit3D | Yes | 180min |  |
 | Speedapp | Custom | Yes | API Only | Added API stats - Thanks team! |
 | Unwalled | Unit3D | Yes | 180min |  |
+| Upload.cx | Unit3D | No | API Only | Seed-size, average-seedtime, and upload-count progress unavailable through the API |
 | YUSCENE | Unit3D | Yes | 180min |  |
 | Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
 
@@ -231,7 +242,7 @@ internal/
   api/              HTTP handlers (chi), one file per route group
   config/           config.json (atomic writes, mutex-guarded)
   defs/             definition loading, validation, override-chain resolution
-  fetch/            API fetchers: unit3d, gazelle, custom (data-driven), demo
+  fetch/            API fetchers: unit3d, gazelle variants, custom (data-driven), demo
   scrape/           multi-strategy HTML profile scraper + rate-limit policy
   stats/            unified stats engine: api + scrape layers → merged view
   store/            SQLite: stat layers, history, scrape log, sessions

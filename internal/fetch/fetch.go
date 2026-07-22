@@ -8,10 +8,12 @@
 package fetch
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -65,6 +67,10 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		data, ferr = c.fetchDemo(t)
 	case "gazelle":
 		data, ferr = c.fetchGazelle(t)
+	case "gazelle_json", "gazelle_json_cookie":
+		data, ferr = c.fetchGazelleJSON(t, kind)
+	case "gazelle_games":
+		data, ferr = c.fetchGazelleGames(t)
 	case "custom":
 		data, ferr = c.fetchCustom(t)
 	case "none":
@@ -91,6 +97,7 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
+	convertUnit3DCoreBytes(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
 	// trackers expose formerly scrape-only stats (seed size, seed times, unread
 	// flags, …) here, letting them turn scraping off entirely. Best-effort: a
@@ -118,6 +125,21 @@ func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 		return c.getJSON(url+"?api_token="+key, nil, identify)
 	}
 	return nil, ferr
+}
+
+// unit3dCoreByteFields are /api/user fields carrying byte counts. Standard
+// UNIT3D installs (Blutopia and most others) return these as raw integers;
+// some forks (ReelFliX, UploadCX) pre-format them as "X.XX GiB" strings
+// instead. convertUnit3DCoreBytes only touches values still in raw numeric
+// form, so already-formatted forks pass through untouched.
+var unit3dCoreByteFields = []string{"uploaded", "downloaded", "buffer"}
+
+func convertUnit3DCoreBytes(data map[string]any) {
+	for _, f := range unit3dCoreByteFields {
+		if n, ok := data[f].(float64); ok {
+			data[f] = parse.BytesToSize(int64(n))
+		}
+	}
 }
 
 // mergeExtended folds an extended-stats response into the core /api/user map.
@@ -194,11 +216,11 @@ func (c *Client) fetchGazelle(t models.Tracker) (map[string]any, *Error) {
 		return nil, errf("parse_error", err)
 	}
 	if raw.Status != "success" {
-		msg := raw.Error
-		if msg == "" {
-			msg = "api_error"
+		message := raw.Error
+		if message == "" {
+			message = "api_error"
 		}
-		return nil, errf("api_error", fmt.Errorf("%s", msg))
+		return nil, errf("api_error", fmt.Errorf("%s", message))
 	}
 	r := raw.Response
 
@@ -206,27 +228,339 @@ func (c *Client) fetchGazelle(t models.Tracker) (map[string]any, *Error) {
 	if r.Downloaded > 0 {
 		ratio = float64(r.Uploaded) / float64(r.Downloaded)
 	}
-	bufBytes := max(r.Uploaded-r.Downloaded, 0)
+	bufferBytes := max(r.Uploaded-r.Downloaded, 0)
 	joinDate := r.JoinDate
 	if len(joinDate) >= 10 {
-		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
+		joinDate = joinDate[:10]
 	}
 	out := map[string]any{
 		"username":   r.Username,
 		"group":      r.Class,
 		"uploaded":   parse.BytesToSize(r.Uploaded),
 		"downloaded": parse.BytesToSize(r.Downloaded),
-		"buffer":     parse.BytesToSize(bufBytes),
+		"buffer":     parse.BytesToSize(bufferBytes),
 		"ratio":      ratio,
 		"seeding":    r.SeedCount,
 		"invites":    fmt.Sprintf("%d", r.Invites),
 		"snatched":   fmt.Sprintf("%d", r.Snatched),
 		"join_date":  joinDate,
 	}
-	// user_id drives the ID-based profile URL (/user.php?id=N). Not rendered as
-	// a stat row (frontend NON_ROW_FIELDS) — consumed by profileURL().
 	if r.ID > 0 {
 		out["user_id"] = fmt.Sprintf("%d", r.ID)
+	}
+	return out, nil
+}
+
+// Gazelle JSON is the ajax.php API used by Redacted-style Gazelle sites.
+type gazelleJSONEnvelope struct {
+	Status   string          `json:"status"`
+	Response json.RawMessage `json:"response"`
+	Error    string          `json:"error,omitempty"`
+}
+
+type gazelleJSONIndex struct {
+	Username    string  `json:"username"`
+	ID          int     `json:"id"`
+	GiftTokens  float64 `json:"giftTokens"`
+	MeritTokens float64 `json:"meritTokens"`
+}
+
+type gazelleJSONUser struct {
+	Username string `json:"username"`
+	Stats    struct {
+		JoinedDate string `json:"joinedDate"`
+		Uploaded   int64  `json:"uploaded"`
+		Downloaded int64  `json:"downloaded"`
+		// Ratio and requiredRatio are numbers on Redacted/Orpheus/AlphaRatio but
+		// JSON strings on GreatPosterWall ("38.17869") — accept either.
+		Ratio         any   `json:"ratio"`
+		Buffer        int64 `json:"buffer"`
+		RequiredRatio any   `json:"requiredRatio"`
+	} `json:"stats"`
+	Personal struct {
+		Class   string `json:"class"`
+		Warned  bool   `json:"warned"`
+		Enabled bool   `json:"enabled"`
+	} `json:"personal"`
+	Community struct {
+		Posts          int `json:"posts"`
+		RequestsFilled int `json:"requestsFilled"`
+		PerfectFLACs   int `json:"perfectFlacs"`
+		Uploaded       int `json:"uploaded"`
+		Groups         int `json:"groups"`
+		Seeding        int `json:"seeding"`
+		Leeching       int `json:"leeching"`
+		Snatched       int `json:"snatched"`
+		Invited        int `json:"invited"`
+	} `json:"community"`
+}
+
+type gazelleJSONCommunityStats struct {
+	Leeching    any `json:"leeching"`
+	Seeding     any `json:"seeding"`
+	Snatched    any `json:"snatched"`
+	SeedingSize any `json:"seedingsize"`
+}
+
+func (c *Client) getGazelleJSON(url string, headers map[string]string, identify string, out any) *Error {
+	body, ferr := c.getBody(url, headers, identify)
+	if ferr != nil {
+		return ferr
+	}
+	var env gazelleJSONEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		snippet := string(body)
+		if len(snippet) > 300 {
+			snippet = snippet[:300]
+		}
+		return errf("parse_error", fmt.Errorf("%w — body: %q", err, snippet))
+	}
+	if env.Status != "success" {
+		message := env.Error
+		if message == "" {
+			message = "api_error"
+		}
+		return errf("api_error", fmt.Errorf("%s", message))
+	}
+	if err := json.Unmarshal(env.Response, out); err != nil {
+		return errf("parse_error", err)
+	}
+	return nil
+}
+
+func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any, *Error) {
+	identify := c.identify(t)
+	headers := map[string]string{"Accept": "application/json"}
+	if kind == "gazelle_json_cookie" {
+		if strings.TrimSpace(t.SessionCookie) == "" {
+			return nil, errf("no_key", nil)
+		}
+		cookieName := c.Registry.APICookieName(t.URL, t.Type)
+		headers["Cookie"] = cookieName + "=" + strings.TrimSpace(t.SessionCookie)
+	} else {
+		if strings.TrimSpace(t.APIKey) == "" {
+			return nil, errf("no_key", nil)
+		}
+		headers["Authorization"] = strings.TrimSpace(t.APIKey)
+	}
+	base := strings.TrimRight(t.URL, "/") + "/ajax.php?action="
+
+	var index gazelleJSONIndex
+	if ferr := c.getGazelleJSON(base+"index", headers, identify, &index); ferr != nil {
+		return nil, ferr
+	}
+	if index.ID <= 0 {
+		return nil, errf("api_error", fmt.Errorf("index response missing user id"))
+	}
+
+	var user gazelleJSONUser
+	if ferr := c.getGazelleJSON(fmt.Sprintf("%suser&id=%d", base, index.ID), headers, identify, &user); ferr != nil {
+		return nil, ferr
+	}
+	// community_stats is supplementary (its only live use below is seed_size —
+	// leeching/seeding/snatched already come from `user` above), and not every
+	// Gazelle fork supports it (verified failing on Orpheus). A failure here
+	// must not discard the index+user data that already succeeded.
+	var community gazelleJSONCommunityStats
+	_ = c.getGazelleJSON(fmt.Sprintf("%scommunity_stats&userid=%d", base, index.ID), headers, identify, &community)
+
+	joinDate := user.Stats.JoinedDate
+	if len(joinDate) >= 10 {
+		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
+	}
+	// Cookie-auth forks (verified on AlphaRatio) don't return a stats.buffer
+	// field or index-level gift/merit tokens — compute buffer from the raw
+	// byte counts instead of trusting an absent field, and omit fl_tokens
+	// rather than reporting a false zero.
+	buffer := user.Stats.Buffer
+	if kind == "gazelle_json_cookie" {
+		buffer = max(user.Stats.Uploaded-user.Stats.Downloaded, 0)
+	}
+	out := map[string]any{
+		"username":         user.Username,
+		"user_id":          fmt.Sprintf("%d", index.ID),
+		"group":            user.Personal.Class,
+		"uploaded":         parse.BytesToSize(user.Stats.Uploaded),
+		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
+		"buffer":           parse.BytesToSize(buffer),
+		"ratio":            parse.AnyFloat(user.Stats.Ratio),
+		"required_ratio":   parse.AnyFloat(user.Stats.RequiredRatio),
+		"join_date":        joinDate,
+		"warnings":         0,
+		"seeding":          user.Community.Seeding,
+		"leeching":         user.Community.Leeching,
+		"snatched":         user.Community.Snatched,
+		"users_invited":    user.Community.Invited,
+		"uploads_approved": user.Community.Uploaded,
+		"requests_filled":  user.Community.RequestsFilled,
+		"forum_posts":      user.Community.Posts,
+		"groups_uploaded":  user.Community.Groups,
+		"perfect_flacs":    user.Community.PerfectFLACs,
+	}
+	if kind != "gazelle_json_cookie" {
+		out["fl_tokens"] = index.GiftTokens + index.MeritTokens
+	}
+	if user.Personal.Warned {
+		out["warnings"] = 1
+	}
+	if size, ok := community.SeedingSize.(string); ok && strings.TrimSpace(size) != "" {
+		out["seed_size"] = size
+	}
+	return out, nil
+}
+
+// GazelleGames exposes a scoped Gazelle-derived API at api.php. It differs
+// from the ajax.php API in both authentication and endpoint names, so it has
+// its own fetcher rather than risking changes to Redacted-style trackers.
+type gazelleGamesQuickUser struct {
+	Username  string `json:"username"`
+	ID        int    `json:"id"`
+	UserStats struct {
+		Class string `json:"class"`
+	} `json:"userstats"`
+}
+
+type gazelleGamesRatio struct {
+	Uploaded      any `json:"uploaded"`
+	Downloaded    any `json:"downloaded"`
+	Ratio         any `json:"ratio"`
+	Buffer        any `json:"buffer"`
+	Disposable    any `json:"disposable"`
+	RequiredRatio any `json:"reqratio"`
+}
+
+type gazelleGamesUser struct {
+	Stats struct {
+		JoinedDate string  `json:"joinedDate"`
+		ShareScore float64 `json:"shareScore"`
+		Gold       float64 `json:"gold"`
+	} `json:"stats"`
+	Personal struct {
+		HNRs    *int `json:"hnrs"`
+		Warned  bool `json:"warned"`
+		Invites *int `json:"invites"`
+	} `json:"personal"`
+	Community struct {
+		HourlyGold     *float64 `json:"hourlyGold"`
+		ActualPosts    *int     `json:"actualPosts"`
+		IRCActualLines *int     `json:"ircActualLines"`
+		Seeding        *int     `json:"seeding"`
+		Leeching       *int     `json:"leeching"`
+		Snatched       *int     `json:"snatched"`
+		UniqueSnatched *int     `json:"uniqueSnatched"`
+		SeedSize       *int64   `json:"seedSize"`
+	} `json:"community"`
+	Achievements struct {
+		NextLevel       string `json:"nextLevel"`
+		TotalPoints     int    `json:"totalPoints"`
+		PointsToNextLvl int    `json:"pointsToNextLvl"`
+	} `json:"achievements"`
+}
+
+func (c *Client) getGazelleGames(url, key, identify string, out any) *Error {
+	body, ferr := c.getBody(url, map[string]string{
+		"Accept":    "application/json",
+		"X-API-Key": key,
+	}, identify)
+	if ferr != nil {
+		return ferr
+	}
+	var env gazelleJSONEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		return errf("parse_error", err)
+	}
+	if env.Status != "success" {
+		message := env.Error
+		if message == "" {
+			message = "api_error"
+		}
+		return errf("api_error", fmt.Errorf("%s", message))
+	}
+	if err := json.Unmarshal(env.Response, out); err != nil {
+		return errf("parse_error", err)
+	}
+	return nil
+}
+
+func (c *Client) fetchGazelleGames(t models.Tracker) (map[string]any, *Error) {
+	key := strings.TrimSpace(t.APIKey)
+	if key == "" {
+		return nil, errf("no_key", nil)
+	}
+	base := strings.TrimRight(t.URL, "/") + "/api.php?request="
+	identify := c.identify(t)
+
+	var quick gazelleGamesQuickUser
+	if ferr := c.getGazelleGames(base+"quick_user", key, identify, &quick); ferr != nil {
+		return nil, ferr
+	}
+	if quick.ID <= 0 {
+		return nil, errf("api_error", fmt.Errorf("quick_user response missing user id"))
+	}
+	var ratio gazelleGamesRatio
+	if ferr := c.getGazelleGames(base+"user_stats_ratio", key, identify, &ratio); ferr != nil {
+		return nil, ferr
+	}
+	// user is supplementary (join date, gold/share score, achievements,
+	// HNRs/invites) — the core uploaded/downloaded/ratio/buffer numbers above
+	// already succeeded, so a failure here must not discard them.
+	var user gazelleGamesUser
+	_ = c.getGazelleGames(fmt.Sprintf("%suser&id=%d", base, quick.ID), key, identify, &user)
+
+	joinDate := user.Stats.JoinedDate
+	if len(joinDate) >= 10 {
+		joinDate = joinDate[:10]
+	}
+	out := map[string]any{
+		"username":             quick.Username,
+		"user_id":              fmt.Sprintf("%d", quick.ID),
+		"group":                quick.UserStats.Class,
+		"uploaded":             parse.BytesToSize(int64(parse.AnyFloat(ratio.Uploaded))),
+		"downloaded":           parse.BytesToSize(int64(parse.AnyFloat(ratio.Downloaded))),
+		"buffer":               parse.BytesToSize(int64(parse.AnyFloat(ratio.Buffer))),
+		"disposable":           parse.BytesToSize(int64(parse.AnyFloat(ratio.Disposable))),
+		"ratio":                parse.AnyFloat(ratio.Ratio),
+		"required_ratio":       parse.AnyFloat(ratio.RequiredRatio),
+		"join_date":            joinDate,
+		"bonus_points":         user.Stats.Gold,
+		"share_score":          user.Stats.ShareScore,
+		"warnings":             0,
+		"achievement_points":   user.Achievements.TotalPoints,
+		"points_to_next_level": user.Achievements.PointsToNextLvl,
+		"next_group":           user.Achievements.NextLevel,
+	}
+	if user.Personal.Warned {
+		out["warnings"] = 1
+	}
+	if user.Personal.HNRs != nil {
+		out["hit_and_runs"] = *user.Personal.HNRs
+	}
+	if user.Personal.Invites != nil {
+		out["invites"] = *user.Personal.Invites
+	}
+	if user.Community.HourlyGold != nil {
+		out["hourly_gold"] = *user.Community.HourlyGold
+	}
+	if user.Community.ActualPosts != nil {
+		out["forum_posts"] = *user.Community.ActualPosts
+	}
+	if user.Community.IRCActualLines != nil {
+		out["irc_lines"] = *user.Community.IRCActualLines
+	}
+	if user.Community.Seeding != nil {
+		out["seeding"] = *user.Community.Seeding
+	}
+	if user.Community.Leeching != nil {
+		out["leeching"] = *user.Community.Leeching
+	}
+	if user.Community.Snatched != nil {
+		out["snatched"] = *user.Community.Snatched
+	}
+	if user.Community.UniqueSnatched != nil {
+		out["unique_snatched"] = *user.Community.UniqueSnatched
+	}
+	if user.Community.SeedSize != nil {
+		out["seed_size"] = parse.BytesToSize(*user.Community.SeedSize)
 	}
 	return out, nil
 }
@@ -240,11 +574,46 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	}
 	api := td.API
 
-	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(t.URL, "/")+api.Path, nil)
+	path := api.Path
+	if strings.Contains(path, "{username}") {
+		if strings.TrimSpace(t.Username) == "" {
+			return nil, errf("no_username", nil)
+		}
+		path = strings.ReplaceAll(path, "{username}", url.QueryEscape(strings.TrimSpace(t.Username)))
+	}
+	method := http.MethodGet
+	var requestBody io.Reader
+	if api.AuthMethod == "api_key_json_rpc" {
+		if strings.TrimSpace(t.APIKey) == "" {
+			return nil, errf("no_key", nil)
+		}
+		if strings.TrimSpace(api.JSONRPCMethod) == "" {
+			return nil, errf("request_error", fmt.Errorf("missing JSON-RPC method"))
+		}
+		payload, marshalErr := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"method":  api.JSONRPCMethod,
+			"params":  []string{t.APIKey},
+			"id":      1,
+		})
+		if marshalErr != nil {
+			return nil, errf("request_error", marshalErr)
+		}
+		method = http.MethodPost
+		requestBody = bytes.NewReader(payload)
+	}
+	baseURL := t.URL
+	if strings.TrimSpace(api.BaseURL) != "" {
+		baseURL = api.BaseURL
+	}
+	req, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, requestBody)
 	if err != nil {
 		return nil, errf("request_error", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if api.AuthMethod == "api_key_json_rpc" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	ident.Apply(req, c.identify(t))
 
 	switch api.AuthMethod {
@@ -269,6 +638,8 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 			return nil, errf("no_key", nil)
 		}
 		req.Header.Set("Authorization", "Bearer "+t.APIKey)
+	case "api_key_json_rpc":
+		// The key is already embedded as the first positional request param.
 	}
 
 	resp, err := c.HTTP.Do(req)
@@ -286,6 +657,23 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	var raw map[string]any
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, errf("parse_error", err)
+	}
+	if apiErr, ok := raw["error"]; ok && apiErr != nil {
+		message := "API error"
+		switch value := apiErr.(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				message = value
+			}
+		case map[string]any:
+			if text, ok := value["message"].(string); ok && strings.TrimSpace(text) != "" {
+				message = text
+			}
+		}
+		return nil, errf("api_error", fmt.Errorf("%s", message))
+	}
+	if api.SuccessField != "" && fmt.Sprint(nested(raw, api.SuccessField)) != api.SuccessValue {
+		return nil, errf("api_error", fmt.Errorf("unexpected %s value", api.SuccessField))
 	}
 
 	out := map[string]any{}
@@ -318,6 +706,18 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 			}
 		}
 		out[canonical] = int(total)
+	}
+
+	// Unix-second fields → YYYY-MM-DD.
+	for jsonPath, canonical := range api.UnixFields {
+		v := nested(raw, jsonPath)
+		if v == nil {
+			continue
+		}
+		seconds := int64(parse.AnyFloat(v))
+		if seconds > 0 {
+			out[canonical] = time.Unix(seconds, 0).UTC().Format("2006-01-02")
+		}
 	}
 
 	// Byte fields → size strings (raw values kept for buffer calc).
@@ -416,7 +816,7 @@ func anyTruthy(v any) bool {
 func normalizeCustomString(canonical, v string) string {
 	switch canonical {
 	case "join_date":
-		if len(v) > 10 && v[10] == 'T' {
+		if len(v) > 10 && (v[10] == 'T' || v[10] == ' ') {
 			return v[:10]
 		}
 	case "ratio", "real_ratio":
