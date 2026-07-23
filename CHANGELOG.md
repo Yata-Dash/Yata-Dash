@@ -6,6 +6,10 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+
+
+## [Beta-20260723]
+
 ### Added
 
 - **Connection health.** The dashboard's Tracker Health card is now
@@ -47,6 +51,13 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Fixed
 
+- **UNIT3D trackers reporting raw byte counts showed nonsense sizes.** A stock
+  UNIT3D install returns uploaded, downloaded and buffer from its API as plain
+  byte numbers, while several forks pre-format them as "620.01 GiB" text. Only
+  the text form was ever handled, so any tracker sending numbers had them read
+  as though they were already gigabytes. Byte counts are now converted, and
+  pre-formatted values still pass through untouched.
+
 - **Expanded table rows could collapse to a narrow strip.** The row's width is
   driven by a CSS variable measured from the table, which was being written as
   `0` when the measurement ran while the table view was still hidden — as it is
@@ -80,7 +91,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   matched to the pathways dataset by their name or website address, so they
   appear at all — previously only trackers with a Yata definition could.
 
-### Fixed
 - **Spurious logouts.** Yata logins were never actually expiring (sessions
   last 30 days and survive restarts), but the login screen re-appeared
   whenever a tracker or integration returned an auth error: a profile scrape

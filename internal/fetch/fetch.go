@@ -91,6 +91,7 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
+	convertCoreBytes(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
 	// trackers expose formerly scrape-only stats (seed size, seed times, unread
 	// flags, …) here, letting them turn scraping off entirely. Best-effort: a
@@ -118,6 +119,36 @@ func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 		return c.getJSON(url+"?api_token="+key, nil, identify)
 	}
 	return nil, ferr
+}
+
+// coreByteFields are the /api/user values that carry byte counts. Everything
+// else UNIT3D returns is already a count, a ratio or a display string.
+var coreByteFields = []string{"uploaded", "downloaded", "buffer"}
+
+// convertCoreBytes turns raw byte counts from /api/user into size strings.
+//
+// Two response shapes exist in the wild, and the Go type tells them apart:
+// a stock UNIT3D install returns these fields as JSON NUMBERS of bytes, while
+// some forks (ReelFliX, Upload.cx) pre-format them as "620.01 GiB" STRINGS.
+// Only numbers are converted, so a fork's strings pass through untouched and
+// nothing can be converted twice. Without this, a stock install's byte counts
+// reached the UI as bare numbers and were read as though they were already
+// GiB — the extended-stats path (mergeExtended) converts its own byte fields,
+// but core values are authoritative there and so were never touched.
+//
+// The residual assumption is that a NUMBER always means bytes. No known fork
+// returns a number in any other unit; one that did would be misread by a
+// factor of ~1e9, so it would be obvious rather than subtly wrong.
+//
+// Negative buffers (downloaded above uploaded) fall out as "0.00 B" from
+// BytesToSize, matching what fetchGazelle and the custom fetcher's
+// buffer_from_bytes already do — worth keeping identical, not "fixing" here.
+func convertCoreBytes(data map[string]any) {
+	for _, f := range coreByteFields {
+		if n, ok := data[f].(float64); ok {
+			data[f] = parse.BytesToSize(int64(n))
+		}
+	}
 }
 
 // mergeExtended folds an extended-stats response into the core /api/user map.

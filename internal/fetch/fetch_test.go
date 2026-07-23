@@ -115,24 +115,24 @@ func TestFetchCustomHUNOShape(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"username":        "hawke",
-		"group":           "Targaryen",
-		"join_date":       "2022-01-01", // ISO datetime trimmed to date
-		"uploaded":        "1.00 TiB",
-		"downloaded":      "512.00 GiB",
-		"buffer":          "512.00 GiB",
-		"ratio":           2.0,
-		"bonus_points":    1500.0,
-		"seeding":         42,
-		"leeching":        3,
-		"hit_and_runs":    0,
-		"warnings":        0,
-		"vanguard_seeds":  10,
-		"squire_seeds":    25,
-		"knight_seeds":    50,
-		"champion_seeds":  100,
-		"guardian_seeds":  3,
-		"legend_seeds":    5,
+		"username":       "hawke",
+		"group":          "Targaryen",
+		"join_date":      "2022-01-01", // ISO datetime trimmed to date
+		"uploaded":       "1.00 TiB",
+		"downloaded":     "512.00 GiB",
+		"buffer":         "512.00 GiB",
+		"ratio":          2.0,
+		"bonus_points":   1500.0,
+		"seeding":        42,
+		"leeching":       3,
+		"hit_and_runs":   0,
+		"warnings":       0,
+		"vanguard_seeds": 10,
+		"squire_seeds":   25,
+		"knight_seeds":   50,
+		"champion_seeds": 100,
+		"guardian_seeds": 3,
+		"legend_seeds":   5,
 	}
 	for k, w := range want {
 		if got, ok := data[k]; !ok {
@@ -236,19 +236,19 @@ func TestFetchCustomRetroflix(t *testing.T) {
 		t.Errorf("auth header = %q, want Bearer token", gotAuth)
 	}
 	want := map[string]any{
-		"username":      "MysteryZiLLA",
-		"group":         "Cinema Addicted", // class 3 via class_map
-		"unread_mail":   "true",            // count 2 → truthy
-		"join_date":     "2026-02-19",      // ISO trimmed
-		"uploaded":      "1.02 TiB",
-		"downloaded":    "148.93 GiB",
-		"buffer":        "891.27 GiB", // uploaded − downloaded
-		"ratio":         6.98,
-		"bonus_points":  "172236.2",
-		"snatched":      20,
-		"hit_and_runs":  0,
-		"invites":       3,
-		"avg_seed_time": 8285514,
+		"username":       "MysteryZiLLA",
+		"group":          "Cinema Addicted", // class 3 via class_map
+		"unread_mail":    "true",            // count 2 → truthy
+		"join_date":      "2026-02-19",      // ISO trimmed
+		"uploaded":       "1.02 TiB",
+		"downloaded":     "148.93 GiB",
+		"buffer":         "891.27 GiB", // uploaded − downloaded
+		"ratio":          6.98,
+		"bonus_points":   "172236.2",
+		"snatched":       20,
+		"hit_and_runs":   0,
+		"invites":        3,
+		"avg_seed_time":  8285514,
 		"total_seedtime": 257125525,
 	}
 	for k, w := range want {
@@ -447,5 +447,119 @@ func TestFetchCustomRatioFromBytesNoData(t *testing.T) {
 	data := fetchSpeedapp(t, 0, 0)
 	if got, ok := data["ratio"]; ok {
 		t.Errorf("ratio = %#v, want absent", got)
+	}
+}
+
+// unit3dRegistry writes a minimal defs dir for the stock UNIT3D type (no
+// custom api block, so the unit3d fetcher handles it) plus one tracker on
+// baseURL. Mirrors customRegistry above.
+func unit3dRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"unit3d","label":"Unit3D",
+		"api":{"kind":"unit3d"},
+		"api_field_map":{"seedbonus":"bonus_points"}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"u3d","name":"Test U3D",
+		"abbr":"U3D","url":%q,"type":"unit3d"}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "unit3d.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "u3d.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+func fetchUnit3DBody(t *testing.T, body string) map[string]any {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	return data
+}
+
+// TestFetchUnit3DConvertsCoreBytes: a stock UNIT3D install returns the core
+// stats as raw byte counts. They must reach the UI as size strings — before
+// this conversion existed they arrived as bare numbers and were read as
+// though they were already GiB, so a 1 TiB upload displayed as a nonsense
+// figure. Non-byte numerics alongside them must be left alone.
+func TestFetchUnit3DConvertsCoreBytes(t *testing.T) {
+	data := fetchUnit3DBody(t, `{
+		"username":"stocku3d","group":"User",
+		"uploaded":1099511627776,"downloaded":549755813888,"buffer":549755813888,
+		"ratio":2.0,"seedbonus":1234.5,"seeding":12,"hit_and_runs":0
+	}`)
+
+	want := map[string]any{
+		"uploaded": "1.00 TiB", "downloaded": "512.00 GiB", "buffer": "512.00 GiB",
+		"ratio": 2.0, "seeding": 12.0, "hit_and_runs": 0.0,
+		"bonus_points": 1234.5, // api_field_map rename still applies afterwards
+	}
+	for k, w := range want {
+		if got, ok := data[k]; !ok {
+			t.Errorf("missing field %q", k)
+		} else if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+// TestFetchUnit3DPreformattedForkPassesThrough: forks (ReelFliX, Upload.cx)
+// pre-format the same fields as strings. Those must survive untouched —
+// converting them again would be catastrophic, and the JSON type is the only
+// thing distinguishing the two shapes.
+func TestFetchUnit3DPreformattedForkPassesThrough(t *testing.T) {
+	data := fetchUnit3DBody(t, `{
+		"username":"forku3d","group":"User",
+		"uploaded":"620.01 GiB","downloaded":"314.88 GiB","buffer":"305.13 GiB",
+		"ratio":1.97
+	}`)
+
+	want := map[string]any{
+		"uploaded": "620.01 GiB", "downloaded": "314.88 GiB", "buffer": "305.13 GiB",
+	}
+	for k, w := range want {
+		if got := data[k]; got != w {
+			t.Errorf("%s = %#v, want %#v (fork strings must pass through)", k, got, w)
+		}
+	}
+}
+
+// TestFetchUnit3DNegativeBufferMatchesOtherFetchers: a user who has downloaded
+// more than they uploaded has a negative buffer. BytesToSize floors that at
+// zero, which is exactly what fetchGazelle and the custom fetcher's
+// buffer_from_bytes already do — UNIT3D must not display it differently.
+func TestFetchUnit3DNegativeBufferMatchesOtherFetchers(t *testing.T) {
+	data := fetchUnit3DBody(t, `{
+		"username":"deficit","uploaded":1073741824,"downloaded":2147483648,
+		"buffer":-1073741824,"ratio":0.5
+	}`)
+
+	if got := data["buffer"]; got != "0.00 B" {
+		t.Errorf("negative buffer = %#v, want %q to match the other fetchers", got, "0.00 B")
+	}
+	if got := data["uploaded"]; got != "1.00 GiB" {
+		t.Errorf("uploaded = %#v, want 1.00 GiB", got)
 	}
 }
