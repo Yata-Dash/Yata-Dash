@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "key": "gazelle_json_cookie",
+  "label": "Gazelle JSON API (session cookie)",
+  "last_updated": "2026-07-22",
+  "description": "Gazelle tracker using the scoped ajax.php JSON API, for forks with no API token feature. Authenticates with the user's own session cookie instead of an API key. Profile pages use ID-based URLs (/user.php?id=N).",
+  "api": {
+    "kind": "gazelle_json_cookie",
+    "cookie_name": "session",
+    "required_fields": ["session_cookie"]
+  },
+  "scrape": {
+    "profile_path": "/user.php?id={id}",
+    "labels": {
+      "torrents uploaded": "uploads_approved"
+    }
+  }
+}

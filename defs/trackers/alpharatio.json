@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "key": "alpharatio",
+  "name": "AlphaRatio",
+  "abbr": "AR",
+  "url": "https://alpharatio.cc",
+  "type": "gazelle_json_cookie",
+  "last_updated": "2026-07-22",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 1.0,
+    "note": "1:1 ratio required. Below 1:1 triggers a 21-day Ratio Watch (no IRC giveaways, no inviting, no class promotion) until ratio recovers; below 0.4 auto-disables the account. Hit & Run: torrents ≤48 GB need 1:1 ratio or 3 days seeding (10-day grace); torrents >48 GB need 1:1 ratio or 7 days seeding (28-day grace). Promotion is blocked while warned. 90 days of inactivity demotes to Exiled."
+  },
+  "invite_requirements": {
+    "min_class": "Philosopher"
+  },
+  "groups": [
+    {
+      "name": "Mortal",
+      "style": {},
+      "requirements": {
+        "description": "Default class for all new members."
+      },
+      "perks": [
+        { "icon": "", "label": "View and add bounty to requests" },
+        { "icon": "", "label": "Personal RSS feed" }
+      ]
+    },
+    {
+      "name": "Philosopher",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "80 GB",
+        "min_bonus_points": 60000,
+        "min_age": "4W"
+      },
+      "perks": [
+        { "icon": "", "label": "Invite users" },
+        { "icon": "", "label": "Upload and submit requests" }
+      ]
+    },
+    {
+      "name": "Gladiator",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "260 GB",
+        "min_bonus_points": 120000,
+        "min_age": "8W",
+        "note": "Requires 0 active Hit & Runs."
+      },
+      "perks": [
+        { "icon": "", "label": "Bookmarks" },
+        { "icon": "", "label": "View top ten user/torrent stats" }
+      ]
+    },
+    {
+      "name": "Giant",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "600 GB",
+        "min_bonus_points": 360000,
+        "min_age": "12W",
+        "note": "Requires 0 active Hit & Runs."
+      },
+      "perks": [
+        { "icon": "", "label": "Create forum polls" }
+      ]
+    },
+    {
+      "name": "Centaur",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "1.6 TB",
+        "min_bonus_points": 720000,
+        "min_age": "18W",
+        "note": "Requires 0 active Hit & Runs."
+      }
+    },
+    {
+      "name": "Sphinx",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "3.2 TB",
+        "min_bonus_points": 1440000,
+        "min_age": "26W",
+        "note": "Requires 0 active Hit & Runs."
+      },
+      "perks": [
+        { "icon": "", "label": "Access to Invite Forum" }
+      ]
+    },
+    {
+      "name": "Harpy",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "6 TB",
+        "min_bonus_points": 1920000,
+        "min_age": "38W",
+        "note": "Requires 0 active Hit & Runs."
+      }
+    },
+    {
+      "name": "Satyr",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "12 TB",
+        "min_bonus_points": 2400000,
+        "min_age": "60W",
+        "note": "Requires 0 active Hit & Runs."
+      },
+      "perks": [
+        { "icon": "", "label": "Exempt from Hit & Runs" },
+        { "icon": "", "label": "Can see other users' active torrents" }
+      ]
+    },
+    {
+      "name": "Adonis",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "12 TB",
+        "min_bonus_points": 2000000,
+        "min_age": "60W",
+        "note": "Requires 0 active Hit & Runs and $50+ total donations."
+      },
+      "perks": [
+        { "icon": "", "label": "Exempt from Hit & Runs" },
+        { "icon": "", "label": "Can see other users' active torrents" }
+      ]
+    },
+    {
+      "name": "Cyclops",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "18 TB",
+        "min_bonus_points": 4800000,
+        "min_age": "90W",
+        "note": "Requires 0 active Hit & Runs."
+      }
+    },
+    {
+      "name": "Chimera",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "18 TB",
+        "min_bonus_points": 4000000,
+        "min_age": "90W",
+        "note": "Requires 0 active Hit & Runs and $200+ total donations."
+      }
+    },
+    {
+      "name": "Deity",
+      "style": {},
+      "requirements": {
+        "description": "Given by staff at their discretion. Do not request this class."
+      },
+      "perks": [
+        { "icon": "", "label": "Send invites even when invites are closed" }
+      ]
+    },
+    {
+      "name": "Spartan",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "10 TB",
+        "min_bonus_points": 6200000,
+        "min_age": "120W",
+        "note": "Requires 0 active Hit & Runs and $400+ total donations."
+      }
+    },
+    {
+      "name": "Demiurge",
+      "style": {},
+      "requirements": {
+        "description": "AlphaRatio's founders; members who continue to support the site monthly."
+      }
+    },
+    {
+      "name": "Olympian",
+      "style": {},
+      "requirements": {
+        "description": "Dedicated uploader, recognized as a highly respected community member."
+      }
+    },
+    {
+      "name": "Oracle",
+      "style": {},
+      "requirements": {
+        "description": "Approved staff members of other trackers AlphaRatio works closely with."
+      }
+    },
+    {
+      "name": "Weaponsmiths",
+      "style": {},
+      "requirements": {
+        "description": "AlphaRatio's developers."
+      }
+    },
+    {
+      "name": "Cerberus",
+      "style": {},
+      "requirements": {
+        "description": "First-line support; moderates forums and handles general IRC questions."
+      }
+    },
+    {
+      "name": "Hoplite",
+      "style": {},
+      "requirements": {
+        "description": "Moderates/designs the forums and can warn users."
+      }
+    },
+    {
+      "name": "Titan",
+      "style": {},
+      "requirements": {
+        "description": "Senior moderator; can manage accounts/privileges, edit torrents, and disable accounts."
+      }
+    },
+    {
+      "name": "Demi-Gods",
+      "style": {},
+      "requirements": {
+        "description": "Oversees the day-to-day running of AlphaRatio."
+      }
+    },
+    {
+      "name": "Gods",
+      "style": {},
+      "requirements": {
+        "description": "Site owner(s)."
+      }
+    }
+  ]
+}

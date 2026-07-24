@@ -157,3 +157,23 @@ func (r *Registry) APIKind(trackerURL, typeKey string) string {
 	}
 	return "unit3d" // sensible default for manual trackers with unknown type
 }
+
+// APICookieName returns the session-cookie name for a "gazelle_json_cookie"
+// type tracker (by URL + type key). A tracker def's own api.cookie_name wins
+// over the type default (e.g. GreatPosterWall uses PHPSESSID where Orpheus/
+// AlphaRatio use the WhatCD/Gazelle-framework default "session"), which in
+// turn wins over the hardcoded fallback.
+func (r *Registry) APICookieName(trackerURL, typeKey string) string {
+	if td, hasDef := r.TrackerByURL(trackerURL); hasDef {
+		if td.API != nil && td.API.CookieName != "" {
+			return td.API.CookieName
+		}
+		if td.Type != "" {
+			typeKey = td.Type
+		}
+	}
+	if tt, ok := r.Type(typeKey); ok && tt.API.CookieName != "" {
+		return tt.API.CookieName
+	}
+	return "session"
+}

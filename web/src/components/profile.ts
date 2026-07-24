@@ -24,6 +24,7 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'downloaded',      label: 'Downloaded',      color: 'purple' },
   { key: 'buffer',          label: 'Buffer',          color: 'blue'   },
   { key: 'ratio',           label: 'Ratio',           color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
+  { key: 'required_ratio',  label: 'Required Ratio',  color: 'amber', fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'real_ratio',      label: 'Real Ratio',      color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'bonus_points',    label: 'Bonus Points',    color: 'orange' },
   { key: 'seeding',         label: 'Seeding',         color: 'blue'   },
@@ -72,6 +73,10 @@ export function buildStatRows(
   const fields = resp?.fields ?? {};
   const rows: StatRow[] = [];
   const seen = new Set<string>();
+  const liveRequiredRatio = parseRatio(String(fields.required_ratio?.value ?? ''));
+  const effectiveMinRatio = !isNaN(liveRequiredRatio) && liveRequiredRatio > 0
+    ? liveRequiredRatio
+    : minRatio;
 
   const push = (key: string, label: string, colorDef: StatRowDef['color'], fmt?: (v: string) => string) => {
     const f = fields[key];
@@ -89,8 +94,8 @@ export function buildStatRows(
     seen.add(def.key);
     if (exclude.has(def.key)) continue;
     // min_ratio-aware colouring for the main ratio stat (item 7)
-    const colorDef = def.key === 'ratio' && minRatio && minRatio > 0
-      ? (v: string) => ratioColorFor(parseRatio(v), minRatio)
+    const colorDef = def.key === 'ratio' && effectiveMinRatio && effectiveMinRatio > 0
+      ? (v: string) => ratioColorFor(parseRatio(v), effectiveMinRatio)
       // Highlight toggle for hit & runs — neutral instead of red when off.
       : def.key === 'hit_and_runs' && settings?.highlight_hnr === false
       ? (v: string) => (parseInt(v) || 0) >= 1 ? 'text3' : 'green'

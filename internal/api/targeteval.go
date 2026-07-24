@@ -24,16 +24,17 @@ import (
 // knownTargetLabels gives the display label for each core target key —
 // mirrors CORE_TARGET_SPECS / targetRowsFor's row labels in the frontend.
 var knownTargetLabels = map[string]string{
-	"uploaded":      "Uploaded",
-	"downloaded":    "Downloaded",
-	"ratio":         "Ratio",
-	"seed_size":     "Seed Size",
-	"total_uploads": "Total Uploads",
-	"days":          "Account Age",
-	"avg_seed":      "Avg Seed Time",
-	"bonus_points":  "Bonus Points",
-	"adoptions":     "Adoptions",
-	"snatched":      "Snatched",
+	"uploaded":       "Uploaded",
+	"downloaded":     "Downloaded",
+	"total_transfer": "Total Transfer",
+	"ratio":          "Ratio",
+	"seed_size":      "Seed Size",
+	"total_uploads":  "Total Uploads",
+	"days":           "Account Age",
+	"avg_seed":       "Avg Seed Time",
+	"bonus_points":   "Bonus Points",
+	"adoptions":      "Adoptions",
+	"snatched":       "Snatched",
 }
 
 // targetKeyOrder is the fixed evaluation/label order for known target keys —
@@ -41,7 +42,7 @@ var knownTargetLabels = map[string]string{
 // alternative labels and row iteration are deterministic instead of riding on
 // Go's randomised map order.
 var targetKeyOrder = []string{
-	"uploaded", "downloaded", "ratio", "seed_size", "total_uploads",
+	"uploaded", "downloaded", "total_transfer", "ratio", "seed_size", "total_uploads",
 	"days", "avg_seed", "bonus_points", "adoptions", "snatched",
 }
 
@@ -179,7 +180,7 @@ func titleCaseKey(key string) string {
 // stat may be an omitted zero (mirrors grid.ts's "miss" fallback rows).
 func baseTargetMet(key, tgt string, merged models.MergedStats) bool {
 	switch key {
-	case "uploaded", "downloaded", "seed_size":
+	case "uploaded", "downloaded", "total_transfer", "seed_size":
 		return sizeMet(mergedFieldString(merged, key), tgt)
 	case "ratio":
 		return ratioMet(mergedFieldString(merged, "ratio"), tgt)
@@ -349,6 +350,9 @@ func groupRequirementsToTargets(req defs.GroupRequirements) map[string]string {
 	}
 	if req.MinDownloaded != "" {
 		out["downloaded"] = req.MinDownloaded
+	}
+	if req.MinTotalTransfer != "" {
+		out["total_transfer"] = req.MinTotalTransfer
 	}
 	if req.MinRatio != 0 {
 		out["ratio"] = strconv.FormatFloat(req.MinRatio, 'f', -1, 64)

@@ -25,9 +25,9 @@ func TestEvaluateTargetRowsBaseTargets(t *testing.T) {
 		},
 	}
 	m := models.MergedStats{
-		"uploaded":  statField("2 TiB"),   // met
+		"uploaded":  statField("2 TiB"),    // met
 		"ratio":     statField("Infinity"), // met — ∞ always clears a finite target
-		"join_date": statField(joinDate),  // met — well past 30 days
+		"join_date": statField(joinDate),   // met — well past 30 days
 		// fl_tokens absent entirely.
 	}
 	rows, met, total := evaluateTargetRows(tr, m, nil)
@@ -65,7 +65,7 @@ func TestEvaluateTargetRowsBoundariesAndCustomFallback(t *testing.T) {
 	}
 	m := models.MergedStats{
 		"seed_size":       statField("1024 GiB"), // exactly 1 TiB
-		"ratio":           statField("1.99"),      // just under target
+		"ratio":           statField("1.99"),     // just under target
 		"upload_snatches": statField("100"),
 	}
 	rows, met, total := evaluateTargetRows(tr, m, nil)
@@ -103,6 +103,20 @@ func TestEvaluateTargetRowsEmpty(t *testing.T) {
 	}
 }
 
+func TestEvaluateTargetRowsCombinedTransferRequirement(t *testing.T) {
+	req := defs.GroupRequirements{MinTotalTransfer: "500 GB"}
+	tr := models.Tracker{ID: "t1", TargetGroup: "Member", Targets: groupRequirementsToTargets(req)}
+	groups := []defs.GroupDef{{Name: "Member", Requirements: req}}
+	merged := models.MergedStats{"total_transfer": statField("600 GB")}
+	rows, met, total := evaluateTargetRows(tr, merged, groups)
+	if len(rows) != 1 || met != 1 || total != 1 {
+		t.Fatalf("combined transfer rows=%+v met=%d total=%d", rows, met, total)
+	}
+	if rows[0].Key != "total_transfer" || rows[0].Label != "Total Transfer" || !rows[0].Met {
+		t.Fatalf("combined transfer row = %+v", rows[0])
+	}
+}
+
 // TestEvaluateTargetRowsMinCountsAndAnyOf covers a target group's min_counts
 // (one EDGE row per count, label falls back to title-case) and any_of (one
 // EDGE row PER ALTERNATIVE, but the two alternatives collapse to a single
@@ -125,9 +139,9 @@ func TestEvaluateTargetRowsMinCountsAndAnyOf(t *testing.T) {
 		},
 	}
 	m := models.MergedStats{
-		"vanguard_seeds": statField("5"),      // met (>= 5)
-		"champion_seeds": statField("3"),      // unmet (< 10)
-		"uploaded":       statField("2 TiB"),  // meets any_of alt 0
+		"vanguard_seeds": statField("5"),       // met (>= 5)
+		"champion_seeds": statField("3"),       // unmet (< 10)
+		"uploaded":       statField("2 TiB"),   // meets any_of alt 0
 		"seed_size":      statField("100 GiB"), // does not meet any_of alt 1
 	}
 	rows, met, total := evaluateTargetRows(tr, m, groups)

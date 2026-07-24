@@ -174,7 +174,9 @@ export function renderCard(
     // STALE DATA RULE: render fields exactly like fresh data even when
     // stats.ok is false — the offline state only adds a banner + dimmed dot.
     const ratio    = parseRatio(strOf(stats, 'ratio'));
-    const rc       = ratioColorFor(ratio, tracker.min_ratio);
+    const requiredRatio = parseRatio(strOf(stats, 'required_ratio'));
+    const effectiveMinRatio = !isNaN(requiredRatio) && requiredRatio > 0 ? requiredRatio : tracker.min_ratio;
+    const rc       = ratioColorFor(ratio, effectiveMinRatio);
     const hnr      = parseInt(strOf(stats, 'hit_and_runs')) || 0;
     const updated  = fmtDateTime(stats.fetched_at);
     const ast      = parseSeedTime(strOf(stats, 'avg_seed_time'));
@@ -204,7 +206,9 @@ export function renderCard(
       `<div class="stat-item"${tip ? ` title="${esc(tip)}"` : ''}><div class="stat-label">${label}</div><div class="stat-value ${color}">${value}${srcDot(fieldOf(stats, key), settings)}</div></div>`;
 
     const warnings = numOf(stats, 'warnings');
-    const minRatioTip = tracker.min_ratio && tracker.min_ratio > 0 ? `Tracker minimum: ${tracker.min_ratio}` : '';
+    const minRatioTip = !isNaN(requiredRatio) && requiredRatio > 0
+      ? `Your required ratio: ${requiredRatio}`
+      : tracker.min_ratio && tracker.min_ratio > 0 ? `Tracker minimum: ${tracker.min_ratio}` : '';
     const totalUploads = strOf(stats, 'uploads_approved');
     const hnrColor = hnr < 1 ? 'green' : (settings.highlight_hnr !== false ? 'red' : 'text3');
     // Per-day trend rollover ("≈ 245.3 GiB per day") from the growth rates.
@@ -285,8 +289,15 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
   if (settings.show_tracker_rules === false) return '';
   const parts: string[] = [];
   if (tracker.min_ratio && tracker.min_ratio > 0) parts.push(`Ratio ≥ ${tracker.min_ratio}`);
-  if (tracker.min_seed_days && tracker.min_seed_days > 0)
+  if (tracker.min_seed_days_episode && tracker.min_seed_days_episode > 0)
+    parts.push(`Episode seed ≥ ${tracker.min_seed_days_episode} day${tracker.min_seed_days_episode === 1 ? '' : 's'}`);
+  if (tracker.min_seed_days_season && tracker.min_seed_days_season > 0)
+    parts.push(`Season seed ≥ ${tracker.min_seed_days_season} day${tracker.min_seed_days_season === 1 ? '' : 's'}`);
+  if (tracker.min_seed_hours && tracker.min_seed_hours > 0)
+    parts.push(`Seed ≥ ${tracker.min_seed_hours} hours`);
+  if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
+  if (tracker.rule_note) parts.push(tracker.rule_note);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
     <i class="fas fa-scale-balanced"></i><span>${parts.map(esc).join(' · ')}</span>
@@ -674,8 +685,11 @@ export function buildTargets(
         ).join('<div class="anyof-or">or</div>')}
       </div>`
     : '';
+  const requirementNoteHtml = targetGroupDef?.requirements?.note
+    ? `<div class="target-group-desc">${esc(targetGroupDef.requirements.note)}</div>`
+    : '';
 
-  if (!rows.length && !anyOfHtml && !hasGroups) return '';
+  if (!rows.length && !anyOfHtml && !requirementNoteHtml && !hasGroups) return '';
 
   // Quick-edit pencil — opens the dashboard targets popover. Hidden for
   // trackers without def groups (nothing to load from).
@@ -769,6 +783,7 @@ export function buildTargets(
     ${groupBadgeHtml}
     ${rows.map(r => renderTargetRow(r, settings, mode)).join('')}
     ${anyOfHtml}
+    ${requirementNoteHtml}
     ${emptyHint}
   </div>`;
 }

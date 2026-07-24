@@ -35,7 +35,8 @@
   "aliases": ["https://mytracker-mirror.example"],
 
   // [REQUIRED] Tracker type key — must match a file in defs/types/.
-  // Built-in types: "unit3d", "gazelle", "custom", "test".
+  // Built-in types: "unit3d", "gazelle", "gazelle_json", "gazelle_json_cookie",
+  // "gazelle_games", "custom", "test".
   "type": "unit3d",
 
   // [OPTIONAL — recommended] Date (YYYY-MM-DD) this def's data was last
@@ -129,18 +130,35 @@
   },
 
   // [OPTIONAL — REQUIRED for type "custom"] Describes a non-standard API
-  // entirely as data. Omit for unit3d/gazelle/test trackers.
+  // entirely as data. Omit for unit3d/gazelle/gazelle_json/gazelle_games/test
+  // trackers. A "gazelle_json_cookie" tracker may ALSO set a minimal api
+  // block containing only "cookie_name" (no "path") to override the type's
+  // default cookie name — e.g. GreatPosterWall uses PHPSESSID where Orpheus/
+  // AlphaRatio use the WhatCD/Gazelle-framework default "session"; omitting
+  // "path" here keeps the fetcher on gazelle_json_cookie instead of custom.
   "api": {
-    // Endpoint path appended to the base URL.
+    // Endpoint path appended to the base URL. Use {username} when an API
+    // needs the configured tracker username in its query; Yata URL-encodes
+    // the value and marks username as required during tracker setup.
     "path": "/api/stats.php?summary",
+    // Optional dedicated API origin when it differs from the tracker URL.
+    "base_url": "https://api.tracker.example",
 
-    // One of: "session_cookie", "api_key_query", "api_key_header"
+    // One of: "session_cookie", "api_key_query", "api_key_header", "api_key_json_rpc"
     //   session_cookie — sends "Cookie: <cookie_name>=<user's session cookie>"
     //   api_key_query  — appends "?<api_key_param>=<user's API key>"
     //   api_key_header — sends "Authorization: Bearer <user's API key>"
+    //   api_key_json_rpc — POSTs JSON-RPC 2.0 with the API key as params[0]
     "auth_method": "api_key_query",
+    // Required only for api_key_json_rpc.
+    "json_rpc_method": "userInfo",
     "cookie_name": "",
     "api_key_param": "token",
+
+    // Optional response-envelope validation. When set, a response is accepted
+    // only if this dot-notation field equals the configured string value.
+    "success_field": "status",
+    "success_value": "success",
 
     // Map JSON response paths (dot notation for nesting) → canonical fields.
     "field_map": {
@@ -157,6 +175,11 @@
     // Sum several byte-count paths into one human-readable size field.
     "sum_bytes_fields": {
       "seed_size": ["seedOk.size", "seedHnr.size"]
+    },
+
+    // Map Unix-second paths to YYYY-MM-DD canonical fields.
+    "unix_fields": {
+      "member_since": "join_date"
     },
 
     // Map byte-count paths → canonical fields, converting to size strings.
@@ -184,7 +207,14 @@
     // InfinityHD 3). DISPLAY-ONLY reference shown in the card/detail Rules
     // section — no calculations; fine print (partial-download thresholds,
     // exemptions, …) stays on the tracker's rules page.
-    "min_seed_days": 10
+    "min_seed_days": 10,
+    // When episode and season requirements differ, use these instead of
+    // min_seed_days so the UI labels both rules accurately.
+    "min_seed_days_episode": 1,
+    "min_seed_days_season": 5,
+    // Concise fine print for rules that do not fit fixed thresholds, such as
+    // size-based seed times, caps, partial-download thresholds, or H&R grace.
+    "note": "Seed time increases with torrent size; see the tracker rules."
   },
 
   // [OPTIONAL] Site-wide requirements to USE the invite system when they are
@@ -226,6 +256,7 @@
       "requirements": {
         "min_uploaded": "1 TiB",     // size string
         "min_downloaded": "50 GB",   // size string — TBDev-family trackers promote on download volume
+        "min_total_transfer": "2 TiB", // combined upload + download threshold
         "min_ratio": 1.0,            // number
         "min_seedtime": "1M",        // avg seedtime: 30D / 1M / 1Y style
         "min_seed_size": "5 TiB",    // concurrent seeding size
@@ -234,6 +265,7 @@
         "min_bonus_points": 0,       // bonus point balance
         "min_age": "1M",             // account age
         "description": "",           // non-stat groups: text shown instead of bars
+        "note": "",                  // extra non-numeric conditions shown with bars
 
         // Alternative requirement sets: everything above must be met PLUS
         // at least ONE complete any_of entry (e.g. LST Whale needs

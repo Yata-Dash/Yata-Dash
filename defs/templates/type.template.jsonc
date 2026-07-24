@@ -5,7 +5,7 @@
 // A tracker TYPE describes a class of tracker software (Unit3D, Gazelle, …).
 // Individual trackers reference a type and inherit its defaults.
 // Most users never need to create a type — the built-ins (unit3d, gazelle,
-// custom, test) cover nearly everything. Create one only for genuinely new
+// gazelle_json, gazelle_games, custom, test) cover nearly everything. Create one only for genuinely new
 // tracker software.
 //
 // To add: copy to defs/types/<key>.json, strip ALL comments (must be plain
@@ -26,6 +26,8 @@
   // [REQUIRED] Which built-in fetcher this type uses.
   //   "unit3d"  — GET {url}/api/user?api_token={key}
   //   "gazelle" — GET {url}/api.php?action=user&apikey={key}&method=getuserinfo&type=username&user={username}
+  //   "gazelle_json" — scoped ajax.php API using a raw Authorization header
+  //   "gazelle_games" — scoped api.php API using an X-API-Key header
   //   "custom"  — fully described by each tracker def's "api" object
   //   "demo"    — local mock data from test_data.json, no HTTP
   //   "none"    — no API at all; profile scraping is the only source

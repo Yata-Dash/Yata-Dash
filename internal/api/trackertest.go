@@ -269,8 +269,14 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	}
 	// Real APIs need a key (and gazelle also a username) — surface these as
 	// "not configured" rather than letting the fetcher return a raw error.
+	// gazelle_json_cookie has no API key concept at all — its credential is
+	// the session cookie (e.g. AlphaRatio, GreatPosterWall).
 	if kind != "demo" {
-		if strings.TrimSpace(t.APIKey) == "" {
+		if kind == "gazelle_json_cookie" {
+			if strings.TrimSpace(t.SessionCookie) == "" {
+				return CheckResult{Status: "not_configured", Detail: "no_cookie"}
+			}
+		} else if strings.TrimSpace(t.APIKey) == "" {
 			return CheckResult{Status: "not_configured", Detail: "no_key"}
 		}
 		if kind == "gazelle" && strings.TrimSpace(t.Username) == "" {
@@ -279,6 +285,11 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	}
 	fields, ferr := d.Fetch.Fetch(t)
 	if ferr != nil {
+		// Full detail (e.g. a raw-body snippet on parse_error) is deliberately
+		// NOT part of CheckResult — the UI only ever shows the short Kind via
+		// friendlyDetail's fixed map. Log it here so a failure is diagnosable
+		// from the server log without re-querying the tracker.
+		d.logWarnf("test: %s (%s) — api fetch detail: %v", t.Name, t.ID, ferr)
 		return CheckResult{Status: "fail", Detail: ferr.Kind}
 	}
 	if persist {
