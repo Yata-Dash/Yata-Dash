@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "key": "blutopia",
+  "name": "Blutopia",
+  "abbr": "BLU",
+  "url": "https://blutopia.cc",
+  "type": "unit3d",
+  "last_updated": "2026-07-21",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 7
+  },
+  "invite_requirements": {
+    "min_class": "BluMaster",
+    "note": "BluMaster and higher active groups can send invites when invite privileges are available. Invite privileges remain subject to staff discretion."
+  },
+  "groups": [
+    {
+      "name": "User",
+      "style": { "color": "#c2d7fb", "icon": "fas fa-user" },
+      "requirements": {
+        "min_ratio": 0.4,
+        "note": "Default active class. New users receive 50 GiB upload credit. Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Upload and download access" },
+        { "icon": "", "label": "Access default forums" },
+        { "icon": "", "label": "3 download slots" }
+      ]
+    },
+    {
+      "name": "BluUser",
+      "style": { "color": "#b7c6f1", "icon": "fas fa-user-tie" },
+      "requirements": {
+        "min_uploaded": "1 TiB",
+        "min_age": "1M",
+        "note": "Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "5 download slots" }
+      ]
+    },
+    {
+      "name": "BluMaster",
+      "style": { "color": "#9ba9e5", "icon": "fas fa-user-graduate" },
+      "requirements": {
+        "min_uploaded": "5 TiB",
+        "min_age": "2M",
+        "note": "Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "10 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "BluExtremist",
+      "style": { "color": "#707ed2", "icon": "fas fa-user-astronaut" },
+      "requirements": {
+        "min_uploaded": "20 TiB",
+        "min_age": "3M",
+        "note": "Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "15 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "BluLegend",
+      "style": { "color": "#515ec8", "icon": "fas fa-solid fa-user-bounty-hunter" },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_age": "6M",
+        "note": "Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "20 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "Blutopian",
+      "style": { "color": "#2978d4", "icon": "fas fa-rocket-launch", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_age": "1Y",
+        "note": "Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "Immune to automated H&R warnings" },
+        { "icon": "", "label": "Global freeleech" },
+        { "icon": "", "label": "25 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "BluSeeder",
+      "style": { "color": "#0092e0", "icon": "fas fa-usb-drive" },
+      "requirements": {
+        "min_seed_size": "5 TiB",
+        "min_seedtime": "1M",
+        "min_age": "1M",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode. Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "Immune to automated H&R warnings" },
+        { "icon": "", "label": "25 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "BluCollector",
+      "style": { "color": "#1fb0ff", "icon": "fas fa-hdd" },
+      "requirements": {
+        "min_seed_size": "10 TiB",
+        "min_seedtime": "2M",
+        "min_age": "2M",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode. Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "Immune to automated H&R warnings" },
+        { "icon": "", "label": "Global freeleech" },
+        { "icon": "", "label": "75 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "BluArchivist",
+      "style": { "color": "#5cc6ff", "icon": "fas fa-server", "sparkle": true },
+      "requirements": {
+        "min_seed_size": "20 TiB",
+        "min_seedtime": "3M",
+        "min_age": "3M",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode. Promotions and demotions update daily at midnight UTC."
+      },
+      "perks": [
+        { "icon": "", "label": "Automatic torrent approvals" },
+        { "icon": "", "label": "Access invite forums" },
+        { "icon": "", "label": "Immune to automated H&R warnings" },
+        { "icon": "", "label": "Global freeleech" },
+        { "icon": "", "label": "Global double upload" },
+        { "icon": "", "label": "150 download slots" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "Junior Uploader",
+      "style": { "color": "#67dd99", "icon": "fas fa-angle-up" },
+      "requirements": { "description": "Discretionary group for users who bring fresh content to Blutopia." }
+    },
+    {
+      "name": "Uploader",
+      "style": { "color": "#2ecc71", "icon": "fas fa-angle-double-up" },
+      "requirements": { "description": "Discretionary group for users who bring quality content to Blutopia." }
+    },
+    {
+      "name": "Trustee",
+      "style": { "color": "#bf55ec", "icon": "fas fa-user-shield" },
+      "requirements": { "description": "Former staff, former internal-group members, and close associates." }
+    },
+    {
+      "name": "Internal",
+      "style": { "color": "#baaf92", "icon": "fas fa-wand-magic-sparkles" },
+      "requirements": { "description": "Member of a Blutopia internal release group." }
+    },
+    {
+      "name": "Editor",
+      "style": { "color": "#15b097", "icon": "fas fa-user-pen" },
+      "requirements": { "description": "Discretionary group that fixes other users' torrent pages." }
+    },
+    {
+      "name": "Torrent Moderator",
+      "style": { "color": "#15b097", "icon": "fas fa-badge-check" },
+      "requirements": { "description": "Staff group that checks pending torrents in the moderation queue." }
+    },
+    {
+      "name": "Moderator",
+      "style": { "color": "#0beac5", "icon": "fas fa-gavel" },
+      "requirements": { "description": "Blutopia moderator." }
+    },
+    {
+      "name": "Super Mod",
+      "style": { "color": "#ea7c0b", "icon": "fas fa-dragon" },
+      "requirements": { "description": "Blutopia senior moderation group." }
+    },
+    {
+      "name": "systemd",
+      "style": { "color": "#3fd475", "icon": "fas fa-code-compare" },
+      "requirements": { "description": "Staff supporting administrators with site and infrastructure management." }
+    },
+    {
+      "name": "Administrator",
+      "style": { "color": "#e30b5d", "icon": "fas fa-chess-queen" },
+      "requirements": { "description": "Blutopia administrator." }
+    },
+    {
+      "name": "Super Admin",
+      "style": { "color": "#ff0000", "icon": "fas fa-chess-king" },
+      "requirements": { "description": "Staff administering Blutopia and its infrastructure." }
+    }
+  ]
+}

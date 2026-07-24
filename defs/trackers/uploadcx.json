@@ -1,0 +1,418 @@
+{
+  "schema_version": 1,
+  "key": "uploadcx",
+  "name": "Upload.cx",
+  "abbr": "ULCX",
+  "url": "https://upload.cx",
+  "type": "unit3d",
+  "last_updated": "2026-07-21",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 0.6,
+    "min_seed_days": 2
+  },
+  "invite_requirements": {
+    "min_class": "Seeder"
+  },
+  "groups": [
+    {
+      "name": "Leech",
+      "style": { "color": "#c07a3a", "icon": "fas fa-virus-covid" },
+      "requirements": {},
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "0 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" }
+      ]
+    },
+    {
+      "name": "Parked",
+      "style": { "icon": "fas fa-box-open-full" },
+      "requirements": { "description": "Staff-assigned group; immune to automated H&R warnings." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "0 download slots" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" }
+      ]
+    },
+    {
+      "name": "User",
+      "style": { "color": "#9aa0a6", "icon": "fas fa-cube" },
+      "requirements": { "min_ratio": 0.6 },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "3 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" }
+      ]
+    },
+    {
+      "name": "Seeder",
+      "style": { "color": "#4daf52", "icon": "fas fa-seedling" },
+      "requirements": {
+        "min_uploaded": "10 TiB",
+        "min_ratio": 0.8,
+        "min_age": "1M",
+        "min_seedtime": "1M",
+        "min_seed_size": "5 TiB",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "5 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "Collector",
+      "style": { "color": "#4d96af", "icon": "fas fa-hand-holding-box" },
+      "requirements": {
+        "min_uploaded": "25 TiB",
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_seedtime": "2M",
+        "min_seed_size": "10 TiB",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "10 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Archivist",
+      "style": { "color": "#598bf7", "icon": "fas fa-file-zipper", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_ratio": 1.5,
+        "min_age": "6M",
+        "min_seedtime": "3M",
+        "min_seed_size": "20 TiB",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "25 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Hoarder",
+      "style": { "color": "#595cf7", "icon": "fas fa-warehouse-full", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 1.8,
+        "min_age": "1Y",
+        "min_seedtime": "4M",
+        "min_seed_size": "30 TiB",
+        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "50 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Sharer",
+      "style": { "color": "#c9e127", "icon": "fas fa-person-walking-luggage" },
+      "requirements": {
+        "min_ratio": 0.8,
+        "min_age": "1M",
+        "min_seedtime": "1M",
+        "min_uploads": 50,
+        "note": "Average-seedtime and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "5 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Provider",
+      "style": { "color": "#91e127", "icon": "fas fa-forklift" },
+      "requirements": {
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_seedtime": "2M",
+        "min_uploads": 100,
+        "note": "Average-seedtime and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "10 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Distributor",
+      "style": { "color": "#59e127", "icon": "fas fa-truck-field", "sparkle": true },
+      "requirements": {
+        "min_ratio": 1.5,
+        "min_age": "6M",
+        "min_seedtime": "3M",
+        "min_uploads": 250,
+        "note": "Average-seedtime and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "25 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Supplier",
+      "style": { "color": "#2df833", "icon": "fas fa-ship", "sparkle": true },
+      "requirements": {
+        "min_ratio": 1.8,
+        "min_age": "1Y",
+        "min_seedtime": "4M",
+        "min_uploads": 500,
+        "note": "Average-seedtime and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "50 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Adept",
+      "style": { "color": "#ed7b9c", "icon": "fas fa-scroll-old" },
+      "requirements": {
+        "min_uploaded": "10 TiB",
+        "min_ratio": 0.8,
+        "min_age": "1M",
+        "min_seedtime": "1M",
+        "min_seed_size": "5 TiB",
+        "min_uploads": 50,
+        "note": "Seed-size, average-seedtime, and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "10 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Master",
+      "style": { "color": "#f44d7f", "icon": "fas fa-graduation-cap", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "25 TiB",
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_seedtime": "2M",
+        "min_seed_size": "10 TiB",
+        "min_uploads": 100,
+        "note": "Seed-size, average-seedtime, and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "25 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Veteran",
+      "style": { "color": "#db148b", "icon": "fas fa-helmet-safety", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_ratio": 1.5,
+        "min_age": "6M",
+        "min_seedtime": "3M",
+        "min_seed_size": "20 TiB",
+        "min_uploads": 250,
+        "note": "Seed-size, average-seedtime, and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "50 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Champion",
+      "style": { "color": "#00b4f0", "icon": "fas fa-award", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 1.8,
+        "min_age": "1Y",
+        "min_seedtime": "4M",
+        "min_seed_size": "30 TiB",
+        "min_uploads": 500,
+        "note": "Seed-size, average-seedtime, and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "100 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Legend",
+      "style": { "color": "#fb9c18", "icon": "fas fa-chess-queen-piece", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "150 TiB",
+        "min_ratio": 2.0,
+        "min_age": "2Y",
+        "min_seedtime": "6M",
+        "min_seed_size": "50 TiB",
+        "min_uploads": 1000,
+        "note": "Seed-size, average-seedtime, and upload-count progress is unavailable in API-only mode."
+      },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "250 download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-chevron-double-up torrent-icons__double-upload", "label": "Double upload" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Network Affiliate",
+      "style": { "color": "#78bdbf", "icon": "fas fa-sitemap" },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Junior Uploader",
+      "style": { "color": "#2ecc71", "icon": "fas fa-file-arrow-up" },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Uploader",
+      "style": { "color": "#2ecca0", "icon": "fas fa-cloud-arrow-up", "sparkle": true },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Trustee",
+      "style": { "color": "#bf55ec", "icon": "fas fa-badge-check", "sparkle": true },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Internal",
+      "style": { "color": "#ffce2e", "icon": "fas fa-cards", "sparkle": true },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Editor",
+      "style": { "color": "#159ab0", "icon": "fas fa-square-quote" },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" },
+        { "icon": "far fa-boot", "label": "Use !votekick" }
+      ]
+    },
+    {
+      "name": "Torrent Moderator",
+      "style": { "color": "#15b097", "icon": "fas fa-clipboard-list" },
+      "requirements": { "description": "No automatic promotion requirements are published." },
+      "perks": [
+        { "icon": "far fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
+        { "icon": "far fa-upload text-success", "label": "Upload torrents" },
+        { "icon": "far fa-paper-plane", "label": "Send invites" },
+        { "icon": "far fa-star text-gold", "label": "Freeleech" },
+        { "icon": "far fa-syringe", "label": "Immune to automated H&R warnings" },
+        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
+        { "icon": "far fa-comments", "label": "Access invite forum" }
+      ]
+    }
+  ]
+}

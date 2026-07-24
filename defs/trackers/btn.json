@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "key": "btn",
+  "name": "BroadcastTheNet",
+  "abbr": "BTN",
+  "url": "https://broadcasthe.net",
+  "type": "custom",
+  "last_updated": "2026-07-22",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "api": {
+    "base_url": "https://api.broadcasthe.net",
+    "path": "/",
+    "auth_method": "api_key_json_rpc",
+    "json_rpc_method": "userInfo",
+    "field_map": {
+      "result.Username": "username",
+      "result.Class": "group",
+      "result.Bonus": "bonus_points",
+      "result.Invites": "invites",
+      "result.HnR": "hit_and_runs",
+      "result.Lumens": "lumens"
+    },
+    "sum_fields": {
+      "snatched": ["result.Snatches", "result.UploadsSnatched"]
+    },
+    "byte_fields": {
+      "result.Upload": "uploaded",
+      "result.Download": "downloaded"
+    },
+    "sum_bytes_fields": {
+      "total_transfer": ["result.Upload", "result.Download"]
+    },
+    "unix_fields": {
+      "result.JoinDate": "join_date"
+    }
+  },
+  "rules": {
+    "min_seed_days_episode": 1,
+    "min_seed_days_season": 5,
+    "note": "Ratioless: meet the seed-time rule or a 1:1 torrent ratio within 2 weeks, while seeding at least once every 12 hours. H&R applies from 10% downloaded. Any H&R stops bonus earnings and promotions; more than 15 disables the account."
+  },
+  "invite_requirements": {
+    "min_class": "Elite",
+    "note": "Elite members can send invites purchased from the Lumens Store."
+  },
+  "groups": [
+    {
+      "name": "Sheep",
+      "style": {},
+      "requirements": { "description": "Restricted user class that members should avoid." }
+    },
+    {
+      "name": "User",
+      "style": {},
+      "requirements": { "note": "Default class for new members." }
+    },
+    {
+      "name": "Member",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "100 GB",
+        "min_bonus_points": 100000,
+        "min_age": "2W",
+        "min_counts": [
+          { "field": "snatched", "count": 100, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 100,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      }
+    },
+    {
+      "name": "Power User",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "250 GB",
+        "min_bonus_points": 250000,
+        "min_age": "1M",
+        "min_counts": [
+          { "field": "snatched", "count": 250, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 250,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Power User forum" },
+        { "icon": "", "label": "Access Official and Unofficial Invites forums" },
+        { "icon": "", "label": "Access Top 10 filters" },
+        { "icon": "", "label": "Access notifications" }
+      ]
+    },
+    {
+      "name": "Extreme User",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "500 GB",
+        "min_bonus_points": 500000,
+        "min_age": "3M",
+        "min_counts": [
+          { "field": "snatched", "count": 500, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 500,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Extreme User forum" }
+      ]
+    },
+    {
+      "name": "Elite",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "1 TB",
+        "min_bonus_points": 850000,
+        "min_age": "6M",
+        "min_counts": [
+          { "field": "snatched", "count": 1000, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 850,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Elite forum" },
+        { "icon": "", "label": "Set a custom title" },
+        { "icon": "", "label": "Send invites purchased from the Lumens Store" },
+        { "icon": "", "label": "Edit torrents" }
+      ]
+    },
+    {
+      "name": "Guru",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "2.5 TB",
+        "min_bonus_points": 1500000,
+        "min_age": "9M",
+        "min_counts": [
+          { "field": "snatched", "count": 1500, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 1,500,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Guru forum" }
+      ]
+    },
+    {
+      "name": "Master",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "7.5 TB",
+        "min_bonus_points": 3000000,
+        "min_age": "1Y",
+        "min_counts": [
+          { "field": "snatched", "count": 3000, "label": "Snatches" }
+        ],
+        "note": "Promotion costs 3,000,000 bonus points. Classes must be purchased sequentially; H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Master forum" }
+      ]
+    },
+    {
+      "name": "Overlord",
+      "style": {},
+      "requirements": {
+        "min_total_transfer": "100 TB",
+        "min_uploads": 500,
+        "min_bonus_points": 250000000,
+        "min_age": "3Y",
+        "min_counts": [
+          { "field": "snatched", "count": 3000, "label": "Snatches" }
+        ],
+        "note": "Also requires 250,000 days of total seed time. Upload-count and total-seed-time progress are unavailable through userInfo. Promotion costs 250,000,000 bonus points; classes are sequential and H&Rs block promotion."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Overlord forum" },
+        { "icon": "", "label": "Set a custom title" },
+        { "icon": "", "label": "Send unlimited invites" },
+        { "icon": "", "label": "Immune to inactivity pruning" }
+      ]
+    },
+    {
+      "name": "Encoder",
+      "style": {},
+      "requirements": { "description": "Member of BTN's Encoding or Capping Team, or an external encoder who uploads their content to BTN." }
+    },
+    {
+      "name": "VIP",
+      "style": {},
+      "requirements": { "description": "Selected by administrators or SysOps for significant contributions to BTN." }
+    },
+    {
+      "name": "Torrent Celebrity",
+      "style": {},
+      "requirements": { "description": "Administrator or SysOp at a tracker with a close relationship to BTN." }
+    },
+    {
+      "name": "Legend",
+      "style": {},
+      "requirements": { "description": "Former BTN staff member." }
+    },
+    {
+      "name": "First-Line Support",
+      "style": {},
+      "requirements": { "description": "Support staff assisting with general issues and questions." }
+    },
+    {
+      "name": "TV Technician",
+      "style": {},
+      "requirements": { "description": "Staff maintaining BTN's torrent quality and metadata." }
+    },
+    {
+      "name": "Designer",
+      "style": {},
+      "requirements": { "description": "Staff responsible for BTN graphics and layouts." }
+    },
+    {
+      "name": "Junior Coder",
+      "style": {},
+      "requirements": { "description": "Development staff fixing bugs and creating features under senior oversight." }
+    },
+    {
+      "name": "Moderator",
+      "style": {},
+      "requirements": { "description": "Staff moderating IRC and forums, editing torrents, and assisting with accounts." }
+    },
+    {
+      "name": "Developer",
+      "style": {},
+      "requirements": { "description": "Staff leading and coordinating BTN development and release management." }
+    },
+    {
+      "name": "Team Leader",
+      "style": {},
+      "requirements": { "description": "Staff member responsible for managing a BTN staff team." }
+    },
+    {
+      "name": "Administrator",
+      "style": {},
+      "requirements": { "description": "Senior management responsible for BTN operations, staff, security, and strategy." }
+    },
+    {
+      "name": "Lead Developer",
+      "style": {},
+      "requirements": { "description": "Senior development staff responsible for resolving site-wide technical issues." }
+    },
+    {
+      "name": "SysOp",
+      "style": {},
+      "requirements": { "description": "BTN system operator." }
+    }
+  ]
+}

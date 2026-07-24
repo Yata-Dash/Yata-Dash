@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "key": "animebytes",
+  "name": "AnimeBytes",
+  "abbr": "AB",
+  "url": "https://animebytes.tv",
+  "type": "custom",
+  "last_updated": "2026-07-21",
+  "scrape": {
+    "disable_scraping": true
+  },
+  "api": {
+    "path": "/api/stats/personal",
+    "auth_method": "api_key_header",
+    "success_field": "success",
+    "success_value": "true",
+    "field_map": {
+      "class": "group",
+      "yen.current": "bonus_points",
+      "hnrs.active": "hit_and_runs",
+      "torrents.uploaded": "uploads_approved",
+      "tracker.seeding": "seeding",
+      "tracker.leeching": "leeching",
+      "tracker.snatched": "snatched",
+      "tracker.avg_seed_time": "avg_seed_time"
+    },
+    "byte_fields": {
+      "upload.account": "uploaded",
+      "download.account": "downloaded",
+      "tracker.seed_size": "seed_size"
+    },
+    "buffer_from_bytes": true,
+    "ratio_from_bytes": true
+  },
+  "rules": {
+    "min_ratio": 0.2,
+    "min_seed_hours": 72,
+    "note": "Seed time adds 5 hours per GiB over 10 GiB, capped at 21 days. It applies from 10% downloaded; grace is four times the minimum when complete or 7 days when incomplete. Uploaders, connected peers, and torrents with ratio at least 1.0 are exempt. Five H&Rs revoke download privileges."
+  },
+  "invite_requirements": {
+    "min_class": "User"
+  },
+  "groups": [
+    {
+      "name": "Aka-chan",
+      "style": { "color": "#a298e1" },
+      "requirements": {
+        "note": "Default class for new members. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Use basic site features" }
+      ]
+    },
+    {
+      "name": "User",
+      "style": { "color": "#518fd6" },
+      "requirements": {
+        "min_uploaded": "10.5 GB",
+        "min_ratio": 0.5,
+        "min_age": "1W",
+        "note": "Must snatch at least one non-freeleech torrent. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Create collages" },
+        { "icon": "", "label": "Edit Knowledge Base articles" },
+        { "icon": "", "label": "Manage approved IPs" },
+        { "icon": "", "label": "Send invites" }
+      ]
+    },
+    {
+      "name": "Power User",
+      "style": { "color": "#2ac08c" },
+      "requirements": {
+        "min_uploaded": "25 GB",
+        "min_ratio": 0.7,
+        "min_age": "2W",
+        "min_uploads": 10,
+        "note": "Pruned torrents do not count. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Power User and Invites forums" },
+        { "icon": "", "label": "Receive invites" },
+        { "icon": "", "label": "Immune to inactivity pruning" },
+        { "icon": "", "label": "Access notifications" },
+        { "icon": "", "label": "Create user-based requests" },
+        { "icon": "", "label": "Use a forum signature" },
+        { "icon": "", "label": "Edit anime group information" }
+      ]
+    },
+    {
+      "name": "Elite",
+      "style": { "color": "#7fae32" },
+      "requirements": {
+        "min_uploaded": "100 GB",
+        "min_ratio": 0.8,
+        "min_age": "1M",
+        "min_uploads": 50,
+        "note": "Pruned torrents do not count. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Elite forum" },
+        { "icon": "", "label": "Join #elite" },
+        { "icon": "", "label": "Edit music group information" }
+      ]
+    },
+    {
+      "name": "Torrent Master",
+      "style": { "color": "#ff70ea" },
+      "requirements": {
+        "min_uploaded": "500 GB",
+        "min_ratio": 0.9,
+        "min_age": "3M",
+        "min_uploads": 100,
+        "note": "Pruned torrents do not count. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Torrent Master forum" },
+        { "icon": "", "label": "Moderate collages" },
+        { "icon": "", "label": "Send invites above the user limit" },
+        { "icon": "", "label": "Moderate screenshots" },
+        { "icon": "", "label": "Change custom title for free" }
+      ]
+    },
+    {
+      "name": "Legend",
+      "style": { "color": "#ff9752" },
+      "requirements": {
+        "min_uploaded": "1 TB",
+        "min_ratio": 1.0,
+        "min_age": "6M",
+        "min_uploads": 500,
+        "note": "Pruned torrents do not count. Promotions require no warning and a calculable ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Legend forum" },
+        { "icon": "", "label": "Change custom icon for free" },
+        { "icon": "", "label": "Submit requests for free" },
+        { "icon": "", "label": "Additional undisclosed perks" }
+      ]
+    },
+    {
+      "name": "VIP",
+      "style": { "color": "#ff473d" },
+      "requirements": { "description": "Appointed by staff for significant contributions to AnimeBytes." },
+      "perks": [
+        { "icon": "", "label": "Send unlimited invites" },
+        { "icon": "", "label": "Additional undisclosed perks" }
+      ]
+    },
+    {
+      "name": "Sensei",
+      "style": { "color": "#c36d50" },
+      "requirements": { "description": "Retired AnimeBytes staff member." },
+      "perks": [
+        { "icon": "", "label": "Send unlimited invites" },
+        { "icon": "", "label": "Additional undisclosed perks" }
+      ]
+    },
+    {
+      "name": "Staff",
+      "style": { "color": "#ff1a1a" },
+      "requirements": { "description": "Current AnimeBytes staff member." },
+      "perks": [
+        { "icon": "", "label": "Undisclosed perks and responsibilities" }
+      ]
+    },
+    {
+      "name": "Editor",
+      "style": {},
+      "requirements": {
+        "min_age": "3M",
+        "note": "Secondary role requiring active, high-quality contributions to torrent information."
+      }
+    },
+    {
+      "name": "Forum Staff",
+      "style": {},
+      "requirements": {
+        "min_age": "3M",
+        "note": "Secondary role requiring active forum participation and useful post/thread reports."
+      }
+    },
+    {
+      "name": "App Reviewer",
+      "style": {},
+      "requirements": { "description": "Secondary role with undisclosed requirements; selected by staff." }
+    },
+    {
+      "name": "Torrent Support",
+      "style": {},
+      "requirements": { "description": "Secondary role assisting staff with torrents; requirements are undisclosed." }
+    },
+    {
+      "name": "First Line Support",
+      "style": {},
+      "requirements": { "description": "Secondary role assisting staff with non-user-facing functions; requirements are undisclosed." }
+    },
+    {
+      "name": "Community Celebrity",
+      "style": {},
+      "requirements": { "description": "Full staff member at another tracker that meets AnimeBytes' requirements." },
+      "perks": [
+        { "icon": "", "label": "Access Community Celebrity forum" },
+        { "icon": "", "label": "Send unlimited invites" }
+      ]
+    }
+  ]
+}

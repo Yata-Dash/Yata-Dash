@@ -279,6 +279,11 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	}
 	fields, ferr := d.Fetch.Fetch(t)
 	if ferr != nil {
+		// Full detail (e.g. a raw-body snippet on parse_error) is deliberately
+		// NOT part of CheckResult — the UI only ever shows the short Kind via
+		// friendlyDetail's fixed map. Log it here so a failure is diagnosable
+		// from the server log without re-querying the tracker.
+		d.logWarnf("test: %s (%s) — api fetch detail: %v", t.Name, t.ID, ferr)
 		return CheckResult{Status: "fail", Detail: ferr.Kind}
 	}
 	if persist {

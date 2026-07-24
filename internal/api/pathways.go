@@ -214,10 +214,11 @@ func mapUserTrackers(d *Deps) []pathways.UserTracker {
 			PathwayName: pname,
 			Stats:       statsFromMerged(merged),
 			Rates: pathways.Rates{
-				UploadGiB:   gr["uploaded"],
-				DownloadGiB: gr["downloaded"],
-				SeedSizeGiB: gr["seed_size"],
-				Bonus:       gr["bonus_points"],
+				UploadGiB:        gr["uploaded"],
+				DownloadGiB:      gr["downloaded"],
+				TotalTransferGiB: gr["total_transfer"],
+				SeedSizeGiB:      gr["seed_size"],
+				Bonus:            gr["bonus_points"],
 			},
 		}
 		out = append(out, u)
@@ -319,4 +320,3 @@ func statsFromMerged(m models.MergedStats) pathways.Stats {
 	}
 	return s
 }
-

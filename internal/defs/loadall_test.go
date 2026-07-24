@@ -58,3 +58,37 @@ func TestShippedDefsLoadClean(t *testing.T) {
 		t.Error("join_date mapping missing")
 	}
 }
+
+// TestShippedDefsResolveTheirFetcher checks that each def dispatches to the
+// fetcher it was written for. This is deliberately the ONLY per-tracker
+// assertion here: it tests the type→kind WIRING (which breaks silently and
+// sends real requests to the wrong endpoint), not the defs' data. Restating
+// group counts, colours or ladder order in Go would just mean every routine
+// def edit also breaks a test, without catching anything a load issue or a
+// fetch test wouldn't.
+func TestShippedDefsResolveTheirFetcher(t *testing.T) {
+	r, err := Load("../../defs")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, tc := range []struct{ url, want string }{
+		{"https://redacted.sh", "gazelle_json"},
+		{"https://orpheus.network", "gazelle_json"},
+		{"https://gazellegames.net", "gazelle_games"},
+		{"https://animebytes.tv", "custom"},
+		{"https://broadcasthe.net", "custom"},
+		{"https://nebulance.io", "custom"},
+		{"https://blutopia.cc", "unit3d"},
+		{"https://reelflix.cc", "unit3d"},
+		{"https://upload.cx", "unit3d"},
+	} {
+		td, ok := r.TrackerByURL(tc.url)
+		if !ok {
+			t.Errorf("%s: def not found", tc.url)
+			continue
+		}
+		if kind := r.APIKind(td.URL, td.Type); kind != tc.want {
+			t.Errorf("%s APIKind = %q, want %q", tc.url, kind, tc.want)
+		}
+	}
+}

@@ -1,6 +1,13 @@
 package api
 
-import "testing"
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
+)
 
 // TestHostMatches: announce hosts must map to the right tracker site and
 // ONLY that tracker — a public tracker's host or a sibling mirror domain
@@ -61,6 +68,54 @@ func TestTrackerSiteHosts(t *testing.T) {
 	// A tracker with no def still matches on its own URL.
 	if hosts := trackerSiteHosts(d, "https://example-no-def.org"); len(hosts) != 1 || hosts[0] != "example-no-def.org" {
 		t.Errorf("def-less tracker should keep its own host, got %v", hosts)
+	}
+}
+
+// TestRefreshQUISeedsizePreservesLayerOnPartialInstanceFailure: with two
+// enabled qui instances, one down and one up-but-silent-for-this-tracker,
+// the computed total for a tracker is 0 — but that's ambiguous, not
+// confirmed-empty, since the down instance might be the one seeding it. The
+// previously saved qui layer must survive, not get wiped.
+func TestRefreshQUISeedsizePreservesLayerOnPartialInstanceFailure(t *testing.T) {
+	d := testDeps(t)
+
+	tr := models.Tracker{ID: "t1", Name: "T1", URL: "https://mytracker.example", Type: "unit3d", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveQUI(tr.ID, map[string]any{"seed_size": "50.00 GiB"}); err != nil {
+		t.Fatal(err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/instances/1/torrents":
+			http.Error(w, "instance down", http.StatusInternalServerError)
+		case r.URL.Path == "/api/instances/2/torrents":
+			fmt.Fprint(w, `{"counts":{"trackerTransfers":{}}}`)
+		default:
+			http.Error(w, "unexpected path", http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	settings := d.Cfg.Settings()
+	settings.QUIURL = ts.URL
+	settings.QUISeedsizeMode = "missing"
+	settings.QUIEnabledInstances = []int{1, 2}
+	if err := d.Cfg.UpdateSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshQUISeedsize(d)
+
+	layer, err := d.DB.Layer(tr.ID, string(models.SourceQUI))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fv, ok := layer["seed_size"]; !ok || fv.Value != "50.00 GiB" {
+		t.Errorf("seed_size = %#v, want preserved \"50.00 GiB\" (ambiguous zero from partial instance failure must not clear it)", layer["seed_size"])
 	}
 }
 

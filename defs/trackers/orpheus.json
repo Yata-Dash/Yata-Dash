@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "key": "orpheus",
+  "name": "Orpheus",
+  "abbr": "OPS",
+  "url": "https://orpheus.network",
+  "type": "gazelle_json",
+  "last_updated": "2026-07-22",
+  "api": {
+    "api_key_hint": "User Settings → API Keys. Paste the value as 'token <key>' (including the word token) — Orpheus deprecates the bare-key Authorization header."
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "note": "Required ratio is calculated dynamically per account from data downloaded and seeding activity (0.00–0.60, rising with more downloaded and falling with more concurrent seeding; see the live required ratio stat). Falling below required ratio starts a 2-week ratio watch; failing to clear it revokes leeching privileges (account stays enabled). The first 5 GB downloaded is exempt."
+  },
+  "groups": [
+    {
+      "name": "User",
+      "style": {},
+      "requirements": {
+        "description": "Standard class for all new members."
+      }
+    },
+    {
+      "name": "Member",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "10 GiB",
+        "min_ratio": 0.7,
+        "min_age": "1W",
+        "note": "Demoted to User when ratio drops below 0.60."
+      },
+      "perks": [
+        { "icon": "", "label": "Advanced Search" },
+        { "icon": "", "label": "Make requests" },
+        { "icon": "", "label": "Purchase invites" },
+        { "icon": "", "label": "Basic torrent editing privileges" },
+        { "icon": "", "label": "Auto-subscribe to forum threads" }
+      ]
+    },
+    {
+      "name": "Power User",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "25 GiB",
+        "min_ratio": 1.05,
+        "min_age": "2W",
+        "min_uploads": 5,
+        "note": "Demoted to Member when ratio drops below 0.95, or torrent count falls below 5."
+      },
+      "perks": [
+        { "icon": "", "label": "Immune to inactivity pruning" },
+        { "icon": "", "label": "Torrent notification system" },
+        { "icon": "", "label": "Collage creation (non-personal)" },
+        { "icon": "", "label": "RSS feed access" },
+        { "icon": "", "label": "Use the collector" },
+        { "icon": "", "label": "View upload/download/bonus history stats" },
+        { "icon": "", "label": "Power User forums and IRC channels" }
+      ]
+    },
+    {
+      "name": "Elite",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "100 GiB",
+        "min_ratio": 1.05,
+        "min_age": "4W",
+        "min_uploads": 50,
+        "note": "Demoted to Member when ratio drops below 0.95."
+      },
+      "perks": [
+        { "icon": "", "label": "Invitations and Elite forums/IRC" },
+        { "icon": "", "label": "Edit torrents" },
+        { "icon": "", "label": "Rename personal collages" }
+      ]
+    },
+    {
+      "name": "Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "500 GiB",
+        "min_ratio": 1.05,
+        "min_age": "8W",
+        "min_uploads": 500,
+        "note": "Demoted to Member when ratio drops below 0.95."
+      },
+      "perks": [
+        { "icon": "", "label": "Torrent Master forums and IRC" },
+        { "icon": "", "label": "Custom title" }
+      ]
+    },
+    {
+      "name": "Power Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "500 GiB",
+        "min_ratio": 1.05,
+        "min_age": "8W",
+        "min_counts": [
+          { "field": "groups_uploaded", "count": 500, "label": "Unique Groups" }
+        ],
+        "note": "Demoted to Member when ratio drops below 0.95."
+      }
+    },
+    {
+      "name": "Elite Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "500 GiB",
+        "min_ratio": 1.05,
+        "min_age": "8W",
+        "min_counts": [
+          { "field": "perfect_flacs", "count": 500, "label": "Perfect FLACs" }
+        ],
+        "note": "Demoted to Member when ratio drops below 0.95."
+      },
+      "perks": [
+        { "icon": "", "label": "Elite Torrent Master forums/IRC" },
+        { "icon": "", "label": "Unlimited invites" },
+        { "icon": "", "label": "Edit Missing Lineage flag on torrents" }
+      ]
+    },
+    {
+      "name": "Ultimate Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_uploaded": "2 TiB",
+        "min_ratio": 1.05,
+        "min_age": "8W",
+        "min_counts": [
+          { "field": "perfect_flacs", "count": 2000, "label": "Perfect FLACs" }
+        ],
+        "note": "OPS-only upload credit. Only one 24-bit torrent per edition counted; web-sourced uploads not counted. Demoted to Member when ratio drops below 0.95."
+      },
+      "perks": [
+        { "icon": "", "label": "View search results past page 20" }
+      ]
+    },
+    {
+      "name": "Interviewer",
+      "style": {},
+      "requirements": {
+        "description": "Selected by staff to conduct interviews and invite new members."
+      }
+    },
+    {
+      "name": "VIP",
+      "style": {},
+      "requirements": {
+        "description": "Member with extraordinary contributions to the site. Cannot be requested."
+      }
+    },
+    {
+      "name": "Legend",
+      "style": {},
+      "requirements": {
+        "description": "Past member of Staff."
+      }
+    },
+    {
+      "name": "Archive Team",
+      "style": {},
+      "requirements": {
+        "description": "Specializes in maintaining seeding on low-seeded and orphaned uploads."
+      }
+    },
+    {
+      "name": "Beta Team",
+      "style": {},
+      "requirements": {
+        "description": "Beta testers."
+      }
+    },
+    {
+      "name": "Charlie Team",
+      "style": {},
+      "requirements": {
+        "description": "Quality Assurance team."
+      }
+    },
+    {
+      "name": "Designer",
+      "style": {},
+      "requirements": {
+        "description": "Artistic Director. Handles the stylesheets and general art direction of the site."
+      }
+    },
+    {
+      "name": "First-Line Support",
+      "style": {},
+      "requirements": {
+        "description": "Helps with day-to-day site tasks and supports users when they need help."
+      }
+    },
+    {
+      "name": "Forum Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Supervises and moderates forums and torrent comments."
+      }
+    },
+    {
+      "name": "Production Manager",
+      "style": {},
+      "requirements": {
+        "description": "Moderates torrents and general site content. Also supports and instructs secondary user classes."
+      }
+    },
+    {
+      "name": "Technician, Sound Engineer",
+      "style": {},
+      "requirements": {
+        "description": "Designs and writes the site code."
+      }
+    },
+    {
+      "name": "Roadie",
+      "style": {},
+      "requirements": {
+        "description": "In charge of everything."
+      }
+    },
+    {
+      "name": "Donor",
+      "style": {},
+      "requirements": {
+        "description": "Has donated money to help keep the site running."
+      }
+    },
+    {
+      "name": "Torrent Celebrity",
+      "style": {},
+      "requirements": {
+        "description": "Approved staff member of another tracker Orpheus works closely with. Not granted on request."
+      }
+    }
+  ]
+}

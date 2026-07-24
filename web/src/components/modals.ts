@@ -337,6 +337,14 @@ function showFormForType(typeKey: string) {
     show('modal-username-group');
     show('modal-key-group');
     show('modal-session-cookie-group');
+  } else if (typeKey === 'gazelle_json') {
+    // Scoped ajax.php API keyed by a raw Authorization header — no username
+    // needed for the call. Cookie group stays for the (rare) def that also
+    // enables profile scraping; applyPredefinedDef hides it otherwise.
+    resetStandardCredentialLabels(typeKey);
+    hide('modal-username-group');
+    show('modal-key-group');
+    show('modal-session-cookie-group');
   } else if (typeKey === 'custom') {
     show('modal-username-group');
     show('modal-key-group');
@@ -352,6 +360,19 @@ function showFormForType(typeKey: string) {
 
   // Mark inputs required by this type (e.g. gazelle → username)
   applyRequiredFieldsUI(typeRequiredFields(typeKey));
+  applySessionCookieLabel();
+}
+
+/** Session cookie field text. The cookie is always the optional scraping
+ *  extra — API access is key-based for every supported type. */
+function applySessionCookieLabel() {
+  const label = document.getElementById('modal-session-cookie-label');
+  const hint  = document.getElementById('modal-session-cookie-hint');
+  if (label) label.innerHTML = 'Session Cookie <span class="opt">(optional — for extended profile stats)</span>';
+  if (hint) hint.innerHTML =
+    'Log in to the tracker → DevTools (F12) → Console → Type <em>document.cookie</em> → copy all cookies <br>-or-\n' +
+    '  use the <em>Cookie-Editor</em> extension Export button → Header String\n' +
+    '  Re-paste if profile stats stop working.';
 }
 
 function hideFormSections() {
@@ -678,31 +699,32 @@ export function openEditModal(
   setVal('modal-joindate', t.join_date ?? '');
 
   // Required fields (e.g. gazelle username) + opt-out check for this URL.
-  // Once defs load, also settle session-cookie visibility for custom defs:
-  // API-only + cookie-less auth (e.g. MAM's mam_id) → the cookie field is
-  // pointless and hides; a session_cookie-auth def keeps it (it's the login).
   applyRequiredFieldsUI(t.required_fields ?? typeRequiredFields(t.type));
-  void ensureDefsLoaded().then(() => {
-    checkTrackerOptOut();
-    if (t.supports_html_scrape === false) {
-      const editDefInfo = _defsCache?.trackers.find(dd => dd.key === t.def_key);
-      if (!editDefInfo?.needs_session_cookie) hide('modal-session-cookie-group');
-    }
-  });
+  applySessionCookieLabel();
 
   // API key — the mask sentinel means "unchanged"; clearing the field removes the key.
   setVal('modal-key', t.has_key ? (t.api_key_masked || MASKED_KEY) : '');
   setPlaceholder('modal-key', t.has_key ? `${MASKED_KEY} = keep current key` : 'Your API token');
 
-  // For API-only trackers, hide the session cookie field entirely
-  if (t.supports_html_scrape === false && t.type !== 'custom') {
-    hide('modal-session-cookie-group');
-  } else {
-    show('modal-session-cookie-group');
-    setVal('modal-session-cookie', t.has_session ? MASKED_KEY : '');
-    setPlaceholder('modal-session-cookie',
-      t.has_session ? `${MASKED_KEY} = keep current cookie` : 'Paste cookie string from browser DevTools');
-  }
+  setVal('modal-session-cookie', t.has_session ? MASKED_KEY : '');
+  setPlaceholder('modal-session-cookie',
+    t.has_session ? `${MASKED_KEY} = keep current cookie` : 'Paste cookie string from browser DevTools');
+  // Best-effort default before defs are confirmed loaded: visible unless
+  // this is a known API-only tracker. Settled authoritatively below once
+  // defs.needs_session_cookie is available — in BOTH directions, so a wrong
+  // initial guess (a custom def whose API authenticates by cookie) gets
+  // corrected instead of staying stuck hidden.
+  if (t.supports_html_scrape === false) hide('modal-session-cookie-group');
+  else show('modal-session-cookie-group');
+
+  void ensureDefsLoaded().then(() => {
+    checkTrackerOptOut();
+    if (t.supports_html_scrape === false) {
+      const editDefInfo = _defsCache?.trackers.find(dd => dd.key === t.def_key);
+      if (editDefInfo?.needs_session_cookie) show('modal-session-cookie-group');
+      else hide('modal-session-cookie-group');
+    }
+  });
 
   // Tracker-specific API key label/hint — only for custom-type trackers.
   if (t.type === 'custom') {
@@ -782,11 +804,11 @@ export function openEditModal(
     populateScenarioSelect(t.mock_scenario, () => switchMockScenario(t.id, trackers, deps));
   } else {
     hide('modal-mock-group');
-    show('modal-username-group');
     show('modal-joindate-group');
     // Re-show the key field explicitly — a prior add-flow visit (test type,
     // or a def that hid it) leaves it display:none otherwise.
     show('modal-key-group');
+    show('modal-username-group');
   }
 
   openTrackerPanel();
@@ -2031,6 +2053,7 @@ function requirementPairs(req: GroupRequirements): [string, string][] {
   const pairs: [string, string][] = [];
   if (req.min_uploaded)     pairs.push(['Uploaded', req.min_uploaded]);
   if (req.min_downloaded)   pairs.push(['Downloaded', req.min_downloaded]);
+  if (req.min_total_transfer) pairs.push(['Total Transfer', req.min_total_transfer]);
   if (req.min_ratio)        pairs.push(['Ratio', String(req.min_ratio)]);
   if (req.min_seedtime)     pairs.push(['Seedtime', req.min_seedtime]);
   if (req.min_seed_size)    pairs.push(['Seed Size', req.min_seed_size]);
@@ -2100,6 +2123,7 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
     bodyPart = pairs.length
       ? chipRow(pairs)
       : `<div class="target-group-hint-desc">No stat requirements for this group.</div>`;
+    if (req.note) bodyPart += `<div class="target-group-hint-desc">${esc(req.note)}</div>`;
     // any_of alternatives — base requirements above PLUS at least one of these
     if (req.any_of?.length) {
       bodyPart += `<div class="target-chip-anyof"><span class="target-chip-anyof-label">plus one of</span>${

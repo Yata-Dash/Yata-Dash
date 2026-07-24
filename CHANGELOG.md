@@ -6,6 +6,42 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **Nine new trackers** (contributed by [@gizzlepox](https://github.com/gizzlepox)):
+  AnimeBytes, Blutopia, BroadcastTheNet, GazelleGames, Nebulance, Orpheus,
+  Redacted, ReelFliX and Upload.cx. All are API-only for now — none has been
+  approved by its staff yet, so Yata warns about their definitions until
+  approval comes through.
+
+- **Two new tracker platforms.** Gazelle trackers with the modern JSON API
+  (Redacted, Orpheus) and GazelleGames' own API now work without any HTML
+  scraping. Both authenticate with an API key.
+
+- **Combined upload + download requirements.** Trackers that promote on total
+  traffic rather than upload alone can now express that, and it shows up in
+  targets and Pathways like any other requirement.
+
+- **Richer tracker rules.** Definitions can record minimum seed times in hours,
+  separate requirements for episodes vs. seasons, and a short note for rules
+  that don't reduce to a number.
+
+### Fixed
+
+- **A tracker's API errors could be misread as failures.** Some APIs include an
+  `error` field on every response and simply leave it empty when nothing went
+  wrong. Yata treated the field's presence as a failure, so those trackers
+  never fetched — and reported a bare "API error" with no explanation.
+
+- **A down qui instance could wipe seed sizes.** If one of several qui
+  instances was unreachable, trackers seeding only on that instance looked like
+  they were seeding nothing, and their stored seed size was cleared. Their data
+  is now left alone until qui can be reached again.
+
+- **Two scrapes in the same second could report the wrong outcome.** Scrape
+  times are recorded to the second, so a retry landing in the same second as
+  the attempt before it could be judged in the wrong order — showing a failure
+  as the latest result when it had actually succeeded, or the reverse.
 
 
 ## [Beta-20260723]

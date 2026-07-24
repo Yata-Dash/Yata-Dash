@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "key": "redacted",
+  "name": "Redacted",
+  "abbr": "RED",
+  "url": "https://redacted.sh",
+  "type": "gazelle_json",
+  "last_updated": "2026-07-21",
+  "api": {
+    "api_key_hint": "User Settings → API Keys. Grant the read-only User scope."
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "invite_requirements": {
+    "min_class": "Power User"
+  },
+  "groups": [
+    {
+      "name": "User",
+      "style": {},
+      "requirements": {},
+      "perks": [
+        { "icon": "", "label": "Can make requests" }
+      ]
+    },
+    {
+      "name": "Member",
+      "style": {},
+      "requirements": {
+        "min_age": "1W",
+        "min_uploaded": "10 GB",
+        "min_ratio": 0.65,
+        "note": "Promotion requires no active warning and may take several hours. Demoted to User if ratio drops below 0.60."
+      },
+      "perks": [
+        { "icon": "", "label": "Can edit collages" },
+        { "icon": "", "label": "First promotion awards 25 Merit Tokens" }
+      ]
+    },
+    {
+      "name": "Power User",
+      "style": {},
+      "requirements": {
+        "min_age": "2W",
+        "min_uploaded": "25 GB",
+        "min_uploads": 5,
+        "min_ratio": 0.65,
+        "note": "Promotion requires no active warning and may take several hours. Demoted to Member below 25 GB or 5 current uploads; demoted to User below 0.60 ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Receives invites" },
+        { "icon": "", "label": "Access notifications and collage subscriptions" },
+        { "icon": "", "label": "Create collages and one personal collage" },
+        { "icon": "", "label": "Access Power User and Invites forums" },
+        { "icon": "", "label": "Create forum polls" },
+        { "icon": "", "label": "Artist and personal Collector features" },
+        { "icon": "", "label": "Profile stat graphs" },
+        { "icon": "", "label": "Immune from inactivity disabling" },
+        { "icon": "", "label": "First promotion awards 25 Merit Tokens" }
+      ]
+    },
+    {
+      "name": "Elite",
+      "style": {},
+      "requirements": {
+        "min_age": "4W",
+        "min_uploaded": "100 GB",
+        "min_uploads": 50,
+        "min_ratio": 0.65,
+        "note": "Promotion requires no active warning and may take several hours. Demoted to Power User below 100 GB or 50 current uploads; demoted to User below 0.60 ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Elite forum and Top 10 filters" },
+        { "icon": "", "label": "Second personal collage" },
+        { "icon": "", "label": "Profile album" },
+        { "icon": "", "label": "Torrent editing privileges" }
+      ]
+    },
+    {
+      "name": "Torrent Master",
+      "style": {},
+      "requirements": {
+        "min_age": "8W",
+        "min_uploaded": "500 GB",
+        "min_uploads": 500,
+        "min_ratio": 0.65,
+        "note": "Promotion requires no active warning and may take several hours. Demoted to Elite below 500 GB or 500 current uploads; demoted to User below 0.60 ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "Access Torrent Master forum" },
+        { "icon": "", "label": "Custom title" },
+        { "icon": "", "label": "Third personal collage and optional collage-name omission" },
+        { "icon": "", "label": "Unlimited invites" }
+      ]
+    },
+    {
+      "name": "Power TM",
+      "style": {},
+      "requirements": {
+        "min_age": "8W",
+        "min_uploaded": "500 GB",
+        "min_uploads": 500,
+        "min_ratio": 0.65,
+        "min_counts": [
+          { "field": "groups_uploaded", "count": 500, "label": "Unique Groups" }
+        ],
+        "note": "Promotion requires no active warning and may take several hours. Demoted to Torrent Master below 500 unique groups, to Elite below 500 GB or 500 current uploads, or to User below 0.60 ratio."
+      },
+      "perks": [
+        { "icon": "", "label": "All Torrent Master perks" },
+        { "icon": "", "label": "Fourth personal collage" },
+        { "icon": "", "label": "Double posting" }
+      ]
+    },
+    {
+      "name": "Elite TM",
+      "style": {},
+      "requirements": {
+        "min_age": "8W",
+        "min_uploaded": "500 GB",
+        "min_uploads": 500,
+        "min_ratio": 0.65,
+        "min_counts": [
+          { "field": "groups_uploaded", "count": 500, "label": "Unique Groups" },
+          { "field": "perfect_flacs", "count": 500, "label": "Perfect FLACs" }
+        ],
+        "note": "Promotion requires no active warning and may take several hours. Must also meet Power TM requirements. Below 500 qualifying FLACs demotes to Power TM or Torrent Master; below 500 GB or 500 current uploads demotes to Elite; below 0.60 ratio demotes to User."
+      },
+      "perks": [
+        { "icon": "", "label": "All Power TM perks" },
+        { "icon": "", "label": "Fifth personal collage" }
+      ]
+    },
+    {
+      "name": "VIP",
+      "style": {},
+      "requirements": {
+        "description": "Be Awesome."
+      },
+      "perks": [
+        { "icon": "", "label": "VIP forum and advanced Wiki editing" },
+        { "icon": "", "label": "Custom title and five personal collages" },
+        { "icon": "", "label": "Double posting and unlimited invites" }
+      ]
+    },
+    {
+      "name": "Legend",
+      "style": {},
+      "requirements": {
+        "description": "Former Redacted staff member."
+      },
+      "perks": [
+        { "icon": "", "label": "Special forum and advanced Wiki editing" },
+        { "icon": "", "label": "Custom title and five personal collages" },
+        { "icon": "", "label": "Unlimited invites" }
+      ]
+    },
+    {
+      "name": "Forum Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Don't ask us; be awesome."
+      }
+    },
+    {
+      "name": "Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Redacted staff class."
+      }
+    },
+    {
+      "name": "Senior Moderator",
+      "style": {},
+      "requirements": {
+        "description": "Redacted senior staff class."
+      }
+    },
+    {
+      "name": "Developer",
+      "style": {},
+      "requirements": {
+        "description": "Redacted developer staff class."
+      }
+    },
+    {
+      "name": "Administrator",
+      "style": {},
+      "requirements": {
+        "description": "Redacted administrator class."
+      }
+    },
+    {
+      "name": "Sysop",
+      "style": {},
+      "requirements": {
+        "description": "Redacted Sysop class."
+      }
+    }
+  ]
+}

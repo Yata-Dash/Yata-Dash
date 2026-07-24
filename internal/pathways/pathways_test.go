@@ -479,6 +479,21 @@ func TestMinMonthlyUploadsIgnoredInGroupEval(t *testing.T) {
 	}
 }
 
+func TestCombinedTransferGroupRequirement(t *testing.T) {
+	req := defs.GroupRequirements{MinTotalTransfer: "500 GiB"}
+	u := UserTracker{Stats: Stats{
+		AgeDays: -1, UploadedGiB: 400, DownloadedGiB: 100, Ratio: -1,
+		SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, Adoptions: -1, BonusPoints: -1,
+	}}
+	rows, eta, unknown := evalGroupReqs(req, u)
+	if len(rows) != 1 || !rows[0].Met || rows[0].Kind != "total_transfer" {
+		t.Fatalf("combined transfer rows = %+v", rows)
+	}
+	if eta != 0 || unknown {
+		t.Fatalf("eta=%v unknown=%v, want met", eta, unknown)
+	}
+}
+
 func TestFindPathsNoRouteSuggestions(t *testing.T) {
 	d := testData()
 	// User only on a tracker with no outgoing routes at all.
