@@ -38,31 +38,6 @@ func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
 	return reg
 }
 
-func gazelleJSONCookieRegistry(t *testing.T, baseURL string) *defs.Registry {
-	t.Helper()
-	dir := t.TempDir()
-	for _, sub := range []string{"types", "trackers"} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	typeJSON := `{"schema_version":1,"key":"gazelle_json_cookie","label":"Gazelle JSON API (session cookie)",
-		"api":{"kind":"gazelle_json_cookie","cookie_name":"session","required_fields":["session_cookie"]}}`
-	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"alpharatio",
-		"name":"AlphaRatio","abbr":"AR","url":%q,"type":"gazelle_json_cookie"}`, baseURL)
-	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle_json_cookie.json"), []byte(typeJSON), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "trackers", "alpharatio.json"), []byte(trackerJSON), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	reg, err := defs.Load(dir)
-	if err != nil {
-		t.Fatalf("defs.Load: %v", err)
-	}
-	return reg
-}
-
 func gazelleGamesRegistry(t *testing.T, baseURL string) *defs.Registry {
 	t.Helper()
 	dir := t.TempDir()
@@ -140,7 +115,7 @@ func TestFetchUnit3DBlutopiaResponseShape(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "testuser", "group": "BluUser",
-		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "ratio": 4.0, "buffer": "0.00 GiB",
+		"uploaded": "400 B", "downloaded": "100 B", "ratio": 4.0, "buffer": "900 B",
 		"seeding": 12.0, "leeching": 0.0, "bonus_points": "1234.50", "hit_and_runs": 0.0,
 	}
 	for key, expected := range want {
@@ -485,7 +460,7 @@ func TestFetchGazelleMergesStandardEndpoints(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "listener", "user_id": "42", "group": "Elite",
-		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
+		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
 		"ratio": 3.0, "required_ratio": 0.6, "fl_tokens": 139.0,
 		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
 		"leeching": 1, "snatched": 30, "users_invited": 4,
@@ -564,87 +539,11 @@ func TestFetchGazelleJSONCommunityStatsFailureIsNotFatal(t *testing.T) {
 	}
 }
 
-// TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey verifies AlphaRatio's
-// auth mode (no API token support — cookie only) and the two verified
-// divergences from Redacted/Orpheus: no stats.buffer field (buffer must be
-// computed from uploaded−downloaded) and no index-level gift/merit tokens
-// (fl_tokens must be omitted, not reported as a false zero).
-func TestFetchGazelleJSONCookieUsesSessionCookieNotAPIKey(t *testing.T) {
-	seen := map[string]int{}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "" {
-			t.Errorf("Authorization = %q, want empty (cookie auth only)", got)
-		}
-		if got := r.Header.Get("Cookie"); got != "session=cookievalue" {
-			t.Errorf("Cookie = %q, want session=cookievalue", got)
-		}
-		action := r.URL.Query().Get("action")
-		seen[action]++
-		w.Header().Set("Content-Type", "application/json")
-		switch action {
-		case "index":
-			fmt.Fprint(w, `{"status":"success","response":{
-				"username":"listener","id":42,
-				"userstats":{"uploaded":300,"downloaded":100,"ratio":1,"requiredratio":0,"class":"Sphinx"}
-			}}`)
-		case "user":
-			if got := r.URL.Query().Get("id"); got != "42" {
-				t.Errorf("user id = %q, want 42", got)
-			}
-			fmt.Fprint(w, `{"status":"success","response":{
-				"username":"listener",
-				"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":1,"requiredRatio":0},
-				"personal":{"class":"Sphinx","warned":false,"enabled":true},
-				"community":{"posts":1,"requestsFilled":2,"perfectFlacs":0,"uploaded":11,"groups":11,"seeding":20,"leeching":1,"snatched":30,"invited":0}
-			}}`)
-		case "community_stats":
-			if got := r.URL.Query().Get("userid"); got != "42" {
-				t.Errorf("community_stats userid = %q, want 42", got)
-			}
-			fmt.Fprint(w, `{"status":"success","response":{"leeching":"1","seeding":"20","snatched":"30","seedingperc":52}}`)
-		default:
-			http.Error(w, "unexpected action", http.StatusBadRequest)
-		}
-	}))
-	defer ts.Close()
-
-	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
-	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
-	if ferr != nil {
-		t.Fatalf("Fetch: %v", ferr)
-	}
-	if _, ok := data["fl_tokens"]; ok {
-		t.Errorf("fl_tokens = %#v, want absent (AR has no gift/merit tokens)", data["fl_tokens"])
-	}
-	if _, ok := data["seed_size"]; ok {
-		t.Errorf("seed_size = %#v, want absent (AR community_stats has no seedingsize)", data["seed_size"])
-	}
-	want := map[string]any{
-		"username": "listener", "user_id": "42", "group": "Sphinx",
-		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
-		"ratio": 1.0, "required_ratio": 0.0,
-		"join_date": "2025-02-03", "warnings": 0, "seeding": 20,
-		"leeching": 1, "snatched": 30, "users_invited": 0,
-		"uploads_approved": 11, "requests_filled": 2, "forum_posts": 1,
-		"groups_uploaded": 11, "perfect_flacs": 0,
-	}
-	for key, expected := range want {
-		if got := data[key]; got != expected {
-			t.Errorf("%s = %#v, want %#v", key, got, expected)
-		}
-	}
-	for _, action := range []string{"index", "user", "community_stats"} {
-		if seen[action] != 1 {
-			t.Errorf("%s calls = %d, want 1", action, seen[action])
-		}
-	}
-}
-
-// TestFetchGazelleJSONCookieToleratesStringRatio verifies GreatPosterWall's
-// shape: its user.stats.ratio comes back as a JSON string ("38.17869") where
+// TestFetchGazelleJSONToleratesStringRatio covers a fork whose
+// user.stats.ratio comes back as a JSON string ("38.17869") where
 // every other observed gazelle_json fork sends a number, which would
 // otherwise fail json.Unmarshal into a float64 field.
-func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
+func TestFetchGazelleJSONToleratesStringRatio(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		action := r.URL.Query().Get("action")
 		w.Header().Set("Content-Type", "application/json")
@@ -669,8 +568,8 @@ func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
-	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
 	if ferr != nil {
 		t.Fatalf("Fetch: %v, want success despite string ratio", ferr)
 	}
@@ -679,12 +578,11 @@ func TestFetchGazelleJSONCookieToleratesStringRatio(t *testing.T) {
 	}
 }
 
-// TestFetchGazelleJSONCookieToleratesStringRequiredRatio covers the same
-// GreatPosterWall shape as the string-ratio test above, but for
-// stats.requiredRatio — the sibling field, formatted the same string way,
-// that previously wasn't tolerant of a string and would have failed the
+// TestFetchGazelleJSONToleratesStringRequiredRatio covers the same shape as
+// the string-ratio test above, but for stats.requiredRatio — the sibling
+// field, formatted the same string way, that would otherwise have failed the
 // whole /user unmarshal.
-func TestFetchGazelleJSONCookieToleratesStringRequiredRatio(t *testing.T) {
+func TestFetchGazelleJSONToleratesStringRequiredRatio(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		action := r.URL.Query().Get("action")
 		w.Header().Set("Content-Type", "application/json")
@@ -709,26 +607,13 @@ func TestFetchGazelleJSONCookieToleratesStringRequiredRatio(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
-	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie", SessionCookie: "cookievalue"})
+	c := NewClient(gazelleJSONRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json", APIKey: "sekrit"})
 	if ferr != nil {
 		t.Fatalf("Fetch: %v, want success despite string requiredRatio", ferr)
 	}
 	if data["required_ratio"] != 0.6 {
 		t.Errorf("required_ratio = %#v, want 0.6", data["required_ratio"])
-	}
-}
-
-func TestFetchGazelleJSONCookieRequiresSessionCookie(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("no request should be made without a session cookie")
-	}))
-	defer ts.Close()
-
-	c := NewClient(gazelleJSONCookieRegistry(t, ts.URL), "")
-	_, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "gazelle_json_cookie"})
-	if ferr == nil || ferr.Kind != "no_key" {
-		t.Fatalf("Fetch error = %v, want no_key", ferr)
 	}
 }
 
@@ -1080,7 +965,7 @@ func TestFetchCustomNebulanceShape(t *testing.T) {
 	}
 	want := map[string]any{
 		"username": "testuser", "group": "Flattop", "join_date": "2025-01-02",
-		"uploaded": "0.00 GiB", "downloaded": "0.00 GiB", "buffer": "0.00 GiB",
+		"uploaded": "300 B", "downloaded": "100 B", "buffer": "200 B",
 		"ratio": 3.0, "seeding": 92, "hit_and_runs": 0, "invites": 1,
 		"grabbed": 12, "snatched": 34, "forum_posts": 7,
 	}
@@ -1564,5 +1449,66 @@ func TestFetchUnit3DNegativeBufferMatchesOtherFetchers(t *testing.T) {
 	}
 	if got := data["uploaded"]; got != "1.00 GiB" {
 		t.Errorf("uploaded = %#v, want 1.00 GiB", got)
+	}
+}
+
+// TestFetchCustomAcceptsEmptyErrorField: many APIs return an "error" key on
+// EVERY response and leave it empty on success. Treating the key's presence
+// as failure rejected those payloads outright — and reported a bare "API
+// error", since an empty field has no message to quote. Each shape below is
+// a success that must be parsed normally.
+func TestFetchCustomAcceptsEmptyErrorField(t *testing.T) {
+	for _, empty := range []string{`""`, `false`, `null`, `0`, `{}`, `[]`} {
+		t.Run(empty, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"error":%s,"status":"success","response":{
+					"Username":"Starbuck","Class":"Viper","JoinDate":"2025-01-02",
+					"Uploaded":300,"Downloaded":100,"SeedCount":92
+				}}`, empty)
+			}))
+			defer ts.Close()
+
+			c := NewClient(nebulanceRegistry(t, ts.URL), "")
+			data, ferr := c.Fetch(models.Tracker{
+				URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+			})
+			if ferr != nil {
+				t.Fatalf("Fetch: %v — an empty error field means success", ferr)
+			}
+			if data["username"] != "Starbuck" {
+				t.Errorf("username = %#v, want Starbuck", data["username"])
+			}
+		})
+	}
+}
+
+// TestFetchCustomRejectsTruthyErrorShapes: the flip side — a populated error
+// must still fail, carrying its message where the API provides one.
+func TestFetchCustomRejectsTruthyErrorShapes(t *testing.T) {
+	for _, tc := range []struct{ body, wantMsg string }{
+		{`{"error":"bad key"}`, "bad key"},
+		{`{"error":{"message":"rate limited"}}`, "rate limited"},
+		{`{"error":true}`, "API error"},
+		{`{"error":{"code":42}}`, "API error"},
+	} {
+		t.Run(tc.body, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, tc.body)
+			}))
+			defer ts.Close()
+
+			c := NewClient(nebulanceRegistry(t, ts.URL), "")
+			_, ferr := c.Fetch(models.Tracker{
+				URL: ts.URL, Type: "custom", APIKey: "sekrit", Username: "Starbuck",
+			})
+			if ferr == nil || ferr.Kind != "api_error" {
+				t.Fatalf("error = %v, want api_error", ferr)
+			}
+			if ferr.Err == nil || ferr.Err.Error() != tc.wantMsg {
+				t.Errorf("message = %v, want %q", ferr.Err, tc.wantMsg)
+			}
+		})
 	}
 }

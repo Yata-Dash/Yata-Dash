@@ -77,10 +77,6 @@ type typeInfo struct {
 	Label          string   `json:"label"`
 	APIKind        string   `json:"api_kind"`
 	RequiredFields []string `json:"required_fields,omitempty"`
-	// CookieName is the session-cookie name for kind "gazelle_json_cookie"
-	// (e.g. "session") — lets the UI tell users exactly which browser cookie
-	// to copy instead of a generic instruction.
-	CookieName string `json:"cookie_name,omitempty"`
 }
 
 // GET /api/defs — registry contents + load issues.
@@ -112,9 +108,8 @@ func listDefs(d *Deps) http.HandlerFunc {
 				info.RequiredFields = []string{}
 			}
 			// The cookie field must stay visible even when scraping is off
-			// whenever the API itself needs it — both custom defs with
-			// auth_method "session_cookie" and types like gazelle_json_cookie
-			// resolve "session_cookie" into RequiredFields, so this covers both.
+			// whenever the API itself needs it — a custom def with auth_method
+			// "session_cookie" resolves "session_cookie" into RequiredFields.
 			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
 			tout = append(tout, info)
 		}
@@ -123,7 +118,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 		for _, tt := range types {
 			tyout = append(tyout, typeInfo{
 				Key: tt.Key, Label: tt.Label, APIKind: tt.API.Kind,
-				RequiredFields: tt.API.RequiredFields, CookieName: tt.API.CookieName,
+				RequiredFields: tt.API.RequiredFields,
 			})
 		}
 		jsonOK(w, map[string]any{

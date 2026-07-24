@@ -345,13 +345,6 @@ function showFormForType(typeKey: string) {
     hide('modal-username-group');
     show('modal-key-group');
     show('modal-session-cookie-group');
-  } else if (typeKey === 'gazelle_json_cookie') {
-    // Same ajax.php API, but this fork has no API token feature — the
-    // session cookie IS the credential. No key, no username.
-    resetStandardCredentialLabels(typeKey);
-    hide('modal-username-group');
-    hide('modal-key-group');
-    show('modal-session-cookie-group');
   } else if (typeKey === 'custom') {
     show('modal-username-group');
     show('modal-key-group');
@@ -367,28 +360,19 @@ function showFormForType(typeKey: string) {
 
   // Mark inputs required by this type (e.g. gazelle → username)
   applyRequiredFieldsUI(typeRequiredFields(typeKey));
-  applySessionCookieLabel(typeKey);
+  applySessionCookieLabel();
 }
 
-/** Session cookie field text: the login credential for gazelle_json_cookie
- *  types (required, names the exact cookie to copy) vs. the generic optional
- *  scraping-extra hint everywhere else. */
-function applySessionCookieLabel(typeKey: string) {
+/** Session cookie field text. The cookie is always the optional scraping
+ *  extra — API access is key-based for every supported type. */
+function applySessionCookieLabel() {
   const label = document.getElementById('modal-session-cookie-label');
   const hint  = document.getElementById('modal-session-cookie-hint');
-  if (typeKey === 'gazelle_json_cookie') {
-    const cookieName = _defsCache?.types.find(t => t.key === typeKey)?.cookie_name || 'session';
-    if (label) label.innerHTML = 'Session Cookie <span style="color:var(--red)">*</span>';
-    if (hint) hint.innerHTML =
-      `This tracker has no API key — the session cookie <strong>is</strong> the credential. ` +
-      `Log in, then DevTools (F12) → Application → Cookies → copy the value of the <code>${cookieName}</code> cookie.`;
-  } else {
-    if (label) label.innerHTML = 'Session Cookie <span class="opt">(optional — for extended profile stats)</span>';
-    if (hint) hint.innerHTML =
-      'Log in to the tracker → DevTools (F12) → Console → Type <em>document.cookie</em> → copy all cookies <br>-or-\n' +
-      '  use the <em>Cookie-Editor</em> extension Export button → Header String\n' +
-      '  Re-paste if profile stats stop working.';
-  }
+  if (label) label.innerHTML = 'Session Cookie <span class="opt">(optional — for extended profile stats)</span>';
+  if (hint) hint.innerHTML =
+    'Log in to the tracker → DevTools (F12) → Console → Type <em>document.cookie</em> → copy all cookies <br>-or-\n' +
+    '  use the <em>Cookie-Editor</em> extension Export button → Header String\n' +
+    '  Re-paste if profile stats stop working.';
 }
 
 function hideFormSections() {
@@ -716,7 +700,7 @@ export function openEditModal(
 
   // Required fields (e.g. gazelle username) + opt-out check for this URL.
   applyRequiredFieldsUI(t.required_fields ?? typeRequiredFields(t.type));
-  applySessionCookieLabel(t.type);
+  applySessionCookieLabel();
 
   // API key — the mask sentinel means "unchanged"; clearing the field removes the key.
   setVal('modal-key', t.has_key ? (t.api_key_masked || MASKED_KEY) : '');
@@ -728,8 +712,8 @@ export function openEditModal(
   // Best-effort default before defs are confirmed loaded: visible unless
   // this is a known API-only tracker. Settled authoritatively below once
   // defs.needs_session_cookie is available — in BOTH directions, so a wrong
-  // initial guess (e.g. AlphaRatio: API-only but the cookie IS the API
-  // credential) gets corrected instead of staying stuck hidden.
+  // initial guess (a custom def whose API authenticates by cookie) gets
+  // corrected instead of staying stuck hidden.
   if (t.supports_html_scrape === false) hide('modal-session-cookie-group');
   else show('modal-session-cookie-group');
 
@@ -737,8 +721,7 @@ export function openEditModal(
     checkTrackerOptOut();
     if (t.supports_html_scrape === false) {
       const editDefInfo = _defsCache?.trackers.find(dd => dd.key === t.def_key);
-      const needsCookie = t.type === 'gazelle_json_cookie' || !!editDefInfo?.needs_session_cookie;
-      if (needsCookie) show('modal-session-cookie-group');
+      if (editDefInfo?.needs_session_cookie) show('modal-session-cookie-group');
       else hide('modal-session-cookie-group');
     }
   });
@@ -825,15 +808,7 @@ export function openEditModal(
     // Re-show the key field explicitly — a prior add-flow visit (test type,
     // or a def that hid it) leaves it display:none otherwise.
     show('modal-key-group');
-    if (t.type === 'gazelle_json_cookie') {
-      // No API key concept at all for this type — the session cookie IS the
-      // credential (see showFormForType). Showing an unused key field is
-      // exactly what confused AlphaRatio users into pasting the cookie there too.
-      hide('modal-key-group');
-      hide('modal-username-group');
-    } else {
-      show('modal-username-group');
-    }
+    show('modal-username-group');
   }
 
   openTrackerPanel();

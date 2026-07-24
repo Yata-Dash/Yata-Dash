@@ -36,24 +36,23 @@ type TypeDef struct {
 
 // TypeAPI selects the built-in fetcher used for a tracker type.
 type TypeAPI struct {
-	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "gazelle_json_cookie",
-	// "gazelle_games", "custom", "demo", "none".
+	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "gazelle_games",
+	// "custom", "demo", "none".
 	//   unit3d  — GET {url}/api/user?api_token={key}
 	//   gazelle — username/query-key API used by legacy Gazelle integrations
 	//   gazelle_json — scoped ajax.php API with a raw Authorization header
-	//   gazelle_json_cookie — same ajax.php API as gazelle_json, for Gazelle
-	//     forks with no API token support: sends the user's session cookie
-	//     (name from CookieName) instead of an Authorization header.
 	//   gazelle_games — scoped api.php API with an X-API-Key header
 	//   custom  — fully described by the tracker def's "api" object
 	//   demo    — local mock data, no HTTP
 	//   none    — no API; scrape-only tracker type
+	//
+	// Every API kind authenticates with an API KEY. Session cookies are a
+	// scraping credential only: a key is something a tracker's operators chose
+	// to expose for external tools, whereas a session token is the user's own
+	// login and its use for API access needs the operators' explicit blessing.
+	// A Gazelle fork with no API-token feature therefore stays unsupported
+	// until its staff open one (or approve the alternative directly).
 	Kind string `json:"kind"`
-
-	// CookieName is the session-cookie name for kind "gazelle_json_cookie"
-	// (e.g. "session" — the WhatCD/Gazelle framework default). Empty means
-	// use the default at the call site.
-	CookieName string `json:"cookie_name,omitempty"`
 
 	// RequiredFields lists tracker-config fields the user MUST fill at setup.
 	// Valid values: "username" (gazelle needs it for the API call),

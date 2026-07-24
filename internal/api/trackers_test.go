@@ -21,9 +21,8 @@ func TestRequiredFieldsIncludesCustomAPIPathInputs(t *testing.T) {
 // TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod: a custom def
 // whose API authenticates with a user-supplied session cookie
 // (auth_method: "session_cookie") must resolve "session_cookie" into its
-// required fields, the same way gazelle_json_cookie-typed trackers do —
-// that's what keeps the cookie input visible in the add/edit modal even
-// with scraping off.
+// required fields — that's what keeps the cookie input visible in the
+// add/edit modal even with scraping off.
 func TestRequiredFieldsIncludesSessionCookieForCustomAuthMethod(t *testing.T) {
 	api := &defs.CustomAPI{
 		Path:       "/api.php?action=user",

@@ -67,8 +67,8 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		data, ferr = c.fetchDemo(t)
 	case "gazelle":
 		data, ferr = c.fetchGazelle(t)
-	case "gazelle_json", "gazelle_json_cookie":
-		data, ferr = c.fetchGazelleJSON(t, kind)
+	case "gazelle_json":
+		data, ferr = c.fetchGazelleJSON(t)
 	case "gazelle_games":
 		data, ferr = c.fetchGazelleGames(t)
 	case "custom":
@@ -155,6 +155,41 @@ func convertCoreBytes(data map[string]any) {
 			data[f] = parse.BytesToSize(int64(n))
 		}
 	}
+}
+
+// apiErrorMessage interprets a custom API's top-level "error" field. It
+// reports whether the response is genuinely an error and, if so, the best
+// message available.
+//
+// Only a TRUTHY value counts: a string with content, a non-empty error object,
+// or boolean true. Empty strings, false, null, 0 and a missing field are all
+// "no error" — the shapes APIs use when they include the field unconditionally.
+func apiErrorMessage(v any) (string, bool) {
+	const fallback = "API error"
+	switch value := v.(type) {
+	case nil:
+		return "", false
+	case string:
+		if strings.TrimSpace(value) == "" {
+			return "", false
+		}
+		return value, true
+	case bool:
+		return fallback, value
+	case float64:
+		return fallback, value != 0
+	case map[string]any:
+		if len(value) == 0 {
+			return "", false
+		}
+		if text, ok := value["message"].(string); ok && strings.TrimSpace(text) != "" {
+			return text, true
+		}
+		return fallback, true
+	case []any:
+		return fallback, len(value) > 0
+	}
+	return fallback, true // unknown non-nil shape — safer to surface it
 }
 
 // mergeExtended folds an extended-stats response into the core /api/user map.
@@ -286,8 +321,8 @@ type gazelleJSONUser struct {
 		JoinedDate string `json:"joinedDate"`
 		Uploaded   int64  `json:"uploaded"`
 		Downloaded int64  `json:"downloaded"`
-		// Ratio and requiredRatio are numbers on Redacted/Orpheus/AlphaRatio but
-		// JSON strings on GreatPosterWall ("38.17869") — accept either.
+		// Ratio and requiredRatio are numbers on Redacted and Orpheus, but some
+		// forks send them as JSON strings ("38.17869") — accept either.
 		Ratio         any   `json:"ratio"`
 		Buffer        int64 `json:"buffer"`
 		RequiredRatio any   `json:"requiredRatio"`
@@ -343,20 +378,14 @@ func (c *Client) getGazelleJSON(url string, headers map[string]string, identify 
 	return nil
 }
 
-func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any, *Error) {
+func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
+	if strings.TrimSpace(t.APIKey) == "" {
+		return nil, errf("no_key", nil)
+	}
 	identify := c.identify(t)
-	headers := map[string]string{"Accept": "application/json"}
-	if kind == "gazelle_json_cookie" {
-		if strings.TrimSpace(t.SessionCookie) == "" {
-			return nil, errf("no_key", nil)
-		}
-		cookieName := c.Registry.APICookieName(t.URL, t.Type)
-		headers["Cookie"] = cookieName + "=" + strings.TrimSpace(t.SessionCookie)
-	} else {
-		if strings.TrimSpace(t.APIKey) == "" {
-			return nil, errf("no_key", nil)
-		}
-		headers["Authorization"] = strings.TrimSpace(t.APIKey)
+	headers := map[string]string{
+		"Accept":        "application/json",
+		"Authorization": strings.TrimSpace(t.APIKey),
 	}
 	base := strings.TrimRight(t.URL, "/") + "/ajax.php?action="
 
@@ -383,21 +412,13 @@ func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any
 	if len(joinDate) >= 10 {
 		joinDate = joinDate[:10] // "2026-03-05 01:18:59" → date only
 	}
-	// Cookie-auth forks (verified on AlphaRatio) don't return a stats.buffer
-	// field or index-level gift/merit tokens — compute buffer from the raw
-	// byte counts instead of trusting an absent field, and omit fl_tokens
-	// rather than reporting a false zero.
-	buffer := user.Stats.Buffer
-	if kind == "gazelle_json_cookie" {
-		buffer = max(user.Stats.Uploaded-user.Stats.Downloaded, 0)
-	}
 	out := map[string]any{
 		"username":         user.Username,
 		"user_id":          fmt.Sprintf("%d", index.ID),
 		"group":            user.Personal.Class,
 		"uploaded":         parse.BytesToSize(user.Stats.Uploaded),
 		"downloaded":       parse.BytesToSize(user.Stats.Downloaded),
-		"buffer":           parse.BytesToSize(buffer),
+		"buffer":           parse.BytesToSize(user.Stats.Buffer),
 		"ratio":            parse.AnyFloat(user.Stats.Ratio),
 		"required_ratio":   parse.AnyFloat(user.Stats.RequiredRatio),
 		"join_date":        joinDate,
@@ -411,9 +432,7 @@ func (c *Client) fetchGazelleJSON(t models.Tracker, kind string) (map[string]any
 		"forum_posts":      user.Community.Posts,
 		"groups_uploaded":  user.Community.Groups,
 		"perfect_flacs":    user.Community.PerfectFLACs,
-	}
-	if kind != "gazelle_json_cookie" {
-		out["fl_tokens"] = index.GiftTokens + index.MeritTokens
+		"fl_tokens":        index.GiftTokens + index.MeritTokens,
 	}
 	if user.Personal.Warned {
 		out["warnings"] = 1
@@ -673,19 +692,13 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, errf("parse_error", err)
 	}
-	if apiErr, ok := raw["error"]; ok && apiErr != nil {
-		message := "API error"
-		switch value := apiErr.(type) {
-		case string:
-			if strings.TrimSpace(value) != "" {
-				message = value
-			}
-		case map[string]any:
-			if text, ok := value["message"].(string); ok && strings.TrimSpace(text) != "" {
-				message = text
-			}
-		}
-		return nil, errf("api_error", fmt.Errorf("%s", message))
+	// An "error" key only means failure when it actually carries one. Plenty
+	// of APIs include the field on EVERY response and leave it empty on
+	// success ("", false, null, 0), so treating its mere presence as a failure
+	// would reject perfectly good payloads — with a useless "API error" at
+	// that, since there is no message to report.
+	if msg, failed := apiErrorMessage(raw["error"]); failed {
+		return nil, errf("api_error", fmt.Errorf("%s", msg))
 	}
 	if api.SuccessField != "" && fmt.Sprint(nested(raw, api.SuccessField)) != api.SuccessValue {
 		return nil, errf("api_error", fmt.Errorf("unexpected %s value", api.SuccessField))

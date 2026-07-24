@@ -269,14 +269,8 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	}
 	// Real APIs need a key (and gazelle also a username) — surface these as
 	// "not configured" rather than letting the fetcher return a raw error.
-	// gazelle_json_cookie has no API key concept at all — its credential is
-	// the session cookie (e.g. AlphaRatio, GreatPosterWall).
 	if kind != "demo" {
-		if kind == "gazelle_json_cookie" {
-			if strings.TrimSpace(t.SessionCookie) == "" {
-				return CheckResult{Status: "not_configured", Detail: "no_cookie"}
-			}
-		} else if strings.TrimSpace(t.APIKey) == "" {
+		if strings.TrimSpace(t.APIKey) == "" {
 			return CheckResult{Status: "not_configured", Detail: "no_key"}
 		}
 		if kind == "gazelle" && strings.TrimSpace(t.Username) == "" {
