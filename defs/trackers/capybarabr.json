@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "key": "capybarabr",
+  "name": "CapybaraBR",
+  "abbr": "CBR",
+  "url": "https://capybarabr.com",
+  "type": "unit3d",
+  "last_updated": "2026-07-24",
+  "rules": {
+    "min_ratio": 1.0,
+    "note": "No hit-and-run system; keep your ratio at or above 1.00."
+  },
+  "invite_requirements": {
+    "min_class": "Arara"
+  },
+  "scrape": {
+    "labels": {
+      "conta upload (total)": "uploaded",
+      "conta download (total)": "downloaded",
+      "total em upload": "seeding",
+      "total baixando": "leeching",
+      "bon": "bonus_points",
+      "tamanho em seeding": "seed_size",
+      "tempo médio de seed": "avg_seed_time",
+      "tempo total de seed": "total_seedtime",
+      "proporção": "ratio",
+      "real proporção": "real_ratio",
+      "buffer": "buffer",
+      "tokens de freeleech": "fl_tokens",
+      "snatches de upload": "upload_snatches",
+      "data de registro": "join_date",
+      "convites": "invites",
+      "total de uploads (non-anônimo)": "uploads"
+    }
+  },
+  "groups": [
+    {
+      "name": "Morcego",
+      "style": { "color": "#96281B", "icon": "fas fa-times" },
+      "requirements": {},
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 0" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" }
+      ]
+    },
+    {
+      "name": "Lesma",
+      "style": { "color": "#FF69B4", "icon": "fas fa-tachometer-slow" },
+      "requirements": {},
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 0" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" }
+      ]
+    },
+    {
+      "name": "Capivarinha",
+      "style": { "color": "#7289DA", "icon": "fas fa-user" },
+      "requirements": {
+        "min_ratio": 1.0,
+        "note": "Default class."
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 5" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" }
+      ]
+    },
+    {
+      "name": "Arara",
+      "style": { "color": "#3c78d8", "icon": "fas fa-feather-pointed" },
+      "requirements": {
+        "min_uploaded": "1 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1M",
+        "min_seedtime": "3D"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 25" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" }
+      ]
+    },
+    {
+      "name": "Mico-Leao",
+      "style": { "color": "#D78A20", "icon": "fas fa-power-off" },
+      "requirements": {
+        "min_uploaded": "5 TiB",
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_seedtime": "1W"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 25" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" }
+      ]
+    },
+    {
+      "name": "Onça",
+      "style": { "color": "#FDD229", "icon": "fas fa-bolt" },
+      "requirements": {
+        "min_uploaded": "25 TiB",
+        "min_ratio": 1.0,
+        "min_age": "6M",
+        "min_seedtime": "2W 6D"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 25" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" }
+      ]
+    },
+    {
+      "name": "Tatu",
+      "style": { "color": "#D8BFD8", "icon": "fas fa-rocket" },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_ratio": 1.0,
+        "min_age": "9M",
+        "min_seedtime": "1M"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 25" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" }
+      ]
+    },
+    {
+      "name": "Caramelo",
+      "style": { "color": "#a85a00", "icon": "fas fa-dog" },
+      "requirements": {
+        "min_uploaded": "70 TiB",
+        "min_ratio": 1.0,
+        "min_age": "12M",
+        "min_seedtime": "2M"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 30" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" }
+      ]
+    },
+    {
+      "name": "Lobo-Guara",
+      "style": { "color": "#0b918c", "icon": "fas fa-paw fa-beat-fade" },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1Y 5M 3W 4D",
+        "min_seedtime": "3M"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 30" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-chevron-double-up torrent-icons__double-upload", "label": "Upload em dobro" }
+      ]
+    },
+    {
+      "name": "Capivara-Master",
+      "style": { "color": "#FF8C00", "icon": "fas fa-crown fa-bounce", "sparkle": true },
+      "requirements": {
+        "min_uploaded": "200 TiB",
+        "min_ratio": 1.0,
+        "min_age": "1Y 11M 3W 4D",
+        "min_seedtime": "6M"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 50" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-chevron-double-up torrent-icons__double-upload", "label": "Upload em dobro" }
+      ]
+    },
+    {
+      "name": "Tartaruga",
+      "style": { "color": "#8FBC8F", "icon": "fas fa-turtle", "sparkle": true },
+      "requirements": {
+        "min_ratio": 1.0,
+        "min_age": "3M",
+        "min_seed_size": "20 TiB"
+      },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-chevron-double-up torrent-icons__double-upload", "label": "Upload em dobro" }
+      ]
+    },
+    {
+      "name": "Internal",
+      "style": { "color": "#BAAF92", "icon": "fas fa-magic", "sparkle": true },
+      "requirements": { "description": "Member of a CapybaraBR internal release group." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    },
+    {
+      "name": "Uploader",
+      "style": { "color": "#00ff2d", "icon": "fas fa-upload", "sparkle": true },
+      "requirements": { "description": "Discretionary group for trusted uploaders." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    },
+    {
+      "name": "Trustee",
+      "style": { "color": "#BF55EC", "icon": "fas fa-shield" },
+      "requirements": { "description": "Discretionary group for close associates of the site." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" }
+      ]
+    },
+    {
+      "name": "Editor",
+      "style": { "color": "#15B097", "icon": "fas fa-user-pen" },
+      "requirements": { "description": "Discretionary group that fixes other users' torrent pages." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    },
+    {
+      "name": "Torrent Moderator",
+      "style": { "color": "#15B097", "icon": "fas fa-badge-check" },
+      "requirements": { "description": "Staff group that checks pending torrents in the moderation queue." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    },
+    {
+      "name": "Bot",
+      "style": { "color": "#ff7400", "icon": "fas fa-user-robot-xmarks" },
+      "requirements": { "description": "Site bot accounts." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 100" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
+        { "icon": "fas fa-syringe", "label": "Imune a avisos automáticos de HnR" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    },
+    {
+      "name": "Designer",
+      "style": { "color": "#7B61FF", "icon": "fas fa-paint-brush", "sparkle": true },
+      "requirements": { "description": "Designer do CBR." },
+      "perks": [
+        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
+        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
+        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
+        { "icon": "fas fa-tasks", "label": "Moderação de torrents bypass" }
+      ]
+    }
+  ]
+}
