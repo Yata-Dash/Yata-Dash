@@ -866,6 +866,19 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
   });
 
+  // Same on resize. A sparkline's viewBox is measured from its box at draw
+  // time and the SVG scales with preserveAspectRatio="none", so a window that
+  // changed width since the last render shows a horizontally smeared stroke
+  // until the next data refresh. Cheap to redraw, but debounced so a drag
+  // across monitors doesn't redraw twelve SVGs per frame.
+  let resizeTimer: number | undefined;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
+    }, 150);
+  });
+
   // ── Mirror scrollbar (top of table) ──────────────────────────────────────
   // Inject a thin div directly above .table-scroll that shows the same
   // horizontal scrollbar. This means it's always reachable right under the
@@ -988,7 +1001,7 @@ modalsReady.then(m => {
     const reloaded = await m.reloadDefs(toast);
     if (!reloaded) return;
     await loadTrackers();
-    trackersTab.resetOptOutsLoaded();
+    trackersTab.resetDefsMeta();
     await loadTrackerGroups();
   };
   (window as any).openColCustomizer  = () => { openColCustomizer(colPrefs); };
@@ -1025,6 +1038,7 @@ modalsReady.then(m => {
 (window as any).trkToggleEnabled = (id: string) => { void trackersTab.trkToggleEnabled(id); };
 (window as any).trkTest          = (id: string) => { void trackersTab.trkTest(id); };
 (window as any).trkAskDelete     = trackersTab.trkAskDelete;
+(window as any).trkSort          = trackersTab.trkSort;
 (window as any).trkCancelDelete  = trackersTab.trkCancelDelete;
 (window as any).trkConfirmDelete = (id: string) => { void trackersTab.trkConfirmDelete(id); };
 (window as any).prowlarrToggle  = () => trackersTab.toggleImportSection('prowlarr');

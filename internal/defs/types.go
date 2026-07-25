@@ -39,9 +39,16 @@ type TypeAPI struct {
 	// Kind is one of: "unit3d", "gazelle", "gazelle_json", "gazelle_games",
 	// "custom", "demo", "none".
 	//   unit3d  — GET {url}/api/user?api_token={key}
-	//   gazelle — username/query-key API used by legacy Gazelle integrations
-	//   gazelle_json — scoped ajax.php API with a raw Authorization header
-	//   gazelle_games — scoped api.php API with an X-API-Key header
+	//   gazelle_json — ajax.php, the STANDARD Gazelle API endpoint (upstream,
+	//                  present on essentially every fork). Raw Authorization
+	//                  header. Reach for this first for a new Gazelle site.
+	//   gazelle — a fork's own api.php (?action=user&method=getuserinfo),
+	//             key + username. NOT upstream and not a shared "legacy"
+	//             standard: forks that ship an api.php each invented their
+	//             own grammar, so this fits only sites matching Anthelion's.
+	//   gazelle_games — GazelleGames' own api.php (?request=…), X-API-Key
+	//                   header, three chained calls. Shares nothing with the
+	//                   above but the filename and the response envelope.
 	//   custom  — fully described by the tracker def's "api" object
 	//   demo    — local mock data, no HTTP
 	//   none    — no API; scrape-only tracker type

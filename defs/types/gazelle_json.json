@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "key": "gazelle_json",
-  "label": "Gazelle JSON API",
-  "last_updated": "2026-07-21",
-  "description": "Gazelle tracker using the scoped ajax.php JSON API. The API key identifies the current user; no username is required. Profile pages use ID-based URLs (/user.php?id=N).",
+  "label": "Gazelle (ajax.php)",
+  "last_updated": "2026-07-25",
+  "description": "Gazelle tracker using ajax.php — the standard API endpoint shipped by upstream Gazelle and present on essentially every fork, so this is the type to reach for first when adding a new Gazelle site. API-key auth on it is a newer per-fork addition (upstream used the session cookie). The key identifies the current user, so no username is required. Profile pages use ID-based URLs (/user.php?id=N).",
   "api": {
     "kind": "gazelle_json",
     "required_fields": []

@@ -94,25 +94,58 @@ export function dismissNewApiToken(): void {
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
 }
 
+/** Put text on the clipboard, tolerating a non-secure origin.
+ *
+ *  navigator.clipboard only exists in a secure context — https:// or
+ *  localhost — so anyone reaching Yata over http://<lan-ip> never had it and
+ *  fell straight through to "press Ctrl+C". document.execCommand('copy') is
+ *  deprecated but still works there, so it's the fallback rather than asking
+ *  the user to do it by hand. Returns false only if both refuse. */
+async function copyText(value: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch { /* denied by permissions policy — try the textarea below */ }
+  }
+  // execCommand copies the current selection, so the text has to be in a real,
+  // selectable element: off-screen rather than hidden (display:none and
+  // visibility:hidden both make select() a no-op).
+  const ta = document.createElement('textarea');
+  ta.value = value;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  try {
+    ta.select();
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    ta.remove();
+  }
+}
+
 export async function copyNewApiToken(btn: HTMLButtonElement): Promise<void> {
   const value = el('s-token-new-value')?.textContent ?? '';
   if (!value) return;
-  try {
-    await navigator.clipboard.writeText(value);
+  if (await copyText(value)) {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
-  } catch {
-    // Clipboard API unavailable (http:// origin) — select the text instead.
-    const range = document.createRange();
-    const node = el('s-token-new-value');
-    if (node) {
-      range.selectNodeContents(node);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-      toast('Press Ctrl+C to copy');
-    }
+    toast('Copied to clipboard');
+    return;
   }
+  // Both routes refused (locked-down browser). Select the token so it's still
+  // one keystroke away — this is the only case that asks for Ctrl+C.
+  const node = el('s-token-new-value');
+  if (node) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+  toast('Could not copy automatically — press Ctrl+C', 'error');
 }
 
 export async function revokeApiToken(id: string, btn?: HTMLButtonElement): Promise<void> {

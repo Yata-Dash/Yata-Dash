@@ -678,8 +678,16 @@
               </div>
               <div class="trk-table-wrap">
                 <table class="trk-table">
+                  <!-- Sortable headers: click cycles ascending → descending →
+                       off (back to the order trackers were added in). -->
                   <thead><tr>
-                    <th style="width:48px"></th><th>Name</th><th>URL</th><th>Type</th><th>Def</th><th>Test Status</th><th style="text-align:right">Actions</th>
+                    <th style="width:48px" aria-sort="none"><button type="button" class="trk-sort" data-sortkey="enabled" onclick="trkSort('enabled')" title="Sort by enabled / disabled">On<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="name" onclick="trkSort('name')" title="Sort by name">Name<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="url" onclick="trkSort('url')" title="Sort by URL">URL<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="type" onclick="trkSort('type')" title="Sort by tracker type">Type<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="def" onclick="trkSort('def')" title="Sort by definition — manually-added trackers last">Def<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="test" onclick="trkSort('test')" title="Sort by test result — failures first">Test Status<span class="trk-sort-ind"></span></button></th>
+                    <th style="text-align:right">Actions</th>
                   </tr></thead>
                   <tbody id="trk-tbody">
                     <tr><td colspan="7" class="trk-empty">Loading…</td></tr>

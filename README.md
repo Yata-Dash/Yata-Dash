@@ -203,7 +203,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Blutopia | Unit3D | No | API Only | Seed-size and average-seedtime progress unavailable through the API |
 | BroadcastTheNet | Custom | No | API Only | JSON-RPC userInfo; 150 API calls per hour |
 | Darkpeers | Unit3D | Yes | 180min |  |
-| GazelleGames | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| GazelleGames | Gazelle | No | API Only |  |
 | Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
 | InfinityHD | Unit3D | Yes | 60min |  |
 | LST | Unit3D | Yes | 180min |  |
@@ -213,8 +213,8 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
 | Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | Unit3D | Yes | Once per day |  |
-| Orpheus | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping; required ratio is calculated dynamically |
-| Redacted | Gazelle | No | API Only | Uses the scoped JSON API; no HTML scraping |
+| Orpheus | Gazelle | No | API Only | Required ratio is calculated dynamically |
+| Redacted | Gazelle | No | API Only |  |
 | ReelFliX | Unit3D | No | API Only | Seed-size, average-seedtime, and rolling-upload progress unavailable through the API |
 | RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
 | RocketHD | Unit3D | Yes | API Only |  |

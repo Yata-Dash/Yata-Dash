@@ -22,7 +22,11 @@ export function renderSparkline(containerId: string, values: number[], color: st
 
   const c = resolveColor(color);
   const w = el.offsetWidth || 200;
-  const h = 36;
+  // Measured, not fixed at 36: the aggregate cards' sparkline box now grows
+  // with the card. The SVG is preserveAspectRatio="none", so a viewBox that
+  // doesn't match the box stretches the stroke — 1.5px reads as ~2.7px once a
+  // 36-unit viewBox is scaled into a 64px slot.
+  const h = el.offsetHeight || 36;
 
   // Drop holes and non-finite entries before anything measures the series.
   // A sparse array reads as populated to .length and .every() (both skip

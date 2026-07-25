@@ -8,40 +8,50 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
-- **Nine new trackers** (contributed by [@gizzlepox](https://github.com/gizzlepox)):
-  AnimeBytes, Blutopia, BroadcastTheNet, GazelleGames, Nebulance, Orpheus,
-  Redacted, ReelFliX and Upload.cx. All are API-only for now — none has been
-  approved by its staff yet, so Yata warns about their definitions until
-  approval comes through.
+- **Sortable tracker settings table.** Settings → Trackers can now be sorted
+  by any column — clicking a header cycles ascending, descending, then back
+  to the order you added trackers in, so nothing is lost. Test Status sorts
+  by severity rather than alphabetically, putting failures and unconfigured
+  trackers at the top where you want them, and Def groups manually-added
+  trackers together at the end instead of filing them under "m".
 
-- **Two new tracker platforms.** Gazelle trackers with the modern JSON API
-  (Redacted, Orpheus) and GazelleGames' own API now work without any HTML
-  scraping. Both authenticate with an API key.
+### Changed
 
-- **Combined upload + download requirements.** Trackers that promote on total
-  traffic rather than upload alone can now express that, and it shows up in
-  targets and Pathways like any other requirement.
+- **Tracker types now read as names, not codes.** The Type column showed the
+  internal key (`gazelle_json`); it now shows the same label the Add Tracker
+  list uses, with the key kept in the tooltip.
 
-- **Richer tracker rules.** Definitions can record minimum seed times in hours,
-  separate requirements for episodes vs. seasons, and a short note for rules
-  that don't reduce to a number.
+- **Clearer names for the Gazelle types.** "Gazelle JSON API" and "Gazelle"
+  are now **Gazelle (ajax.php)** and **Gazelle (api.php)**, named for the
+  endpoint each one actually talks to. The old names suggested one was a
+  modern replacement for the other, which had it backwards: `ajax.php` is
+  the standard endpoint shipped by Gazelle itself and present on virtually
+  every fork, while an `api.php` is a site-specific addition that each fork
+  invented independently. So when adding a new Gazelle tracker, reach for
+  **Gazelle (ajax.php)** first. GazelleGames' own `api.php` — unrelated to
+  Anthelion's beyond the filename — is now just **GazelleGames**, and Unit3D
+  is now **UNIT3D**, matching that project's own capitalisation. Existing
+  trackers are unaffected: only the display names changed.
+
+- **The dashboard uses the whole window.** Grid and table were capped at
+  1800px, so on an ultrawide roughly half the screen was empty margin while
+  the top bar ran edge to edge. The cap is gone: the grid packs in as many
+  card columns as fit (eight on a 3440px display), and the table finally shows
+  every column without sideways scrolling. Settings, the expanded table row
+  and the Tracker Detail info columns stay capped — they're forms and
+  label→value lists, which only get harder to read stretched — while the
+  charts, grid and table take the full width. The aggregate cards' sparklines
+  now grow taller as their cards widen, so a week of data isn't drawn as a
+  flat line across half a metre.
 
 ### Fixed
 
-- **A tracker's API errors could be misread as failures.** Some APIs include an
-  `error` field on every response and simply leave it empty when nothing went
-  wrong. Yata treated the field's presence as a failure, so those trackers
-  never fetched — and reported a bare "API error" with no explanation.
-
-- **A down qui instance could wipe seed sizes.** If one of several qui
-  instances was unreachable, trackers seeding only on that instance looked like
-  they were seeding nothing, and their stored seed size was cleared. Their data
-  is now left alone until qui can be reached again.
-
-- **Two scrapes in the same second could report the wrong outcome.** Scrape
-  times are recorded to the second, so a retry landing in the same second as
-  the attempt before it could be judged in the wrong order — showing a failure
-  as the latest result when it had actually succeeded, or the reverse.
+- **The API token "Copy" button now actually copies.** Over plain `http://`
+  (any LAN address, so most self-hosted setups) browsers withhold the modern
+  clipboard API, and the button quietly fell back to selecting the token and
+  telling you to press Ctrl+C. It now copies for real on those origins too,
+  and confirms with "Copied to clipboard". The Ctrl+C message survives only
+  for browsers that refuse both routes.
 
 
 ## [Beta-20260723]

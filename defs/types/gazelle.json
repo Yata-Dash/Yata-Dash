@@ -1,8 +1,9 @@
 {
   "schema_version": 1,
   "key": "gazelle",
-  "label": "Gazelle",
-  "description": "Gazelle-based private tracker. API requires both an API key and a username. Profile pages use ID-based URLs (/user.php?id=N) — the ID is fetched from the API at scrape time. Session cookie required for profile scraping.",
+  "label": "Gazelle (api.php)",
+  "last_updated": "2026-07-25",
+  "description": "Gazelle fork exposing a site-specific api.php endpoint (?action=user&method=getuserinfo), which is NOT part of upstream Gazelle — each fork that ships one invented its own query grammar. Most Gazelle trackers use the standard ajax.php API instead, so try the 'Gazelle (ajax.php)' type first. Needs both an API key and a username: the key authenticates, the username selects the account. Profile pages use ID-based URLs (/user.php?id=N) — the ID comes from the API at scrape time, and scraping one needs a session cookie.",
   "api": {
     "kind": "gazelle",
     "required_fields": ["username"]

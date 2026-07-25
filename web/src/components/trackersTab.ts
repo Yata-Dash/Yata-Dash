@@ -1,7 +1,9 @@
 // components/trackersTab.ts — Settings → Trackers tab
 // Configured-trackers table (enabled toggle / edit / inline-confirm delete)
 // plus the collapsible "Import from Prowlarr" / "Import from Jackett" sections.
-import type { OptOutEntry, ProwlarrIndexer, TestStatusMap, Tracker } from '../types';
+import type {
+  CheckResult, OptOutEntry, ProwlarrIndexer, TestStatusMap, Tracker, TrackerTestResult,
+} from '../types';
 import { MASKED_KEY } from '../types';
 import * as api from '../api';
 import { appSettings } from '../state';
@@ -25,6 +27,88 @@ let _testStatus: TestStatusMap = {};
 let _testing = new Set<string>(); // tracker ids with a test in flight
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Column sorting
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Sortable columns. "Actions" isn't one — there's nothing to order by. */
+type SortKey = 'enabled' | 'name' | 'url' | 'type' | 'def' | 'test';
+
+let _sortKey: SortKey | null = null; // null = the order trackers were added in
+let _sortAsc = true;
+
+/** Worst-first severity for the Test Status column. Sorting it alphabetically
+ *  would be useless — the only reason to sort this column is "show me what's
+ *  broken", so ascending puts failures at the top. A tracker's rank is that of
+ *  its worst check, since one broken channel is what you want to see. */
+function testRank(res: TrackerTestResult | undefined): number {
+  if (!res) return 3; // never tested — after real problems, before healthy
+  const rank = (c: CheckResult): number => {
+    switch (c.status) {
+      case 'fail':           return 0;
+      case 'not_configured': return 1;
+      case 'blocked':        return 2;
+      case 'ok':             return 5;
+      default:               return 4; // not_applicable / unknown
+    }
+  };
+  return Math.min(rank(res.api), rank(res.scrape));
+}
+
+function sortValue(t: Tracker, key: SortKey): string | number {
+  switch (key) {
+    case 'enabled': return t.enabled === false ? 1 : 0; // enabled first
+    case 'name':    return t.name.toLowerCase();
+    case 'url':     return t.url.toLowerCase();
+    // Sort by what's on screen (the type's label), not the raw key.
+    case 'type':    return typeLabel(t.type).toLowerCase();
+    // Def-backed trackers alphabetically, then the manual ones as a block —
+    // "manual" is a different category, not a def key that happens to start
+    // with an m, so interleaving it just hides the trackers with no def.
+    case 'def':     return t.def_key ? `0${t.def_key.toLowerCase()}` : '1';
+    case 'test':    return testRank(_testStatus[t.id]);
+  }
+}
+
+/** Trackers in display order. Sorts a COPY — _trackers is the array handed to
+ *  us by the reload path and has to keep its own (insertion) order so that
+ *  clicking a header a third time can restore it. */
+function sortedTrackers(): Tracker[] {
+  const key = _sortKey;
+  if (!key) return _trackers;
+  const dir = _sortAsc ? 1 : -1;
+  return [..._trackers].sort((a, b) => {
+    const av = sortValue(a, key);
+    const bv = sortValue(b, key);
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+    // Ties break by name in a fixed direction, so reversing the sort doesn't
+    // also shuffle rows that compare equal.
+    return cmp !== 0 ? cmp * dir : a.name.localeCompare(b.name);
+  });
+}
+
+/** Header click: cycle ascending → descending → off (insertion order). */
+export function trkSort(key: SortKey): void {
+  if (_sortKey !== key)   { _sortKey = key; _sortAsc = true; }
+  else if (_sortAsc)      { _sortAsc = false; }
+  else                    { _sortKey = null; _sortAsc = true; }
+  if (_deps) renderTrackersTable(_trackers, _deps);
+}
+
+/** Paint the active column's arrow and aria-sort onto the header row. */
+function paintSortHeaders(): void {
+  for (const btn of document.querySelectorAll<HTMLElement>('.trk-sort')) {
+    const active = btn.dataset.sortkey === _sortKey;
+    btn.classList.toggle('active', active);
+    const ind = btn.querySelector('.trk-sort-ind');
+    if (ind) ind.textContent = active ? (_sortAsc ? '▲' : '▼') : '';
+    btn.closest('th')?.setAttribute(
+      'aria-sort', active ? (_sortAsc ? 'ascending' : 'descending') : 'none');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Configured trackers table
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -40,13 +124,15 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
   _trackers = trackers;
   const tbody = document.getElementById('trk-tbody');
   if (!tbody) return;
+  void loadDefsMeta(); // type labels for the Type column (re-renders on arrival)
+  paintSortHeaders();
 
   if (!trackers.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="trk-empty">No trackers configured yet — click “Add Tracker” above or import from Prowlarr below.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = trackers.map(t => {
+  tbody.innerHTML = sortedTrackers().map(t => {
     const abbr = t.abbr ? `<span class="trk-abbr-badge">${esc(t.abbr)}</span>` : '';
     const optOutBadge = t.opted_out
       ? `<span class="trk-optout-badge" title="${esc(optedOutTitle(t))}">⛔ opted out</span>`
@@ -84,7 +170,7 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
       </td>
       <td class="trk-td-name"><span class="trk-name">${esc(t.name)}</span>${abbr}</td>
       <td class="trk-td-url"><a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">${esc(t.url)}</a></td>
-      <td class="trk-td-type">${esc(t.type)}</td>
+      <td class="trk-td-type" title="Type key: ${esc(t.type)}">${esc(typeLabel(t.type))}</td>
       <td class="trk-td-def">${defBadge}</td>
       <td class="trk-td-test">${testCell}</td>
       <td class="trk-td-actions">${actions}</td>
@@ -222,20 +308,42 @@ const IMPORT_SOURCES: Record<ImportKey, ImportSource> = {
 
 const _importLists: Record<ImportKey, ProwlarrIndexer[]> = { prowlarr: [], jackett: [] };
 let _optOuts: OptOutEntry[] = [];
-let _optOutsLoaded = false;
+let _typeLabels: Record<string, string> = {}; // type key → human label
+let _defsMetaLoaded = false;
+let _defsMetaInFlight: Promise<void> | null = null;
 
-/** Opt-out list from /api/defs — loaded once, used to disable import rows. */
-async function ensureOptOutsLoaded(): Promise<void> {
-  if (_optOutsLoaded) return;
-  const { ok, data } = await api.fetchDefs();
-  if (ok) { _optOuts = data.opt_outs ?? []; _optOutsLoaded = true; }
+/** Type labels + the opt-out list, both from /api/defs. They come in the same
+ *  payload and the labels are needed the moment the table renders, so one
+ *  shared in-flight fetch serves both callers instead of two round trips. */
+function loadDefsMeta(): Promise<void> {
+  if (_defsMetaLoaded) return Promise.resolve();
+  if (_defsMetaInFlight) return _defsMetaInFlight;
+  _defsMetaInFlight = api.fetchDefs().then(({ ok, data }) => {
+    _defsMetaInFlight = null;
+    if (!ok || !data) return; // stays unloaded — the next render retries
+    _defsMetaLoaded = true;
+    _optOuts = data.opt_outs ?? [];
+    _typeLabels = Object.fromEntries((data.types ?? []).map(ty => [ty.key, ty.label]));
+    if (_deps) renderTrackersTable(_trackers, _deps); // labels arrived late
+  });
+  return _defsMetaInFlight;
 }
 
-/** Invalidate the cached opt-out list — the defs it's derived from may have
- *  just changed (Reload Definitions), so the next import fetch must re-fetch
- *  it instead of using the stale cache. */
-export function resetOptOutsLoaded(): void {
-  _optOutsLoaded = false;
+async function ensureOptOutsLoaded(): Promise<void> {
+  await loadDefsMeta();
+}
+
+/** A type's display label ("Gazelle (ajax.php)"), falling back to the raw key
+ *  for a manually-added tracker whose type isn't in the registry. */
+function typeLabel(key: string): string {
+  return _typeLabels[key] ?? key;
+}
+
+/** Invalidate the cached defs metadata — the def files it came from may have
+ *  just changed (Reload Definitions), so the next read must re-fetch instead
+ *  of using the stale cache. */
+export function resetDefsMeta(): void {
+  _defsMetaLoaded = false;
 }
 
 /** Prefill the URL/secret inputs from saved settings — only when the user

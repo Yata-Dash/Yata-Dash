@@ -228,7 +228,11 @@ func (c *Client) identify(t models.Tracker) string {
 	return c.Registry.ResolveScrape(t.URL, t.Type).Identify
 }
 
-// ── Gazelle ──────────────────────────────────────────────────────────────────
+// ── Gazelle (a fork's own api.php) ───────────────────────────────────────────
+//
+// Not upstream Gazelle — see the TypeAPI.Kind notes in internal/defs/types.go.
+// A new Gazelle tracker almost certainly wants fetchGazelleJSON (ajax.php)
+// instead; this fetcher only fits sites using Anthelion's query grammar.
 
 type gazelleResponse struct {
 	Status   string `json:"status"`
@@ -443,9 +447,11 @@ func (c *Client) fetchGazelleJSON(t models.Tracker) (map[string]any, *Error) {
 	return out, nil
 }
 
-// GazelleGames exposes a scoped Gazelle-derived API at api.php. It differs
-// from the ajax.php API in both authentication and endpoint names, so it has
-// its own fetcher rather than risking changes to Redacted-style trackers.
+// GazelleGames exposes its own Gazelle-derived API at api.php. The filename
+// matches the fetchGazelle (Anthelion) endpoint and the envelope matches
+// ajax.php, but that is where the resemblance stops: different query grammar,
+// different response shapes, and the stats need three chained calls. Hence a
+// third fetcher rather than a branch inside either of the others.
 type gazelleGamesQuickUser struct {
 	Username  string `json:"username"`
 	ID        int    `json:"id"`

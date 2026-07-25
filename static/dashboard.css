@@ -49,13 +49,25 @@ html{overflow-x:clip}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
 /* ── Layout ── */
+/* Comfortable maximum for surfaces that are read rather than scanned — forms,
+   label→value lists. They gain nothing from an ultrawide and lose plenty: a
+   toggle three feet from its label, a value 1000px from the field it belongs
+   to. Grids, tables and charts deliberately DON'T use this; they get the whole
+   window. Kept out of the themed :root block since it isn't a theme concern. */
+:root{--reading-max:1600px}
 .app-wrapper{display:flex;flex-direction:column;min-height:100vh}
 .topbar{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:12px;padding:0 24px;height:58px;background:var(--topbar-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
 .topbar-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.3px;text-decoration:none;color:var(--text)}
 .topbar-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
 .topbar-badge{font-size:11px;font-weight:600;letter-spacing:.5px;padding:2px 8px;border-radius:20px;background:var(--accent-glow);color:var(--accent);border:1px solid var(--accent-border-md)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.main{flex:1;padding:24px 24px 48px;max-width:1800px;width:100%;margin:0 auto}
+/* No max-width: on an ultrawide a capped .main left ~800px dead on each side
+   while the topbar ran edge to edge, so the content read as a floating island.
+   The 24px side padding matches the topbar's, keeping the logo and the first
+   column on the same line. Anything inside that would look silly stretched to
+   3000px caps itself locally (.expanded-cols, .sc-spark) rather than holding
+   the whole page back. */
+.main{flex:1;padding:24px 24px 48px;width:100%;margin:0 auto}
 
 /* ── View toggle ── */
 .view-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
@@ -95,7 +107,11 @@ html{overflow-x:clip}
 .sc-label{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px}
 .sc-value{font-size:22px;font-weight:700;font-family:'Geist Mono',monospace;letter-spacing:-.5px;color:var(--card-accent,var(--text));line-height:1.2;margin-top:2px}
 .sc-sub{font-size:11px;color:var(--text3);margin-bottom:4px}
-.sc-spark{width:100%;height:36px;margin-top:6px}
+/* Grows with the card instead of staying a fixed 36px ribbon: on an ultrawide
+   the six cards are ~550px each, and a week of data drawn 36px tall across
+   that is a flat line with no readable shape. Clamped at both ends so it can't
+   shrink below the old height or grow tall enough to dominate the numbers. */
+.sc-spark{width:100%;height:auto;aspect-ratio:7/1;min-height:36px;max-height:64px;margin-top:6px}
 .sc-spark svg{width:100%;height:100%;display:block;overflow:visible}
 /* Aggregate card 7-day change chip — mirrors .stat-delta-chip's family/weight
    (Detail page) so the top cards and Detail read as one system. Always
@@ -461,7 +477,12 @@ th.sort-desc .sort-icon .up{opacity:.2}
   padding:16px 20px 18px 56px;
   overflow:hidden;
 }
-.expanded-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;align-items:start}
+/* Capped rather than tracking the row width. Unbounded, an ultrawide gave
+   auto-fill eleven 300px tracks for the two or three panels that exist, and
+   stretched the connection strip's seven day-blocks to ~480px each. The cap is
+   about what the row had before .main lost its own, so ordinary widths are
+   unchanged. */
+.expanded-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;align-items:start;max-width:var(--reading-max)}
 /* Full-width band beneath the columns (the connection strip). Spanning every
    column keeps it out of the auto-fill flow, so it can't become a short third
    column that leaves the other two stretched. */
@@ -920,7 +941,10 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   background:var(--surface);transition:color .15s,border-color .15s,background .15s;
 }
 .settings-back:hover{color:var(--text);border-color:var(--border2);background:var(--surface2)}
-.settings-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start}
+/* Settings is a form, not a dashboard — capped so an ultrawide doesn't put a
+   toggle a third of a metre from the label it belongs to. The tracker table
+   inside it scrolls within this width as it always did. */
+.settings-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start;max-width:var(--reading-max)}
 .settings-tabs{display:flex;flex-direction:column;gap:4px;position:sticky;top:78px}
 .settings-tab{
   text-align:left;padding:9px 14px;border-radius:var(--radius-sm);
@@ -955,6 +979,17 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   text-transform:uppercase;letter-spacing:.6px;color:var(--text3);
   background:var(--surface2);border-bottom:1px solid var(--border2);white-space:nowrap;
 }
+/* Sortable column headers — a bare button that inherits the th's styling, so
+   the header row looks unchanged until you hover it. */
+.trk-table thead th:has(.trk-sort){padding:0}
+.trk-sort{
+  display:flex;align-items:center;gap:5px;width:100%;padding:8px 10px;
+  background:none;border:none;cursor:pointer;font:inherit;letter-spacing:inherit;
+  text-transform:inherit;color:inherit;text-align:left;
+}
+.trk-sort:hover{color:var(--text2);background:var(--surface3)}
+.trk-sort.active{color:var(--accent)}
+.trk-sort-ind{font-size:8px;line-height:1}
 .trk-table tbody td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;white-space:nowrap}
 .trk-table tbody tr:last-child td{border-bottom:none}
 .trk-row-disabled .trk-td-name,.trk-row-disabled .trk-td-url,.trk-row-disabled .trk-td-type,.trk-row-disabled .trk-td-def{opacity:.45}
@@ -966,7 +1001,7 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 }
 .trk-td-url a{font-size:12px;color:var(--text3);font-family:'Geist Mono',monospace;text-decoration:none;max-width:260px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
 .trk-td-url a:hover{color:var(--accent);text-decoration:underline}
-.trk-td-type{font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)}
+.trk-td-type{font-size:12px;color:var(--text2)}
 .trk-def-badge{
   font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;
   background:var(--accent-bg-sm);color:var(--accent);border:1px solid var(--accent-border-sm);
@@ -1145,8 +1180,11 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .hc-tip-row{display:flex;align-items:center;gap:5px;line-height:1.5}
 .hc-tip-row b{font-weight:700}
 .hc-tip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+/* auto-FIT, not auto-fill: an ultrawide fits ten 320px tracks but the page only
+   ever has six charts, and auto-fill left the last four as dead columns with
+   the charts stranded at 320px. Collapsing them lets the six share the row. */
 .detail-charts{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
   gap:12px;margin-bottom:16px;
 }
 .detail-chart-card{
@@ -1163,9 +1201,12 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 }
 .detail-chart-open:hover{color:var(--accent);background:var(--surface2)}
 .detail-chart{min-height:60px}
+/* Label→value lists, so capped: auto-fit would happily stretch the three
+   columns to 1100px each on an ultrawide, putting every value a screen's width
+   from its label. The charts above are free to use the whole row. */
 .detail-cols{
   display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-  gap:16px;align-items:start;
+  gap:16px;align-items:start;max-width:var(--reading-max);
 }
 .detail-col{
   background:var(--surface);border:1px solid var(--border);

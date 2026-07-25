@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "key": "unit3d",
-  "label": "Unit3D",
-  "last_updated": "2026-07-21",
-  "description": "Standard Unit3D private tracker. Provides /api/user stats and scrapes the /users/{username} profile page for extended stats.",
+  "label": "UNIT3D",
+  "last_updated": "2026-07-25",
+  "description": "Standard UNIT3D private tracker. Provides /api/user stats and scrapes the /users/{username} profile page for extended stats.",
   "api": { 
     "kind": "unit3d",
     "api_key_hint": "Settings → API"

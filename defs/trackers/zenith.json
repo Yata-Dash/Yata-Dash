@@ -13,8 +13,8 @@
     "note": "Staff are working to add the needed stats to their API so scraping can eventually be dropped; once the API covers the scraped fields — Zenith should move to API-only (disable_scraping)"
   },
     "rules": {
-    "min_ratio": 0.0,
-    "min_seed_days": 3
+    "min_seed_days": 3,
+    "note": "Ratioless"
   },
   "groups": [
     {
