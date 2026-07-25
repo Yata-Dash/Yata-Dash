@@ -26,6 +26,7 @@ export function sortKey(
     case 'buffer':        return parseSize(strOf(s, 'buffer'))     ?? 0;
     case 'seed_size':     return parseSize(strOf(s, 'seed_size'))  ?? 0;
     case 'avg_seed_time': return parseSeedTime(strOf(s, 'avg_seed_time')) ?? 0;
+    case 'total_seedtime': return parseSeedTime(strOf(s, 'total_seedtime')) ?? 0;
     case 'seeding':       return numOf(s, 'seeding')      ?? 0;
     case 'leeching':      return numOf(s, 'leeching')     ?? 0;
     case 'hit_and_runs':  return numOf(s, 'hit_and_runs') ?? 0;
@@ -34,12 +35,20 @@ export function sortKey(
     case 'snatched':      return numOf(s, 'snatched')        ?? 0;
     case 'upload_snatches': return numOf(s, 'upload_snatches') ?? 0;
     case 'real_ratio':    return ratioSort(strOf(s, 'real_ratio'));
+    case 'real_uploaded':   return parseSize(strOf(s, 'real_uploaded'))   ?? 0;
+    case 'real_downloaded': return parseSize(strOf(s, 'real_downloaded')) ?? 0;
     case 'fl_tokens':     return numOf(s, 'fl_tokens')       ?? 0;
     case 'invites':       return numOf(s, 'invites')         ?? 0;
     case 'warnings':      return numOf(s, 'warnings')        ?? 0;
     case 'total_uploads': return numOf(s, 'uploads_approved') ?? 0;
     case 'adoptions':     return numOf(s, 'adoptions')        ?? 0;
     case 'reqs_filled':   return numOf(s, 'requests_filled')  ?? 0;
+    case 'forum_posts':   return numOf(s, 'forum_posts')      ?? 0;
+    // Freshness columns sort by raw unix seconds, so ascending is oldest-first
+    // — which is the useful direction: the trackers that haven't updated in a
+    // while come to the top. Never contacted sorts as 0, i.e. oldest of all.
+    case 'last_api_update': return s?.fetched_at ?? 0;
+    case 'last_scrape':     return scrapeStatus[tracker.id]?.last_scrape_at ?? 0;
     case 'scrape_health': {
       // Worst first when descending: dead cookies above plain failure
       // streaks, healthy trackers at 0.

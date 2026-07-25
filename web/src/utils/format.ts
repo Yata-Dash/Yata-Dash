@@ -33,6 +33,67 @@ export function fmtGib(gib: number): string {
   return gib.toFixed(2) + ' GiB';
 }
 
+// ── Bonus points ──────────────────────────────────────────────────────────
+//
+// Trackers report these fractionally (UNIT3D accrues per minute, so "98432.50"
+// is normal) and they get very large: a high hourly rate reaches nine digits,
+// and trackers running point raffles pay out ten. Neither suits a table cell
+// or a ~120px card stat box, so the dashboard surfaces show a floored and,
+// past ten million, abbreviated figure. History, Tracker Detail and the
+// expanded row keep the exact number.
+
+/** Parse a reported bonus-points value. Tolerates thousands separators and
+ *  numeric input; null when there's nothing usable to show. */
+function parsePoints(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Bonus points for the table and grid card.
+ *
+ * ALWAYS ROUNDS DOWN, never to nearest — no tracker lets you spend part of a
+ * point, and a 50,000-point requirement isn't met by 49,999.63. Rounding to
+ * nearest would display "50,000" and claim it was. The abbreviated range
+ * truncates for the same reason, so 219,664,390 reads "219M" rather than
+ * being rounded up to "220M": the figure shown is never more than you hold.
+ *
+ * Under TEN million the exact count is kept. Most balances live between ten
+ * thousand and ten million, and that's the range where you're saving toward a
+ * specific purchase and want the real number — it also genuinely fits: the
+ * widest such value, "9,999,999", measures 70px beside an 11px source dot in
+ * the narrowest card's 105px stat box. Abbreviating there would be hiding
+ * digits there's room for.
+ *
+ * Returns '' when there's nothing to show, so callers can fall back to '—'.
+ */
+export function fmtBonusPoints(raw: string | number | null | undefined): string {
+  const n = parsePoints(raw);
+  if (n === null) return '';
+  const sign = n < 0 ? '-' : '';
+  const v = Math.abs(n);
+  if (v < 1e7) return sign + Math.floor(v).toLocaleString();
+  const units: [string, number][] = [['T', 1e12], ['B', 1e9], ['M', 1e6]];
+  for (const [unit, div] of units) {
+    if (v < div) continue;
+    const scaled = v / div;
+    // Three significant figures — 10.5M, 219M, 1.23B — truncated, not rounded.
+    const dp = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+    const factor = 10 ** dp;
+    return `${sign}${(Math.floor(scaled * factor) / factor).toFixed(dp)}${unit}`;
+  }
+  return sign + Math.floor(v).toLocaleString();
+}
+
+/** The unabbreviated figure, for the hover text beside fmtBonusPoints.
+ *  Keeps the fraction the tracker reported so nothing is silently lost. */
+export function fmtBonusPointsExact(raw: string | number | null | undefined): string {
+  const n = parsePoints(raw);
+  if (n === null) return '';
+  return `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} points`;
+}
+
 // ── Per-day trend rollovers (hover tooltips on stat values) ────────────────
 
 /** Stat fields whose growth rate is a size (GiB/day); the rest are raw counts. */

@@ -2,7 +2,7 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -213,6 +213,9 @@ export function renderCard(
     const hnrColor = hnr < 1 ? 'green' : (settings.highlight_hnr !== false ? 'red' : 'text3');
     // Per-day trend rollover ("≈ 245.3 GiB per day") from the growth rates.
     const rTip = (f: string) => rateTip(stats?.rates, f, settings);
+    // Bonus is floored and abbreviated in the box, so the exact figure joins
+    // the trend in its hover text rather than being lost.
+    const bonusTip = [fmtBonusPointsExact(bonusRaw), rTip('bonus_points')].filter(Boolean).join('\n');
 
     body = `<div class="card-body">
       ${offlineBanner}
@@ -230,7 +233,7 @@ export function renderCard(
         ${stat('Buffer',        'buffer',          'blue',   esc(strOf(stats, 'buffer')     || '—'), rTip('buffer'))}
         ${stat('Seed Size',     'seed_size',       'teal',   esc(strOf(stats, 'seed_size')  || '—'))}
         ${stat('Avg Seed Time', 'avg_seed_time',   'pink',   ast !== null ? fmtSeedTimeStacked(ast) : '—')}
-        ${stat('Bonus',         'bonus_points',    'orange', esc(bonusRaw || '—'), rTip('bonus_points'))}
+        ${stat('Bonus',         'bonus_points',    'orange', esc(fmtBonusPoints(bonusRaw) || '—'), bonusTip)}
         ${stat('Total Uploads', 'uploads_approved','green',  esc(totalUploads || '—'), rTip('uploads_approved'))}
         ${stat('Warnings',      'warnings',        warnings !== null && warnings > 0 ? 'red' : 'text3', warnings !== null ? String(warnings) : '—')}
         ${stat('H&Rs',          'hit_and_runs',    hnrColor, String(hnr))}
@@ -485,13 +488,16 @@ function targetRowsFor(
     }
     else if (tgtV && tgtV > 0) miss('Avg Seed Time', fmtSeedTime(tgtV), 'pink');
   }
-  // Bonus Points — all tracker types
+  // Bonus Points — all tracker types. Both sides go through fmtBonusPoints:
+  // the row is "current / target" on one line in a ~400px card, and an
+  // unabbreviated nine-digit balance beside a typed-out target overruns it.
+  // Progress is still computed from the full values.
   if (targets['bonus_points']) {
     const curStr = strOf(stats, 'bonus_points');
     const curV = parseInt(curStr.replace(/,/g, ''), 10);
     const tgtV = parseInt(targets['bonus_points'].replace(/,/g, ''), 10);
-    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Bonus Points', curStr, targets['bonus_points'], (curV / tgtV) * 100, 'orange', { etaDays: rateEta(curV, tgtV, rates['bonus_points']), ...pacingFor('bonus_points', targets['bonus_points']) });
-    else miss('Bonus Points', targets['bonus_points'], 'orange');
+    if (curStr && !isNaN(curV) && !isNaN(tgtV) && tgtV > 0) push('Bonus Points', fmtBonusPoints(curStr), fmtBonusPoints(targets['bonus_points']), (curV / tgtV) * 100, 'orange', { etaDays: rateEta(curV, tgtV, rates['bonus_points']), ...pacingFor('bonus_points', targets['bonus_points']) });
+    else miss('Bonus Points', fmtBonusPoints(targets['bonus_points']) || targets['bonus_points'], 'orange');
   }
   // Adoptions — Gazelle adoption program (count; no rate to project)
   if (targets['adoptions']) {

@@ -26,6 +26,10 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'ratio',           label: 'Ratio',           color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'required_ratio',  label: 'Required Ratio',  color: 'amber', fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'real_ratio',      label: 'Real Ratio',      color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
+  // Pre-freeleech transfer — the numbers Real Ratio is computed from, so they
+  // sit with it and borrow Uploaded/Downloaded's colours.
+  { key: 'real_uploaded',   label: 'Real Uploaded',   color: 'green'  },
+  { key: 'real_downloaded', label: 'Real Downloaded', color: 'purple' },
   { key: 'bonus_points',    label: 'Bonus Points',    color: 'orange' },
   { key: 'seeding',         label: 'Seeding',         color: 'blue'   },
   { key: 'leeching',        label: 'Leeching',        color: 'amber'  },
@@ -41,6 +45,7 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'uploads_approved', label: 'Total Uploads',  color: 'green'  },
   { key: 'adoptions',       label: 'Adoptions',       color: 'teal'   },
   { key: 'requests_filled', label: 'Requests Filled', color: 'purple' },
+  { key: 'forum_posts',     label: 'Forum Posts',     color: 'text2'  },
 ];
 
 /** Fields never shown as stat rows (rendered elsewhere: header, info, beacon).

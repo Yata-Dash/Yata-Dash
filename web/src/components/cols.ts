@@ -28,7 +28,7 @@ export function openColCustomizer(colPrefs: ColPref[]): void {
           <circle cx="4" cy="13" r="1.5"/><circle cx="8" cy="13" r="1.5"/>
         </svg>
       </span>
-      <span class="col-item-label">${esc(def.label)}${def.group === 'extended' ? '<span class="col-profile-dot"></span>' : ''}</span>
+      <span class="col-item-label">${esc(def.label)}</span>
       <div class="col-item-toggle ${pref.visible ? 'on' : ''}" data-key="${pref.key}"
         onclick="toggleColVisible('${pref.key}', this)"
         ${def.always ? 'style="opacity:.4;pointer-events:none"' : ''}></div>`;

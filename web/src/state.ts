@@ -6,32 +6,48 @@ import type {
 } from './types';
 
 // ── Column definitions ────────────────────────────────────────────────────
-// To add a new column: add an entry here. Nothing else needs to change.
-// All stat columns read from statsCache[id].fields (the merged stats view).
+// To add a new column: add an entry here, a buildCell case in views/table.ts
+// and a sortKey case in utils/sort.ts.
+//
+// Most columns read from statsCache[id].fields (the merged API+scrape view) —
+// which fields a given tracker actually reports varies enormously, so any
+// column can legitimately be empty for some trackers. That is not an error
+// state and the customizer says so rather than labelling columns by origin:
+// the old "extended = from profile scrapes" split stopped being true once
+// trackers started exposing these same fields over their APIs.
+//
+// The last three read tracker/scrape metadata rather than a stat field.
 export const COL_DEFS: ColDef[] = [
-  { key: 'name',          label: 'Tracker',       sortable: true,  always: true,  center: false, group: 'core',     defaultVisible: true,  minWidth: 180 },
-  { key: 'username',      label: 'User / Group',  sortable: true,  always: true,  center: false, group: 'core',     defaultVisible: true,  minWidth: 130 },
-  { key: 'uploaded',      label: 'Uploaded',      sortable: true,  always: false, center: false, group: 'core',     defaultVisible: true,  minWidth:  90 },
-  { key: 'downloaded',    label: 'Downloaded',    sortable: true,  always: false, center: false, group: 'core',     defaultVisible: true,  minWidth:  90 },
-  { key: 'ratio',         label: 'Ratio',         sortable: true,  always: false, center: false, group: 'core',     defaultVisible: true,  minWidth:  70 },
-  { key: 'buffer',        label: 'Buffer',        sortable: true,  always: false, center: false, group: 'core',     defaultVisible: true,  minWidth:  90 },
-  { key: 'seed_size',     label: 'Seed Size',     sortable: true,  always: false, center: true,  group: 'core',     defaultVisible: true,  minWidth:  90 },
-  { key: 'avg_seed_time', label: 'Avg Seed Time', sortable: true,  always: false, center: true,  group: 'core',     defaultVisible: true,  minWidth: 130 },
-  { key: 'seeding',       label: 'Seeding',       sortable: true,  always: false, center: true,  group: 'core',     defaultVisible: true,  minWidth:  70 },
-  { key: 'leeching',      label: 'Leeching',      sortable: true,  always: false, center: true,  group: 'core',     defaultVisible: true,  minWidth:  75 },
-  { key: 'hit_and_runs',  label: 'H&Rs',          sortable: true,  always: false, center: true,  group: 'core',     defaultVisible: true,  minWidth:  60 },
-  { key: 'account_age',   label: 'Account Age',   sortable: true,  always: false, center: false, group: 'core',     defaultVisible: true,  minWidth: 100 },
-  { key: 'bonus_points',    label: 'Bonus Points',    sortable: true, always: false, center: true, group: 'extended', defaultVisible: false, minWidth:  95 },
-  { key: 'snatched',        label: 'Snatched',        sortable: true, always: false, center: true, group: 'extended', defaultVisible: false, minWidth:  80 },
-  { key: 'upload_snatches', label: 'Upload Snatches', sortable: true, always: false, center: true, group: 'extended', defaultVisible: false, minWidth: 110 },
-  { key: 'real_ratio',    label: 'Real Ratio',    sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  80 },
-  { key: 'fl_tokens',     label: 'FL Tokens',     sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  80 },
-  { key: 'invites',       label: 'Invites',       sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  70 },
-  { key: 'warnings',      label: 'Warnings',      sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: true,  minWidth:  75 },
-  { key: 'total_uploads', label: 'Uploads',       sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  75 },
-  { key: 'adoptions',     label: 'Adoptions',     sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  85 },
-  { key: 'reqs_filled',   label: 'Reqs Filled',   sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  90 },
-  { key: 'scrape_health', label: 'Scrape',        sortable: true,  always: false, center: true,  group: 'extended', defaultVisible: false, minWidth:  80 },
+  { key: 'name',          label: 'Tracker',       sortable: true,  always: true,  center: false, defaultVisible: true,  minWidth: 180 },
+  { key: 'username',      label: 'User / Group',  sortable: true,  always: true,  center: false, defaultVisible: true,  minWidth: 130 },
+  { key: 'uploaded',      label: 'Uploaded',      sortable: true,  always: false, center: false, defaultVisible: true,  minWidth:  90 },
+  { key: 'downloaded',    label: 'Downloaded',    sortable: true,  always: false, center: false, defaultVisible: true,  minWidth:  90 },
+  { key: 'ratio',         label: 'Ratio',         sortable: true,  always: false, center: false, defaultVisible: true,  minWidth:  70 },
+  { key: 'buffer',        label: 'Buffer',        sortable: true,  always: false, center: false, defaultVisible: true,  minWidth:  90 },
+  { key: 'seed_size',     label: 'Seed Size',     sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth:  90 },
+  { key: 'avg_seed_time', label: 'Avg Seed Time', sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth: 130 },
+  { key: 'total_seedtime', label: 'Total Seed Time', sortable: true, always: false, center: true, defaultVisible: false, minWidth: 130 },
+  { key: 'seeding',       label: 'Seeding',       sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth:  70 },
+  { key: 'leeching',      label: 'Leeching',      sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth:  75 },
+  { key: 'hit_and_runs',  label: 'H&Rs',          sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth:  60 },
+  { key: 'account_age',   label: 'Account Age',   sortable: true,  always: false, center: false, defaultVisible: true,  minWidth: 100 },
+  { key: 'bonus_points',    label: 'Bonus Points',    sortable: true, always: false, center: true, defaultVisible: false, minWidth:  95 },
+  { key: 'snatched',        label: 'Snatched',        sortable: true, always: false, center: true, defaultVisible: false, minWidth:  80 },
+  { key: 'upload_snatches', label: 'Upload Snatches', sortable: true, always: false, center: true, defaultVisible: false, minWidth: 110 },
+  { key: 'real_ratio',    label: 'Real Ratio',    sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  80 },
+  // Pre-freeleech transfer — the true numbers behind Real Ratio.
+  { key: 'real_uploaded',   label: 'Real Uploaded',   sortable: true, always: false, center: false, defaultVisible: false, minWidth: 105 },
+  { key: 'real_downloaded', label: 'Real Downloaded', sortable: true, always: false, center: false, defaultVisible: false, minWidth: 115 },
+  { key: 'fl_tokens',     label: 'FL Tokens',     sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  80 },
+  { key: 'invites',       label: 'Invites',       sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  70 },
+  { key: 'warnings',      label: 'Warnings',      sortable: true,  always: false, center: true,  defaultVisible: true,  minWidth:  75 },
+  { key: 'total_uploads', label: 'Uploads',       sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  75 },
+  { key: 'adoptions',     label: 'Adoptions',     sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  85 },
+  { key: 'reqs_filled',   label: 'Reqs Filled',   sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  90 },
+  { key: 'forum_posts',   label: 'Forum Posts',   sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  95 },
+  { key: 'scrape_health', label: 'Scrape',        sortable: true,  always: false, center: true,  defaultVisible: false, minWidth:  80 },
+  { key: 'last_api_update', label: 'Last API Update', sortable: true, always: false, center: true, defaultVisible: false, minWidth: 125 },
+  { key: 'last_scrape',     label: 'Last Scrape',     sortable: true, always: false, center: true, defaultVisible: false, minWidth: 105 },
 ];
 
 // ── Runtime state ─────────────────────────────────────────────────────────

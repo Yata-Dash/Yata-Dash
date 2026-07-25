@@ -1,6 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { esc, errLabel, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
@@ -183,6 +183,12 @@ function buildTableRow(
   return mainTr + expTr;
 }
 
+/** Full local timestamp for the freshness columns' hover text — fmtDateTime
+ *  deliberately drops the date for today and the time for everything else. */
+function fullTime(unixSec: number): string {
+  return new Date(unixSec * 1000).toLocaleString();
+}
+
 // STALE DATA RULE: cells render whatever fields exist regardless of resp.ok.
 // A missing field shows '—'; an error never blanks previously stored values.
 function buildCell(
@@ -277,6 +283,10 @@ function buildCell(
       const ast = parseSeedTime(strOf(s, 'avg_seed_time'));
       return `<td class="td-mono td-center" style="color:var(--pink)">${ast !== null ? fmtSeedTime(ast) + dot('avg_seed_time') : dash}</td>`;
     }
+    case 'total_seedtime': {
+      const tst = parseSeedTime(strOf(s, 'total_seedtime'));
+      return `<td class="td-mono td-center" style="color:var(--pink)">${tst !== null ? fmtSeedTime(tst) + dot('total_seedtime') : dash}</td>`;
+    }
     case 'seeding': {
       const v = numOf(s, 'seeding');
       return `<td class="td-mono td-center" style="color:var(--blue)">${v !== null ? String(v) + dot('seeding') : dash}</td>`;
@@ -297,8 +307,13 @@ function buildCell(
       return `<td class="td-mono" style="color:var(--text2)">${jd ? memberDur(jd) + dot('join_date') : dash}</td>`;
     }
     case 'bonus_points': {
-      const v = strOf(s, 'bonus_points');
-      return `<td class="td-mono td-center"${rtip('bonus_points')} style="color:var(--orange)">${v ? esc(v) + dot('bonus_points') : dash}</td>`;
+      const raw = strOf(s, 'bonus_points');
+      const v = fmtBonusPoints(raw);
+      // The exact figure shares the hover text with the per-day trend, so
+      // nothing the flooring or the abbreviation drops is unreachable.
+      const tips = [fmtBonusPointsExact(raw), rateTip(s?.rates, 'bonus_points', settings)].filter(Boolean);
+      const tip = tips.length ? ` title="${esc(tips.join('\n'))}"` : '';
+      return `<td class="td-mono td-center"${tip} style="color:var(--orange)">${v ? esc(v) + dot('bonus_points') : dash}</td>`;
     }
     case 'snatched': {
       const v = strOf(s, 'snatched');
@@ -312,6 +327,16 @@ function buildCell(
       const rr = parseRatio(strOf(s, 'real_ratio'));
       const rrc = !isNaN(rr) ? ratioColor(rr) : 'text3';
       return `<td class="td-mono td-center" style="color:var(--${rrc})">${!isNaN(rr) ? fmtRatio(rr) + dot('real_ratio') : dash}</td>`;
+    }
+    // Pre-freeleech transfer. Same colours as Uploaded/Downloaded so the pair
+    // reads as the same quantity measured differently, not a separate stat.
+    case 'real_uploaded': {
+      const v = strOf(s, 'real_uploaded');
+      return `<td class="td-mono" style="color:var(--green)">${v ? esc(v) + dot('real_uploaded') : dash}</td>`;
+    }
+    case 'real_downloaded': {
+      const v = strOf(s, 'real_downloaded');
+      return `<td class="td-mono" style="color:var(--purple)">${v ? esc(v) + dot('real_downloaded') : dash}</td>`;
     }
     case 'fl_tokens': {
       const v = strOf(s, 'fl_tokens');
@@ -336,6 +361,29 @@ function buildCell(
     case 'reqs_filled': {
       const v = strOf(s, 'requests_filled');
       return `<td class="td-mono td-center" style="color:var(--purple)">${v ? esc(v) + dot('requests_filled') : dash}</td>`;
+    }
+    case 'forum_posts': {
+      const v = numOf(s, 'forum_posts');
+      return `<td class="td-mono td-center" style="color:var(--text2)">${v !== null ? String(v) + dot('forum_posts') : dash}</td>`;
+    }
+    // ── Freshness columns ──
+    // Metadata about the last contact, not a stat, so neither carries a source
+    // dot: the whole cell IS the source. Both show a compact time (today →
+    // HH:MM, older → the date) with the exact timestamp on hover.
+    case 'last_api_update': {
+      if (!s?.fetched_at) return `<td class="td-center">${dash}</td>`;
+      return `<td class="td-mono td-center" title="${esc(fullTime(s.fetched_at))}" style="color:var(--text2)">${esc(fmtDateTime(s.fetched_at))}</td>`;
+    }
+    case 'last_scrape': {
+      const ss = scrapeStatus[t.id];
+      // A tracker Yata never scrapes has no "last scrape" to be stale — say
+      // why in one word rather than showing a bare dash that reads as a fault.
+      if (ss?.reason === 'opted_out')
+        return `<td class="td-center" title="Operator opted out — Yata no longer contacts this tracker" style="color:var(--text3);font-size:12px">Opted out</td>`;
+      if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
+        return `<td class="td-center" title="This tracker is not scraped — stats come from its API" style="color:var(--text3);font-size:12px">API only</td>`;
+      if (!ss?.last_scrape_at) return `<td class="td-center">${dash}</td>`;
+      return `<td class="td-mono td-center" title="${esc(fullTime(ss.last_scrape_at))}" style="color:var(--text2)">${esc(fmtDateTime(ss.last_scrape_at))}</td>`;
     }
     case 'scrape_health': {
       // Reads scrapeStatus, not the merged stats — this column is about the

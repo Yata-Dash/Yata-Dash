@@ -661,8 +661,6 @@ export interface ColDef {
   sortable: boolean;
   always: boolean;
   center: boolean;
-  /** "core" columns are visible by default; "extended" come from profile scrapes / extra API fields. */
-  group: 'core' | 'extended';
   defaultVisible: boolean;
   minWidth: number; // px — minimum column width; prevents squishing when many cols visible
 }

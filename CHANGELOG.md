@@ -14,6 +14,14 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   by severity rather than alphabetically, putting failures and unconfigured
   trackers at the top where you want them, and Def groups manually-added
   trackers together at the end instead of filing them under "m".
+  - **Nine new trackers** (contributed by [@gizzlepox](https://github.com/gizzlepox)):
+  AnimeBytes, Blutopia, BroadcastTheNet, GazelleGames, Nebulance, Orpheus,
+  Redacted, ReelFliX and Upload.cx. All are API-only for now — none has been
+  approved by its staff yet, so Yata warns about their definitions until
+  approval comes through.
+  - **Combined upload + download requirements.** Trackers that promote on total
+  traffic rather than upload alone can now express that, and it shows up in
+  targets and Pathways like any other requirement.
 
 ### Changed
 
@@ -33,6 +41,26 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   is now **UNIT3D**, matching that project's own capitalisation. Existing
   trackers are unaffected: only the display names changed.
 
+- **Bonus points are rounded down and abbreviated.** The table and grid card
+  showed whatever the tracker reported — "98432.50" — even though no tracker
+  lets you spend part of a point. They now floor, never round to nearest, so
+  49,999.63 reads "49,999" rather than claiming a 50,000-point requirement is
+  met. Past ten million the figure abbreviates (219,664,390 → "219M",
+  1,234,567,890 → "1.23B"); below that the exact count is kept, since most
+  balances live in that range and it's where you're saving toward a specific
+  purchase — "9,999,999" still fits the narrowest card comfortably. Abbreviation truncates too —
+  the number shown is never more than you hold — and the exact figure, decimals
+  included, is on hover. History, Tracker Detail and the expanded row are
+  unchanged and still show the full value.
+
+- **Six new table columns.** **Last API Update** and **Last Scrape** show when
+  each tracker was last contacted (compact time, full timestamp on hover;
+  trackers Yata never scrapes read "API only" rather than a bare dash), and
+  sorting them ascending brings the stalest to the top. **Total Seed Time**,
+  **Real Uploaded**, **Real Downloaded** and **Forum Posts** cover fields
+  several trackers already report but the table had no home for. All six are
+  off by default — enable them in Customise Columns.
+
 - **The dashboard uses the whole window.** Grid and table were capped at
   1800px, so on an ultrawide roughly half the screen was empty margin while
   the top bar ran edge to edge. The cap is gone: the grid packs in as many
@@ -43,6 +71,13 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   charts, grid and table take the full width. The aggregate cards' sparklines
   now grow taller as their cards widen, so a week of data isn't drawn as a
   flat line across half a metre.
+
+- **Customise Columns drops the "Extended" label.** Columns were dotted and
+  described as populating "from profile scrapes or extra API fields", a split
+  that stopped being true once trackers began exposing those same fields over
+  their APIs — and which said nothing useful anyway, since what any given
+  tracker reports varies enormously. The dot is gone, replaced by a plain
+  note that not all fields are available or applicable for every tracker.
 
 ### Fixed
 
