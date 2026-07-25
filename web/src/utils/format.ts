@@ -338,6 +338,69 @@ export function errLabel(err: string): string {
   return `Error: ${err}`;
 }
 
+// ── Absolute timestamps ──────────────────────────────────────────────────────
+//
+// Dates are written year-first everywhere Yata shows an absolute one. It reads
+// the same in every country — 07/08 is the 7th of August to most of the world
+// and the 8th of July to the US, and a dashboard aggregating trackers from
+// everywhere can't afford that ambiguity — and it sorts as it reads.
+//
+// Built from local date parts rather than toISOString(), which is UTC: an
+// evening in a positive-offset zone lands on the following UTC day, so the
+// date half would silently disagree with the time half beside it.
+
+const pad2 = (n: number): string => (n < 10 ? '0' + n : String(n));
+
+/** Local calendar date — "2026-07-18". */
+export function fmtDay(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** Local date and time for hover text — "2026-07-18 15:55". Seconds are left
+ *  off: nothing here is timed that finely, and they only add noise. */
+export function fmtStamp(unixSec: number): string {
+  const d = new Date(unixSec * 1000);
+  return `${fmtDay(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** Whether a tracker_events kind is a connection event — either channel, or
+ *  the pre-split kind still sitting in older databases. */
+export function isConnectionKind(kind: string): boolean {
+  return kind === 'connection' || kind.startsWith('connection_');
+}
+
+/**
+ * Decode a connection event for display.
+ *
+ * `kind` is "connection_api" | "connection_scrape" — or plain "connection" for
+ * events recorded before Yata tracked the two channels separately, which carry
+ * no channel and so get the unqualified wording. `detail` is "up" or
+ * "down:<errorKind>".
+ *
+ * Returns both lengths because the surfaces differ: a chart flag has room for
+ * "API down" and nothing more, while a timeline row can say what actually
+ * broke.
+ */
+export function connectionEventText(kind: string, detail: string): { up: boolean; label: string; text: string } {
+  const chan = kind === 'connection_api' ? 'API' : kind === 'connection_scrape' ? 'Scrape' : '';
+  if (detail === 'up') {
+    return {
+      up: true,
+      label: chan ? `${chan} up` : 'Up',
+      text: chan ? `${chan} back online` : 'Back online',
+    };
+  }
+  // Colon, not a dash: some errLabel strings carry their own em-dash clause
+  // ("Session cookie expired — log in again and re-copy it") and two in one
+  // line reads as a typo.
+  const reason = errLabel(detail.replace(/^down:/, ''));
+  return {
+    up: false,
+    label: chan ? `${chan} down` : 'Down',
+    text: chan ? `${chan} unreachable: ${reason}` : `Unreachable: ${reason}`,
+  };
+}
+
 /** Prettify a canonical field key for generic display: "fl_tokens" → "Fl Tokens" */
 export function fieldLabel(key: string): string {
   return key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');

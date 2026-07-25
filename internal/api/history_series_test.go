@@ -115,6 +115,85 @@ func TestHistorySeriesEndpoint(t *testing.T) {
 	}
 }
 
+// TestHistorySeriesUptime: the synthetic uptime series is assembled from the
+// connection rollups, arrives as a percentage, and — crucially — only when the
+// caller names the field. Everything else in the app asks for "the recorded
+// fields", and uptime is not one of them.
+func TestHistorySeriesUptime(t *testing.T) {
+	d := testDeps(t)
+	now := time.Now().UTC()
+	day := func(n int) time.Time { return now.Add(-time.Duration(n) * 24 * time.Hour) }
+
+	// 3 days back: two contacts, one failed → 50%.
+	if err := d.DB.RecordConnection("tr-a", day(3), true, "", "api"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.RecordConnection("tr-a", day(3), false, "timeout", "api"); err != nil {
+		t.Fatal(err)
+	}
+	// 2 days back: nothing attempted at all — no row, so no point (see below).
+	// 1 day back: one contact, succeeded → 100%.
+	if err := d.DB.RecordConnection("tr-a", day(1), true, "", "api"); err != nil {
+		t.Fatal(err)
+	}
+	// A second tracker so the per-tracker split is exercised.
+	if err := d.DB.RecordConnection("tr-b", day(1), false, "http_500", "scrape"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Not requested → absent, even though the rollups exist.
+	plain := callSeries(t, d, "?range=30d&fields=uploaded")
+	for _, s := range plain.Series {
+		if s.Field == "uptime" {
+			t.Fatalf("uptime series returned without being asked for: %+v", s)
+		}
+	}
+	// An unfiltered request means "every recorded stat", which uptime is not.
+	all := callSeries(t, d, "?range=30d")
+	for _, s := range all.Series {
+		if s.Field == "uptime" {
+			t.Fatalf("uptime series leaked into an unfiltered request: %+v", s)
+		}
+	}
+
+	resp := callSeries(t, d, "?range=30d&fields=uptime")
+	if len(resp.Series) != 2 {
+		t.Fatalf("series = %d, want 2 (one per tracker): %+v", len(resp.Series), resp.Series)
+	}
+	byID := map[string][][2]float64{}
+	for _, s := range resp.Series {
+		if s.Field != "uptime" || s.Unit != "percent" {
+			t.Errorf("series %s: field=%s unit=%s, want uptime/percent", s.TrackerID, s.Field, s.Unit)
+		}
+		byID[s.TrackerID] = s.Points
+	}
+
+	a := byID["tr-a"]
+	// Two points, not three: the untouched day contributes nothing rather than
+	// a fabricated 0%, so a gap in the line reads as "not contacted".
+	if len(a) != 2 {
+		t.Fatalf("tr-a points = %+v, want 2 (the no-contact day omitted)", a)
+	}
+	if a[0][1] != 50 {
+		t.Errorf("tr-a day -3 = %v%%, want 50", a[0][1])
+	}
+	if a[1][1] != 100 {
+		t.Errorf("tr-a day -1 = %v%%, want 100", a[1][1])
+	}
+	if a[1][0] <= a[0][0] {
+		t.Error("uptime points not oldest-first")
+	}
+	if b := byID["tr-b"]; len(b) != 1 || b[0][1] != 0 {
+		t.Errorf("tr-b points = %+v, want a single 0%% day", b)
+	}
+
+	// Tracker filter applies to the synthetic series too.
+	one := callSeries(t, d, "?range=30d&fields=uptime&trackers=tr-b")
+	if len(one.Series) != 1 || one.Series[0].TrackerID != "tr-b" {
+		t.Errorf("filtered uptime = %+v, want tr-b only", one.Series)
+	}
+}
+
 // TestHistorySeriesSkipsNonFiniteRows: a +Inf row (a downloaded=0 ratio,
 // recorded before NumericSnapshot filtered non-finite values) must not break
 // json.Encode for the rest of the response — the point is dropped, the finite

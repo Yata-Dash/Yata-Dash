@@ -11,7 +11,7 @@ import {
   smoothSeries, targetRefLinesFor, toRateSeries, valueAt,
 } from '../utils/series';
 import type { HistoryRangeKey, SeriesUnit } from '../utils/series';
-import { esc, fmtTrackerName } from '../utils/format';
+import { connectionEventText, esc, fmtTrackerName, isConnectionKind } from '../utils/format';
 import type { HistorySeriesResponse, Tracker } from '../types';
 import { appSettings, groupDefs, statsCache } from '../state';
 
@@ -30,6 +30,7 @@ interface HistoryUIState {
   targets: boolean;          // target reference lines
   milestones: boolean;       // threshold-crossing markers
   groupChanges: boolean;     // promotion/demotion timeline markers
+  connections: boolean;      // tracker went unreachable / came back markers
   portfolio: boolean;        // synthetic "sum of selected" line
   projection: boolean;       // dashed growth-rate continuation
   smoothing: boolean;        // moving-average the drawn line
@@ -40,7 +41,7 @@ const LS_KEY = 'yata.history.ui';
 function loadUIState(): HistoryUIState {
   const dflt: HistoryUIState = {
     metric: 'uploaded', range: '30d', trackers: null, mode: 'value',
-    targets: true, milestones: false, groupChanges: true,
+    targets: true, milestones: false, groupChanges: true, connections: true,
     portfolio: false, projection: false, smoothing: false,
   };
   try {
@@ -54,6 +55,7 @@ function loadUIState(): HistoryUIState {
       targets: bool(raw.targets, dflt.targets),
       milestones: bool(raw.milestones, dflt.milestones),
       groupChanges: bool(raw.groupChanges, dflt.groupChanges),
+      connections: bool(raw.connections, dflt.connections),
       portfolio: bool(raw.portfolio, dflt.portfolio),
       projection: bool(raw.projection, dflt.projection),
       smoothing: bool(raw.smoothing, dflt.smoothing),
@@ -105,6 +107,7 @@ export function renderHistory(trackers: Tracker[]): void {
             <label><input type="checkbox" data-ov="targets"> Targets</label>
             <label><input type="checkbox" data-ov="milestones"> Milestones</label>
             <label><input type="checkbox" data-ov="groupChanges"> Group changes</label>
+            <label title="When Yata stopped being able to reach the tracker, and when it could again"><input type="checkbox" data-ov="connections"> Connection changes</label>
             <div class="history-menu-label">Series</div>
             <label><input type="checkbox" data-ov="portfolio"> Σ Portfolio</label>
             <label><input type="checkbox" data-ov="projection"> Projection</label>
@@ -254,10 +257,12 @@ function overlayApplicable(key: string): boolean {
     case 'targets':      return single && ui.mode === 'value';
     case 'milestones':   return single && ui.mode === 'value';
     case 'groupChanges': return single;
+    case 'connections':  return single;
     case 'portfolio':    return isSummableUnit(metricUnit()) && selectedIds().length >= 2;
     // Projection works for every metric now that the rate falls back to the
-    // charted points' recent slope (flat/declining stats project too).
-    case 'projection':   return ui.mode === 'value';
+    // charted points' recent slope (flat/declining stats project too) — except
+    // the bounded ones, where continuing a slope walks straight off the scale.
+    case 'projection':   return ui.mode === 'value' && !isBoundedMetric();
     case 'smoothing':    return true;
     default:             return true;
   }
@@ -267,10 +272,17 @@ function syncControls() {
   const sel = document.getElementById('hist-metric') as HTMLSelectElement | null;
   if (sel && sel.value !== ui.metric) sel.value = ui.metric;
 
+  // Rate/day describes how fast a stat is accumulating. A bounded metric never
+  // accumulates, so snap back to Value rather than leaving the button lit over
+  // a chart of meaningless daily wobble.
+  if (isBoundedMetric() && ui.mode === 'rate') { ui.mode = 'value'; saveUIState(); }
+
   document.querySelectorAll<HTMLButtonElement>('#hist-ranges button').forEach(b =>
     b.classList.toggle('active', b.dataset['range'] === ui.range));
-  document.querySelectorAll<HTMLButtonElement>('#hist-modes button').forEach(b =>
-    b.classList.toggle('active', b.dataset['mode'] === ui.mode));
+  document.querySelectorAll<HTMLButtonElement>('#hist-modes button').forEach(b => {
+    b.classList.toggle('active', b.dataset['mode'] === ui.mode);
+    b.disabled = isBoundedMetric() && b.dataset['mode'] === 'rate';
+  });
 
   // Overlays checkboxes — reflect state, disable (dim) when not applicable.
   document.querySelectorAll<HTMLInputElement>('#hist-overlays-menu input[data-ov]').forEach(cb => {
@@ -281,7 +293,7 @@ function syncControls() {
     cb.closest('label')?.classList.toggle('is-disabled', !ok);
   });
   // A hint when any single-tracker overlay is enabled but multiple are selected.
-  const anyAnnot = ui.targets || ui.milestones || ui.groupChanges;
+  const anyAnnot = ui.targets || ui.milestones || ui.groupChanges || ui.connections;
   const hint = document.querySelector('#hist-overlays-menu .history-menu-hint') as HTMLElement | null;
   if (hint) hint.style.color = anyAnnot && selectedIds().length !== 1 ? 'var(--amber)' : '';
 
@@ -338,15 +350,27 @@ async function refetch() {
 
 const PORTFOLIO_ID = '__portfolio__';
 
+/** Uptime arrives as one point per UTC day. A wider gap than this means Yata
+ *  never contacted the tracker on the days between — the server omits those
+ *  rather than inventing a 0% (see uptimeSeries in internal/api) — so the line
+ *  breaks there instead of running flat across days nobody measured. */
+const UPTIME_GAP_SEC = 1.5 * 86400;
+
 function metricUnit(): SeriesUnit {
   return HISTORY_METRICS.find(m => m.key === ui.metric)?.unit ?? 'count';
 }
+
+/** True for metrics that sit on a fixed scale instead of accumulating — today
+ *  that's Uptime (0–100%). The transforms built for cumulative stats (per-day
+ *  rate, projection tail) are meaningless on them. */
+function isBoundedMetric(): boolean { return metricUnit() === 'percent'; }
 
 function portfolioActive(): boolean { return ui.portfolio && overlayApplicable('portfolio'); }
 function projectionActive(): boolean { return ui.projection && overlayApplicable('projection'); }
 function targetsActive(): boolean { return ui.targets && overlayApplicable('targets'); }
 function milestonesActive(): boolean { return ui.milestones && overlayApplicable('milestones'); }
 function groupChangesActive(): boolean { return ui.groupChanges && overlayApplicable('groupChanges'); }
+function connectionsActive(): boolean { return ui.connections && overlayApplicable('connections'); }
 
 /** Promotion/demotion direction from the ordered group defs (rank ascending). */
 function groupDirection(defKey: string | undefined, oldName: string, newName: string): ChartEvent['kind'] {
@@ -359,17 +383,35 @@ function groupDirection(defKey: string | undefined, oldName: string, newName: st
   return b > a ? 'promotion' : b < a ? 'demotion' : 'neutral';
 }
 
-/** Group-change markers for the single selected tracker within the window. */
+/** Timeline markers for the single selected tracker within the window: group
+ *  promotions/demotions, and the moments the tracker stopped being reachable or
+ *  came back. Both are recorded as tracker_events and arrive in the same feed,
+ *  so they're told apart by `kind` and gated by their own overlay toggle.
+ *
+ *  Connection events are recorded only on a CHANGE of state, so a tracker that
+ *  has been up all year contributes no markers at all — the chart stays clean
+ *  and a marker always means something actually happened. The flag itself stays
+ *  short ("Down"/"Up") because the reason can be long; it goes in the tooltip. */
 function chartEvents(win: { from: number; to: number }): ChartEvent[] {
-  if (!groupChangesActive()) return [];
+  const wantGroups = groupChangesActive();
+  const wantConns = connectionsActive();
+  if (!wantGroups && !wantConns) return [];
   const id = selectedIds()[0];
   const defKey = allTrackers.find(t => t.id === id)?.def_key;
-  return (lastResp?.events ?? [])
-    .filter(e => e.tracker_id === id && e.kind === 'group_change' && e.at >= win.from && e.at <= win.to)
-    .map(e => {
+  const out: ChartEvent[] = [];
+  for (const e of lastResp?.events ?? []) {
+    if (e.tracker_id !== id || e.at < win.from || e.at > win.to) continue;
+    if (e.kind === 'group_change' && wantGroups) {
       const [oldG = '', newG = ''] = e.detail.split('→');
-      return { at: e.at, label: newG.trim(), detail: e.detail, kind: groupDirection(defKey, oldG, newG) };
-    });
+      out.push({ at: e.at, label: newG.trim(), detail: e.detail, kind: groupDirection(defKey, oldG, newG) });
+    } else if (isConnectionKind(e.kind) && wantConns) {
+      // Each channel keeps its own up/down state, so an API that fails while
+      // the scrape still works marks the chart once, not twice per refresh.
+      const c = connectionEventText(e.kind, e.detail);
+      out.push({ at: e.at, label: c.label, detail: c.text, title: c.text, kind: c.up ? 'up' : 'down' });
+    }
+  }
+  return out;
 }
 
 /** Milestone (threshold-crossing) markers for the single selected tracker. */
@@ -399,6 +441,7 @@ function chartSeries(): ChartSeries[] {
       color: trackerColor(id),
       unit: s?.unit ?? unit,
       points: s?.points ?? [],
+      ...(unit === 'percent' ? { gapSec: UPTIME_GAP_SEC } : {}),
     }];
   });
   // Portfolio sums the VALUE series (summing first keeps rate mode honest:

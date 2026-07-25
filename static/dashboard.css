@@ -226,6 +226,10 @@ html{overflow-x:clip}
 .history-range-btn{border:none;background:transparent;color:var(--text3);font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;letter-spacing:.2px}
 .history-range-btn:hover{color:var(--text)}
 .history-range-btn.active{background:var(--accent);color:#fff}
+/* Rate/day is disabled for bounded metrics (Uptime) — dimmed and inert rather
+   than removed, so the control set doesn't reflow when the metric changes. */
+.history-range-btn:disabled{opacity:.35;cursor:default}
+.history-range-btn:disabled:hover{color:var(--text3)}
 .history-trackers{display:flex;gap:6px;flex-wrap:wrap}
 /* Overlays / export dropdown menus + tracker select-all bar */
 .history-menu-wrap{position:relative;display:inline-block}
@@ -833,6 +837,40 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   white-space:nowrap;
   margin-left:auto; /* end date stays at right edge */
 }
+/* Extras from the structured active_events list (expanded UNIT3D stats). The
+   banner keeps its single-line shape — the description is allowed to truncate,
+   while the name, the user's standing and the countdown never do. */
+.exp-event-banner .exp-event-text{flex-shrink:0}
+.exp-event-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.exp-event-link:hover{text-decoration-thickness:2px}
+.exp-event-desc{
+  min-width:0;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:11px;font-weight:400;
+  color:color-mix(in srgb,var(--amber) 60%,var(--text3));
+}
+.exp-event-progress{
+  flex-shrink:0;font-size:10.5px;font-weight:600;
+  background:color-mix(in srgb,var(--amber) 15%,transparent);
+  border-radius:4px;padding:2px 7px;white-space:nowrap;
+}
+.exp-event-status{
+  margin-left:6px;font-size:9.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;opacity:.75;
+}
+/* Not running yet — present, but visibly not the thing happening now. */
+.exp-event-banner.is-upcoming{
+  background:color-mix(in srgb,var(--text3) 8%,transparent);
+  border-color:color-mix(in srgb,var(--text3) 25%,transparent);
+  color:var(--text3);
+}
+.exp-event-banner.is-upcoming .exp-event-timer,
+.exp-event-banner.is-upcoming .exp-event-progress{
+  background:color-mix(in srgb,var(--text3) 12%,transparent);
+  border-color:color-mix(in srgb,var(--text3) 30%,transparent);
+}
+.exp-event-banner.is-upcoming .exp-event-desc,
+.exp-event-banner.is-upcoming .exp-event-ends{color:var(--text3)}
 
 /* ── Mock / test tracker badge ──────────────────────────────────────────── */
 .mock-badge{
@@ -1215,8 +1253,11 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .detail-route-fav{color:var(--amber);font-size:11px;margin-right:8px}
 .detail-route-reqs{font-size:10.5px;color:var(--text3);margin-top:2px}
 .detail-events{display:flex;flex-direction:column;gap:7px}
-.detail-event{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text)}
-.detail-event-when{margin-left:auto;font-size:10.5px;color:var(--text3)}
+.detail-event{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:var(--text)}
+.detail-event-detail{flex:1;min-width:0}
+/* The date never wraps: "25 Jul 2026" breaking across two lines in a narrow
+   column read as a rendering fault. The description wraps instead. */
+.detail-event-when{margin-left:auto;font-size:10.5px;color:var(--text3);white-space:nowrap}
 
 .card-rules{
   display:flex;align-items:center;gap:6px;margin-top:8px;

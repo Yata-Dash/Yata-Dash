@@ -137,3 +137,42 @@ func TestDeleteTrackerPurgesDaily(t *testing.T) {
 		t.Errorf("tr-b data = %d daily / %d fine points, want 6 / 6", len(daily), len(fine))
 	}
 }
+
+// TestLayerUpdatedAt: the timestamp tracks each source's last SUCCESSFUL write
+// independently, and reads as 0 for a source that has never produced data.
+// This is what the dashboard's Last API Update column shows — a failing API
+// leaves its layer untouched, so the number correctly stops advancing while
+// the tracker is still being polled.
+func TestLayerUpdatedAt(t *testing.T) {
+	db := testDB(t)
+	t0 := time.Now().UTC().Add(-7 * 24 * time.Hour).Truncate(time.Second)
+
+	if ts, err := db.LayerUpdatedAt("tr-a", "api"); err != nil || ts != 0 {
+		t.Fatalf("never-fetched = %d (err %v), want 0", ts, err)
+	}
+
+	// A week-old API success, then a scrape a minute ago — the Unwalled shape.
+	if err := db.ReplaceLayer("tr-a", "api", map[string]any{"ratio": "2.0"}, t0); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	if err := db.ReplaceLayer("tr-a", "scrape", map[string]any{"ratio": "2.5"}, now); err != nil {
+		t.Fatal(err)
+	}
+
+	api, err := db.LayerUpdatedAt("tr-a", "api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if api != t0.Unix() {
+		t.Errorf("api = %d, want %d — a fresh scrape must not advance the API's timestamp", api, t0.Unix())
+	}
+	scrape, _ := db.LayerUpdatedAt("tr-a", "scrape")
+	if scrape != now.Unix() {
+		t.Errorf("scrape = %d, want %d", scrape, now.Unix())
+	}
+	// Another tracker's layers don't leak in.
+	if ts, _ := db.LayerUpdatedAt("tr-b", "api"); ts != 0 {
+		t.Errorf("tr-b api = %d, want 0", ts)
+	}
+}

@@ -114,7 +114,10 @@ export interface TrackerStatsResponse {
   error?: string;
   error_kind?: string; // disabled | no_key | timeout | connection_error | http_NNN | parse_error | api_error
   fields: Record<string, StatField>;
-  fetched_at: number;  // unix seconds
+  fetched_at: number;  // unix seconds — when this refresh RAN, success or not
+  // When the API last actually returned data (0/absent = never). Diverges from
+  // fetched_at whenever the API is failing while the tracker is still polled.
+  api_updated_at?: number;
   rates?: Record<string, number>; // per-day growth (uploaded/downloaded/seed_size in GiB/day, bonus_points raw/day); omitted when flat
 }
 
@@ -219,16 +222,42 @@ export interface ApiTokenInfo {
 export interface HistorySeries {
   tracker_id: string;
   field: string;
-  unit: 'GiB' | 'count' | 'ratio' | 'seconds';
+  unit: 'GiB' | 'count' | 'ratio' | 'seconds' | 'percent';
   points: [number, number][]; // [unixSec, value], oldest first
 }
 
-/** A point-in-time timeline marker (group change) from GET /api/history/series. */
+/**
+ * One entry of the `active_events` merged field — the structured promotion list
+ * newer UNIT3D installs return, covering both global states (site-wide
+ * freeleech) and rows from the tracker's events table (upload contests).
+ *
+ * The backend normalises it (internal/fetch/fetch.go, normalizeActiveEvents):
+ * timestamps arrive as unix seconds and null fields are dropped, so every
+ * optional key here is genuinely absent rather than null. Extra keys a tracker
+ * adds are passed through untouched, hence the index signature — read them
+ * defensively, this shape is the tracker's, not Yata's.
+ */
+export interface ActiveEvent {
+  type?: string;
+  name?: string;
+  description?: string;
+  icon?: string;         // Font Awesome class, e.g. "fas fa-upload"
+  status?: string;       // "live" | "upcoming" | … — only "live" feeds the banner
+  url?: string;
+  starts_at?: number;    // unix seconds
+  ends_at?: number;      // unix seconds
+  user_progress?: Record<string, number | string>;
+  [key: string]: unknown;
+}
+
+/** A point-in-time timeline marker from GET /api/history/series. */
 export interface HistoryEvent {
   tracker_id: string;
   at: number;     // unix sec
-  kind: string;   // "group_change"
-  detail: string; // e.g. "Seeker→PowerPool"
+  kind: string;   // "group_change" | "connection"
+  // group_change: "Seeker→PowerPool"
+  // connection:   "up" | "down:<errorKind>" — recorded on state CHANGES only
+  detail: string;
 }
 
 export interface HistorySeriesResponse {

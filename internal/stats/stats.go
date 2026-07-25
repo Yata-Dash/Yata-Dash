@@ -60,6 +60,18 @@ func (e *Engine) SaveQUI(trackerID string, data map[string]any) error {
 	return e.DB.ReplaceLayer(trackerID, string(models.SourceQUI), stripMeta(data), time.Now().UTC())
 }
 
+// LayerUpdatedAt reports when a source last successfully wrote its layer (unix
+// seconds; 0 = never). Errors read as "never" — the callers use this for
+// display, where a missing timestamp shows as "—" and a bubbled error would
+// only cost them the whole stats response.
+func (e *Engine) LayerUpdatedAt(trackerID string, src models.Source) int64 {
+	ts, err := e.DB.LayerUpdatedAt(trackerID, string(src))
+	if err != nil {
+		return 0
+	}
+	return ts
+}
+
 func stripMeta(data map[string]any) map[string]any {
 	out := make(map[string]any, len(data))
 	for k, v := range data {

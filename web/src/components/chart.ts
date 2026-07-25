@@ -10,7 +10,7 @@
 // uPlot behind this same signature (HISTORY_VIEW_PLAN.md §6).
 import { fmtAxisValue, fmtTimeTick, fmtUnitValue, nearestIndex, niceTicks, timeTicks } from '../utils/series';
 import type { SeriesUnit } from '../utils/series';
-import { esc, fmtEtaDays } from '../utils/format';
+import { esc, fmtDay, fmtEtaDays } from '../utils/format';
 
 // ── Duration axis ticks ─────────────────────────────────────────────────────
 // Seconds domains get whole, human durations (days → months → years) rather
@@ -47,6 +47,14 @@ export interface ChartSeries {
   // Ghost series draw dashed and are invisible to interaction: no crosshair
   // snap, no hover dot, no pin dot. Used for projection tails.
   ghost?: boolean;
+  // Break the line when consecutive points are further apart than this many
+  // seconds, instead of joining across. For series where a missing point means
+  // "nothing was recorded" rather than "nothing changed" — Uptime, where days
+  // Yata never contacted the tracker have no value, and drawing a straight line
+  // over them would claim a perfect stretch that was never measured. Unset
+  // (the default) keeps one continuous path, which is right for cumulative
+  // stats: they genuinely held their last value while nobody was looking.
+  gapSec?: number;
 }
 
 /** Horizontal reference line (e.g. a tracker target) with a right-edge label. */
@@ -55,12 +63,20 @@ export interface ChartRefLine {
   label: string;
 }
 
-/** A timeline marker (e.g. a group change) — vertical line + axis flag. */
+/** A timeline marker (a group change, a connection going down or coming back)
+ *  — vertical line + axis flag. */
 export interface ChartEvent {
-  at: number;                                  // unix sec
-  label: string;                               // short label, e.g. "PowerPool"
-  detail: string;                              // full text for the hover title
-  kind: 'promotion' | 'demotion' | 'neutral'; // drives the colour
+  at: number;      // unix sec
+  label: string;   // short label, e.g. "PowerPool" or "API down"
+  detail: string;  // full text for the hover title
+  // Complete hover title, replacing the "<verb>: <detail>" the chart composes.
+  // For events whose own wording already names what happened — "API unreachable
+  // — Server error (500)" doesn't want "Unreachable: " glued to the front.
+  title?: string;
+  // Drives the colour and the ▲/▼ prefix. Group changes and connection changes
+  // share the good/bad axis deliberately — green is "this got better" on both
+  // — but stay separate kinds so the tooltip can name what actually happened.
+  kind: 'promotion' | 'demotion' | 'neutral' | 'up' | 'down';
 }
 
 /** A milestone marker (a threshold crossing) — dot at (at,value). */
@@ -115,6 +131,7 @@ export function renderChart(container: HTMLElement, opts: ChartOptions): void {
   const { from, to } = opts;
   const span = Math.max(1, to - from);
   const drawable = opts.series.filter(s => s.points.length > 0);
+  const unit = drawable[0]?.unit ?? opts.series[0]?.unit ?? 'count';
 
   // ── Scales ────────────────────────────────────────────────────────────────
   // Data extent over every drawn series (projection ghosts included, so the
@@ -164,6 +181,12 @@ export function renderChart(container: HTMLElement, opts: ChartOptions): void {
     if (yMax > 0 || hasRef) yMax += pad;
     if (yMin < 0) yMin -= pad;
   }
+  // Percentages are bounded, and uptime is the same 0–100 scale for every
+  // tracker and every window — so pin the axis rather than fitting it to the
+  // data. Auto-scaling would centre a permanently-perfect line halfway up an
+  // axis running to 200%, and would blow a 100%-vs-98% week up into what looks
+  // like a collapse. A flat line at the top IS the good news.
+  if (unit === 'percent') { yMin = Math.min(0, dMin); yMax = Math.max(100, dMax); }
 
   const x = (t: number) => M.left + ((t - from) / span) * plotW;
   const y = (v: number) => M.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
@@ -182,7 +205,6 @@ export function renderChart(container: HTMLElement, opts: ChartOptions): void {
     viewBox: `0 0 ${width} ${height}`, width, height, class: 'history-chart-svg',
   });
 
-  const unit = drawable[0]?.unit ?? opts.series[0]?.unit ?? 'count';
   // Durations get whole-unit ticks labelled to match the target line (and the
   // rest of the app's duration setting); everything else uses nice 1/2/5 ticks,
   // integer-stepped for whole-number metrics.
@@ -222,16 +244,28 @@ export function renderChart(container: HTMLElement, opts: ChartOptions): void {
   // ── Series paths ──────────────────────────────────────────────────────────
   for (const s of drawable) {
     const c = resolveColor(s.color);
-    if (s.points.length === 1 && !s.ghost) {
-      svg.appendChild(svgEl('circle', { cx: x(s.points[0][0]), cy: y(s.points[0][1]), r: 3, fill: c }));
-      continue;
+    // Contiguous runs — one when gapSec is unset (the usual case), several when
+    // the series has holes worth showing. A run of one draws as a dot; a path
+    // through a single point would be invisible.
+    const runs: [number, number][][] = [[]];
+    for (const p of s.points) {
+      const cur = runs[runs.length - 1];
+      if (cur.length && s.gapSec && p[0] - cur[cur.length - 1][0] > s.gapSec) runs.push([p]);
+      else cur.push(p);
     }
-    const d = s.points.map(([t, v], i) => `${i === 0 ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    svg.appendChild(svgEl('path', {
-      d, fill: 'none', stroke: c, 'stroke-width': s.ghost ? 1.5 : 1.8,
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round',
-      ...(s.ghost ? { 'stroke-dasharray': '5 4', opacity: 0.75 } : {}),
-    }));
+    for (const run of runs) {
+      if (!run.length) continue;
+      if (run.length === 1 && !s.ghost) {
+        svg.appendChild(svgEl('circle', { cx: x(run[0][0]), cy: y(run[0][1]), r: 3, fill: c }));
+        continue;
+      }
+      const d = run.map(([t, v], i) => `${i === 0 ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      svg.appendChild(svgEl('path', {
+        d, fill: 'none', stroke: c, 'stroke-width': s.ghost ? 1.5 : 1.8,
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+        ...(s.ghost ? { 'stroke-dasharray': '5 4', opacity: 0.75 } : {}),
+      }));
+    }
   }
 
   // ── Pins (view-owned, redrawn on every render) ────────────────────────────
@@ -339,22 +373,27 @@ export function renderChart(container: HTMLElement, opts: ChartOptions): void {
   });
 
   // ── Annotations (drawn on TOP of the hit layer so hover tooltips work) ─────
-  const dateStr = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
+  const dateStr = (t: number) => fmtDay(new Date(t * 1000));
+  const good = (k: ChartEvent['kind']) => k === 'promotion' || k === 'up';
+  const bad = (k: ChartEvent['kind']) => k === 'demotion' || k === 'down';
   const eventColor = (k: ChartEvent['kind']) =>
-    resolveColor(k === 'promotion' ? '--green' : k === 'demotion' ? '--red' : '--text3');
+    resolveColor(good(k) ? '--green' : bad(k) ? '--red' : '--text3');
+  const VERBS: Record<ChartEvent['kind'], string> = {
+    promotion: 'Promoted', demotion: 'Demoted', neutral: 'Group change',
+    up: 'Back online', down: 'Unreachable',
+  };
   for (const ev of opts.events ?? []) {
     if (ev.at < from || ev.at > to) continue;
     const ex = x(ev.at);
     const g = svgEl('g', { class: 'hc-event' });
     const title = svgEl('title', {});
-    const verb = ev.kind === 'promotion' ? 'Promoted' : ev.kind === 'demotion' ? 'Demoted' : 'Group change';
-    title.textContent = `${verb}: ${ev.detail} · ${dateStr(ev.at)}`;
+    title.textContent = `${ev.title ?? `${VERBS[ev.kind]}: ${ev.detail}`} · ${dateStr(ev.at)}`;
     g.appendChild(title);
     g.appendChild(svgEl('line', { x1: ex, x2: ex, y1: M.top, y2: M.top + plotH, stroke: eventColor(ev.kind), 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.85 }));
     // Widen the hover target with an invisible thicker line.
     g.appendChild(svgEl('line', { x1: ex, x2: ex, y1: M.top, y2: M.top + plotH, stroke: 'transparent', 'stroke-width': 8, 'pointer-events': 'stroke' }));
     const flag = svgEl('text', { x: ex + 3, y: M.top + 9, fill: eventColor(ev.kind), 'font-size': 9, 'font-weight': 700 });
-    flag.textContent = (ev.kind === 'promotion' ? '▲ ' : ev.kind === 'demotion' ? '▼ ' : '') + ev.label;
+    flag.textContent = (good(ev.kind) ? '▲ ' : bad(ev.kind) ? '▼ ' : '') + ev.label;
     g.appendChild(flag);
     svg.appendChild(g);
   }

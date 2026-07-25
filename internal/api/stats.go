@@ -51,6 +51,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		if merged, err := d.Stats.Merged(t.ID); err == nil {
 			resp.Fields = merged
 		}
+		resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
 		return resp
 	}
 	logOptOutTransition(d, t, false)
@@ -69,6 +70,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 						resp.Rates = r
 					}
 				}
+				resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
 				return resp
 			}
 		}
@@ -99,6 +101,9 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		// API failed — try a policy-respecting scrape fallback for main stats.
 		tryScrapeFallback(d, t)
 	}
+
+	// Read AFTER the fetch above, so a success this pass is reflected.
+	resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
 
 	merged, err := d.Stats.Merged(t.ID)
 	if err == nil {
@@ -261,8 +266,23 @@ func logFetchTransition(d *Deps, t models.Tracker, errKind string) {
 	}
 }
 
+// connectionKind is the tracker_events kind for one contact CHANNEL.
+//
+// The two channels get their own kinds, and therefore their own de-dup state,
+// because they fail INDEPENDENTLY. A tracker whose API returns 500s while its
+// profile scrape still works alternates api-fail, scrape-ok, api-fail, … on
+// every single refresh; against one shared state machine that reads as a
+// down/up pair per cycle — hundreds of rows a day that say nothing except that
+// the tracker is half-working. Split, the same week records exactly one event:
+// "API unreachable — Server error (500)", and nothing more until it recovers.
+//
+// Events written before the split carry the bare kind "connection" with no
+// channel. Nothing migrates them; the readers accept all three.
+func connectionKind(source string) string { return "connection_" + source }
+
 // recordConnection persists one contact attempt's outcome: the day's rollup
-// (uptime strip / Health card) plus, on a state CHANGE, a timeline event.
+// (uptime strip / Health card) plus, on a state CHANGE of that channel, a
+// timeline event.
 //
 // De-duping goes through the stored event rather than lastFetchState, which
 // lives only in memory: after a restart that map is empty, so a tracker that
@@ -285,17 +305,20 @@ func recordConnection(d *Deps, t models.Tracker, source, errKind string) {
 	if errKind != "" {
 		detail = "down:" + errKind
 	}
-	last, err := d.DB.LatestEventDetail(t.ID, "connection")
+	kind := connectionKind(source)
+	last, err := d.DB.LatestEventDetail(t.ID, kind)
 	if err != nil || last == detail {
 		return
 	}
-	// Never open the timeline with a recovery: with no prior event there was
-	// no outage to recover FROM, just a tracker that has always worked.
+	// Never open a channel's timeline with a recovery: with no prior event
+	// there was no outage to recover FROM, just a channel that has always
+	// worked. This is what keeps the healthy half of a half-broken tracker
+	// silent — the scrape succeeding is not news.
 	if last == "" && detail == "up" {
 		return
 	}
-	if err := d.DB.AddEvent(t.ID, now, "connection", detail); err == nil {
-		d.logDebugf("event: %s (%s) connection %s (%s)", t.Name, t.ID, detail, source)
+	if err := d.DB.AddEvent(t.ID, now, kind, detail); err == nil {
+		d.logDebugf("event: %s (%s) %s %s", t.Name, t.ID, kind, detail)
 	}
 }
 

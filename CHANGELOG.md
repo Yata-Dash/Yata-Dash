@@ -8,6 +8,105 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Connection timeline on the Tracker Detail page.** A second timeline
+  beside Group timeline, listing when Yata stopped being able to reach the
+  tracker and when it could again, with the reason for each outage. These are
+  recorded only when the state actually changes, so an empty list is the good
+  outcome — it says so rather than looking like missing data.
+
+### Added
+
+- **Rich active events on the Tracker Detail page.** Zenith's expanded UNIT3D
+  user stats (now proposed upstream) return a structured list of what's running
+  — global freeleech, upload contests and the like — with names, descriptions,
+  links, windows and your own standing in them. Each gets its own banner:
+  the tracker's own icon, a link to the event page where there is one, "Rank 2
+  · Uploads 6" where the tracker reports your progress, and a live countdown.
+  Events that haven't started are listed but dimmed and badged, and count down
+  to their **start** rather than their end. Grid cards and table rows keep the
+  compact one-line summary, derived from the same list.
+
+### Fixed
+
+- **Seed size no longer displays as a raw byte count.** The expanded UNIT3D
+  stats send sizes as integer bytes from `/api/user`; only three core fields
+  were being converted there, because everything else used to arrive via a
+  supplementary endpoint that did its own conversion. A seed size showed as
+  `3005578784855` instead of `2.73 TiB`. `seed_size`, `real_uploaded` and
+  `real_downloaded` now convert alongside the core three — safely, since only
+  JSON numbers are converted and forks that pre-format them as strings pass
+  through untouched.
+
+- **Active events no longer render as `[object Object]`.** The new structured
+  list had no handler, so it fell through to the generic stat row and was
+  stringified. It now drives the existing event banner and countdown
+  everywhere, and renders in full on the Detail page.
+
+- **Absolute dates read year-first everywhere the connection surfaces show
+  one.** The freshness tooltips were rendering through the browser's locale,
+  which for most people means `7/22/2026` — the least widely used ordering, and
+  ambiguous against `22/7/2026` for everyone else. Tooltips, timeline rows and
+  chart-marker hovers now use `2026-07-22` (with `2026-07-22 15:55` where a
+  time is needed), matching the dates the table cells already showed. The
+  dashboard's date formatter also builds those from local time rather than UTC:
+  it decides "is this today" locally, so answering in UTC meant an evening east
+  of Greenwich could stop counting as today and jump straight to tomorrow's
+  date.
+
+- **"Last API Update" now shows the last time the API actually returned
+  data**, not the last time Yata tried. On a tracker whose API had been failing
+  for a week while its profile scrape carried the stats, the column read "5
+  minutes ago" — describing the attempt, not the numbers. The attempted time
+  moves to the hover text, the value turns amber while the API is currently
+  failing, and sorting by the column now genuinely brings the stalest trackers
+  to the top instead of ordering every tracker by the same polling cycle. A
+  tracker whose API has never worked reads "—" and says so on hover.
+
+### Changed
+
+- **Connection state is tracked per channel.** A tracker whose API is down
+  while its profile scrape still works was recording a "went down" and a "came
+  back" on every single refresh — the two channels disagreed, and one shared
+  state machine flipped between them forever. The API and the scrape now keep
+  their own state, so that week records one event ("API unreachable: Server
+  error (500)") instead of hundreds, and it says which half is broken. The
+  reverse case — a good API with an expired scrape cookie — reads the same way
+  from the other side. Timelines and History markers name the channel;
+  events recorded before this change keep their original wording.
+
+- **Pathways from here is its own card on the Tracker Detail page**, no longer
+  sharing one with the timelines, and lists up to twelve routes before
+  "+N more" now that it has the room. It's hidden entirely when a tracker has
+  no routes rather than leaving an empty card in the row.
+
+- **The detail timelines no longer run off the page.** A tracker whose API is
+  failing while its profile scrape still works records a down/up pair on every
+  single refresh, which piled up hundreds of rows and buried the group changes
+  underneath them. The card now shows the twelve most recent changes across
+  both timelines, split so neither can starve the other — ten of each gives six
+  and six, not twelve and none, while two group changes beside two hundred
+  connection changes gives two and ten. Each list says how many it left out,
+  and the History chart still marks every one of them.
+
+- **Connection changes on the History chart.** A new Overlays toggle draws
+  outages and recoveries as ▼/▲ markers alongside the group-change ones. The
+  flag stays short ("Down" / "Up") with the reason in the hover text, and
+  because only state changes are recorded, a tracker that has been up all year
+  adds no clutter at all.
+
+- **Uptime as a History metric.** Chart how reliably Yata could reach a
+  tracker, day by day, next to everything else you track. It behaves like the
+  bounded quantity it is: the axis is pinned to 0–100% instead of being fitted
+  to the data (so a steady 100% reads as steady, and a 100%-vs-98% week doesn't
+  look like a collapse), and Rate/day and Projection are switched off, since
+  neither means anything for a percentage. Days Yata never contacted the
+  tracker leave a **gap** in the line rather than a flat stretch claiming
+  uptime nobody measured. Also available as a Tracker Detail mini-chart.
+
+## [Beta-20260725]
+
+### Added
+
 - **Sortable tracker settings table.** Settings → Trackers can now be sorted
   by any column — clicking a header cycles ascending, descending, then back
   to the order you added trackers in, so nothing is lost. Test Status sorts

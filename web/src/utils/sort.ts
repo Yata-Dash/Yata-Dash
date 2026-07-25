@@ -47,7 +47,11 @@ export function sortKey(
     // Freshness columns sort by raw unix seconds, so ascending is oldest-first
     // — which is the useful direction: the trackers that haven't updated in a
     // while come to the top. Never contacted sorts as 0, i.e. oldest of all.
-    case 'last_api_update': return s?.fetched_at ?? 0;
+    // Sorts on the same number the column shows — the last SUCCESSFUL fetch —
+    // so ascending really does bring the stalest trackers to the top. Sorting
+    // by the attempt would order them all identically (everything is polled on
+    // the same cycle) and hide the one that has been broken for a week.
+    case 'last_api_update': return s?.api_updated_at ?? 0;
     case 'last_scrape':     return scrapeStatus[tracker.id]?.last_scrape_at ?? 0;
     case 'scrape_health': {
       // Worst first when descending: dead cookies above plain failure

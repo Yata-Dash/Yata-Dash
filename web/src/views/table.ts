@@ -1,6 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
@@ -183,11 +183,6 @@ function buildTableRow(
   return mainTr + expTr;
 }
 
-/** Full local timestamp for the freshness columns' hover text — fmtDateTime
- *  deliberately drops the date for today and the time for everything else. */
-function fullTime(unixSec: number): string {
-  return new Date(unixSec * 1000).toLocaleString();
-}
 
 // STALE DATA RULE: cells render whatever fields exist regardless of resp.ok.
 // A missing field shows '—'; an error never blanks previously stored values.
@@ -370,9 +365,24 @@ function buildCell(
     // Metadata about the last contact, not a stat, so neither carries a source
     // dot: the whole cell IS the source. Both show a compact time (today →
     // HH:MM, older → the date) with the exact timestamp on hover.
+    // Last time the API actually RETURNED DATA — not the last time Yata tried.
+    // Those diverge exactly when it matters: a tracker whose API has been
+    // failing for a week is still polled every few minutes, and showing the
+    // attempt would report week-old numbers as five minutes fresh. The attempt
+    // isn't lost, it moves to the hover text, and the value turns amber while
+    // the API is currently failing so the staleness is visible without it.
     case 'last_api_update': {
-      if (!s?.fetched_at) return `<td class="td-center">${dash}</td>`;
-      return `<td class="td-mono td-center" title="${esc(fullTime(s.fetched_at))}" style="color:var(--text2)">${esc(fmtDateTime(s.fetched_at))}</td>`;
+      const ok = s?.api_updated_at ?? 0;
+      const tried = s?.fetched_at ?? 0;
+      const failing = scrapeStatus[t.id]?.api_down;
+      const tip = [
+        ok ? `Last successful API update: ${fmtStamp(ok)}` : 'The API has never returned data for this tracker',
+        tried ? `Attempted: ${fmtStamp(tried)}` : '',
+        failing ? 'The API is failing right now — these numbers are not being refreshed by it' : '',
+      ].filter(Boolean).join('\n');
+      if (!ok) return `<td class="td-center" title="${esc(tip)}">${dash}</td>`;
+      const color = failing ? 'var(--amber)' : 'var(--text2)';
+      return `<td class="td-mono td-center" title="${esc(tip)}" style="color:${color}">${esc(fmtDateTime(ok))}</td>`;
     }
     case 'last_scrape': {
       const ss = scrapeStatus[t.id];
@@ -383,7 +393,7 @@ function buildCell(
       if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
         return `<td class="td-center" title="This tracker is not scraped — stats come from its API" style="color:var(--text3);font-size:12px">API only</td>`;
       if (!ss?.last_scrape_at) return `<td class="td-center">${dash}</td>`;
-      return `<td class="td-mono td-center" title="${esc(fullTime(ss.last_scrape_at))}" style="color:var(--text2)">${esc(fmtDateTime(ss.last_scrape_at))}</td>`;
+      return `<td class="td-mono td-center" title="${esc(fmtStamp(ss.last_scrape_at))}" style="color:var(--text2)">${esc(fmtDateTime(ss.last_scrape_at))}</td>`;
     }
     case 'scrape_health': {
       // Reads scrapeStatus, not the merged stats — this column is about the

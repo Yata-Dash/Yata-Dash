@@ -2,7 +2,7 @@
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -14,7 +14,12 @@ type ReorderFn = (srcId: string, dstId: string) => void;
 let dragSrcId: string | null = null;
 
 /** Format a date/time: today → HH:MM am/pm, other → yyyy-mm-dd.
- *  Accepts ISO8601 string or unix timestamp (seconds). */
+ *  Accepts ISO8601 string or unix timestamp (seconds).
+ *
+ *  The date half goes through fmtDay (local) rather than toISOString (UTC):
+ *  "is it today" is asked in local time, so answering it in UTC meant an
+ *  evening east of Greenwich could stop being "today" and immediately show
+ *  tomorrow's date. */
 export function fmtDateTime(raw: string | number | null | undefined): string {
   if (!raw) return '—';
   const d = typeof raw === 'number' ? new Date(raw * 1000) : new Date(raw as string);
@@ -24,7 +29,7 @@ export function fmtDateTime(raw: string | number | null | undefined): string {
     && d.getMonth() === now.getMonth()
     && d.getDate() === now.getDate();
   if (isToday) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return d.toISOString().slice(0, 10);
+  return fmtDay(d);
 }
 
 /** Render the full grid — creates card shells and fills them */

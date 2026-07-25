@@ -430,7 +430,15 @@ type TrackerStatsResponse struct {
 	Error     string      `json:"error,omitempty"`
 	ErrorKind string      `json:"error_kind,omitempty"` // auth_error | connection_error | parse_error | disabled
 	Fields    MergedStats `json:"fields"`
-	FetchedAt int64       `json:"fetched_at"`
+	// FetchedAt is when this refresh RAN — success or failure. It is the
+	// freshness of the response, not of the numbers in it.
+	FetchedAt int64 `json:"fetched_at"`
+	// APIUpdatedAt is when the tracker's API last actually returned data (0 =
+	// never). These diverge exactly when it matters: a tracker whose API has
+	// been failing for a week while its profile scrape carries the stats is
+	// still attempted every few minutes, so FetchedAt says "5 minutes ago"
+	// about data that is seven days old.
+	APIUpdatedAt int64 `json:"api_updated_at,omitempty"`
 	// Rates is per-day growth for projectable fields (uploaded/downloaded/
 	// seed_size in GiB; bonus_points raw), from the stable daily-rollup
 	// average. The frontend uses it for target/promotion ETAs. A field with

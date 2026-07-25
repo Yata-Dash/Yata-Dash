@@ -256,6 +256,27 @@ func (d *DB) Layer(trackerID, source string) (map[string]FieldValue, error) {
 	return out, rows.Err()
 }
 
+// LayerUpdatedAt returns when a source layer was last written (unix seconds),
+// or 0 if that source has never produced data for this tracker.
+//
+// A layer is only written on SUCCESS — a failed fetch leaves the previous one
+// untouched — so this is "when did this source last actually work", which is a
+// different question from "when did we last try". The API layer's answer is
+// what the dashboard's Last API Update column shows: a tracker whose API has
+// been failing for a week is still being attempted every few minutes, and
+// reporting the attempt would say the stats are current when they are a week
+// old.
+func (d *DB) LayerUpdatedAt(trackerID, source string) (int64, error) {
+	var ts sql.NullInt64
+	err := d.sql.QueryRow(
+		`SELECT MAX(updated_at) FROM stat_layers WHERE tracker_id = ? AND source = ?`,
+		trackerID, source).Scan(&ts)
+	if err != nil {
+		return 0, err
+	}
+	return ts.Int64, nil
+}
+
 // Layers returns both layers for a tracker keyed by source.
 func (d *DB) Layers(trackerID string) (map[string]map[string]FieldValue, error) {
 	rows, err := d.sql.Query(

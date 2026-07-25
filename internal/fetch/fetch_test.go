@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
@@ -1510,5 +1511,127 @@ func TestFetchCustomRejectsTruthyErrorShapes(t *testing.T) {
 				t.Errorf("message = %v, want %q", ferr.Err, tc.wantMsg)
 			}
 		})
+	}
+}
+
+// TestFetchUnit3DExpandedStatsSchema covers the expanded UNIT3D user stats
+// (Zenith 2026-07, proposed upstream) arriving on /api/user rather than a
+// supplementary endpoint. Sizes are integer BYTES and seed times integer
+// SECONDS: the byte fields must be formatted, and the second fields must NOT be
+// (the UI's duration formatter takes raw seconds).
+func TestFetchUnit3DExpandedStatsSchema(t *testing.T) {
+	data := fetchUnit3DBody(t, `{
+		"username":"Zenith","group":"User",
+		"uploaded":"50 GiB","downloaded":"1 GiB","ratio":"50","buffer":"124 GiB",
+		"seeding":12,"leeching":0,"seedbonus":"100.00","hit_and_runs":0,
+		"seed_size":536870912000,"total_seedtime":8640000,"avg_seed_time":720000,
+		"fl_tokens":15,"invites":3,"warnings":1,"uploads_approved":42,
+		"upload_snatches":930,"real_ratio":4.25,
+		"unread_mail":true,"unread_notifications":false
+	}`)
+
+	want := map[string]any{
+		"seed_size":       "500.00 GiB", // was reaching the UI as "536870912000"
+		"total_seedtime":  8640000.0,    // seconds stay raw
+		"avg_seed_time":   720000.0,
+		"fl_tokens":       15.0,
+		"upload_snatches": 930.0,
+		"real_ratio":      4.25,
+		"unread_mail":     true,
+		// The pre-formatted core strings this tracker sends pass through.
+		"uploaded": "50 GiB", "buffer": "124 GiB",
+	}
+	for k, w := range want {
+		got, ok := data[k]
+		if !ok {
+			t.Errorf("missing field %q", k)
+			continue
+		}
+		if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+// TestFetchUnit3DRealRatioNull: real_ratio is null when actual downloaded bytes
+// are zero. It must be absent rather than surfacing as 0 — "your real ratio is
+// 0" is the opposite of "there is nothing to divide by".
+func TestFetchUnit3DRealRatioNull(t *testing.T) {
+	data := fetchUnit3DBody(t, `{"username":"fresh","ratio":"50","real_ratio":null}`)
+	if v, ok := data["real_ratio"]; ok && v != nil {
+		t.Errorf("real_ratio = %#v, want absent/nil", v)
+	}
+}
+
+// TestFetchUnit3DActiveEvents: the structured event list must both survive for
+// the detail page AND drive the flat canonical fields every other surface (and
+// every alert rule) already speaks.
+func TestFetchUnit3DActiveEvents(t *testing.T) {
+	data := fetchUnit3DBody(t, `{
+		"username":"Zenith",
+		"active_events":[
+			{"type":"global_freeleech","id":null,"name":"Global Freeleech","description":null,
+			 "icon":null,"status":"live","url":null,"starts_at":null,
+			 "ends_at":"2026-08-01T00:00:00+00:00"},
+			{"type":"upload_contest","id":7,"name":"July Upload Contest",
+			 "description":"Upload approved releases.","icon":"fas fa-upload","status":"live",
+			 "url":"https://znth.cx/upload-contests/7",
+			 "starts_at":"2026-07-01T00:00:00+00:00","ends_at":"2026-07-31T23:59:59+00:00",
+			 "awarded":false,"user_progress":{"uploads":6,"rank":2}},
+			{"type":"double_upload","name":"August Double Up","status":"upcoming",
+			 "ends_at":"2026-09-01T00:00:00+00:00"}
+		]
+	}`)
+
+	// Banner text: live events only, in order — the upcoming one is listed but
+	// must not be announced as running.
+	if got := data["active_event"]; got != "Global Freeleech · July Upload Contest" {
+		t.Errorf("active_event = %#v", got)
+	}
+	// Countdown targets the SOONEST live end (the contest, not the freeleech).
+	wantEnd, _ := time.Parse(time.RFC3339, "2026-07-31T23:59:59+00:00")
+	if got := data["active_event_ends_at"]; got != wantEnd.Unix() {
+		t.Errorf("active_event_ends_at = %#v, want %d", got, wantEnd.Unix())
+	}
+
+	evs, ok := data["active_events"].([]any)
+	if !ok || len(evs) != 3 {
+		t.Fatalf("active_events = %#v, want 3 entries", data["active_events"])
+	}
+	first, _ := evs[0].(map[string]any)
+	if _, present := first["url"]; present {
+		t.Error("null fields must be dropped, not stored as null")
+	}
+	wantFLEnd, _ := time.Parse(time.RFC3339, "2026-08-01T00:00:00+00:00")
+	if first["ends_at"] != wantFLEnd.Unix() {
+		t.Errorf("ends_at = %#v, want unix %d", first["ends_at"], wantFLEnd.Unix())
+	}
+	second, _ := evs[1].(map[string]any)
+	if second["url"] != "https://znth.cx/upload-contests/7" {
+		t.Errorf("url dropped: %#v", second)
+	}
+	if _, ok := second["user_progress"].(map[string]any); !ok {
+		t.Errorf("user_progress must pass through untouched: %#v", second["user_progress"])
+	}
+}
+
+// TestFetchUnit3DActiveEventsEmpty: no events is not the same as a tracker that
+// reports events and currently has none pending — an empty array must not be
+// stored as a field at all.
+func TestFetchUnit3DActiveEventsEmpty(t *testing.T) {
+	data := fetchUnit3DBody(t, `{"username":"quiet","active_events":[]}`)
+	if _, ok := data["active_events"]; ok {
+		t.Errorf("empty active_events stored: %#v", data["active_events"])
+	}
+	if _, ok := data["active_event"]; ok {
+		t.Errorf("empty active_events produced a banner: %#v", data["active_event"])
+	}
+}
+
+// TestEventNameFallsBackToType: name is nullable; the type slug is always there.
+func TestEventNameFallsBackToType(t *testing.T) {
+	got := eventName(map[string]any{"type": "upload_contest"})
+	if got != "Upload Contest" {
+		t.Errorf("eventName = %q, want %q", got, "Upload Contest")
 	}
 }

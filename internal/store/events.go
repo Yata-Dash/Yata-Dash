@@ -2,13 +2,21 @@ package store
 
 import "time"
 
-// TrackerEvent is a point-in-time annotation for the History view (currently
-// group promotions/demotions; `kind` leaves room for freeleech windows etc.).
+// TrackerEvent is a point-in-time annotation for the History view and the
+// Tracker Detail timelines (`kind` leaves room for freeleech windows etc.).
 type TrackerEvent struct {
 	TrackerID string `json:"tracker_id"`
-	At        int64  `json:"at"`     // unix seconds
-	Kind      string `json:"kind"`   // "group_change"
-	Detail    string `json:"detail"` // e.g. "Seeker→PowerPool"
+	At   int64  `json:"at"`
+	Kind string `json:"kind"`
+	// group_change:        "Seeker→PowerPool"
+	// connection_api,
+	// connection_scrape:   "up" | "down:<errorKind>" — written on state CHANGES
+	//                      only, per channel, so consecutive identical readings
+	//                      collapse to one event and a failing API doesn't
+	//                      flap against a working scrape.
+	// connection:          the pre-split kind, no channel. Still read, never
+	//                      written; see connectionKind in internal/api/stats.go.
+	Detail string `json:"detail"`
 }
 
 // AddEvent records one tracker event.

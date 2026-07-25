@@ -98,6 +98,7 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 		return nil, ferr
 	}
 	convertCoreBytes(data)
+	normalizeActiveEvents(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
 	// trackers expose formerly scrape-only stats (seed size, seed times, unread
 	// flags, …) here, letting them turn scraping off entirely. Best-effort: a
@@ -129,7 +130,18 @@ func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 
 // coreByteFields are the /api/user values that carry byte counts. Everything
 // else UNIT3D returns is already a count, a ratio or a display string.
-var coreByteFields = []string{"uploaded", "downloaded", "buffer"}
+//
+// The last three arrived with the expanded UNIT3D user stats (Zenith 2026-07,
+// now proposed upstream): they used to exist only behind a supplementary
+// endpoint, where ExtendedStatsSpec.ByteFields converted them, so a tracker
+// serving them from /api/user instead sent bytes straight through — a seed size
+// rendering as "3005578784855" rather than "2.73 TiB". Listing them here is
+// safe for every other tracker: only NUMBERS are converted, so an install that
+// doesn't send the field, or sends it pre-formatted, is untouched.
+var coreByteFields = []string{
+	"uploaded", "downloaded", "buffer",
+	"seed_size", "real_uploaded", "real_downloaded",
+}
 
 // convertCoreBytes turns raw byte counts from /api/user into size strings.
 //
@@ -155,6 +167,130 @@ func convertCoreBytes(data map[string]any) {
 			data[f] = parse.BytesToSize(int64(n))
 		}
 	}
+}
+
+// ── Active events ────────────────────────────────────────────────────────────
+
+// activeEventsField is the structured event list newer UNIT3D installs return
+// from /api/user: one object per running promotion, covering both global states
+// (site-wide freeleech) and rows from the events table (upload contests), each
+// with a name, status, window, and sometimes a URL, prize table and the user's
+// own progress.
+//
+// Yata's canonical event fields predate it and are deliberately flat — a single
+// banner string plus one countdown target — because that is all a grid card or
+// a table row has room for, and alert rules are written against them. Rather
+// than replace them, normalizeActiveEvents DERIVES them from the list and keeps
+// the list itself, so every existing surface keeps working while the detail
+// page can show the full picture.
+const activeEventsField = "active_events"
+
+// normalizeActiveEvents fills active_event / active_event_ends_at from the
+// structured list, and rewrites the list into a form the frontend can render
+// without date parsing.
+//
+// Only LIVE events feed the banner and the countdown: an event that hasn't
+// started yet is real and worth listing, but announcing it as though freeleech
+// were running right now would be wrong. Timestamps become unix seconds (the
+// countdown ticker's unit) and null fields are dropped, so the UI can test for
+// presence instead of null-checking every key. Everything else passes through
+// untouched — a tracker adding a field to these objects tomorrow should reach
+// the UI without a Yata release.
+func normalizeActiveEvents(data map[string]any) {
+	raw, ok := data[activeEventsField].([]any)
+	if !ok {
+		return
+	}
+	events := make([]any, 0, len(raw))
+	var names []string
+	var soonestEnd int64
+	for _, item := range raw {
+		ev, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		clean := make(map[string]any, len(ev))
+		for k, v := range ev {
+			if v == nil {
+				continue
+			}
+			clean[k] = v
+		}
+		endsAt := eventUnix(clean["ends_at"])
+		if endsAt > 0 {
+			clean["ends_at"] = endsAt
+		}
+		if startsAt := eventUnix(clean["starts_at"]); startsAt > 0 {
+			clean["starts_at"] = startsAt
+		}
+		events = append(events, clean)
+
+		status, _ := clean["status"].(string)
+		if status != "" && !strings.EqualFold(status, "live") {
+			continue
+		}
+		if name := eventName(clean); name != "" {
+			names = append(names, name)
+		}
+		if endsAt > 0 && (soonestEnd == 0 || endsAt < soonestEnd) {
+			soonestEnd = endsAt
+		}
+	}
+	if len(events) == 0 {
+		// An empty list means "no events", not "unknown" — leaving the key in
+		// would store an empty array that reads as a field the tracker reports.
+		delete(data, activeEventsField)
+		return
+	}
+	data[activeEventsField] = events
+	if len(names) > 0 {
+		data["active_event"] = strings.Join(names, " · ")
+	}
+	if soonestEnd > 0 {
+		// The SOONEST end, so the countdown always names the next thing to
+		// expire rather than an outer window that is still weeks away.
+		data["active_event_ends_at"] = soonestEnd
+	}
+}
+
+// eventName is an event's display name, falling back to a prettified type slug
+// ("upload_contest" → "Upload Contest") when the tracker leaves name null.
+func eventName(ev map[string]any) string {
+	if s, _ := ev["name"].(string); strings.TrimSpace(s) != "" {
+		return strings.TrimSpace(s)
+	}
+	slug, _ := ev["type"].(string)
+	if slug = strings.TrimSpace(slug); slug == "" {
+		return ""
+	}
+	parts := strings.Split(strings.ReplaceAll(slug, "-", "_"), "_")
+	for i, p := range parts {
+		if p != "" {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// eventUnix reads an event timestamp as unix seconds. Accepts the RFC3339 the
+// UNIT3D schema uses ("2026-08-01T00:00:00+00:00") and a bare number, so a fork
+// serialising these as epoch seconds needs no special case. 0 = unusable.
+func eventUnix(v any) int64 {
+	switch t := v.(type) {
+	case float64:
+		return int64(t)
+	case string:
+		s := strings.TrimSpace(t)
+		if s == "" {
+			return 0
+		}
+		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+			if parsed, err := time.Parse(layout, s); err == nil {
+				return parsed.Unix()
+			}
+		}
+	}
+	return 0
 }
 
 // apiErrorMessage interprets a custom API's top-level "error" field. It

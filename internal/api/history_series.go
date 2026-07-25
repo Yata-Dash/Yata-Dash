@@ -7,11 +7,21 @@ package api
 import (
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
+
+// uptimeField is a SYNTHETIC series: daily connection uptime, assembled here
+// from connection_daily rather than read from history_daily like every other
+// field. Keeping it out of history_daily is deliberate — that table's field
+// names populate the stat lists, target pickers and alert conditions, and
+// "uptime" belongs in none of them. So it is only ever emitted when a caller
+// asks for it by name; an unfiltered request ("every recorded field") means
+// recorded stats, not this.
+const uptimeField = "uptime"
 
 // seriesRange describes the window the response covers.
 type seriesRange struct {
@@ -51,9 +61,56 @@ func fieldUnit(field string) string {
 		return "ratio"
 	case "avg_seed_time":
 		return "seconds"
+	case uptimeField:
+		return "percent"
 	default:
 		return "count"
 	}
+}
+
+// uptimeSeries builds one percent-valued series per tracker from the daily
+// connection rollups, oldest first.
+//
+// Days with NO contact attempt are left out rather than plotted as 0: a paused
+// tracker, or one added mid-window, has no uptime to report, and drawing that
+// as a 0% day would invent an outage that never happened. The gap in the line
+// says "not contacted" — which is the truth.
+//
+// Granularity is ignored: connection_daily is per-UTC-day and there is no finer
+// record, so a 48h range shows two points rather than a smoother version of the
+// same thing.
+func uptimeSeries(d *Deps, trackerIDs []string, since time.Time) []*historySeries {
+	days, err := d.DB.ConnectionDaily(trackerIDs, since)
+	if err != nil {
+		return nil
+	}
+	byID := map[string]*historySeries{}
+	var order []string
+	for _, c := range days {
+		u := c.Uptime()
+		if u < 0 {
+			continue
+		}
+		s := byID[c.TrackerID]
+		if s == nil {
+			s = &historySeries{
+				TrackerID: c.TrackerID,
+				Field:     uptimeField,
+				Unit:      fieldUnit(uptimeField),
+				Points:    [][2]float64{},
+			}
+			byID[c.TrackerID] = s
+			order = append(order, c.TrackerID)
+		}
+		// c.Day is UTC midnight, so the point lands at the start of the day it
+		// summarises — the same convention the daily stat rollups use.
+		s.Points = append(s.Points, [2]float64{float64(c.Day), u * 100})
+	}
+	out := make([]*historySeries, 0, len(order))
+	for _, id := range order {
+		out = append(out, byID[id])
+	}
+	return out
 }
 
 // csvParam splits a comma-separated query param into trimmed non-empty parts.
@@ -146,8 +203,14 @@ func getHistorySeries(d *Deps) http.HandlerFunc {
 			series = append(series, byKey[k])
 		}
 
-		// Point-in-time events (group changes) for the same trackers/window —
-		// the History view draws these as timeline markers.
+		// Connection uptime rides along only when named — see uptimeField.
+		if slices.Contains(fields, uptimeField) {
+			series = append(series, uptimeSeries(d, trackers, since)...)
+		}
+
+		// Point-in-time events (group changes, connection up/down) for the same
+		// trackers/window — the History view draws these as timeline markers and
+		// the Detail page lists them.
 		events, _ := d.DB.EventsSince(trackers, since)
 		if events == nil {
 			events = []store.TrackerEvent{}

@@ -490,7 +490,7 @@ const TARGET_BACKING_FIELD: Record<string, string> = {
  *  strings the generic compare can't handle). */
 const TARGET_EXCLUDED_FIELDS = new Set([
   'username', 'group', 'join_date', 'user_id', 'active_event',
-  'active_event_ends_at', 'unread_mail', 'unread_notifications',
+  'active_event_ends_at', 'active_events', 'unread_mail', 'unread_notifications',
   'total_seedtime',
 ]);
 

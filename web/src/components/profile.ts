@@ -52,6 +52,9 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
  *  unread_* render as card icons + expanded-Info rows, not raw true/false. */
 const NON_ROW_FIELDS = new Set([
   'username', 'group', 'join_date', 'active_event', 'active_event_ends_at',
+  // The structured event list renders as banners on the Detail page. As a
+  // generic stat row it stringified to "[object Object],[object Object]".
+  'active_events',
   'user_id', 'unread_mail', 'unread_notifications',
 ]);
 

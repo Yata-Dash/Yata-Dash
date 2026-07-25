@@ -36,9 +36,14 @@ export const HISTORY_METRICS: { key: string; label: string; unit: SeriesUnit }[]
   { key: 'uploads_approved', label: 'Uploads',       unit: 'count' },
   { key: 'hit_and_runs',     label: 'Hit & Runs',    unit: 'count' },
   { key: 'avg_seed_time',    label: 'Avg Seed Time', unit: 'seconds' },
+  // Not a recorded stat: the server assembles this one from the daily
+  // connection rollups (see uptimeField in internal/api/history_series.go). It
+  // charts how reliably Yata could REACH the tracker, not how the account is
+  // doing, so it sits last — after everything the account actually earned.
+  { key: 'uptime',           label: 'Uptime',        unit: 'percent' },
 ];
 
-export type SeriesUnit = 'GiB' | 'count' | 'ratio' | 'seconds';
+export type SeriesUnit = 'GiB' | 'count' | 'ratio' | 'seconds' | 'percent';
 
 export function metricLabel(key: string): string {
   return HISTORY_METRICS.find(m => m.key === key)?.label ?? key;
@@ -121,6 +126,7 @@ export function fmtUnitValue(unit: SeriesUnit, v: number): string {
     case 'GiB':     return fmtGiB(v, 2);
     case 'ratio':   return v.toFixed(2);
     case 'seconds': return fmtSeedTime(v);
+    case 'percent': return trim1(v) + '%';
     default:        return Math.round(v).toLocaleString();
   }
 }
@@ -137,6 +143,7 @@ export function fmtAxisValue(unit: SeriesUnit, v: number): string {
       return trim1(v * 1024) + 'M';
     }
     case 'ratio':   return trim1(v);
+    case 'percent': return trim1(v) + '%';
     case 'seconds': {
       const a = Math.abs(v);
       if (a >= 31536000) return trim1(v / 31536000) + 'y';
@@ -354,6 +361,7 @@ const MILESTONES: Record<SeriesUnit, number[]> = {
   ratio: [1, 2, 3, 5, 10, 20, 50],
   count: [100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000, 10000000],
   seconds: [], // duration milestones aren't meaningful
+  percent: [], // uptime has no "achievement" to cross — 100% is the baseline
 };
 
 /** Compact milestone label (e.g. "10 TiB", "1M", "2"). */

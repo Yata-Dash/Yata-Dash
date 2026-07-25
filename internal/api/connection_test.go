@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -185,6 +186,69 @@ func TestRecordConnectionSeparatesChannels(t *testing.T) {
 	}
 }
 
+// isConnectionEventKind matches either channel's events plus the pre-split
+// kind, mirroring what the frontend accepts.
+func isConnectionEventKind(kind string) bool {
+	return kind == "connection" || strings.HasPrefix(kind, "connection_")
+}
+
+// TestRecordConnectionChannelsAreIndependent is the case that motivated
+// splitting the kinds: a tracker whose API returns 500s while its profile
+// scrape keeps working reports one failure AND one success on every refresh.
+// Sharing one state machine, that wrote a down/up pair per cycle — hundreds of
+// rows a day. Per channel it is a single event: the API went down and stayed
+// down, and the working scrape says nothing at all.
+func TestRecordConnectionChannelsAreIndependent(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "tr1", Name: "Test"}
+
+	connEvents := func() []string {
+		evs, err := d.DB.EventsSince(nil, time.Unix(0, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, e := range evs {
+			if isConnectionEventKind(e.Kind) {
+				out = append(out, e.Kind+"="+e.Detail)
+			}
+		}
+		return out
+	}
+	eq := func(got, want []string, what string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("%s: events = %v, want %v", what, got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("%s: events = %v, want %v", what, got, want)
+			}
+		}
+	}
+
+	for range 20 { // twenty refreshes of a half-broken tracker
+		recordConnection(d, tr, "api", "http_500")
+		recordConnection(d, tr, "scrape", "")
+	}
+	eq(connEvents(), []string{"connection_api=down:http_500"}, "API down, scrape fine")
+
+	// The API comes back: one more event, on the API channel only.
+	recordConnection(d, tr, "api", "")
+	recordConnection(d, tr, "scrape", "")
+	eq(connEvents(), []string{"connection_api=down:http_500", "connection_api=up"}, "API recovered")
+
+	// The mirror case — a dead session cookie — is its own channel's event and
+	// doesn't disturb the API's state.
+	recordConnection(d, tr, "scrape", "session_expired")
+	recordConnection(d, tr, "api", "")
+	eq(connEvents(), []string{
+		"connection_api=down:http_500",
+		"connection_api=up",
+		"connection_scrape=down:session_expired",
+	}, "scrape cookie expired")
+}
+
 // TestRecordConnectionEvents covers the timeline half: only state CHANGES
 // become events, a run of identical failures is de-duped, and the timeline
 // never opens with a recovery there was no outage to precede.
@@ -205,7 +269,7 @@ func TestRecordConnectionEvents(t *testing.T) {
 	}
 	var conn []string
 	for _, e := range evs {
-		if e.Kind == "connection" {
+		if e.Kind == connectionKind("api") {
 			conn = append(conn, e.Detail)
 		}
 	}
@@ -240,7 +304,7 @@ func TestRecordConnectionIgnoresPreflight(t *testing.T) {
 	}
 	evs, _ := d.DB.EventsSince(nil, time.Unix(0, 0))
 	for _, e := range evs {
-		if e.Kind == "connection" {
+		if isConnectionEventKind(e.Kind) {
 			t.Errorf("pre-flight failure produced a timeline event: %+v", e)
 		}
 	}
@@ -268,7 +332,7 @@ func TestRecordConnectionSurvivesRestart(t *testing.T) {
 	evs, _ := d.DB.EventsSince(nil, time.Unix(0, 0))
 	n := 0
 	for _, e := range evs {
-		if e.Kind == "connection" {
+		if isConnectionEventKind(e.Kind) {
 			n++
 		}
 	}
