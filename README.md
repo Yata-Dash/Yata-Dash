@@ -223,7 +223,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Unwalled | Unit3D | Yes | 180min |  |
 | Upload.cx | Unit3D | No | API Only | Seed-size, average-seedtime, and upload-count progress unavailable through the API |
 | YUSCENE | Unit3D | Yes | 180min |  |
-| Zenith | Unit3D | Yes | 120min | Will switch to API only when extended stats added |
+| Zenith | Unit3D | Yes | API Only | API reworked include extended stats and events |
 
   — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
 

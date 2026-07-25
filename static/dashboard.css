@@ -843,8 +843,13 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .exp-event-banner .exp-event-text{flex-shrink:0}
 .exp-event-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .exp-event-link:hover{text-decoration-thickness:2px}
+/* Shrinks but never GROWS. With flex:1 it absorbed all the slack and pushed the
+   countdown to the far edge, so a banner with a description laid out completely
+   differently from one without — on an ultrawide, half a metre apart. Nothing
+   in the banner grows now, so every countdown sits just after its own content,
+   which is what the single-banner design has always done. */
 .exp-event-desc{
-  min-width:0;flex:1;
+  min-width:0;flex:0 1 auto;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:11px;font-weight:400;
   color:color-mix(in srgb,var(--amber) 60%,var(--text3));
