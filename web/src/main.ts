@@ -10,7 +10,7 @@
 import * as api from './api';
 import * as state from './state';
 import { startIconFallback } from './utils/icons';
-import { renderGrid, renderCard } from './views/grid';
+import { renderGrid, renderCard, setGridRerender } from './views/grid';
 import { renderAggCards } from './views/aggCards';
 import { renderQuiBars, refreshQuiStats, renderQUIInstanceChecklist } from './components/qui';
 import { toast } from './components/toast';
@@ -400,14 +400,14 @@ async function loadTrackerGroups() {
   }
 }
 
-/** Drag-reorder — persisted locally (the v2 backend has no reorder endpoint). */
+/** Drag-reorder — persisted locally (the v2 backend has no reorder endpoint).
+ *  The move itself lives in state.reorderTrackers; see there for why the
+ *  destination is resolved after the removal and why direction matters. */
 function handleReorder(srcId: string, dstId: string) {
-  const fi = state.trackers.findIndex(t => t.id === srcId);
-  const ti = state.trackers.findIndex(t => t.id === dstId);
-  if (fi === -1 || ti === -1) return;
-  const [moved] = state.trackers.splice(fi, 1);
-  state.trackers.splice(ti, 0, moved);
-  state.saveOrder(state.trackers.map(t => t.id));
+  const next = state.reorderTrackers(state.trackers, srcId, dstId);
+  if (next === state.trackers) return; // no-op move
+  state.setTrackers(next);
+  state.saveOrder(next.map(t => t.id));
   renderGridFull();
   renderTable();
 }
@@ -416,6 +416,9 @@ function handleReorder(srcId: string, dstId: string) {
 function renderGridFull() {
   renderGrid(state.trackers, state.statsCache, handleReorder, state.appSettings, state.groupDefs);
 }
+// The grid's own controls (order / show / even heights) re-render through this
+// rather than reaching into app state themselves.
+setGridRerender(renderGridFull);
 
 // ── Stats refresh ─────────────────────────────────────────────────────────
 

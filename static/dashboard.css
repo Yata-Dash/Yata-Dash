@@ -142,6 +142,45 @@ html{overflow-x:clip}
 .tracker-grid{column-width:400px;column-gap:16px}
 .tracker-grid > .tracker-card{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;width:100%;margin:0 0 16px;display:inline-block;vertical-align:top}
 
+/* ── Even heights ──
+   Masonry packs tightly but flows COLUMN-major: at three or four columns that
+   reads fine, but across an ultrawide's seven or eight the eye wants rows and
+   gets a ragged wall instead. With the option on, the layout becomes a real
+   grid — left-to-right reading order, cards in a row sharing a height — which
+   only works because the card's variable-height sections collapse at the same
+   time (see cardExtras in views/grid.ts). Both halves are needed: a grid alone
+   would stretch every card to the tallest in its row. */
+.tracker-grid.grid--even{columns:auto;column-width:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:16px}
+.tracker-grid.grid--even > .tracker-card{display:flex;flex-direction:column;width:auto;margin:0}
+.tracker-grid.grid--even > .tracker-card .card-body{flex:1}
+/* Footers line up along the bottom of each row rather than floating mid-card. */
+.tracker-grid.grid--even > .tracker-card .card-footer{margin-top:auto}
+
+/* Collapsed Targets / More Stats, with a per-card peek. */
+.card-extra-toggle{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--text3);font-size:11px;font-weight:600;letter-spacing:.02em;
+  padding:6px 10px;cursor:pointer;transition:color .15s,border-color .15s;
+}
+.card-extra-toggle:hover{color:var(--text);border-color:var(--border2)}
+.card-extra-caret{transition:transform .15s;display:inline-block}
+.card-extra[data-open="1"] .card-extra-caret{transform:rotate(180deg)}
+.card-extra-body{display:none;flex-direction:column;gap:10px;margin-top:10px}
+.card-extra[data-open="1"] .card-extra-body{display:flex}
+
+/* ── Grid controls bar ──
+   Reuses the History view's control styling (.history-menu-*, .history-range-btn)
+   — they are the app's generic control-bar look now, not history-specific. */
+.grid-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.grid-ctl-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.04em;text-transform:uppercase}
+.grid-ctl-select{max-width:170px;padding:5px 8px;font-size:12px}
+.grid-ctl-hint{font-size:11px;color:var(--text3);font-style:italic;margin-left:auto}
+/* The filter menu lists every tracker, so it needs to scroll on big setups. */
+.grid-filter-menu{max-height:min(60vh,420px);overflow-y:auto;min-width:210px}
+.drag-handle.is-disabled{cursor:not-allowed;opacity:.35}
+.tracker-card:hover .drag-handle.is-disabled{opacity:.35}
+
 /* ── Cards ── */
 .tracker-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .2s,box-shadow .2s,opacity .2s,transform .15s;cursor:default}
 .tracker-card:active{cursor:default}

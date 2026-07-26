@@ -166,6 +166,11 @@ function typeRequiredFields(typeKey: string): string[] {
 }
 
 const DEFAULT_JOINDATE_LABEL = 'Join Date <span class="opt">(optional)</span>';
+/** Mirrors the hint in templates/index.html — restored when the selected
+ *  tracker doesn't require a join date, so switching between trackers in one
+ *  modal session can't leave the "this tracker doesn't report one" text
+ *  standing over a tracker that does. */
+const DEFAULT_JOINDATE_HINT = "Your account creation date. Used for account-age tracking only when the tracker doesn't report it (e.g. MyAnonamouse). Set once — it never changes.";
 
 /** Mark/unmark fields the selected tracker type requires (username for the
  *  API call; join_date for API-only trackers that report no join date). */
@@ -196,8 +201,10 @@ function applyRequiredFieldsUI(required: string[]) {
       ? 'Join Date <span style="color:var(--red)">*</span>'
       : DEFAULT_JOINDATE_LABEL;
   }
-  if (jHint && isJoin) {
-    jHint.textContent = 'This tracker doesn\'t report a join date, so enter it here for account-age tracking. Set once — it never changes.';
+  if (jHint) {
+    jHint.textContent = isJoin
+      ? 'This tracker doesn\'t report a join date, so enter it here for account-age tracking. Set once — it never changes.'
+      : DEFAULT_JOINDATE_HINT;
   }
 }
 

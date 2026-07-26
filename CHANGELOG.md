@@ -16,6 +16,26 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Grid view gets Order, Show and Even heights controls.**
+  - **Order** sorts the cards by any of the table's sortable columns, or keeps
+    **My order** — your own drag arrangement, which is preserved untouched
+    while you look at something else and comes back exactly as you left it.
+    Dragging is disabled while a sort is applied (a drop there could only be
+    discarded or silently rewrite an order you can't see) and the handle says
+    why.
+  - **Show** hides trackers from the grid alone. They stay in the table, the
+    detail pages, the aggregate cards and every refresh — this is
+    decluttering, not disabling.
+  - **Even heights** lines the cards up. Each card's Targets and More Stats
+    collapse behind a per-card toggle, and the layout switches from masonry
+    columns to a real grid — so cards read left-to-right in aligned rows
+    instead of flowing top-to-bottom down a ragged wall, which is what made
+    wide screens look messy. Both halves are needed: the grid alone would
+    stretch every card to the tallest in its row. Expanding a card affects
+    only its own row, and nothing is hidden that a click doesn't reach.
+
+  All three are per-browser view state, saved alongside the custom order.
+
 - **Rich active events on the Tracker Detail page.** Zenith's expanded UNIT3D
   user stats (now proposed upstream) return a structured list of what's running
   — global freeleech, upload contests and the like — with names, descriptions,
@@ -27,6 +47,33 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   compact one-line summary, derived from the same list.
 
 ### Fixed
+
+- **Grid drag-reorder now puts the card where you dropped it.** Two faults
+  compounded, which is why it looked random. The destination was read from the
+  list *before* the dragged card was removed, so dragging forward landed it one
+  slot past the target while dragging backward worked — the same gesture
+  behaving differently by direction, and a neighbour appearing to move on its
+  own. And the move was applied to the full tracker list while the grid shows
+  only enabled ones, so any disabled tracker lying between source and target
+  displaced the card by however many hidden entries were in the way. Dropping
+  onto the last card also used to land you second-to-last, forever; direction
+  now decides whether the card lands before or after the target, so every
+  position is reachable.
+
+- **A tracker def can now require a join date on its own.** Whether the setup
+  form demands one was decided entirely by the tracker TYPE, so a def's
+  `api.required_fields` parsed into nothing and was silently ignored — Aura4K
+  had asked for a join date since July and no user was ever prompted. It now
+  unions with the type's list (and still drops anything the def's own
+  `field_map` provides, so declaring a mapped field stays a no-op). Zenith
+  needs this: it's API-only now, and its API is the one thing that doesn't
+  report a join date, so without the prompt account-age tracking silently
+  never works.
+
+- **The join-date hint no longer sticks.** Selecting a tracker that requires
+  one and then switching to a tracker that doesn't left "This tracker doesn't
+  report a join date" standing over a tracker that does. The label and the
+  asterisk already reverted; only the hint had no path back.
 
 - **Seed size no longer displays as a raw byte count.** The expanded UNIT3D
   stats send sizes as integer bytes from `/api/user`; only three core fields

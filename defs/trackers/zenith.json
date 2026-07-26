@@ -16,6 +16,9 @@
     "min_seed_days": 3,
     "note": "Ratioless"
   },
+  "api": {
+    "required_fields": ["join_date"]
+  },
   "scrape": {
     "disable_scraping": true
   },

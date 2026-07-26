@@ -39,11 +39,15 @@ type defInfo struct {
 	RequiredFields []string `json:"required_fields"`
 }
 
-// requiredFieldsFor resolves a type's required config fields for one tracker:
-// any field the tracker def's custom API already provides is dropped — e.g. a
-// field_map entry mapping member_since → join_date means the user never has
-// to enter a join date (HUNO), while MAM's API reports none so the type-level
-// requirement stands. Always returns a non-nil slice.
+// requiredFieldsFor resolves the required config fields for one tracker.
+//
+// Two sources are unioned: the TYPE's list (what every tracker of this kind
+// needs) and the DEF's own api.required_fields (what this tracker needs on top,
+// because it differs from its type's norm — a UNIT3D tracker whose API omits
+// the join date and which isn't scraped). Then any field the def's API already
+// provides is dropped — a field_map entry mapping member_since → join_date
+// means the user never has to enter one (HUNO), while MAM's API reports none so
+// the requirement stands. Always returns a non-nil slice.
 func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
 	out := make([]string, 0, len(base)+1)
 	provided := make(map[string]bool)
@@ -52,10 +56,19 @@ func requiredFieldsFor(base []string, api *defs.CustomAPI) []string {
 			provided[canonical] = true
 		}
 	}
-	for _, f := range base {
-		if !provided[f] {
+	seen := make(map[string]bool, len(base))
+	add := func(fields []string) {
+		for _, f := range fields {
+			if provided[f] || seen[f] {
+				continue
+			}
+			seen[f] = true
 			out = append(out, f)
 		}
+	}
+	add(base)
+	if api != nil {
+		add(api.RequiredFields)
 	}
 	if api != nil && strings.Contains(api.Path, "{username}") {
 		hasUsername := false

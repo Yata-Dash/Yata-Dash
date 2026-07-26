@@ -1,6 +1,8 @@
 // views/grid.ts — tracker card grid view (reads merged stats fields)
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { appSettings, fieldOf, numOf, scrapeStatus, strOf } from '../state';
+import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../state';
+import { getSortedTrackers } from '../utils/sort';
+import type { SortDir } from '../types';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
 import { esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
@@ -12,6 +14,60 @@ import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
 type ReorderFn = (srcId: string, dstId: string) => void;
 
 let dragSrcId: string | null = null;
+
+// ── Grid view controls ───────────────────────────────────────────────────────
+//
+// Order, visibility and card height are VIEW state, not account settings: they
+// answer "how do I want to look at this right now", they differ per screen (the
+// even-height option exists because of ultrawides), and the custom order they
+// sit alongside has always been local. So they live in localStorage next to it
+// rather than in the settings API — same call the History view makes.
+
+interface GridUIState {
+  /** COL_DEFS key to sort by; '' = the user's own drag order. */
+  sort: string;
+  dir: SortDir;
+  /** Tracker IDs hidden from THIS view only — they stay in the table, the
+   *  detail page, the aggregate cards and every refresh. Hiding a tracker here
+   *  is decluttering, not disabling. */
+  hidden: string[];
+  /** Collapse each card's Targets / More Stats so the cards line up. */
+  evenHeights: boolean;
+}
+
+const GRID_UI_KEY = 'yata.grid.ui';
+
+function loadGridUI(): GridUIState {
+  const dflt: GridUIState = { sort: '', dir: 'asc', hidden: [], evenHeights: false };
+  try {
+    const raw = JSON.parse(localStorage.getItem(GRID_UI_KEY) ?? '{}');
+    return {
+      sort: COL_DEFS.some(c => c.key === raw.sort && c.sortable) ? raw.sort : dflt.sort,
+      dir: raw.dir === 'desc' ? 'desc' : 'asc',
+      hidden: Array.isArray(raw.hidden) ? raw.hidden.filter((v: unknown) => typeof v === 'string') : dflt.hidden,
+      evenHeights: typeof raw.evenHeights === 'boolean' ? raw.evenHeights : dflt.evenHeights,
+    };
+  } catch {
+    return dflt;
+  }
+}
+
+const gridUI = loadGridUI();
+
+function saveGridUI() {
+  try { localStorage.setItem(GRID_UI_KEY, JSON.stringify(gridUI)); } catch { /* private mode */ }
+}
+
+/** Drag-reorder only means something while the grid is in the user's own
+ *  order — dragging a card in an alphabetical list would either be ignored or
+ *  silently rewrite an order you can't see. */
+function customOrderActive(): boolean { return gridUI.sort === ''; }
+
+/** Re-render callback, set by main.ts so the controls can refresh the grid
+ *  without grid.ts reaching back into app state. */
+let rerender: () => void = () => {};
+
+export function setGridRerender(fn: () => void): void { rerender = fn; }
 
 /** Format a date/time: today → HH:MM am/pm, other → yyyy-mm-dd.
  *  Accepts ISO8601 string or unix timestamp (seconds).
@@ -60,14 +116,33 @@ export function renderGrid(
   // Disabled trackers are hidden from the dashboard — they live in
   // Settings → Trackers until re-enabled. Distinct empty state so a fully
   // disabled set doesn't show the first-run welcome.
-  const visible = trackers.filter(t => t.enabled !== false);
-  if (!visible.length) {
+  const enabled = trackers.filter(t => t.enabled !== false);
+  if (!enabled.length) {
+    renderGridControls([], statsCache);
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text3);font-size:13px">
       All trackers are disabled — re-enable them in Settings → Trackers.</div>`;
     return;
   }
 
-  visible.forEach(t => {
+  // Controls see every enabled tracker (the filter menu has to list the ones
+  // it's hiding); the grid itself sees what survives the filter and the sort.
+  renderGridControls(enabled, statsCache);
+  const hidden = new Set(gridUI.hidden);
+  const shown = enabled.filter(t => !hidden.has(t.id));
+  const ordered = customOrderActive()
+    ? shown
+    : getSortedTrackers(shown, gridUI.sort, gridUI.dir, statsCache);
+
+  grid.classList.toggle('grid--even', gridUI.evenHeights);
+
+  if (!shown.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text3);font-size:13px">
+      Every tracker is hidden from this view — use the Show menu above to bring some back.
+      <br>They're all still tracked, and still in the table and detail pages.</div>`;
+    return;
+  }
+
+  ordered.forEach(t => {
     const el = document.createElement('div');
     el.className = 'tracker-card';
     el.id = `card-${t.id}`;
@@ -77,6 +152,95 @@ export function renderGrid(
     if (settings) renderCard(t, statsCache[t.id], settings, groupDefs);
   });
 }
+
+// ── Controls bar ─────────────────────────────────────────────────────────────
+
+/** Sort options: the user's own order, then every sortable table column, so the
+ *  grid and the table agree on what "sort by ratio" means (both go through
+ *  utils/sort.ts). Rebuilt on each render because the tracker list drives the
+ *  filter menu. */
+function renderGridControls(enabled: Tracker[], statsCache: Record<string, TrackerStatsResponse>): void {
+  const bar = document.getElementById('grid-controls');
+  if (!bar) return;
+
+  const sortOpts = [{ key: '', label: 'My order' }]
+    .concat(COL_DEFS.filter(c => c.sortable).map(c => ({ key: c.key, label: c.label })));
+  const hidden = new Set(gridUI.hidden);
+  const hiddenCount = enabled.filter(t => hidden.has(t.id)).length;
+
+  bar.innerHTML = `
+    <label class="grid-ctl-label" for="grid-sort">Order</label>
+    <select class="form-input grid-ctl-select" id="grid-sort" title="Sort the cards, or keep your own drag order">
+      ${sortOpts.map(o => `<option value="${esc(o.key)}"${o.key === gridUI.sort ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}
+    </select>
+    <button type="button" class="history-range-btn" id="grid-dir"
+      title="${gridUI.dir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}"
+      ${customOrderActive() ? 'disabled' : ''}>${gridUI.dir === 'asc' ? '↑ Asc' : '↓ Desc'}</button>
+    <div class="history-menu-wrap">
+      <button type="button" class="history-menu-btn" id="grid-filter-btn"
+        title="Choose which trackers appear in this view">Show${hiddenCount ? ` (${enabled.length - hiddenCount}/${enabled.length})` : ''} ▾</button>
+      <div class="history-menu grid-filter-menu" id="grid-filter-menu" hidden>
+        <div class="history-menu-label">Show in grid <span class="history-menu-hint">(this view only)</span></div>
+        ${enabled.map(t => `<label><input type="checkbox" data-hide="${esc(t.id)}"${hidden.has(t.id) ? '' : ' checked'}> ${esc(fmtTrackerName(t.name, t.abbr ?? '', appSettings.tracker_name_mode || 'name'))}</label>`).join('')}
+        <button type="button" class="history-menu-item" id="grid-filter-all">Show all</button>
+      </div>
+    </div>
+    <button type="button" class="history-range-btn${gridUI.evenHeights ? ' active' : ''}" id="grid-even"
+      title="Line the cards up by collapsing each one's Targets and More Stats — expand any card individually">Even heights</button>
+    <span class="grid-ctl-hint" id="grid-ctl-hint">${customOrderActive()
+      ? 'Drag a card by its handle to reorder'
+      : 'Sorted — switch to <b>My order</b> to drag'}</span>`;
+
+  (document.getElementById('grid-sort') as HTMLSelectElement).onchange = e => {
+    gridUI.sort = (e.target as HTMLSelectElement).value;
+    saveGridUI();
+    rerender();
+  };
+  document.getElementById('grid-dir')!.onclick = () => {
+    gridUI.dir = gridUI.dir === 'asc' ? 'desc' : 'asc';
+    saveGridUI();
+    rerender();
+  };
+  document.getElementById('grid-even')!.onclick = () => {
+    gridUI.evenHeights = !gridUI.evenHeights;
+    saveGridUI();
+    rerender();
+  };
+  const menu = document.getElementById('grid-filter-menu')!;
+  document.getElementById('grid-filter-btn')!.onclick = e => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  };
+  menu.onclick = e => e.stopPropagation(); // ticking a box mustn't close the menu
+  menu.querySelectorAll<HTMLInputElement>('input[data-hide]').forEach(cb => {
+    cb.onchange = () => {
+      const id = cb.dataset['hide']!;
+      const next = new Set(gridUI.hidden);
+      cb.checked ? next.delete(id) : next.add(id);
+      gridUI.hidden = [...next];
+      saveGridUI();
+      rerender();
+    };
+  });
+  document.getElementById('grid-filter-all')!.onclick = () => {
+    gridUI.hidden = [];
+    saveGridUI();
+    rerender();
+  };
+  void statsCache; // sorting reads it via getSortedTrackers, not here
+}
+
+// One document-level listener closes the filter menu on an outside click,
+// matching the History view's menus.
+document.addEventListener('click', () => {
+  const m = document.getElementById('grid-filter-menu');
+  if (m) m.hidden = true;
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const m = document.getElementById('grid-filter-menu');
+  if (m) m.hidden = true;
+});
 
 /** Core fields shown in the card's compact stats grid (excluded from More Stats). */
 const CARD_CORE_FIELDS = new Set([
@@ -243,11 +407,7 @@ export function renderCard(
         ${stat('Warnings',      'warnings',        warnings !== null && warnings > 0 ? 'red' : 'text3', warnings !== null ? String(warnings) : '—')}
         ${stat('H&Rs',          'hit_and_runs',    hnrColor, String(hnr))}
       </div>
-      ${targetsHtml ? `<div class="card-section-wrap">${targetsHtml}</div>` : ''}
-      ${moreHtml ? `<div class="card-section-wrap">
-        <div class="card-section-title">More Stats</div>
-        ${moreHtml}
-      </div>` : ''}
+      ${cardExtras(targetsHtml, moreHtml)}
       ${buildRulesLine(tracker, settings)}
     </div>
     <div class="card-footer">
@@ -288,6 +448,41 @@ export function renderCard(
   el.innerHTML = header + body;
   // Re-attach drag/drop listeners after innerHTML wipe (drop targets still needed)
   attachDragEvents(el, tracker.id, () => {});
+  // Per-card expand for the collapsed extras. Local to the card and not
+  // persisted: it's a peek, not a preference — the next render starts closed.
+  const toggle = el.querySelector<HTMLElement>('.card-extra-toggle');
+  toggle?.addEventListener('click', () => {
+    const wrap = toggle.closest<HTMLElement>('.card-extra');
+    if (wrap) wrap.dataset['open'] = wrap.dataset['open'] === '1' ? '0' : '1';
+  });
+}
+
+/**
+ * A card's Targets and More Stats sections.
+ *
+ * These are what make cards different heights: the twelve-box stats grid above
+ * them is fixed, so a tracker with six targets and a dozen extra stats towers
+ * over one with none. At three or four columns the ragged bottom edge reads as
+ * density; across an ultrawide's seven or eight it just reads as mess.
+ *
+ * With "Even heights" on they collapse behind a per-card toggle, which is what
+ * levels the cards — the alternative, stretching every card to the tallest,
+ * would give most of them a large empty area instead. Expanding one card grows
+ * only its row, and nothing is hidden that a click doesn't reach.
+ */
+function cardExtras(targetsHtml: string, moreHtml: string): string {
+  const sections =
+    (targetsHtml ? `<div class="card-section-wrap">${targetsHtml}</div>` : '') +
+    (moreHtml ? `<div class="card-section-wrap">
+      <div class="card-section-title">More Stats</div>
+      ${moreHtml}
+    </div>` : '');
+  if (!sections || !gridUI.evenHeights) return sections;
+  const label = [targetsHtml ? 'Targets' : '', moreHtml ? 'More Stats' : ''].filter(Boolean).join(' & ');
+  return `<div class="card-extra" data-open="0">
+    <button type="button" class="card-extra-toggle" title="Show this card's ${esc(label)}">${esc(label)} <span class="card-extra-caret">▾</span></button>
+    <div class="card-extra-body">${sections}</div>
+  </div>`;
 }
 
 /** Compact display-only rules line at the bottom of a card (def account-wide
@@ -825,7 +1020,19 @@ function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): vo
   // Only start dragging when the pointer is down on the drag handle
   el.draggable = false;
   const handle = el.querySelector<HTMLElement>('.drag-handle');
+  // Reordering is meaningless while a sort is applied: the drop would either be
+  // discarded on the next render or quietly rewrite an order the user can't
+  // see. The handle stays visible but says why it's inert.
+  if (!customOrderActive()) {
+    if (handle) {
+      handle.classList.add('is-disabled');
+      handle.title = 'Sorted by a column — switch Order to “My order” to drag';
+    }
+    return;
+  }
   if (handle) {
+    handle.classList.remove('is-disabled');
+    handle.title = 'Drag to reorder';
     handle.addEventListener('mousedown', () => { el.draggable = true; });
     handle.addEventListener('mouseleave', () => { if (!dragSrcId) el.draggable = false; });
   }

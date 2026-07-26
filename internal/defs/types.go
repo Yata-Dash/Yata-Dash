@@ -319,9 +319,23 @@ type ExtendedStatsSpec struct {
 }
 
 // CustomAPI describes a non-standard tracker API entirely as data.
+//
+// A def of ANY type may carry a partial "api" block for per-tracker API
+// metadata — APIKeyHint and RequiredFields are read for unit3d and gazelle defs
+// too, not just custom ones.
 type CustomAPI struct {
 	// Path is appended to the tracker base URL.
 	Path string `json:"path"`
+
+	// RequiredFields adds to the TYPE's required fields for this tracker alone
+	// (same vocabulary as TypeAPI.RequiredFields). For a tracker that differs
+	// from its type's norm: most UNIT3D trackers report a join date, but one
+	// whose API omits it and whose operator has asked not to be scraped can
+	// only get it from the user, so it must be demanded at setup or account-age
+	// tracking silently never works. Fields the def's own field_map provides
+	// are still subtracted, so declaring one that is actually mapped is a
+	// harmless no-op rather than a contradiction.
+	RequiredFields []string `json:"required_fields,omitempty"`
 	// BaseURL overrides the tracker's canonical URL when its API uses a
 	// dedicated host. Empty means use the tracker URL.
 	BaseURL string `json:"base_url,omitempty"`

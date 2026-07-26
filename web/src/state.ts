@@ -186,3 +186,38 @@ export function applySavedOrder(list: Tracker[]): Tracker[] {
 export function saveOrder(ids: string[]) {
   localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
 }
+
+/**
+ * Move `srcId` to `dstId`'s position, returning the reordered list.
+ *
+ * Two things this has to get right, both of which the previous in-place splice
+ * got wrong:
+ *
+ *  1. The destination index is resolved AFTER the source is removed. Taking it
+ *     from the original array meant that dragging a card FORWARD landed it one
+ *     slot past the drop target (removing the source shifts everything after it
+ *     left), while dragging BACKWARD worked — so the same gesture behaved
+ *     differently depending on which way you went, and neighbouring cards
+ *     appeared to shuffle on their own.
+ *
+ *  2. Direction decides before-or-after. Always inserting before the target
+ *     makes the last position unreachable — drop onto the final card and you
+ *     land second-to-last, forever. Dragging forward inserts AFTER the target
+ *     (you pushed past it), backward inserts BEFORE it. Every position is then
+ *     reachable and the card always ends up where it was dropped.
+ *
+ * Positions are resolved by ID relative to the target rather than by raw index,
+ * which is also what makes DISABLED trackers harmless: they sit in this array
+ * but not in the grid, so index arithmetic across them silently misplaced the
+ * card by however many hidden entries lay between the two.
+ */
+export function reorderTrackers(list: Tracker[], srcId: string, dstId: string): Tracker[] {
+  const from = list.findIndex(t => t.id === srcId);
+  const to = list.findIndex(t => t.id === dstId);
+  if (from === -1 || to === -1 || from === to) return list;
+  const out = [...list];
+  const [moved] = out.splice(from, 1);
+  const target = out.findIndex(t => t.id === dstId);
+  out.splice(from < to ? target + 1 : target, 0, moved);
+  return out;
+}
