@@ -61,23 +61,23 @@
     <div class="topbar-sep"></div>
     <a href="#/"><span class="topbar-badge">DASHBOARD</span></a>
     <div class="view-toggle">
-      <button class="view-btn active" id="btn-grid-view"  onclick="setView('grid')">
+      <button class="view-btn active" id="btn-grid-view" title="Grid"  onclick="setView('grid')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Grid
+        <span class="view-btn-label">Grid</span>
       </button>
-      <button class="view-btn" id="btn-table-view" onclick="setView('table')">
+      <button class="view-btn" id="btn-table-view" title="Detail" onclick="setView('table')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        Detail
+        <span class="view-btn-label">Detail</span>
       </button>
       <!-- Hidden unless FEATURES.history is on (main.ts flips it) -->
-      <button class="view-btn" id="btn-history-view" onclick="setView('history')" style="display:none">
+      <button class="view-btn" id="btn-history-view" title="History" onclick="setView('history')" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
-        History
+        <span class="view-btn-label">History</span>
       </button>
       <!-- Hidden until /api/pathways/targets succeeds (404 = feature off) -->
-      <button class="view-btn" id="btn-pathways-view" onclick="setView('pathways')" style="display:none">
+      <button class="view-btn" id="btn-pathways-view" title="Pathways" onclick="setView('pathways')" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
-        Pathways
+        <span class="view-btn-label">Pathways</span>
       </button>
     </div>
     <div class="topbar-right">

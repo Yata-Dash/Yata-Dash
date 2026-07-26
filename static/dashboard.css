@@ -75,6 +75,40 @@ html{overflow-x:clip}
 .view-btn:hover{color:var(--text2)}
 .view-btn.active{background:var(--surface);color:var(--text)}
 
+/* ── Narrow screens ──
+   The topbar is a fixed row of four view buttons plus the logo, the badge, the
+   refresh time and four icon actions. Below ~640px that adds up to more than
+   the viewport and pushed the whole PAGE into horizontal scroll — every view
+   under it dragged sideways by a header that wouldn't fit.
+   Nothing here is removed, only de-labelled: the four views stay reachable as
+   icons (each button carries a title), and what goes is decoration — the badge,
+   the separator, the "updated N ago" line, and finally the wordmark beside a
+   logo that already says Yata. */
+/* Decoration goes first: the badge, its separator and the refresh time buy
+   back ~175px, which is enough to keep the four view LABELS down to 640. */
+@media(max-width:820px){
+  .topbar{padding:0 14px;gap:10px}
+  .topbar-sep,.topbar-badge{display:none}
+  .topbar-right{gap:5px}
+  .topbar-right #last-refresh{display:none}
+}
+@media(max-width:640px){
+  .topbar{padding:0 12px;gap:8px}
+  .view-btn{padding:6px 10px;gap:0}
+  .view-btn-label{display:none}
+}
+@media(max-width:420px){
+  /* The logo mark alone still identifies the app; the wordmark is the last
+     thing worth its width when four views and four actions have to fit.
+     The padding squeeze that follows is what gets a 320px phone — the
+     narrowest still in circulation — under the line. */
+  .topbar-logo{font-size:0;gap:0}
+  .topbar-logo .yata-logo{font-size:16px}
+  .topbar{padding:0 6px;gap:4px}
+  .view-btn{padding:6px 7px}
+  .topbar-right .btn-icon{padding:4px 6px}
+}
+
 /* ── Buttons ── */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:background .15s,border-color .15s,transform .1s;user-select:none;white-space:nowrap}
 .btn:active{transform:scale(.97)}
@@ -879,7 +913,14 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 /* Extras from the structured active_events list (expanded UNIT3D stats). The
    banner keeps its single-line shape — the description is allowed to truncate,
    while the name, the user's standing and the countdown never do. */
-.exp-event-banner .exp-event-text{flex-shrink:0}
+/* The name holds its width only when there's a DESCRIPTION beside it to give
+   ground instead. Everywhere else — the table row and grid card banners, whose
+   single text span carries the tracker's whole announcement — it has to be the
+   thing that shrinks, or a long message pushes the countdown and end date off
+   the right edge. Those two matter more than the message: a truncated headline
+   still tells you what's running, and the tracker itself has the detail, but a
+   missing end time can't be recovered by reading harder. */
+.exp-event-banner.has-desc .exp-event-text{flex-shrink:0}
 .exp-event-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .exp-event-link:hover{text-decoration-thickness:2px}
 /* Shrinks but never GROWS. With flex:1 it absorbed all the slack and pushed the

@@ -353,7 +353,9 @@ function eventBanner(ev: ActiveEvent): string {
     ? `<a class="exp-event-link" href="${esc(ev.url)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`
     : esc(name);
   const progress = eventProgress(ev);
-  return `<div class="exp-event-banner${live ? '' : ' is-upcoming'}">
+  // has-desc lets the name keep its width and the description absorb the
+  // shrinking; without one, the name itself has to give way (see the CSS).
+  return `<div class="exp-event-banner${live ? '' : ' is-upcoming'}${ev.description ? ' has-desc' : ''}">
     ${icon}
     <span class="exp-event-text">${title}${badge}</span>
     ${ev.description ? `<span class="exp-event-desc">${esc(ev.description)}</span>` : ''}

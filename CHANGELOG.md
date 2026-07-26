@@ -14,7 +14,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   recorded only when the state actually changes, so an empty list is the good
   outcome — it says so rather than looking like missing data.
 
-### Added
 
 - **Grid view gets Order, Show and Even heights controls.**
   - **Order** sorts the cards by any of the table's sortable columns, or keeps
@@ -46,7 +45,78 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   to their **start** rather than their end. Grid cards and table rows keep the
   compact one-line summary, derived from the same list.
 
+### Changed
+
+- **Connection state is tracked per channel.** A tracker whose API is down
+  while its profile scrape still works was recording a "went down" and a "came
+  back" on every single refresh — the two channels disagreed, and one shared
+  state machine flipped between them forever. The API and the scrape now keep
+  their own state, so that week records one event ("API unreachable: Server
+  error (500)") instead of hundreds, and it says which half is broken. The
+  reverse case — a good API with an expired scrape cookie — reads the same way
+  from the other side. Timelines and History markers name the channel;
+  events recorded before this change keep their original wording.
+
+- **Pathways from here is its own card on the Tracker Detail page**, no longer
+  sharing one with the timelines, and lists up to twelve routes before
+  "+N more" now that it has the room. It's hidden entirely when a tracker has
+  no routes rather than leaving an empty card in the row.
+
+- **The detail timelines no longer run off the page.** A tracker whose API is
+  failing while its profile scrape still works records a down/up pair on every
+  single refresh, which piled up hundreds of rows and buried the group changes
+  underneath them. The card now shows the twelve most recent changes across
+  both timelines, split so neither can starve the other — ten of each gives six
+  and six, not twelve and none, while two group changes beside two hundred
+  connection changes gives two and ten. Each list says how many it left out,
+  and the History chart still marks every one of them.
+
+- **Connection changes on the History chart.** A new Overlays toggle draws
+  outages and recoveries as ▼/▲ markers alongside the group-change ones. The
+  flag stays short ("Down" / "Up") with the reason in the hover text, and
+  because only state changes are recorded, a tracker that has been up all year
+  adds no clutter at all.
+
+- **Uptime as a History metric.** Chart how reliably Yata could reach a
+  tracker, day by day, next to everything else you track. It behaves like the
+  bounded quantity it is: the axis is pinned to 0–100% instead of being fitted
+  to the data (so a steady 100% reads as steady, and a 100%-vs-98% week doesn't
+  look like a collapse), and Rate/day and Projection are switched off, since
+  neither means anything for a percentage. Days Yata never contacted the
+  tracker leave a **gap** in the line rather than a flat stretch claiming
+  uptime nobody measured. Also available as a Tracker Detail mini-chart.
+
+- **A tracker's API can lose priority once it goes stale.** Stats were merged
+  in strict source order — the tracker's own API always beat a profile scrape,
+  which is right while the API is answering. When one stops (a fork breaking
+  `/api/user`, a key quietly losing scope), its layer just sat there and every
+  refresh kept serving values from whenever it last worked, while a scrape had
+  succeeded minutes earlier. After **three days** without a successful API
+  fetch, a *newer* scrape takes over until the API answers again — at which
+  point it wins back immediately, with no state to unwind. Three days is well
+  beyond any refresh interval, so a bad night never moves anything. The swap
+  only happens when the scrape genuinely has something fresher: if it's older
+  still, or absent, the API keeps the field, and a field only the API reports
+  keeps coming from the API however old it is. Provenance dots show which
+  source each value actually came from, so the change is visible where it
+  matters.
+
 ### Fixed
+
+- **Long event banners no longer push the countdown off the edge.** In table
+  rows and grid cards the whole announcement lives in one text span, and a
+  regression earlier in this release stopped it shrinking, so trackers running
+  several events at once lost the end date off the right-hand side. The message
+  truncates again; the countdown and end time never do — a shortened headline
+  still says what's running and the tracker has the detail, but a missing end
+  time can't be recovered by reading harder.
+
+- **The top bar no longer forces the whole page to scroll sideways.** Below
+  ~800px the logo, badge, four view buttons, refresh time and four actions
+  added up to more than the viewport, dragging every view under it off-centre.
+  Nothing was removed — decoration goes first (badge, separator, "updated N
+  ago"), then the view-button labels below 640px leaving titled icons, then the
+  wordmark below 420px. All four views stay reachable down to 320px.
 
 - **Grid drag-reorder now puts the card where you dropped it.** Two faults
   compounded, which is why it looked random. The destination was read from the
@@ -109,46 +179,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   to the top instead of ordering every tracker by the same polling cycle. A
   tracker whose API has never worked reads "—" and says so on hover.
 
-### Changed
-
-- **Connection state is tracked per channel.** A tracker whose API is down
-  while its profile scrape still works was recording a "went down" and a "came
-  back" on every single refresh — the two channels disagreed, and one shared
-  state machine flipped between them forever. The API and the scrape now keep
-  their own state, so that week records one event ("API unreachable: Server
-  error (500)") instead of hundreds, and it says which half is broken. The
-  reverse case — a good API with an expired scrape cookie — reads the same way
-  from the other side. Timelines and History markers name the channel;
-  events recorded before this change keep their original wording.
-
-- **Pathways from here is its own card on the Tracker Detail page**, no longer
-  sharing one with the timelines, and lists up to twelve routes before
-  "+N more" now that it has the room. It's hidden entirely when a tracker has
-  no routes rather than leaving an empty card in the row.
-
-- **The detail timelines no longer run off the page.** A tracker whose API is
-  failing while its profile scrape still works records a down/up pair on every
-  single refresh, which piled up hundreds of rows and buried the group changes
-  underneath them. The card now shows the twelve most recent changes across
-  both timelines, split so neither can starve the other — ten of each gives six
-  and six, not twelve and none, while two group changes beside two hundred
-  connection changes gives two and ten. Each list says how many it left out,
-  and the History chart still marks every one of them.
-
-- **Connection changes on the History chart.** A new Overlays toggle draws
-  outages and recoveries as ▼/▲ markers alongside the group-change ones. The
-  flag stays short ("Down" / "Up") with the reason in the hover text, and
-  because only state changes are recorded, a tracker that has been up all year
-  adds no clutter at all.
-
-- **Uptime as a History metric.** Chart how reliably Yata could reach a
-  tracker, day by day, next to everything else you track. It behaves like the
-  bounded quantity it is: the axis is pinned to 0–100% instead of being fitted
-  to the data (so a steady 100% reads as steady, and a 100%-vs-98% week doesn't
-  look like a collapse), and Rate/day and Projection are switched off, since
-  neither means anything for a percentage. Days Yata never contacted the
-  tracker leave a **gap** in the line rather than a flat stretch claiming
-  uptime nobody measured. Also available as a Tracker Detail mini-chart.
 
 ## [Beta-20260725]
 

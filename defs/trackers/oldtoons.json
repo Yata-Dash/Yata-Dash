@@ -16,6 +16,9 @@
     "disable_scraping": true,
     "identify": "ua"
     },
+  "api": {
+    "required_fields": ["join_date"]
+  },
   "extended_stats": {
     "path": "/api/user/stats",
     "byte_fields": ["seed_size", "real_uploaded", "real_downloaded"]

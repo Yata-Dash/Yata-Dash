@@ -275,3 +275,95 @@ func TestNumericSnapshotSkipsNonFinite(t *testing.T) {
 		t.Errorf("uploaded = %v, want 10", fields["uploaded"])
 	}
 }
+
+// writeLayerAt writes a layer with an explicit timestamp — SaveAPI/SaveScrape
+// always stamp "now", and staleness is the whole point here.
+func writeLayerAt(t *testing.T, db *store.DB, id string, src models.Source, at time.Time, fields map[string]any) {
+	t.Helper()
+	if err := db.ReplaceLayer(id, string(src), fields, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestMergedDemotesStaleAPI: when a tracker's API stops answering while its
+// profile scrape keeps working, the merge must stop serving the API's frozen
+// values. This is the Unwalled case — a week of "current" stats that were a
+// week old, presented with no hint that they were.
+func TestMergedDemotesStaleAPI(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "stale.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+	now := time.Now()
+
+	ratioFrom := func(id, wantVal string, wantSrc models.Source, what string) {
+		t.Helper()
+		m, err := e.Merged(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, ok := m["ratio"]
+		if !ok {
+			t.Fatalf("%s: ratio missing", what)
+		}
+		if f.Value != wantVal || f.Source != wantSrc {
+			t.Errorf("%s: ratio = %v from %s, want %v from %s", what, f.Value, f.Source, wantVal, wantSrc)
+		}
+	}
+
+	// API a week old, scrape four minutes old → the scrape wins, and says so.
+	writeLayerAt(t, db, "dead", models.SourceAPI, now.AddDate(0, 0, -7), map[string]any{"ratio": "2.10"})
+	writeLayerAt(t, db, "dead", models.SourceScrape, now.Add(-4*time.Minute), map[string]any{"ratio": "2.44"})
+	ratioFrom("dead", "2.44", models.SourceScrape, "API stale a week")
+
+	// Just inside the grace period → nothing moves. A night of timeouts must
+	// not reshuffle where a tracker's numbers come from.
+	writeLayerAt(t, db, "blip", models.SourceAPI, now.Add(-2*24*time.Hour), map[string]any{"ratio": "3.00"})
+	writeLayerAt(t, db, "blip", models.SourceScrape, now.Add(-time.Minute), map[string]any{"ratio": "3.50"})
+	ratioFrom("blip", "3.00", models.SourceAPI, "API 2 days old (inside grace)")
+
+	// Stale API but an even older scrape → swapping would trade old for older,
+	// so the API keeps the field.
+	writeLayerAt(t, db, "both", models.SourceAPI, now.AddDate(0, 0, -7), map[string]any{"ratio": "4.00"})
+	writeLayerAt(t, db, "both", models.SourceScrape, now.AddDate(0, 0, -20), map[string]any{"ratio": "4.90"})
+	ratioFrom("both", "4.00", models.SourceAPI, "scrape older than the stale API")
+
+	// No scrape at all (API-only tracker) → the API's values stand however old
+	// they are; there is nothing better to show.
+	writeLayerAt(t, db, "apionly", models.SourceAPI, now.AddDate(0, 0, -30), map[string]any{"ratio": "5.00"})
+	ratioFrom("apionly", "5.00", models.SourceAPI, "API-only tracker")
+
+	// A successful fetch ends it immediately — no hysteresis to unwind.
+	writeLayerAt(t, db, "dead", models.SourceAPI, now, map[string]any{"ratio": "2.90"})
+	ratioFrom("dead", "2.90", models.SourceAPI, "API recovered")
+}
+
+// TestMergedStaleAPIKeepsManualLast: demoting the API must not disturb the
+// rest of the order — manual is a fallback for what nothing else reports, and
+// must never outrank a real source just because the API went quiet.
+func TestMergedStaleAPIKeepsManualLast(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "stale2.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+	now := time.Now()
+
+	writeLayerAt(t, db, "t1", models.SourceAPI, now.AddDate(0, 0, -9), map[string]any{"ratio": "1.10"})
+	writeLayerAt(t, db, "t1", models.SourceScrape, now.Add(-time.Hour), map[string]any{"ratio": "1.55"})
+	writeLayerAt(t, db, "t1", models.SourceManual, now, map[string]any{"ratio": "9.99", "join_date": "2020-01-01"})
+
+	m, err := e.Merged("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m["ratio"].Value != "1.55" || m["ratio"].Source != models.SourceScrape {
+		t.Errorf("ratio = %v from %s, want 1.55 from scrape (manual must not win)", m["ratio"].Value, m["ratio"].Source)
+	}
+	if m["join_date"].Value != "2020-01-01" || m["join_date"].Source != models.SourceManual {
+		t.Errorf("join_date = %v from %s, want the manual value", m["join_date"].Value, m["join_date"].Source)
+	}
+}

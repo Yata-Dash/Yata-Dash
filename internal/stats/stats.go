@@ -104,6 +104,7 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 			priority = []models.Source{models.SourceAPI, models.SourceQUI, models.SourceScrape, models.SourceManual}
 		}
 	}
+	priority = demoteStaleAPI(priority, layers, time.Now())
 	for _, src := range priority {
 		for field, fv := range layers[string(src)] {
 			if !meaningful(fv.Value) {
@@ -116,6 +117,67 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 		}
 	}
 	return out, nil
+}
+
+// APIStaleAfter is how long a tracker's API may go without returning data
+// before a working profile scrape is allowed to outrank it.
+//
+// The API normally wins outright, and should: it's the tracker's own number,
+// where a scrape is a reading of a page. But "normally" assumed the API keeps
+// answering. When it stops — a fork breaking its /api/user, a key silently
+// losing scope — the layer just sits there, and every refresh kept serving
+// values from whenever it last worked while a scrape ran successfully minutes
+// ago. A week-old ratio presented as current is worse than a slightly less
+// authoritative one that's actually true.
+//
+// Three days is deliberately generous. It's far longer than any refresh
+// interval, so a brief outage or a night of timeouts never moves anything, and
+// short enough that nobody stares at week-old numbers. The moment the API
+// succeeds again its layer is rewritten with a fresh timestamp and it wins
+// immediately — there is no hysteresis to unwind and no state to reset.
+const APIStaleAfter = 3 * 24 * time.Hour
+
+// demoteStaleAPI moves the API below the scrape in the merge order when the
+// API has gone stale AND the scrape has something newer to offer.
+//
+// Both halves are required. Staleness alone isn't enough: if the scrape is
+// older still (or absent), promoting it would swap old data for older, so the
+// order is left exactly as it was. Nothing else moves — manual stays the last
+// resort, and qui keeps whatever slot its seedsize mode gave it.
+//
+// The swap is invisible except where it should be visible: each field records
+// the source it actually came from, so the provenance dots and their tooltips
+// switch to "scrape" on their own.
+func demoteStaleAPI(priority []models.Source, layers map[string]map[string]store.FieldValue, now time.Time) []models.Source {
+	api, scrape := layerStamp(layers[string(models.SourceAPI)]), layerStamp(layers[string(models.SourceScrape)])
+	if api == 0 || scrape <= api || now.Sub(time.Unix(api, 0)) <= APIStaleAfter {
+		return priority
+	}
+	out := make([]models.Source, 0, len(priority))
+	for _, src := range priority {
+		switch src {
+		case models.SourceAPI:
+			continue // re-inserted after the scrape below
+		case models.SourceScrape:
+			out = append(out, models.SourceScrape, models.SourceAPI)
+		default:
+			out = append(out, src)
+		}
+	}
+	return out
+}
+
+// layerStamp is when a layer was last written — its newest field timestamp.
+// ReplaceLayer stamps every field in one go, so they agree; taking the max
+// keeps this honest if that ever stops being true. 0 = the layer has no data.
+func layerStamp(layer map[string]store.FieldValue) int64 {
+	var newest int64
+	for _, fv := range layer {
+		if fv.UpdatedAt > newest {
+			newest = fv.UpdatedAt
+		}
+	}
+	return newest
 }
 
 // meaningful reports whether a stored value carries real data. Empty strings
