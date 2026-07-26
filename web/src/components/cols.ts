@@ -1,7 +1,7 @@
 // components/cols.ts — column visibility & order customizer
 import type { ColPref } from '../types';
 import { COL_DEFS, saveColPrefs } from '../state';
-import { esc } from '../utils/format';
+import { jsId, esc } from '../utils/format';
 
 let dragSrcKey: string | null = null;
 
@@ -30,7 +30,7 @@ export function openColCustomizer(colPrefs: ColPref[]): void {
       </span>
       <span class="col-item-label">${esc(def.label)}</span>
       <div class="col-item-toggle ${pref.visible ? 'on' : ''}" data-key="${pref.key}"
-        onclick="toggleColVisible('${pref.key}', this)"
+        onclick="toggleColVisible('${jsId(pref.key)}', this)"
         ${def.always ? 'style="opacity:.4;pointer-events:none"' : ''}></div>`;
 
     // Drag-and-drop reorder

@@ -2,7 +2,7 @@
 // All values come from statsCache[id].fields (StatField objects). There is no
 // separate profile cache anymore — API and scraped values arrive pre-merged.
 import type { AppSettings, StatField, Tracker, TrackerStatsResponse } from '../types';
-import { esc, fieldLabel, fmtRatio, fmtSeedTime, parseRatio, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { jsId, esc, fieldLabel, fmtRatio, fmtSeedTime, parseRatio, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { parseSeedTime } from '../utils/parse';
 import { scrapeStatus } from '../state';
 
@@ -157,7 +157,7 @@ export function buildScrapeRefreshBtn(tracker: Tracker): string {
     return `<button class="btn btn-ghost btn-sm prof-refresh" disabled title="${esc(tip)}" style="opacity:.45;cursor:not-allowed">↻ ${esc(tip)}</button>`;
   }
   if (!tracker.supports_html_scrape) return '';
-  return `<button class="btn btn-ghost btn-sm prof-refresh" onclick="scrapeProfile('${esc(tracker.id)}')">↻ Scrape Now</button>`;
+  return `<button class="btn btn-ghost btn-sm prof-refresh" onclick="scrapeProfile('${jsId(tracker.id)}')">↻ Scrape Now</button>`;
 }
 
 /**
@@ -174,7 +174,7 @@ export function buildStatsPanel(
   if (!rows.length) {
     let hint: string;
     if (!tracker.has_key && tracker.type !== 'test') {
-      hint = `No API key configured. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${esc(tracker.id)}')">Configure</button>`;
+      hint = `No API key configured. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Configure</button>`;
     } else if (!resp) {
       hint = 'Loading…';
     } else {

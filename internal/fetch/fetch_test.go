@@ -1036,23 +1036,23 @@ func TestFetchCustomHUNOShape(t *testing.T) {
 // object with a numeric membership "class", byte up/down, an unread PM count,
 // and a stringy seed_bonus.
 const retroflixMe = `{
-  "ratio": 6.98,
+  "ratio": 7.00,
   "unread_private_message_count": %s,
-  "id": 17594,
-  "username": "MysteryZiLLA",
+  "id": 1001,
+  "username": "TestUser",
   "email": "user@example.com",
-  "created_at": "2026-02-19T19:42:20+00:00",
+  "created_at": "2026-02-01T00:00:00+00:00",
   "class": 3,
-  "uploaded": 1116908837235,
-  "downloaded": 159913546812,
-  "seed_time": 257125525,
+  "uploaded": 1099511627776,
+  "downloaded": 161061273600,
+  "seed_time": 250000000,
   "leech_time": 723055,
   "snatched_count": 20,
-  "average_seed_time": 8285514,
+  "average_seed_time": 8000000,
   "hit_and_run_count": 0,
   "title": "",
   "invites": 3,
-  "seed_bonus": "172236.2"
+  "seed_bonus": "170000.0"
 }`
 
 // retroflixRegistry writes a custom type + a RetroFlix tracker def exercising
@@ -1125,20 +1125,20 @@ func TestFetchCustomRetroflix(t *testing.T) {
 		t.Errorf("auth header = %q, want Bearer token", gotAuth)
 	}
 	want := map[string]any{
-		"username":       "MysteryZiLLA",
+		"username":       "TestUser",
 		"group":          "Cinema Addicted", // class 3 via class_map
 		"unread_mail":    "true",            // count 2 → truthy
-		"join_date":      "2026-02-19",      // ISO trimmed
-		"uploaded":       "1.02 TiB",
-		"downloaded":     "148.93 GiB",
-		"buffer":         "891.27 GiB", // uploaded − downloaded
-		"ratio":          6.98,
-		"bonus_points":   "172236.2",
+		"join_date":      "2026-02-01",      // ISO trimmed
+		"uploaded":       "1.00 TiB",
+		"downloaded":     "150.00 GiB",
+		"buffer":         "874.00 GiB", // uploaded − downloaded
+		"ratio":          7.00,
+		"bonus_points":   "170000.0",
 		"snatched":       20,
 		"hit_and_runs":   0,
 		"invites":        3,
-		"avg_seed_time":  8285514,
-		"total_seedtime": 257125525,
+		"avg_seed_time":  8000000,
+		"total_seedtime": 250000000,
 	}
 	for k, w := range want {
 		if got, ok := data[k]; !ok {
@@ -1191,10 +1191,10 @@ func TestFetchCustomInfRatio(t *testing.T) {
 // object like RetroFlix's but with NO ratio field (only raw transfer bytes),
 // so ratio_from_bytes must derive it. uploaded/downloaded are printf slots.
 const speedappMe = `{
-  "id": 5897683,
-  "username": "MysteryZiLLA",
+  "id": 1002,
+  "username": "TestUser",
   "email": "user@example.com",
-  "created_at": "2026-07-18T02:40:17+00:00",
+  "created_at": "2026-07-01T00:00:00+00:00",
   "class": 0,
   "uploaded": %d,
   "downloaded": %d,
@@ -1285,7 +1285,7 @@ func TestFetchCustomRatioFromBytes(t *testing.T) {
 		"downloaded":    "10.00 GiB",
 		"buffer":        "40.00 GiB",
 		"ratio":         5.0,
-		"join_date":     "2026-07-18", // ISO trimmed
+		"join_date":     "2026-07-01", // ISO trimmed
 		"snatched":      2,
 		"need_seed":     1,
 		"avg_seed_time": 8640,

@@ -6,7 +6,7 @@
 // visible. Selection persists in localStorage.
 import * as api from '../api';
 import { appSettings, trackers } from '../state';
-import { esc, fmtEtaDays } from '../utils/format';
+import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
 import { getFaviconUrl } from '../utils/parse';
 import type {
@@ -560,7 +560,7 @@ function renderDisclosure() {
   if (!el || !source) return;
   const hasPaths = (lastResult?.paths?.length ?? 0) > 0;
   const explain = hasPaths ? etaExplainHtml() : '';
-  const credit = `Pathway data from <a href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">${esc(source.name || 'trackerpathways')}</a> (MIT), fetched ${esc(source.fetched)}. Community-driven — may be incorrect or out of date. Reference only: meeting listed requirements does NOT guarantee an invite. Routes marked "+" (e.g. Titan+) mean that class or higher — official invites can carry extra requirements beyond the class itself.`;
+  const credit = `Pathway data from <a href="${esc(safeUrl(source.url))}" target="_blank" rel="noopener noreferrer">${esc(source.name || 'trackerpathways')}</a> (MIT), fetched ${esc(source.fetched)}. Community-driven — may be incorrect or out of date. Reference only: meeting listed requirements does NOT guarantee an invite. Routes marked "+" (e.g. Titan+) mean that class or higher — official invites can carry extra requirements beyond the class itself.`;
   // Estimates explainer (when shown) sits above the source credit, separated by
   // a divider so there's a clear line break before the GitHub attribution.
   el.innerHTML = explain

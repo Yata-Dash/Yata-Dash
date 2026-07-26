@@ -4,7 +4,7 @@
 // never changes what is logged to the file/buffer).
 import * as api from '../api';
 import type { LogEntry } from '../types';
-import { esc } from '../utils/format';
+import { jsId, esc } from '../utils/format';
 import type { ToastType } from './toast';
 
 const POLL_MS = 2500;
@@ -40,7 +40,7 @@ function renderChips(): void {
   const box = document.getElementById('s-log-levels');
   if (!box) return;
   box.innerHTML = LEVELS.map(l =>
-    `<button type="button" class="log-lvl-chip log-lvl-${l}${shown.has(l) ? ' selected' : ''}" onclick="toggleLogLevel('${l}')">${l.toUpperCase()}</button>`
+    `<button type="button" class="log-lvl-chip log-lvl-${l}${shown.has(l) ? ' selected' : ''}" onclick="toggleLogLevel('${jsId(l)}')">${l.toUpperCase()}</button>`
   ).join('');
 }
 

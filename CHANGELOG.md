@@ -101,6 +101,28 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   source each value actually came from, so the change is visible where it
   matters.
 
+### Security
+
+- **Inline click handlers validate their arguments instead of escaping them.**
+  `esc()` now escapes single quotes too, which matters for quoted attributes —
+  but it cannot help an inline handler, because a browser decodes an
+  attribute's character references *before* the JavaScript is parsed, so an
+  escaped quote arrives at the JS parser as a real one. The values these
+  handlers carry have always been server-generated IDs and canonical field
+  keys; that is now enforced rather than assumed, and anything outside
+  `[A-Za-z0-9_-]` makes the button inert instead of an injection point.
+
+- **Links supplied by a tracker are checked before they become clickable.**
+  Yata renders URLs it didn't author — the active-events list carries a link
+  per event, Prowlarr/Jackett imports bring tracker URLs, and the pathways
+  dataset has a source link. HTML-escaping makes those safe as text but says
+  nothing about the *scheme*, so a hostile or compromised tracker returning
+  `{"url": "javascript:…"}` would have had a script URL sitting in a
+  logged-in dashboard waiting for a click. Only `http` and `https` now
+  survive; anything else renders as plain text with no link. Event icon
+  classes are likewise restricted to class-name characters, so a tracker
+  can't borrow Yata's own styling to reshape the page.
+
 ### Fixed
 
 - **Long event banners no longer push the countdown off the edge.** In table

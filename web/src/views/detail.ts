@@ -11,7 +11,7 @@ import { renderChart } from '../components/chart';
 import type { ChartSeries } from '../components/chart';
 import { buildStatRows } from '../components/profile';
 import { appSettings, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
-import { connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, fmtTrackerName, isConnectionKind } from '../utils/format';
+import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind } from '../utils/format';
 import { buildTargets, fmtDateTime } from './grid';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { eventGlobeSvg } from '../utils/icons';
@@ -231,11 +231,11 @@ function render(): void {
       </div>
     </div>
     <div class="detail-actions">
-      <button type="button" class="btn btn-ghost btn-sm" onclick="refreshSingle('${esc(t.id)}')" title="Refresh stats now">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="refreshSingle('${jsId(t.id)}')" title="Refresh stats now">
         <i class="fas fa-rotate"></i></button>
-      ${t.profile_url ? `<a class="btn btn-ghost btn-sm" href="${esc(t.profile_url)}" target="_blank" rel="noopener noreferrer" title="Open your profile on the tracker">
+      ${safeUrl(t.profile_url) ? `<a class="btn btn-ghost btn-sm" href="${esc(safeUrl(t.profile_url))}" target="_blank" rel="noopener noreferrer" title="Open your profile on the tracker">
         <i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}
-      <button type="button" class="btn btn-ghost btn-sm" onclick="openEditModal('${esc(t.id)}')" title="Edit tracker">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(t.id)}')" title="Edit tracker">
         <i class="fas fa-pen"></i></button>
     </div>
   </div>`;
@@ -342,15 +342,20 @@ function eventBanner(ev: ActiveEvent): string {
   // The tracker's own Font Awesome class when it sent one — the icon is part of
   // how the event is presented on the tracker, so borrowing it keeps the two
   // recognisably the same thing. Falls back to Yata's globe.
-  const icon = ev.icon
-    ? `<i class="${esc(ev.icon)}" style="flex-shrink:0"></i>`
+  // Class names only — a tracker supplies this, and letting arbitrary text into
+  // a class attribute lets it borrow Yata's own classes and reshape the page.
+  const iconCls = (ev.icon ?? '').replace(/[^\w\s-]/g, '').trim().slice(0, 60);
+  const icon = iconCls
+    ? `<i class="${esc(iconCls)}" style="flex-shrink:0"></i>`
     : eventGlobeSvg('flex-shrink:0');
   // Anything not currently running is dimmed and labelled, so an event that
   // starts next week can be listed without reading as active now.
   const live = !ev.status || ev.status.toLowerCase() === 'live';
   const badge = live ? '' : `<span class="exp-event-status">${esc(ev.status!)}</span>`;
-  const title = ev.url
-    ? `<a class="exp-event-link" href="${esc(ev.url)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`
+  // The tracker's own link, when it gave one that is actually a web address.
+  const url = safeUrl(ev.url);
+  const title = url
+    ? `<a class="exp-event-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`
     : esc(name);
   const progress = eventProgress(ev);
   // has-desc lets the name keep its width and the description absorb the

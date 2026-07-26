@@ -1,6 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, srcDot } from '../utils/format';
+import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
@@ -164,7 +164,7 @@ function buildTableRow(
   });
 
   const hnrHighlight = settings.highlight_hnr !== false;
-  const mainTr = `<tr class="tr-main${hnr >= 1 && hnrHighlight ? ' hnr-row' : ''}" id="trow-${t.id}" onclick="toggleRow('${t.id}')">
+  const mainTr = `<tr class="tr-main${hnr >= 1 && hnrHighlight ? ' hnr-row' : ''}" id="trow-${t.id}" onclick="toggleRow('${jsId(t.id)}')">
     <td style="text-align:center;padding-left:10px">
       <svg class="expand-chev ${isExp ? 'open' : ''}" width="14" height="14" viewBox="0 0 24 24"
         fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -216,7 +216,7 @@ function buildCell(
       <div class="td-tracker-wrap">
         ${settings.show_favicons && t.url ? `<img class="tracker-favicon" src="${getFaviconUrl(t.url)}" alt="" onerror="this.style.display='none'">` : ''}
         <span class="td-tracker-name"><span class="td-name-text tracker-name-link" title="Open tracker detail" onclick="event.stopPropagation();openTrackerDetail('${t.id}')">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}${unreadFlags}</span>
-        <a class="td-tracker-url" href="${esc(t.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(t.url)}</a>
+        <a class="td-tracker-url" href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(t.url)}</a>
       </div></td>`;
     }
     case 'username': {
@@ -427,7 +427,7 @@ function buildExpanded(
   const hasFields = !!stats && Object.keys(stats.fields ?? {}).length > 0;
 
   if (!stats && !tracker.has_key && tracker.type !== 'test') {
-    return `<div style="padding:8px 0;color:var(--text3);font-size:13px">No API key. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${tracker.id}')">Configure</button></div>`;
+    return `<div style="padding:8px 0;color:var(--text3);font-size:13px">No API key. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Configure</button></div>`;
   }
   if (!stats) return `<div style="padding:8px 0;color:var(--text3);font-size:13px">Loading…</div>`;
 
@@ -436,7 +436,7 @@ function buildExpanded(
   const errorBanner = !stats.ok
     ? `<div style="padding:6px 0 10px;display:flex;align-items:center;gap:10px">`
     + `<span style="color:var(--red);font-size:13px">${errLabel(stats.error_kind || stats.error || 'error')}${hasFields ? ' — showing last known stats' : ''}</span>`
-    + `<button class="btn btn-ghost btn-sm" onclick="refreshSingle('${tracker.id}')">Retry</button></div>`
+    + `<button class="btn btn-ghost btn-sm" onclick="refreshSingle('${jsId(tracker.id)}')">Retry</button></div>`
     : '';
 
   const joinDate = strOf(stats, 'join_date');
@@ -502,7 +502,7 @@ function buildExpanded(
   const profileLinkRow = tracker.profile_url
     ? `<div class="exp-stat">
         <span class="exp-stat-label">Profile</span>
-        <span class="exp-stat-value"><a class="exp-profile-link" href="${esc(tracker.profile_url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a></span>
+        <span class="exp-stat-value"><a class="exp-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a></span>
       </div>`
     : '';
 

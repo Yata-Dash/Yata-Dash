@@ -8,7 +8,7 @@ import { MASKED_KEY } from '../types';
 import * as api from '../api';
 import { appSettings } from '../state';
 import { approvalIcon, approvalTitle, approvalWarns } from '../utils/approval';
-import { esc } from '../utils/format';
+import { jsId, esc, safeUrl } from '../utils/format';
 import { findOptOut } from '../utils/optout';
 import { renderTestPills } from './trackerTest';
 import type { ToastType } from './toast';
@@ -148,17 +148,17 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
     const confirming = _pendingRowDelete === t.id;
     const actions = confirming
       ? `<span class="trk-del-confirm">Delete <strong>${esc(t.name)}</strong>?</span>
-         <button class="btn btn-danger btn-sm" onclick="trkConfirmDelete('${esc(t.id)}')">Delete</button>
+         <button class="btn btn-danger btn-sm" onclick="trkConfirmDelete('${jsId(t.id)}')">Delete</button>
          <button class="btn btn-ghost btn-sm" onclick="trkCancelDelete()">Cancel</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="trkTest('${esc(t.id)}')" ${_testing.has(t.id) ? 'disabled' : ''} title="Test API & scrape connectivity">
+      : `<button class="btn btn-ghost btn-sm" onclick="trkTest('${jsId(t.id)}')" ${_testing.has(t.id) ? 'disabled' : ''} title="Test API & scrape connectivity">
            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
            Test
          </button>
-         <button class="btn btn-ghost btn-sm" onclick="openEditModal('${esc(t.id)}')">
+         <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(t.id)}')">
            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
            Edit
          </button>
-         <button class="btn btn-ghost btn-sm trk-del-btn" onclick="trkAskDelete('${esc(t.id)}')">
+         <button class="btn btn-ghost btn-sm trk-del-btn" onclick="trkAskDelete('${jsId(t.id)}')">
            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
            Delete
          </button>`;
@@ -166,10 +166,10 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
       <td class="trk-td-toggle">
         <div class="toggle-track trk-toggle ${t.enabled !== false ? 'on' : ''}" role="switch" aria-checked="${t.enabled !== false}"
           title="${t.enabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable'}"
-          onclick="trkToggleEnabled('${esc(t.id)}')"><div class="toggle-thumb"></div></div>
+          onclick="trkToggleEnabled('${jsId(t.id)}')"><div class="toggle-thumb"></div></div>
       </td>
       <td class="trk-td-name"><span class="trk-name">${esc(t.name)}</span>${abbr}</td>
-      <td class="trk-td-url"><a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">${esc(t.url)}</a></td>
+      <td class="trk-td-url"><a href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener noreferrer">${esc(t.url)}</a></td>
       <td class="trk-td-type" title="Type key: ${esc(t.type)}">${esc(typeLabel(t.type))}</td>
       <td class="trk-td-def">${defBadge}</td>
       <td class="trk-td-test">${testCell}</td>
@@ -444,7 +444,7 @@ function renderImportResults(key: ImportKey, results: HTMLElement): void {
     if (optedOut)          badges.push(`<span class="prowlarr-badge optout">opted out</span>`);
     return `<label class="prowlarr-row${disabled ? ' disabled' : ''}">
       <input type="checkbox" class="prowlarr-check" value="${i}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
-        onchange="updateImportBtn('${key}')">
+        onchange="updateImportBtn('${jsId(key)}')">
       <span class="prowlarr-name">${esc(ix.name)}</span>
       <span class="prowlarr-url">${esc(ix.base_url)}</span>
       <span class="prowlarr-badges">${badges.join('')}</span>

@@ -10,7 +10,7 @@ import { MASKED_KEY } from '../types';
 import * as api from '../api';
 import { approvalIcon, approvalWarns } from '../utils/approval';
 import { eventGlobeSvg } from '../utils/icons';
-import { esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
+import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
 import { parseAgeDays, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { findOptOut, optOutMessage } from '../utils/optout';
@@ -560,7 +560,7 @@ function targetRowHtml(key: string, value: string, deadline: string): string {
     <span class="target-edit-label" title="${esc(spec.hint ?? '')}">${esc(spec.label)}</span>
     <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
     ${goalDateControlHtml(key, deadline)}
-    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove target" onclick="modalRemoveTargetRow('${esc(key)}')">&times;</button>
+    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove target" onclick="modalRemoveTargetRow('${jsId(key)}')">&times;</button>
   </div>`;
 }
 
@@ -1281,7 +1281,7 @@ function renderThemeGrid(currentThemeId: string) {
           : SWATCH_FALLBACK;
       const active = (t.id === _selectedThemeId || (!_selectedThemeId && t.id === 'default')) ? 'active' : '';
       return `
-        <div class="theme-option ${active}" data-theme-id="${esc(t.id)}" onclick="selectTheme('${esc(t.id)}')">
+        <div class="theme-option ${active}" data-theme-id="${esc(t.id)}" onclick="selectTheme('${jsId(t.id)}')">
           <div class="theme-swatch" style="background:${sw[0]}">
             <div class="theme-swatch-col" style="background:${sw[1]}"></div>
             <div class="theme-swatch-col" style="background:${sw[2]}"></div>

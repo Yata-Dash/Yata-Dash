@@ -3,7 +3,7 @@
 // The token itself only unlocks the read-only endpoints (see docs/API.md).
 import * as api from '../api';
 import type { ApiTokenInfo } from '../types';
-import { esc } from '../utils/format';
+import { jsId, esc } from '../utils/format';
 import { toast } from './toast';
 
 function el(id: string): HTMLElement | null { return document.getElementById(id); }
@@ -47,7 +47,7 @@ function renderList(tokens: ApiTokenInfo[]) {
         <code class="token-row-prefix">${esc(t.prefix)}</code>
       </div>
       <span class="token-row-meta">created ${esc(fmtDate(t.created_at))} · ${esc(fmtLastUsed(t.last_used_at))}</span>
-      <button type="button" class="btn btn-danger btn-sm" onclick="revokeApiToken('${esc(t.id)}', this)">Revoke</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="revokeApiToken('${jsId(t.id)}', this)">Revoke</button>
     </div>`).join('');
 }
 

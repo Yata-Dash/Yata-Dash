@@ -4,7 +4,7 @@ import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../s
 import { getSortedTrackers } from '../utils/sort';
 import type { SortDir } from '../types';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, srcDot } from '../utils/format';
+import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeUrl, srcDot } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -309,11 +309,11 @@ export function renderCard(
           style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fmtTrackerName(tracker.name, tracker.abbr, settings.tracker_name_mode))}</span><span style="flex-shrink:0">${tracker.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${eventBeacon}${unreadFlags}</span>
       </div>
       <div class="card-header-meta">
-        <a class="card-tracker-url" href="${esc(tracker.url)}" target="_blank" rel="noopener"
+        <a class="card-tracker-url" href="${esc(safeUrl(tracker.url))}" target="_blank" rel="noopener"
           onclick="event.stopPropagation()">${esc(tracker.url)}</a>
         ${memberBadge}
         ${tracker.profile_url
-          ? `<a class="card-profile-link" href="${esc(tracker.profile_url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a>`
+          ? `<a class="card-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a>`
           : ''}
       </div>
     </div>
@@ -328,7 +328,7 @@ export function renderCard(
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
       <p>No API key configured</p>
-      <button class="btn btn-ghost btn-sm" onclick="openEditModal('${tracker.id}')">Configure API Key</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Configure API Key</button>
     </div></div>`;
   } else if (!stats) {
     body = `<div class="card-body">${skelStats()}</div>`;
@@ -337,7 +337,7 @@ export function renderCard(
     el.classList.add('error-state');
     body = `<div class="card-body">
       <div class="card-error-msg">${errLabel(stats.error_kind || stats.error || 'error')}</div>
-      <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="refreshSingle('${tracker.id}')">Retry</button>
+      <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="refreshSingle('${jsId(tracker.id)}')">Retry</button>
     </div>`;
   } else {
     // STALE DATA RULE: render fields exactly like fresh data even when
@@ -366,7 +366,7 @@ export function renderCard(
     const offlineBanner = !stats.ok
       ? `<div class="card-error-msg" style="padding:6px 10px;font-size:11px">
           ${errLabel(stats.error_kind || stats.error || 'error')} — showing last known stats
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="event.stopPropagation();refreshSingle('${tracker.id}')">Retry</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="event.stopPropagation();refreshSingle('${jsId(tracker.id)}')">Retry</button>
         </div>`
       : '';
     if (!stats.ok) el.classList.add('error-state');

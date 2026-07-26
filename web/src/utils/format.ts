@@ -298,7 +298,61 @@ export function esc(s: unknown): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * A value safe to drop into an inline event handler's argument list, e.g.
+ * onclick="openEditModal('${jsId(id)}')". Anything outside [A-Za-z0-9_-] makes
+ * it return '' rather than being escaped.
+ *
+ * Validation, not escaping — because escaping CANNOT work here. An attribute's
+ * character references are decoded before the JavaScript is parsed, so
+ * `&#39;); alert(1); //` arrives at the JS parser as `'); alert(1); //` and
+ * runs. esc() escaping quotes protects quoted ATTRIBUTES; it does nothing for
+ * inline handlers, and treating it as though it does is the trap here.
+ *
+ * Every value these handlers carry today is a server-generated ID, a canonical
+ * field key or a fixed literal — all safely inside the character class. This
+ * makes that an enforced invariant rather than a convention: the day someone
+ * passes a tracker NAME to one of them, the button goes inert instead of
+ * becoming an injection point.
+ */
+export function jsId(v: unknown): string {
+  const s = String(v ?? '');
+  return /^[A-Za-z0-9_-]+$/.test(s) ? s : '';
+}
+
+/**
+ * A URL safe to put in an href, or '' if it isn't one.
+ *
+ * esc() makes a string safe as HTML *text* and safe inside a quoted attribute,
+ * but it does nothing about the SCHEME — `javascript:alert(1)` contains no
+ * escapable character, so an escaped value in an href is still a live script
+ * URL waiting for a click. That matters because not every URL Yata renders is
+ * typed by the user: tracker APIs supply them (the active_events list carries a
+ * link per event), as do Prowlarr/Jackett imports and the community pathways
+ * dataset. A hostile or compromised tracker handing back
+ * `{"url": "javascript:fetch('/api/tokens')…"}` would otherwise get a
+ * same-origin script running against a logged-in dashboard.
+ *
+ * Only http and https pass. Relative URLs are rejected too: everything this
+ * guards is an off-site link, so a relative one is a sign something is wrong
+ * rather than a case worth supporting.
+ */
+export function safeUrl(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  try {
+    // Parsed, not pattern-matched: the URL parser already knows about the
+    // tricks — leading control characters, embedded newlines, "jAvAsCrIpT:",
+    // "java\tscript:" — that a regex on the raw string misses.
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : '';
+  } catch {
+    return ''; // not absolute, or not parseable at all
+  }
 }
 
 /** Minimal numeric format — returns null for non-numeric values */
