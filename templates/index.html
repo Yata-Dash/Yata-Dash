@@ -39,13 +39,20 @@
       <label class="form-label" for="login-password">Password</label>
       <input class="form-input" type="password" id="login-password" autocomplete="current-password"/>
     </div>
+    <!-- Second factor: revealed only once the password has been accepted and
+         the server asks for it, so accounts without 2FA never see it. -->
+    <div class="form-group" id="login-2fa-group" style="margin-bottom:14px;display:none">
+      <label class="form-label" for="login-code">Authentication code</label>
+      <input class="form-input" type="text" id="login-code" inputmode="numeric" autocomplete="one-time-code"
+             placeholder="6-digit code" maxlength="16" spellcheck="false"/>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">From your authenticator app — or enter one of your recovery codes.</div>
+    </div>
     <div id="login-error" class="login-error" style="display:none"></div>
     <button type="submit" class="btn btn-primary" id="login-submit" style="width:100%">Sign in</button>
-    <!-- Lockout + recovery (shown after too many failed attempts) -->
+    <!-- Lockout (shown after too many failed attempts) -->
     <div id="login-locked" class="login-locked" style="display:none">
-      <div id="login-locked-msg" style="margin-bottom:10px"></div>
-      <button type="button" class="btn btn-danger btn-sm" style="width:100%" onclick="resetLogin()">Reset login &amp; erase all data</button>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Use this only if you're locked out or forgot your password. It deletes your account, trackers, stats, settings and alerts so you can get back in. Your tracker accounts themselves are not affected.</div>
+      <div id="login-locked-msg"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Locked out for good? Stop Yata and run it once with <code>-reset-auth</code> on the machine it's hosted on. That removes the login and keeps all your trackers, stats and settings.</div>
     </div>
   </form>
 </div>
@@ -842,6 +849,18 @@
                     <label class="form-label" id="modal-username-label">Username</label>
                     <input class="form-input" type="text" id="modal-username" placeholder="Your username on this tracker"/>
                     <span class="form-hint" id="modal-username-hint">Used to scrape extended stats from your profile page. Auto-filled when API key is set.</span>
+                  </div>
+                  <!-- Tracker software type. Shown in edit mode only for
+                       trackers with no definition — a defined tracker's type
+                       comes from its def and is not the user's to change. -->
+                  <div class="form-group" id="modal-edit-type-group" style="display:none">
+                    <label class="form-label" id="modal-edit-type-label">Tracker Type <span style="color:var(--red)">*</span></label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                      <select class="form-input" id="modal-edit-type" style="max-width:240px"></select>
+                      <button type="button" class="btn btn-ghost btn-sm" id="modal-detect-btn" onclick="detectTrackerType()">Detect</button>
+                    </div>
+                    <span class="form-hint" id="modal-edit-type-hint">Yata has no definition for this tracker, so its software couldn't be identified. Pick the type it runs, or use Detect to try each one with your API key. Nothing is collected until a type is set.</span>
+                    <div id="modal-detect-result" style="display:none;font-size:11.5px;margin-top:8px"></div>
                   </div>
                   <div class="form-group" id="modal-joindate-group">
                     <label class="form-label" id="modal-joindate-label">Join Date <span class="opt">(optional)</span></label>

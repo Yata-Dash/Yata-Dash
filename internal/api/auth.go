@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -21,8 +21,21 @@ const sessionCookie = "yata_session"
 // sessionTTL is how long a login stays valid.
 const sessionTTL = 30 * 24 * time.Hour
 
-// minPasswordLen is the minimum accepted password length.
-const minPasswordLen = 8
+// minPasswordLen is the minimum accepted password length. Length is the only
+// rule: composition requirements (a digit, a symbol, a capital) reliably push
+// people towards short predictable passwords that satisfy every class and
+// resist nothing, so they are deliberately absent.
+const minPasswordLen = 12
+
+// maxPasswordLen exists because bcrypt silently ignores everything past 72
+// bytes. Accepting a longer passphrase would mean quietly checking only its
+// first 72 bytes while the user believes the rest counts.
+const maxPasswordLen = 72
+
+// bcryptCost is the work factor for new hashes. Hashes made at a lower cost
+// are transparently upgraded on the next successful login, where the plaintext
+// is briefly available.
+const bcryptCost = 12
 
 // Login brute-force protection: after maxLoginFailures consecutive failures
 // from one client IP, that IP is locked out for lockoutDuration.
@@ -42,11 +55,27 @@ func registerAuth(r chi.Router, d *Deps) {
 	r.Get("/auth/status", authStatus(d))
 	r.Post("/auth/login", authLogin(d))
 	r.Post("/auth/setup", authSetup(d))
-	r.Post("/auth/reset", authReset(d)) // recovery: wipe data + account (not-logged-in only)
 	// Self-guarded — these validate the session inside the handler.
 	r.Post("/auth/logout", authLogout(d))
 	r.Post("/auth/password", authChangePassword(d))
 	r.Post("/auth/disable", authDisable(d))
+	// Two-factor enrolment and management (all require a live session).
+	r.Post("/auth/totp/start", totpStart(d))
+	r.Post("/auth/totp/enable", totpEnable(d))
+	r.Post("/auth/totp/disable", totpDisable(d))
+	r.Post("/auth/totp/recovery", totpRegenerateRecovery(d))
+}
+
+// validatePassword applies the length policy, returning an error code for the
+// response body or "" when acceptable.
+func validatePassword(pw string) string {
+	switch {
+	case len(pw) < minPasswordLen:
+		return "password_too_short"
+	case len(pw) > maxPasswordLen:
+		return "password_too_long"
+	}
+	return ""
 }
 
 // ── Login rate limiting (per client IP, in-memory) ───────────────────────────
@@ -172,12 +201,23 @@ func isAuthenticated(d *Deps, r *http.Request) bool {
 func authStatus(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u, configured, _ := d.DB.GetUser()
+		authed := isAuthenticated(d, r)
 		resp := map[string]any{
 			"configured":    configured,
-			"authenticated": isAuthenticated(d, r),
+			"authenticated": authed,
 		}
-		if configured && isAuthenticated(d, r) {
+		// Everything below describes the account itself, so it is only exposed
+		// to a caller already holding a session — whether an instance has 2FA
+		// on is not something an anonymous visitor needs to learn.
+		if configured && authed {
 			resp["username"] = u.Username
+			resp["totp_enabled"] = u.TOTPEnabled
+			resp["password_weak"] = u.WeakPassword
+			resp["min_password_len"] = minPasswordLen
+			if u.TOTPEnabled {
+				left, _ := d.DB.RecoveryCodesLeft()
+				resp["recovery_codes_left"] = left
+			}
 		}
 		jsonOK(w, resp)
 	}
@@ -187,7 +227,9 @@ type authCreds struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
 	NewPassword string `json:"new_password"`
-	ResetCode   string `json:"reset_code"`
+	// Code is the second factor: either a six-digit authenticator code or one
+	// of the single-use recovery codes.
+	Code string `json:"code"`
 }
 
 func decodeCreds(r *http.Request) authCreds {
@@ -209,11 +251,11 @@ func authSetup(d *Deps) http.HandlerFunc {
 			jsonError(w, "username_required", http.StatusBadRequest)
 			return
 		}
-		if len(c.Password) < minPasswordLen {
-			jsonError(w, "password_too_short", http.StatusBadRequest)
+		if code := validatePassword(c.Password); code != "" {
+			jsonError(w, code, http.StatusBadRequest)
 			return
 		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(c.Password), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(c.Password), bcryptCost)
 		if err != nil {
 			jsonError(w, "hash_error", http.StatusInternalServerError)
 			return
@@ -263,72 +305,97 @@ func authLogin(d *Deps) http.HandlerFunc {
 				jsonStatus(w, http.StatusTooManyRequests, map[string]any{
 					"error":       "locked",
 					"retry_after": int(locked.Seconds()),
-					"can_reset":   true,
 				})
 				return
 			}
 			jsonError(w, "invalid_credentials", http.StatusUnauthorized)
 			return
 		}
+
+		// Second factor. The password was right, so an absent code is the
+		// normal first leg of the flow rather than a failure — only a WRONG
+		// code counts towards the lockout.
+		if u.TOTPEnabled {
+			if strings.TrimSpace(c.Code) == "" {
+				jsonStatus(w, http.StatusUnauthorized, map[string]any{"error": "totp_required"})
+				return
+			}
+			okCode, usedRecovery, err := consumeSecondFactor(d, u, c.Code, now)
+			if err != nil {
+				jsonError(w, "store_error", http.StatusInternalServerError)
+				return
+			}
+			if !okCode {
+				locked := recordLoginFailure(ip, now)
+				d.logWarnf("auth: failed two-factor attempt for %q from %s", u.Username, ip)
+				if locked > 0 {
+					jsonStatus(w, http.StatusTooManyRequests, map[string]any{
+						"error": "locked", "retry_after": int(locked.Seconds()),
+					})
+					return
+				}
+				jsonStatus(w, http.StatusUnauthorized, map[string]any{"error": "totp_invalid"})
+				return
+			}
+			if usedRecovery {
+				left, _ := d.DB.RecoveryCodesLeft()
+				d.logWarnf("auth: %q signed in with a recovery code (%d left)", u.Username, left)
+			}
+		}
+
 		clearLoginFailures(ip)
+		// The plaintext is in hand only here, so this is the one place the
+		// stored hash can be brought up to the current cost and the account's
+		// password measured against the current length floor.
+		upgradeStoredHash(d, u, c.Password)
+		_ = d.DB.SetWeakPassword(len(c.Password) < minPasswordLen)
 		issueSession(d, w, r)
 		d.logInfof("auth: %q logged in", u.Username)
 		jsonOK(w, map[string]any{"ok": true, "username": u.Username})
 	}
 }
 
-// authReset is the locked-out / forgotten-password recovery path. It wipes the
-// account AND all config + stored data (a clean slate with no private info),
-// and is allowed ONLY when the caller is NOT logged in — a logged-in user must
-// use change-password (which keeps data). This is destructive by design.
-func authReset(d *Deps) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authConfigured(d) {
-			jsonError(w, "no_account", http.StatusBadRequest)
-			return
-		}
-		// When configured, isAuthenticated == "has a valid session".
-		if isAuthenticated(d, r) {
-			jsonError(w, "logged_in", http.StatusForbidden) // use change-password instead
-			return
-		}
-		// The wipe requires the recovery code printed to the server console/
-		// log at startup — network reach alone must never be enough to erase
-		// everything. Wrong codes count toward the login lockout so the code
-		// can't be brute-forced.
-		ip := clientIP(d, r)
-		now := time.Now()
-		if locked, remain := loginLocked(ip, now); locked {
-			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
-				"error": "locked", "retry_after": int(remain.Seconds()) + 1,
-			})
-			return
-		}
-		c := decodeCreds(r)
-		if d.ResetCode == "" || subtle.ConstantTimeCompare(
-			[]byte(normalizeResetCode(c.ResetCode)), []byte(normalizeResetCode(d.ResetCode))) != 1 {
-			lockedFor := recordLoginFailure(ip, now)
-			d.logWarnf("auth: reset attempt with wrong recovery code from %s", ip)
-			if lockedFor > 0 {
-				jsonStatus(w, http.StatusTooManyRequests, map[string]any{
-					"error": "locked", "retry_after": int(lockedFor.Seconds()),
-				})
-				return
-			}
-			jsonError(w, "bad_reset_code", http.StatusForbidden)
-			return
-		}
-		_ = d.DB.DeleteUser() // account + all sessions
-		_ = d.DB.WipeData()   // stats / history / scrape log
-		_ = d.Cfg.Reset()     // trackers / settings / notifications → defaults (server kept)
-		clearSessionCookie(d, w, r)
-		loginLimiter.mu.Lock()
-		loginLimiter.byIP = map[string]*attemptState{}
-		loginLimiter.mu.Unlock()
-		d.logWarnf("auth: login + all data reset via recovery from %s", ip)
-		jsonOK(w, map[string]any{"ok": true})
+// consumeSecondFactor validates either an authenticator code or a single-use
+// recovery code, spending it in the process. It reports which kind was used so
+// the caller can warn about a dwindling recovery set.
+func consumeSecondFactor(d *Deps, u store.User, code string, now time.Time) (ok, usedRecovery bool, err error) {
+	if looksLikeRecoveryCode(code) {
+		used, err := d.DB.UseRecoveryCode(hashRecoveryCode(code), now)
+		return used, used, err
 	}
+	step, valid := verifyTOTP(u.TOTPSecret, code, now, u.TOTPLastStep)
+	if !valid {
+		return false, false, nil
+	}
+	// Burn the step so the same code can't be replayed within its window.
+	return true, false, d.DB.SetTOTPLastStep(step)
 }
+
+// upgradeStoredHash re-hashes the password when the stored hash predates the
+// current cost. Best-effort: a failure here leaves the working older hash in
+// place, so the user is never locked out by a housekeeping step.
+func upgradeStoredHash(d *Deps, u store.User, plaintext string) {
+	cost, err := bcrypt.Cost([]byte(u.PasswordHash))
+	if err != nil || cost >= bcryptCost {
+		return
+	}
+	nh, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcryptCost)
+	if err != nil {
+		return
+	}
+	if err := d.DB.SetUser(u.Username, string(nh)); err != nil {
+		d.logWarnf("auth: could not upgrade password hash cost: %v", err)
+		return
+	}
+	d.logInfof("auth: password hash cost upgraded %d → %d", cost, bcryptCost)
+}
+
+// There is deliberately no network-reachable account reset. The previous one
+// was gated on a code printed to the console AND the log file, which meant a
+// log shared for debugging carried the ability to erase the instance. Recovery
+// now runs through the 2FA recovery codes, or — for someone with no second
+// factor at all — the `-reset-auth` flag on the binary, which requires access
+// to the machine by construction and preserves all data.
 
 func authLogout(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -356,11 +423,11 @@ func authChangePassword(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid_credentials", http.StatusUnauthorized)
 			return
 		}
-		if len(c.NewPassword) < minPasswordLen {
-			jsonError(w, "password_too_short", http.StatusBadRequest)
+		if code := validatePassword(c.NewPassword); code != "" {
+			jsonError(w, code, http.StatusBadRequest)
 			return
 		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(c.NewPassword), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(c.NewPassword), bcryptCost)
 		if err != nil {
 			jsonError(w, "hash_error", http.StatusInternalServerError)
 			return

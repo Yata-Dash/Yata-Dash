@@ -378,7 +378,7 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 		StatCardClasses: rs.StatCardClasses,
 		PresenceFlags:   rs.PresenceFlags,
 		Identify:        rs.Identify,
-		Gazelle:         d.Reg.APIKind(t.URL, t.Type) == "gazelle",
+		Gazelle:         d.Reg.TypeKeyFor(t.URL, t.Type) == gazelleANTNEBType,
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
 	}
 	result, serr := scrape.Profile(t, spec)

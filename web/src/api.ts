@@ -1,7 +1,8 @@
 // api.ts — all HTTP calls to the Go backend (v2 unified-stats API)
 // To add a new endpoint: add a typed function here. Nothing else needs changing.
 import type {
-  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult, DryRunResult,
+  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult,
+  DetectTypeResponse, DryRunResult,
   HistorySeriesResponse,
   LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
@@ -37,12 +38,40 @@ async function call<T>(path: string, opts: RequestInit = {}): Promise<ApiResult<
 }
 
 // ── Auth (single-user basic auth) ──────────────────────────────────────────
-export type AuthResult = { ok: boolean; username?: string; error?: string; retry_after?: number; can_reset?: boolean };
+export type AuthResult = {
+  ok: boolean; username?: string; error?: string; retry_after?: number;
+  /** Returned once at enrolment/regeneration and never again — only hashes are kept. */
+  recovery_codes?: string[];
+};
+
+/** Enrolment payload: the QR to scan plus the same secret in typeable form. */
+export type TOTPStart = {
+  secret: string;          // grouped for reading off the screen
+  secret_compact: string;  // ungrouped, for copy-to-clipboard
+  uri: string;
+  qr_svg: string;
+  error?: string;
+};
 
 export const fetchAuthStatus = () => call<AuthStatus>('/api/auth/status');
 
-export const authLogin = (username: string, password: string) =>
-  call<AuthResult>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+/** `code` is the second factor — a six-digit authenticator code or a recovery
+ *  code. Omitted on the first leg; the server replies `totp_required` when the
+ *  account has 2FA on and the login form then asks for it. */
+export const authLogin = (username: string, password: string, code?: string) =>
+  call<AuthResult>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password, code }) });
+
+export const authTOTPStart = (password: string) =>
+  call<TOTPStart>('/api/auth/totp/start', { method: 'POST', body: JSON.stringify({ password }) });
+
+export const authTOTPEnable = (code: string) =>
+  call<AuthResult>('/api/auth/totp/enable', { method: 'POST', body: JSON.stringify({ code }) });
+
+export const authTOTPDisable = (password: string, code: string) =>
+  call<AuthResult>('/api/auth/totp/disable', { method: 'POST', body: JSON.stringify({ password, code }) });
+
+export const authTOTPRegenerateRecovery = (password: string) =>
+  call<AuthResult>('/api/auth/totp/recovery', { method: 'POST', body: JSON.stringify({ password }) });
 
 export const authSetup = (username: string, password: string) =>
   call<AuthResult>('/api/auth/setup', { method: 'POST', body: JSON.stringify({ username, password }) });
@@ -56,11 +85,8 @@ export const authChangePassword = (password: string, new_password: string) =>
 export const authDisable = (password: string) =>
   call<AuthResult>('/api/auth/disable', { method: 'POST', body: JSON.stringify({ password }) });
 
-/** Recovery: wipe the account + all config/data so a locked-out or
- *  forgotten-password user can get back in (only works when not logged in).
- *  Requires the recovery code printed to the server console/log at startup. */
-export const authReset = (reset_code: string) =>
-  call<AuthResult>('/api/auth/reset', { method: 'POST', body: JSON.stringify({ reset_code }) });
+// There is no reset endpoint. Recovery is a 2FA recovery code, or running the
+// binary with -reset-auth on the host — see internal/api/auth.go.
 
 // ── Logs (rolling logger) ───────────────────────────────────────────────────
 export const fetchLogs = (limit = 500) =>
@@ -121,6 +147,11 @@ export const testTracker = (id: string, overrides?: TrackerTestOverrides) =>
     method: 'POST',
     ...(overrides ? { body: JSON.stringify(overrides) } : {}),
   });
+
+/** Probe candidate tracker types with the stored API key, adopting the first
+ *  that returns stats. Only valid for trackers with no definition. */
+export const detectTrackerType = (id: string) =>
+  call<DetectTypeResponse>(`/api/trackers/${encodeURIComponent(id)}/detect`, { method: 'POST' });
 
 /** Ad-hoc connectivity test for a tracker that hasn't been added yet
  *  (Add-mode Test button). Body is the same shape as addTracker's payload.

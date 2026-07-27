@@ -23,8 +23,26 @@ type TypeDef struct {
 	LastUpdated string `json:"last_updated,omitempty"`
 	Description string `json:"description,omitempty"`
 
+	// Notes is documentation for whoever edits the def next — never shown in
+	// the UI. A real field rather than a stray key because readJSON falls back
+	// to a tolerant decode when it meets an unknown one, which would quietly
+	// disable unknown-field checking for the whole file and let a typo in a
+	// field map pass unnoticed.
+	Notes string `json:"notes,omitempty"`
+
 	// API describes how stats are fetched for this type.
 	API TypeAPI `json:"api"`
+
+	// CustomAPI lets a TYPE carry the whole custom-API description, for a
+	// family of trackers running the same software with the same endpoint —
+	// Anthelion and Nebulance share their developers, their api.php grammar
+	// and (increasingly) their field names. Each tracker def then only needs
+	// what actually differs from its siblings, usually just the key hint.
+	//
+	// Tracker-level "api" blocks are merged OVER this one, so a def can still
+	// override any single part without restating the rest. A type that sets
+	// this needs api.kind "custom".
+	CustomAPI *CustomAPI `json:"custom_api,omitempty"`
 
 	// APIFieldMap maps API JSON field names → canonical field names,
 	// applied to every response before storage (e.g. "seedbonus" → "bonus_points").
@@ -60,6 +78,13 @@ type TypeAPI struct {
 	// A Gazelle fork with no API-token feature therefore stays unsupported
 	// until its staff open one (or approve the alternative directly).
 	Kind string `json:"kind"`
+
+	// APIKeyHint is the default "where do I find my key" hint for this type,
+	// shown under the API key field. A tracker def's own api.api_key_hint
+	// overrides it. (This field was set in defs/types/unit3d.json long before
+	// it existed here, so the hint was silently dropped — the unknown-field
+	// warning is what surfaced it.)
+	APIKeyHint string `json:"api_key_hint,omitempty"`
 
 	// RequiredFields lists tracker-config fields the user MUST fill at setup.
 	// Valid values: "username" (gazelle needs it for the API call),
@@ -143,6 +168,10 @@ type TrackerDef struct {
 	// LastUpdated is the date (YYYY-MM-DD) this def's data was last verified
 	// against the tracker. Record-keeping only — never displayed in the app.
 	LastUpdated string `json:"last_updated,omitempty"`
+	// Notes is documentation for whoever edits this def next — never shown in
+	// the UI. Several defs already carried one before the field existed, so
+	// the text was being silently discarded on load.
+	Notes string `json:"notes,omitempty"`
 	// ApprovedBy records which tracker staff member approved Yata's
 	// support for this tracker (name, their role, and the date). The derived
 	// STATUS (see ApprovalStatus) is shown in the UI as a warning icon on

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "key": "gazelle_antneb",
+  "label": "Gazelle (ANT/NEB)",
+  "last_updated": "2026-07-27",
+  "description": "The Gazelle fork shared by Anthelion and Nebulance — same developers, same api.php grammar (?action=user&method=getuserinfo), same field names. Needs an API key and a username: the key authenticates, the username selects the account. Because the two sites track each other's API changes, the endpoint and field map live here on the type rather than in each tracker def, so a new field reaching both is a single edit. Fields a given site doesn't return are simply absent.",
+  "notes": "Deliberately NOT mapped, and must stay that way: IRCKey is a live credential, and Email, Inviter and paranoia are personal data about the user or a third party. Yata stores every mapped field in its stats database and renders it on the profile panel, so mapping any of them would put a secret on screen and in a file users are told to share when reporting bugs. LastAccess and SubClasses are unmapped only because no canonical field exists yet.",
+  "api": {
+    "kind": "custom"
+  },
+  "custom_api": {
+    "path": "/api.php?action=user&method=getuserinfo&type=username&user={username}",
+    "auth_method": "api_key_query",
+    "api_key_param": "api_key",
+    "success_field": "status",
+    "success_value": "success",
+    "field_map": {
+      "response.ID": "user_id",
+      "response.Username": "username",
+      "response.Class": "group",
+      "response.JoinDate": "join_date",
+      "response.SeedCount": "seeding",
+      "response.HnR": "hit_and_runs",
+      "response.Invites": "invites",
+      "response.Orbs": "bonus_points",
+      "response.Uploads": "uploads_approved",
+      "response.Adoptions": "adoptions",
+      "response.Grabbed": "grabbed",
+      "response.Snatched": "snatched",
+      "response.ForumPosts": "forum_posts"
+    },
+    "byte_fields": {
+      "response.Uploaded": "uploaded",
+      "response.Downloaded": "downloaded",
+      "response.SeedSize": "seed_size"
+    },
+    "bool_fields": {
+      "response.UnreadMail": "unread_mail"
+    },
+    "buffer_from_bytes": true,
+    "ratio_from_bytes": true
+  },
+  "scrape": {
+    "profile_path": "/user.php?id={id}",
+    "labels": {
+      "orbs": "bonus_points",
+      "tokens": "fl_tokens",
+      "torrents uploaded": "uploads_approved",
+      "adopted": "adoptions",
+      "adoptions": "adoptions",
+      "adoption": "adoptions",
+      "torrents adopted": "adoptions"
+    }
+  }
+}

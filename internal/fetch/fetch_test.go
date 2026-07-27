@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,31 +56,6 @@ func gazelleGamesRegistry(t *testing.T, baseURL string) *defs.Registry {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "trackers", "gazellegames.json"), []byte(trackerJSON), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	reg, err := defs.Load(dir)
-	if err != nil {
-		t.Fatalf("defs.Load: %v", err)
-	}
-	return reg
-}
-
-func legacyGazelleRegistry(t *testing.T, baseURL string) *defs.Registry {
-	t.Helper()
-	dir := t.TempDir()
-	for _, sub := range []string{"types", "trackers"} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	typeJSON := `{"schema_version":1,"key":"gazelle","label":"Gazelle",
-		"api":{"kind":"gazelle","required_fields":["username"]}}`
-	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"anthelion",
-		"name":"Anthelion","abbr":"ANT","url":%q,"type":"gazelle"}`, baseURL)
-	if err := os.WriteFile(filepath.Join(dir, "types", "gazelle.json"), []byte(typeJSON), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "trackers", "anthelion.json"), []byte(trackerJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	reg, err := defs.Load(dir)
@@ -391,31 +367,6 @@ func btnRegistry(t *testing.T, baseURL string) *defs.Registry {
 		t.Fatalf("defs.Load: %v", err)
 	}
 	return reg
-}
-
-func TestFetchGazellePreservesLegacyQueryAPI(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api.php" || r.URL.Query().Get("apikey") != "sekrit" || r.URL.Query().Get("user") != "alice" {
-			t.Fatalf("unexpected legacy Gazelle request: %s", r.URL.String())
-		}
-		fmt.Fprint(w, `{"status":"success","response":{
-			"ID":7,"Username":"alice","Class":"Member","Uploaded":300,
-			"Downloaded":100,"SeedCount":4,"Invites":2,
-			"JoinDate":"2025-01-02 03:04:05","Snatched":9
-		}}`)
-	}))
-	defer ts.Close()
-
-	c := NewClient(legacyGazelleRegistry(t, ts.URL), "")
-	data, ferr := c.Fetch(models.Tracker{
-		URL: ts.URL, Type: "gazelle", APIKey: "sekrit", Username: "alice",
-	})
-	if ferr != nil {
-		t.Fatalf("Fetch: %v", ferr)
-	}
-	if data["username"] != "alice" || data["seeding"] != 4 {
-		t.Fatalf("unexpected legacy Gazelle data: %+v", data)
-	}
 }
 
 func TestFetchGazelleMergesStandardEndpoints(t *testing.T) {
@@ -1633,5 +1584,111 @@ func TestEventNameFallsBackToType(t *testing.T) {
 	got := eventName(map[string]any{"type": "upload_contest"})
 	if got != "Upload Contest" {
 		t.Errorf("eventName = %q, want %q", got, "Upload Contest")
+	}
+}
+
+// antnebResponse is the ANT/NEB api.php user envelope. Values are invented —
+// this shape carries a live IRC key, an email address and an inviter's handle
+// in production, none of which belong in a repository.
+const antnebResponse = `{
+  "status": "success",
+  "response": {
+    "ID": 1001,
+    "Username": "TestUser",
+    "Inviter": { "InviterID": 1002, "Username": "OtherUser" },
+    "Email": "test-user@example.invalid",
+    "IRCKey": "0000000000000000000000000000feed",
+    "LastAccess": "2026-07-27 03:02:47",
+    "Uploaded": 3221225472,
+    "Downloaded": 1073741824,
+    "Orbs": 742190,
+    "Uploads": 0,
+    "Adoptions": 1,
+    "SeedCount": 320,
+    "SeedSize": 2199023255552,
+    "UnreadMail": false,
+    "Invites": 0,
+    "Class": "User",
+    "SubClasses": null,
+    "JoinDate": "2026-03-05 01:18:59",
+    "Grabbed": 367,
+    "Snatched": 21,
+    "ForumPosts": 2,
+    "paranoia": ["None"]
+  }
+}`
+
+// TestFetchGazelleANTNEBType drives the REAL defs/types/gazelle_antneb.json,
+// so the shipped type definition itself is what's under test — Anthelion and
+// Nebulance both inherit their endpoint and field map from it.
+func TestFetchGazelleANTNEBType(t *testing.T) {
+	var gotPath, gotKeyParam, gotLegacyParam, gotUser string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotKeyParam = r.URL.Query().Get("api_key")
+		gotLegacyParam = r.URL.Query().Get("apikey")
+		gotUser = r.URL.Query().Get("user")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, antnebResponse)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{
+		URL: ts.URL, Type: "gazelle_antneb", APIKey: "sekrit", Username: "TestUser",
+	})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+
+	if gotPath != "/api.php" {
+		t.Errorf("path = %q, want /api.php", gotPath)
+	}
+	// The parameter ANT asked us to move to. The old spelling must be gone:
+	// sending both would leave which one is honoured up to the server.
+	if gotKeyParam != "sekrit" {
+		t.Errorf("api_key query = %q, want the key", gotKeyParam)
+	}
+	if gotLegacyParam != "" {
+		t.Errorf("legacy apikey query should not be sent, got %q", gotLegacyParam)
+	}
+	if gotUser != "TestUser" {
+		t.Errorf("user query = %q, want the username", gotUser)
+	}
+
+	want := map[string]any{
+		"user_id": 1001, "username": "TestUser", "group": "User",
+		"join_date": "2026-03-05", // datetime trimmed to the date
+		"uploaded":  "3.00 GiB", "downloaded": "1.00 GiB", "buffer": "2.00 GiB",
+		"ratio": 3.0, "seed_size": "2.00 TiB",
+		"bonus_points": 742190.0, // points keep their precision
+		"uploads_approved": 0, "adoptions": 1, "seeding": 320,
+		"grabbed": 367, "snatched": 21, "forum_posts": 2, "invites": 0,
+		"unread_mail": "false",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+
+	// The response carries the user's IRC key, email address and the handle of
+	// whoever invited them. Every mapped field is written to the stats database
+	// and rendered on the profile panel, so mapping any of these would put a
+	// live credential on screen and into a file users are asked to attach to
+	// bug reports. This assertion is the guard on that.
+	for _, leak := range []string{"IRCKey", "irc_key", "Email", "email", "Inviter", "inviter", "paranoia"} {
+		if v, present := data[leak]; present {
+			t.Errorf("sensitive field %q must not be mapped (got %#v)", leak, v)
+		}
+	}
+	for _, v := range data {
+		if s, ok := v.(string); ok && strings.Contains(s, "0000000000000000000000000000feed") {
+			t.Error("the IRC key leaked into a mapped field")
+		}
 	}
 }

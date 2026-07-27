@@ -47,6 +47,64 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Changed
 
+- **Anthelion and Nebulance share one tracker type, `Gazelle (ANT/NEB)`.**
+  They run the same software from the same developers, on the same `api.php`
+  endpoint with the same field names, and Anthelion's expanded user stats are
+  expected to reach Nebulance too. The endpoint, auth and field map now live on
+  the **type**, so a field arriving on both sites is one edit rather than two,
+  and a third tracker from the same developers needs only a name and a URL.
+  Each def keeps what genuinely differs — the path through its own settings UI
+  to find an API key.
+
+  Its key is now sent as `api_key` rather than `apikey`, as their developers
+  asked. Both spellings work today, but only `api_key` works for the family.
+
+  **The old `Gazelle (api.php)` type is retired.** We adopted it as a generic
+  Gazelle base before learning that each fork invents its own query grammar;
+  the three Gazelle trackers added since went to their own types, leaving it
+  describing precisely the Anthelion/Nebulance family it now names properly.
+  Configs storing the old key are migrated on load, so nothing needs doing.
+  Going with it: the bespoke Go fetcher that existed solely for Anthelion, and
+  a *second* copy of the same `api.php` call buried in the scraper — still on
+  the old parameter, requiring an API key just to look up a user id, and
+  re-fetching invites, join date and snatches to override scraped values. All
+  three now arrive through the stats API, which already outranks the scrape
+  layer, so the override was redoing what the merge does. The user id is
+  discovered from the page like every other tracker's.
+
+  Anthelion's new stats are mapped: Orbs (bonus points), Uploads, Adoptions,
+  Seed Size, seeding count, unread mail, invites, user id, and Grabbed and
+  Snatched alongside each other. That takes its promotion requirements from
+  three of six measurable to all six, with no scraping.
+
+  **The response also carries an IRC key, an email address and the handle of
+  whoever invited you, and none of them are mapped — deliberately.** Every
+  mapped field is written to the stats database and rendered on the profile
+  panel, so mapping the IRC key would put a live credential on screen and into
+  a file users are asked to attach to bug reports. The type def says so, and a
+  test asserts it.
+
+- **A tracker Yata has no definition for no longer claims to be UNIT3D.**
+  Adding or importing a tracker that matched no definition silently typed it as
+  UNIT3D — so a Prowlarr import of, say, PassThePopcorn arrived labelled as
+  UNIT3D software it does not run, was probed with endpoints it does not have,
+  and reported the resulting failures as though the tracker were simply broken.
+  Unmatched trackers now land in a **No definition** type that fetches and
+  scrapes nothing, and say so: a "needs type" badge in the trackers table, and
+  a type picker in the edit panel with a **Detect** button that tries each
+  candidate with your own API key and adopts the first that returns real stats.
+  Detection is a button and never automatic — it means several deliberately
+  failing requests to a tracker whose operator has agreed to nothing.
+
+  The picker appears only for trackers without a definition, and can be changed
+  as often as you like. A tracker *with* a definition takes its type from that
+  definition, and the backend re-asserts it regardless of what a request says.
+
+  Two more silent UNIT3D assumptions went with it: the ad-hoc "Test" before a
+  tracker is saved, and the registry's own fallback for an unrecognised type.
+  A fetcher kind no handler recognises is now a loud error rather than a
+  UNIT3D attempt that fails in a plausible-looking way.
+
 - **Connection state is tracked per channel.** A tracker whose API is down
   while its profile scrape still works was recording a "went down" and a "came
   back" on every single refresh — the two channels disagreed, and one shared
@@ -103,6 +161,49 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Security
 
+- **Two-factor authentication.** An optional TOTP second factor, in Settings →
+  General → Account, working with any authenticator app — Google, Microsoft,
+  Aegis, 1Password. Enrolment shows a QR to scan and the same key in typeable
+  form for anyone entering it by hand, and **nothing is switched on until a code
+  generated from the secret has been verified**, so a mistyped key or a phone
+  with a wrong clock can't lock you out of your own dashboard. Ten single-use
+  recovery codes are issued at enrolment and shown exactly once; only their
+  hashes are kept. Turning 2FA off needs the password *and* a current code —
+  otherwise anyone who got past the first factor could simply remove the second.
+
+  Codes can't be replayed: the time step a code belongs to is recorded when it
+  is spent, so a code glimpsed over a shoulder or sitting in a proxy log is
+  already dead. Wrong codes count toward the same lockout as wrong passwords.
+
+  Implemented on the standard library — RFC 6238 and a small QR encoder — so
+  2FA adds no dependency to a project that deliberately has four. Both were
+  checked against independent implementations: the codes against the RFC's
+  published test vectors and a WebCrypto implementation in the browser, and the
+  QR output against jsQR across every symbol version it can emit.
+
+- **The minimum password length is now 12, and hashes are stronger.** Eight was
+  too short for anything in 2026, let alone a store of tracker API keys. Length
+  is the only rule — composition requirements reliably produce short predictable
+  passwords that satisfy every class and resist nothing — and a meter shows
+  where you stand as you type. Passwords over bcrypt's 72-byte limit are now
+  refused rather than silently truncated at 72 while appearing to be honoured
+  in full. New hashes use a higher work factor, and existing ones are quietly
+  upgraded at the next sign-in.
+
+  **Existing accounts keep working.** A password below the new floor is flagged
+  at sign-in and prompts a nudge in Settings; it is never forcibly reset, since
+  locking someone out of their dashboard over a policy change would be worse
+  than the password.
+
+- **The log-printed recovery code is gone, along with the wipe it unlocked.**
+  `POST /api/auth/reset` erased the account, trackers, stats and settings, and
+  was gated on a code printed to the console *and the log file* — so anyone
+  handed a log for debugging held the ability to erase the instance remotely.
+  Recovery is now a 2FA recovery code, or, for an account with no second
+  factor, running the binary once with `-reset-auth` on its host. That requires
+  access to the machine by construction, and unlike the reset it replaces it
+  removes only the login: every tracker, stat and setting survives.
+
 - **Inline click handlers validate their arguments instead of escaping them.**
   `esc()` now escapes single quotes too, which matters for quoted attributes —
   but it cannot help an inline handler, because a browser decodes an
@@ -124,6 +225,27 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   can't borrow Yata's own styling to reshape the page.
 
 ### Fixed
+
+- **A misspelled key in a tracker definition is no longer silent.** Unknown
+  fields are tolerated so a def written for a different Yata version still
+  loads — but they were tolerated *silently*, so a typo like `filed_map` made
+  that whole section vanish while the def loaded looking perfectly healthy.
+  The tracker then collected nothing and nothing said why. Ignored keys are
+  now reported at startup and in Settings → Definitions, naming the field,
+  while the def still loads.
+
+  Turning this on immediately found three live cases, all of them data that
+  had been quietly discarded:
+  - **UNIT3D's API key hint never reached anyone.** `defs/types/unit3d.json`
+    has set `api_key_hint` since it was written, but no Go field read it, so
+    every plain UNIT3D tracker showed the generic hint instead of
+    "Settings → API". Type-level hints now work, with a tracker's own hint
+    overriding.
+  - **Six defs lost their approval notes** to `notes` where the field is
+    `note` — including the informal-approval context the UI shows in its
+    tooltip, which is exactly where that wording matters.
+  - Def files can now carry a `notes` field of their own for whoever edits
+    them next.
 
 - **Long event banners no longer push the countdown off the edge.** In table
   rows and grid cards the whole announcement lives in one text span, and a

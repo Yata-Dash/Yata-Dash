@@ -10,12 +10,12 @@
     "name": "edge2020",
     "role": "Leader",
     "date": "2026-07-12",
-    "notes": "Approved for scrape once every 24 hours"
+    "note": "Approved for scrape once every 24 hours"
   },
   "scrape": {
     "max_scrapes_per_day": 1
   },
-    "rules": {
+  "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 2
   },

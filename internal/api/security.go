@@ -1,11 +1,8 @@
 // security.go — defense-in-depth HTTP middleware: response headers and
-// cross-site request blocking for the browser-facing API, plus the recovery
-// reset code.
+// cross-site request blocking for the browser-facing API.
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"net/http"
 	"net/url"
 	"strings"
@@ -75,21 +72,3 @@ func crossSite(r *http.Request) bool {
 	return !strings.EqualFold(u.Host, r.Host)
 }
 
-// NewResetCode generates the recovery code required by /api/auth/reset,
-// formatted like "3F2A-9C41". Regenerated every start; printed to the
-// console and log so a reset proves console/filesystem access, not just
-// network reach.
-func NewResetCode() string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	s := strings.ToUpper(hex.EncodeToString(b))
-	return s[:4] + "-" + s[4:]
-}
-
-// normalizeResetCode makes code comparison forgiving: case-insensitive,
-// dashes and spaces ignored.
-func normalizeResetCode(s string) string {
-	s = strings.ToUpper(strings.TrimSpace(s))
-	s = strings.ReplaceAll(s, "-", "")
-	return strings.ReplaceAll(s, " ", "")
-}

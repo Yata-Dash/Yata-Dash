@@ -112,13 +112,18 @@ func listDefs(d *Deps) http.HandlerFunc {
 				ApprovalStatus:     td.ApprovalStatus(),
 				ApprovalNote:       td.ApprovalNote(),
 			}
-			if td.API != nil {
-				info.APIKeyHint = td.API.APIKeyHint
-			}
+			// Resolve through the type so a tracker inheriting its family's
+			// endpoint reports the same hint and required fields it will
+			// actually be fetched with.
+			customAPI := d.Reg.ResolveCustomAPI(td.URL, td.Type)
 			if tt, ok := d.Reg.Type(td.Type); ok {
-				info.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, td.API)
+				info.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, customAPI)
+				info.APIKeyHint = tt.API.APIKeyHint // type default…
 			} else {
 				info.RequiredFields = []string{}
+			}
+			if customAPI != nil && customAPI.APIKeyHint != "" {
+				info.APIKeyHint = customAPI.APIKeyHint // …overridden per tracker
 			}
 			// The cookie field must stay visible even when scraping is off
 			// whenever the API itself needs it — a custom def with auth_method

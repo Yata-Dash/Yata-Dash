@@ -65,8 +65,6 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 	switch kind {
 	case "demo":
 		data, ferr = c.fetchDemo(t)
-	case "gazelle":
-		data, ferr = c.fetchGazelle(t)
 	case "gazelle_json":
 		data, ferr = c.fetchGazelleJSON(t)
 	case "gazelle_games":
@@ -74,9 +72,16 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 	case "custom":
 		data, ferr = c.fetchCustom(t)
 	case "none":
-		return map[string]any{}, nil // scrape-only type: empty API layer
-	default: // "unit3d"
+		// Scrape-only, or a tracker with no definition and no type chosen yet:
+		// an empty API layer either way, and no request made.
+		return map[string]any{}, nil
+	case "unit3d":
 		data, ferr = c.fetchUnit3D(t)
+	default:
+		// A kind no fetcher handles is a definition-authoring mistake. This
+		// used to fall through to UNIT3D, which hid the mistake behind
+		// plausible-looking HTTP failures against the wrong endpoints.
+		return nil, errf("unknown_api_kind_"+kind, nil)
 	}
 	if ferr != nil {
 		return nil, ferr
@@ -159,8 +164,8 @@ var coreByteFields = []string{
 // factor of ~1e9, so it would be obvious rather than subtly wrong.
 //
 // Negative buffers (downloaded above uploaded) fall out as "0.00 B" from
-// BytesToSize, matching what fetchGazelle and the custom fetcher's
-// buffer_from_bytes already do — worth keeping identical, not "fixing" here.
+// BytesToSize, matching what the custom fetcher's buffer_from_bytes already
+// does — worth keeping identical, not "fixing" here.
 func convertCoreBytes(data map[string]any) {
 	for _, f := range coreByteFields {
 		if n, ok := data[f].(float64); ok {
@@ -362,83 +367,6 @@ func mergeExtended(core, ext map[string]any, byteFields []string) {
 // same way scrapes do, so staff can monitor ALL of Yata's traffic.
 func (c *Client) identify(t models.Tracker) string {
 	return c.Registry.ResolveScrape(t.URL, t.Type).Identify
-}
-
-// ── Gazelle (a fork's own api.php) ───────────────────────────────────────────
-//
-// Not upstream Gazelle — see the TypeAPI.Kind notes in internal/defs/types.go.
-// A new Gazelle tracker almost certainly wants fetchGazelleJSON (ajax.php)
-// instead; this fetcher only fits sites using Anthelion's query grammar.
-
-type gazelleResponse struct {
-	Status   string `json:"status"`
-	Response struct {
-		ID         int    `json:"ID"`
-		Username   string `json:"Username"`
-		Class      string `json:"Class"`
-		Uploaded   int64  `json:"Uploaded"`
-		Downloaded int64  `json:"Downloaded"`
-		SeedCount  int    `json:"SeedCount"`
-		Invites    int    `json:"Invites"`
-		JoinDate   string `json:"JoinDate"`
-		Snatched   int    `json:"Snatched"`
-	} `json:"response"`
-	Error string `json:"error,omitempty"`
-}
-
-func (c *Client) fetchGazelle(t models.Tracker) (map[string]any, *Error) {
-	if strings.TrimSpace(t.APIKey) == "" {
-		return nil, errf("no_key", nil)
-	}
-	if strings.TrimSpace(t.Username) == "" {
-		return nil, errf("no_username", nil)
-	}
-	apiURL := fmt.Sprintf(
-		"%s/api.php?action=user&apikey=%s&method=getuserinfo&type=username&user=%s",
-		strings.TrimRight(t.URL, "/"), t.APIKey, t.Username)
-
-	body, ferr := c.getBody(apiURL, nil, c.identify(t))
-	if ferr != nil {
-		return nil, ferr
-	}
-	var raw gazelleResponse
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, errf("parse_error", err)
-	}
-	if raw.Status != "success" {
-		message := raw.Error
-		if message == "" {
-			message = "api_error"
-		}
-		return nil, errf("api_error", fmt.Errorf("%s", message))
-	}
-	r := raw.Response
-
-	var ratio float64
-	if r.Downloaded > 0 {
-		ratio = float64(r.Uploaded) / float64(r.Downloaded)
-	}
-	bufferBytes := max(r.Uploaded-r.Downloaded, 0)
-	joinDate := r.JoinDate
-	if len(joinDate) >= 10 {
-		joinDate = joinDate[:10]
-	}
-	out := map[string]any{
-		"username":   r.Username,
-		"group":      r.Class,
-		"uploaded":   parse.BytesToSize(r.Uploaded),
-		"downloaded": parse.BytesToSize(r.Downloaded),
-		"buffer":     parse.BytesToSize(bufferBytes),
-		"ratio":      ratio,
-		"seeding":    r.SeedCount,
-		"invites":    fmt.Sprintf("%d", r.Invites),
-		"snatched":   fmt.Sprintf("%d", r.Snatched),
-		"join_date":  joinDate,
-	}
-	if r.ID > 0 {
-		out["user_id"] = fmt.Sprintf("%d", r.ID)
-	}
-	return out, nil
 }
 
 // Gazelle JSON is the ajax.php API used by Redacted-style Gazelle sites.
@@ -744,11 +672,12 @@ func (c *Client) fetchGazelleGames(t models.Tracker) (map[string]any, *Error) {
 // ── Custom (fully data-driven) ───────────────────────────────────────────────
 
 func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
-	td, found := c.Registry.TrackerByURL(t.URL)
-	if !found || td.API == nil {
+	// The description may come from the tracker def, from its type (a family
+	// sharing one endpoint), or from both merged together.
+	api := c.Registry.ResolveCustomAPI(t.URL, t.Type)
+	if api == nil || api.Path == "" {
 		return nil, errf("no_def", fmt.Errorf("no custom API def for %s", t.URL))
 	}
-	api := td.API
 
 	path := api.Path
 	if strings.Contains(path, "{username}") {

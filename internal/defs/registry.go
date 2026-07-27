@@ -15,6 +15,9 @@ import (
 type LoadIssue struct {
 	File  string `json:"file"`
 	Error string `json:"error"`
+	// Warning marks an issue the def survived: it loaded, but something in it
+	// was ignored. Errors mean the def was skipped entirely.
+	Warning bool `json:"warning,omitempty"`
 }
 
 // OptOutEntry marks a tracker that has asked NOT to be supported by this
@@ -63,9 +66,13 @@ func (r *Registry) Reload() error {
 	}
 	for _, f := range typeFiles {
 		var td TypeDef
-		if err := readJSON(f, &td); err != nil {
+		warn, err := readJSON(f, &td)
+		if err != nil {
 			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: err.Error()})
 			continue
+		}
+		if warn != "" {
+			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: warn, Warning: true})
 		}
 		if err := validateType(td); err != nil {
 			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: err.Error()})
@@ -84,9 +91,13 @@ func (r *Registry) Reload() error {
 	}
 	for _, f := range trackerFiles {
 		var td TrackerDef
-		if err := readJSON(f, &td); err != nil {
+		warn, err := readJSON(f, &td)
+		if err != nil {
 			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: err.Error()})
 			continue
+		}
+		if warn != "" {
+			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: warn, Warning: true})
 		}
 		if err := validateTracker(td, types); err != nil {
 			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: err.Error()})
@@ -102,8 +113,11 @@ func (r *Registry) Reload() error {
 	// Opt-out list (optional file). Trackers on it cannot be added.
 	var optout []OptOutEntry
 	if optPath := filepath.Join(r.dir, "optout.json"); fileExists(optPath) {
-		if err := readJSON(optPath, &optout); err != nil {
+		warn, err := readJSON(optPath, &optout)
+		if err != nil {
 			issues = append(issues, LoadIssue{File: "optout.json", Error: err.Error()})
+		} else if warn != "" {
+			issues = append(issues, LoadIssue{File: "optout.json", Error: warn, Warning: true})
 		}
 	}
 
@@ -153,21 +167,48 @@ func (r *Registry) OptOuts() []OptOutEntry {
 	return append([]OptOutEntry(nil), r.optout...)
 }
 
-func readJSON(path string, v any) error {
+// readJSON decodes a def file, returning a warning when the file parsed but
+// something in it was ignored.
+//
+// Unknown fields must not reject a def written for a newer or older app
+// version, so the decode retries tolerantly. But silently is the wrong way to
+// tolerate them: a misspelled key ("filed_map") makes that whole section
+// vanish, and the def then loads looking healthy while collecting nothing.
+// The warning is surfaced as a load issue so a typo is visible at startup and
+// in Settings instead of being discovered as missing stats weeks later.
+func readJSON(path string, v any) (warning string, err error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		// Retry tolerantly: unknown fields are a warning-grade problem and
-		// shouldn't reject a def written for a newer/older app version.
+	if strictErr := dec.Decode(v); strictErr != nil {
 		if err2 := json.Unmarshal(data, v); err2 != nil {
-			return err2
+			return "", err2
+		}
+		// The file is valid JSON — the strict pass only objected to a field
+		// this build doesn't know. Report it, keep the def.
+		if msg := unknownFieldMessage(strictErr); msg != "" {
+			return msg, nil
 		}
 	}
-	return nil
+	return "", nil
+}
+
+// unknownFieldMessage turns encoding/json's strict-mode complaint into
+// something actionable, and returns "" for any other decode failure (which
+// the tolerant retry has already dealt with or re-raised).
+func unknownFieldMessage(err error) string {
+	msg := err.Error()
+	const marker = "unknown field "
+	i := strings.Index(msg, marker)
+	if i < 0 {
+		return ""
+	}
+	field := strings.TrimSpace(msg[i+len(marker):])
+	return fmt.Sprintf("ignored unrecognised field %s — check the spelling, "+
+		"or it belongs to a newer Yata version", field)
 }
 
 func validateType(td TypeDef) error {
@@ -178,9 +219,9 @@ func validateType(td TypeDef) error {
 		return fmt.Errorf("missing required field: label")
 	}
 	switch td.API.Kind {
-	case "unit3d", "gazelle", "gazelle_json", "gazelle_games", "custom", "demo", "none":
+	case "unit3d", "gazelle_json", "gazelle_games", "custom", "demo", "none":
 	default:
-		return fmt.Errorf("api.kind must be one of unit3d|gazelle|gazelle_json|gazelle_games|custom|demo|none, got %q", td.API.Kind)
+		return fmt.Errorf("api.kind must be one of unit3d|gazelle_json|gazelle_games|custom|demo|none, got %q", td.API.Kind)
 	}
 	return nil
 }
@@ -199,8 +240,16 @@ func validateTracker(td TrackerDef, types map[string]TypeDef) error {
 	if _, ok := types[td.Type]; !ok {
 		return fmt.Errorf("unknown tracker type %q (no defs/types/%s.json)", td.Type, td.Type)
 	}
-	if types[td.Type].API.Kind == "custom" && td.API == nil {
-		return fmt.Errorf("type %q requires an \"api\" object in the tracker def", td.Type)
+	// A custom type needs a path from somewhere: either the tracker def's own
+	// "api" block, or the type's shared "custom_api" for a family of trackers
+	// running the same endpoint.
+	if tt := types[td.Type]; tt.API.Kind == "custom" {
+		typeHasPath := tt.CustomAPI != nil && tt.CustomAPI.Path != ""
+		defHasPath := td.API != nil && td.API.Path != ""
+		if !typeHasPath && !defHasPath {
+			return fmt.Errorf("type %q requires an \"api\" object with a path in the tracker def "+
+				"(or a \"custom_api\" block on the type)", td.Type)
+		}
 	}
 	return nil
 }

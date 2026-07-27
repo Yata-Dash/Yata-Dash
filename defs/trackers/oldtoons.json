@@ -10,20 +10,26 @@
     "name": "Jhonny",
     "role": "Gang Leader",
     "date": "2026-07-08",
-    "notes": "Fully API-supported: staff added GET /api/user/stats exposing the formerly scrape-only fields (seed_size, total_seedtime, avg_seed_time, fl_tokens, invites, warnings, uploads_approved, real up/down/ratio, unread mail/notifications). Scraping disabled at their request; UA identification kept on API traffic."
+    "note": "Fully API-supported: staff added GET /api/user/stats exposing the formerly scrape-only fields (seed_size, total_seedtime, avg_seed_time, fl_tokens, invites, warnings, uploads_approved, real up/down/ratio, unread mail/notifications). Scraping disabled at their request; UA identification kept on API traffic."
   },
   "scrape": {
     "disable_scraping": true,
     "identify": "ua"
-    },
+  },
   "api": {
-    "required_fields": ["join_date"]
+    "required_fields": [
+      "join_date"
+    ]
   },
   "extended_stats": {
     "path": "/api/user/stats",
-    "byte_fields": ["seed_size", "real_uploaded", "real_downloaded"]
+    "byte_fields": [
+      "seed_size",
+      "real_uploaded",
+      "real_downloaded"
+    ]
   },
-    "rules": {
+  "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 2
   },

@@ -46,17 +46,49 @@ func Open(path string) (*Manager, error) {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
 		m.applyDefaults()
+		migrated := migrateTrackerTypes(m.cfg.Trackers)
 		// Runs once per install: seedDefaultAlertRules is a no-op after the
 		// flag is set, so this costs an extra write only on the very first
 		// load of a pre-existing config.json that predates event alerts.
 		if !m.cfg.Notifications.SeededDefaultRules {
 			seedDefaultAlertRules(&m.cfg.Notifications)
+			migrated = true
+		}
+		if migrated {
 			if err := m.saveLocked(); err != nil {
-				return nil, fmt.Errorf("seed default alert rules: %w", err)
+				return nil, fmt.Errorf("save config after migration: %w", err)
 			}
 		}
 	}
 	return m, nil
+}
+
+// renamedTrackerTypes maps retired type keys to their replacements, for
+// configs written before a type was renamed. Without this a stored type that
+// no longer exists resolves to nothing and the tracker silently stops
+// collecting — the failure mode is invisible, so it is worth migrating rather
+// than asking every user to notice and re-pick.
+var renamedTrackerTypes = map[string]string{
+	// "gazelle" was only ever Anthelion's api.php grammar — we adopted it as a
+	// generic base before learning that Gazelle forks each invent their own.
+	// The later Gazelle trackers went to their own types, leaving this one
+	// describing exactly the Anthelion/Nebulance family it now names.
+	"gazelle": "gazelle_antneb",
+}
+
+// migrateTrackerTypes rewrites retired type keys in place, reporting whether
+// anything changed. A tracker with a def takes its type from that def anyway;
+// this fixes the stored value so the UI, the type picker and any def-less
+// tracker agree with it.
+func migrateTrackerTypes(trackers []models.Tracker) bool {
+	changed := false
+	for i := range trackers {
+		if to, ok := renamedTrackerTypes[trackers[i].Type]; ok {
+			trackers[i].Type = to
+			changed = true
+		}
+	}
+	return changed
 }
 
 // seedDefaultAlertRules gives a brand-new install (no destinations AND no

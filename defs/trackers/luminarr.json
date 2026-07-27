@@ -10,9 +10,9 @@
     "name": "Socs",
     "role": "Operator",
     "date": "2026-07-14",
-    "notes": "Approved 60-120min Will monitor and reach out if traffic is too heavy."
+    "note": "Approved 60-120min Will monitor and reach out if traffic is too heavy."
   },
-    "rules": {
+  "rules": {
     "min_ratio": 0.6,
     "min_seed_days": 3
   },

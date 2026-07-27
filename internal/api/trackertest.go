@@ -201,7 +201,7 @@ func testAdhocTracker(d *Deps) http.HandlerFunc {
 		}
 		applyPayload(&t, p) // an explicit type/credentials selection wins over the def match
 		if t.Type == "" {
-			t.Type = "unit3d"
+			t.Type = models.TypeUnknown
 		}
 		jsonOK(w, runAdhocTest(d, t))
 	}
@@ -267,13 +267,16 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 	if kind == "none" {
 		return CheckResult{Status: "not_applicable", Detail: "scrape_only"}
 	}
-	// Real APIs need a key (and gazelle also a username) — surface these as
-	// "not configured" rather than letting the fetcher return a raw error.
+	// Real APIs need a key, and some also select the account by name —
+	// surface these as "not configured" rather than letting the fetcher
+	// return a raw error. Whether a username is needed comes from the def
+	// (a "{username}" in the endpoint, or a declared required field), so a
+	// new tracker family is covered without editing this check.
 	if kind != "demo" {
 		if strings.TrimSpace(t.APIKey) == "" {
 			return CheckResult{Status: "not_configured", Detail: "no_key"}
 		}
-		if kind == "gazelle" && strings.TrimSpace(t.Username) == "" {
+		if needsUsername(d, t.URL, d.Reg.TypeKeyFor(t.URL, t.Type)) && strings.TrimSpace(t.Username) == "" {
 			return CheckResult{Status: "not_configured", Detail: "no_username"}
 		}
 	}
@@ -331,7 +334,7 @@ func testScrape(d *Deps, t models.Tracker, persist bool) CheckResult {
 		StatCardClasses: rs.StatCardClasses,
 		PresenceFlags:   rs.PresenceFlags,
 		Identify:        rs.Identify,
-		Gazelle:         d.Reg.APIKind(t.URL, t.Type) == "gazelle",
+		Gazelle:         d.Reg.TypeKeyFor(t.URL, t.Type) == gazelleANTNEBType,
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
 	}
 	result, serr := scrape.Profile(t, spec)

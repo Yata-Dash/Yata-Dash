@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "key": "unknown",
+  "label": "No definition",
+  "description": "A tracker Yata has no definition for. Nothing is fetched and nothing is scraped until a type is chosen: the site's software can't be inferred from its URL, and guessing would mean sending a stream of requests it never answers. Trackers imported from Prowlarr or Jackett that match no definition land here. Pick the matching type — or use Detect, which tries each one with your own API key — and stats start on the next refresh.",
+  "api": {
+    "kind": "none"
+  }
+}

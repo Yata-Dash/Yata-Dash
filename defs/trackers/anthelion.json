@@ -4,24 +4,21 @@
   "name": "Anthelion",
   "abbr": "ANT",
   "url": "https://anthelion.me",
-  "type": "gazelle",
-  "last_updated": "2026-07-16",
+  "type": "gazelle_antneb",
+  "last_updated": "2026-07-27",
   "approved_by": {
     "name": "Alastor",
     "role": "Owner",
     "date": "2026-07-14",
-    "notes": "Will look at adding API stats in the future"
+    "note": "API user stats added 2026-07 (Orbs, Uploads, Adoptions, SeedSize and more), shared with Nebulance."
   },
-  "api": { 
+  "api": {
     "api_key_hint": "Settings → Access Settings"
   },
   "scrape": {
-    "labels": {
-      "orbs": "bonus_points"
-    },
     "disable_scraping": true
   },
-    "rules": {
+  "rules": {
     "min_ratio": 0.8
   },
   "invite_requirements": {

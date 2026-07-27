@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,69 +99,30 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
-// TestAuthResetRequiresCode: the recovery wipe only proceeds with the code
-// printed to the server console — network reach alone must never be enough.
-func TestAuthResetRequiresCode(t *testing.T) {
+// TestNoNetworkReachableReset: the account+data wipe that used to live at
+// /api/auth/reset is gone for good. It was gated on a code printed to the log
+// file, so anyone handed a log for debugging could erase the instance.
+// Recovery is now the 2FA recovery codes, or the local -reset-auth flag.
+func TestNoNetworkReachableReset(t *testing.T) {
 	d := testDeps(t)
-	d.ResetCode = NewResetCode()
-
-	setupUser := func() {
-		hash, _ := bcrypt.GenerateFromPassword([]byte("hunter2hunter2"), bcrypt.DefaultCost)
-		if err := d.DB.SetUser("admin", string(hash)); err != nil {
-			t.Fatal(err)
-		}
+	hash, _ := bcrypt.GenerateFromPassword([]byte("hunter2hunter2hunter2"), bcrypt.DefaultCost)
+	if err := d.DB.SetUser("admin", string(hash)); err != nil {
+		t.Fatal(err)
 	}
-	reset := func(code string) int {
-		resetTestLimiter()
-		body, _ := json.Marshal(authCreds{ResetCode: code})
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/reset", bytes.NewReader(body))
+	router := NewRouter(d)
+
+	for _, path := range []string{"/api/auth/reset", "/api/auth/wipe"} {
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader([]byte(`{}`)))
 		req.RemoteAddr = "203.0.113.7:4444"
 		rec := httptest.NewRecorder()
-		authReset(d)(rec, req)
-		return rec.Code
-	}
-
-	setupUser()
-	if code := reset(""); code != http.StatusForbidden {
-		t.Fatalf("reset without code: want 403, got %d", code)
-	}
-	if code := reset("WRONG-CODE"); code != http.StatusForbidden {
-		t.Fatalf("reset with wrong code: want 403, got %d", code)
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s: want 404 (route must not exist), got %d", path, rec.Code)
+		}
 	}
 	if _, ok, _ := d.DB.GetUser(); !ok {
-		t.Fatal("failed resets must not delete the account")
+		t.Fatal("the account must still be there")
 	}
-	// Correct code works, forgiving about case/dashes/spaces.
-	if code := reset(" " + normalizeResetCode(d.ResetCode) + " "); code != http.StatusOK {
-		t.Fatalf("reset with correct (normalized) code: want 200, got %d", code)
-	}
-	if _, ok, _ := d.DB.GetUser(); ok {
-		t.Fatal("successful reset must delete the account")
-	}
-
-	// An empty server-side code disables reset outright, even with an empty match.
-	setupUser()
-	d.ResetCode = ""
-	if code := reset(""); code != http.StatusForbidden {
-		t.Fatalf("reset with empty server code must be disabled, got %d", code)
-	}
-
-	// Wrong codes count toward the shared lockout (no brute-forcing the code).
-	d.ResetCode = NewResetCode()
-	resetTestLimiter()
-	ip, now := "203.0.113.8", time.Now()
-	for i := 0; i < maxLoginFailures; i++ {
-		recordLoginFailure(ip, now)
-	}
-	body, _ := json.Marshal(authCreds{ResetCode: d.ResetCode})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset", bytes.NewReader(body))
-	req.RemoteAddr = ip + ":4444"
-	rec := httptest.NewRecorder()
-	authReset(d)(rec, req)
-	if rec.Code != http.StatusTooManyRequests {
-		t.Fatalf("locked-out IP must get 429 even with the right code, got %d", rec.Code)
-	}
-	resetTestLimiter()
 }
 
 // TestClientIPProxyHeaders: X-Forwarded-For is honored only when the

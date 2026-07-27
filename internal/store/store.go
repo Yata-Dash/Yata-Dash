@@ -76,11 +76,27 @@ func (d *DB) migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_scrape_log ON scrape_log (tracker_id, scraped_at)`,
 		// Single-user basic auth (id is pinned to 1 — at most one account).
+		// totp_secret holds the base32 shared secret. It is written at enrolment
+		// START and only becomes authoritative once totp_enabled flips — a secret
+		// is never trusted until the user has proved they can generate a code
+		// from it, or enabling it would lock them out of their own instance.
 		`CREATE TABLE IF NOT EXISTS auth (
-			id            INTEGER PRIMARY KEY CHECK (id = 1),
-			username      TEXT NOT NULL,
-			password_hash TEXT NOT NULL,
-			created_at    INTEGER NOT NULL
+			id             INTEGER PRIMARY KEY CHECK (id = 1),
+			username       TEXT NOT NULL,
+			password_hash  TEXT NOT NULL,
+			created_at     INTEGER NOT NULL,
+			totp_secret    TEXT NOT NULL DEFAULT '',
+			totp_enabled   INTEGER NOT NULL DEFAULT 0,
+			totp_last_step INTEGER NOT NULL DEFAULT 0,
+			weak_password  INTEGER NOT NULL DEFAULT 0
+		)`,
+		// Single-use 2FA recovery codes. Only the hash is stored; the plaintext
+		// is shown once at generation. Consumed codes are kept (used_at set)
+		// rather than deleted so the UI can show how many remain.
+		`CREATE TABLE IF NOT EXISTS recovery_codes (
+			hash       TEXT PRIMARY KEY,
+			created_at INTEGER NOT NULL,
+			used_at    INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS sessions (
 			token      TEXT PRIMARY KEY,
@@ -150,6 +166,18 @@ func (d *DB) migrate() error {
 	if err := d.addColumns("connection_daily", map[string]string{
 		"api_ok_count":   "INTEGER NOT NULL DEFAULT 0",
 		"api_fail_count": "INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	// 2FA + the password-policy grandfathering flag arrived after auth shipped.
+	// weak_password defaults to 0 ("not known to be weak"): an existing account's
+	// password length can't be recovered from its bcrypt hash, so the flag is
+	// only set once the user next logs in and the plaintext is briefly in hand.
+	if err := d.addColumns("auth", map[string]string{
+		"totp_secret":    "TEXT NOT NULL DEFAULT ''",
+		"totp_enabled":   "INTEGER NOT NULL DEFAULT 0",
+		"totp_last_step": "INTEGER NOT NULL DEFAULT 0",
+		"weak_password":  "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
 	}

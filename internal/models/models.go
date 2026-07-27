@@ -3,6 +3,11 @@
 // definition files loaded by internal/defs.
 package models
 
+// TypeUnknown is the type key for a tracker Yata has no definition for and
+// whose software the user hasn't identified yet. It fetches and scrapes
+// nothing — see defs/types/unknown.json.
+const TypeUnknown = "unknown"
+
 // Tracker is a user-configured tracker account, stored in config.json.
 type Tracker struct {
 	ID            string `json:"id"`

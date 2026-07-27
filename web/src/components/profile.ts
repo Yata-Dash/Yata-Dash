@@ -38,6 +38,12 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'avg_seed_time',   label: 'Avg Seed Time',   color: 'pink',  fmt: fmtDuration },
   { key: 'total_seedtime',  label: 'Total Seed Time', color: 'pink',  fmt: fmtDuration },
   { key: 'snatched',        label: 'Snatched',        color: 'amber'  },
+  // Grabbed sits with Snatched because trackers reporting both mean them as a
+  // pair. Deliberately no tooltip: "grabbed" and "snatched" are canonical
+  // field names shared across every tracker, and each site decides what counts
+  // as which — so any explanation here would be a claim about all of them, and
+  // wrong for some. The tracker's own site is the authority on its stats.
+  { key: 'grabbed',         label: 'Grabbed',         color: 'amber'  },
   { key: 'upload_snatches', label: 'Upload Snatches', color: 'green'  },
   { key: 'fl_tokens',       label: 'FL Tokens',       color: 'teal'   },
   { key: 'invites',         label: 'Invites',         color: 'blue'   },

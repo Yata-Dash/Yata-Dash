@@ -50,6 +50,7 @@ func main() {
 		dataPath   = flag.String("data", envOr("YATA_DATA", "yata.db"), "SQLite database path")
 		baseDir    = flag.String("base", envOr("YATA_BASE", "."), "directory containing static/ and templates/")
 		logPath    = flag.String("log", envOr("YATA_LOG", ""), "log file path (default: yata.log next to the database)")
+		resetAuth  = flag.Bool("reset-auth", false, "remove the login account and exit (trackers, stats and settings are kept)")
 	)
 	flag.Parse()
 
@@ -80,7 +81,14 @@ func main() {
 		log.Fatalf("defs: %v", err)
 	}
 	for _, issue := range reg.Issues() {
-		log.Printf("defs: skipped %s: %s", issue.File, issue.Error)
+		// Warnings loaded but lost something (a misspelled key); errors were
+		// skipped entirely. Saying "skipped" for both would send anyone
+		// chasing a warning looking for a def that isn't actually missing.
+		if issue.Warning {
+			log.Printf("defs: %s: %s", issue.File, issue.Error)
+		} else {
+			log.Printf("defs: skipped %s: %s", issue.File, issue.Error)
+		}
 	}
 	log.Printf("defs: loaded %d tracker defs, %d types", len(reg.Trackers()), len(reg.Types()))
 
@@ -89,6 +97,26 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	defer db.Close()
+
+	// Last-resort recovery for someone locked out with no second factor and no
+	// recovery codes. Running it requires a shell on the machine (or `docker
+	// exec`), which is the point: there is deliberately no way to reach this
+	// over the network. Unlike the reset it replaces, data is left untouched —
+	// only the account and its sessions go.
+	if *resetAuth {
+		if _, ok, err := db.GetUser(); err != nil {
+			log.Fatalf("reset-auth: %v", err)
+		} else if !ok {
+			log.Printf("reset-auth: no account configured — nothing to do")
+			return
+		}
+		if err := db.DeleteUser(); err != nil {
+			log.Fatalf("reset-auth: %v", err)
+		}
+		log.Printf("reset-auth: account removed — login protection is now off. " +
+			"Open the dashboard and set it up again from Settings → General → Account.")
+		return
+	}
 
 	statsEngine := stats.New(db)
 	// Read the qui seedsize mode live so a settings change re-slots the qui
@@ -103,13 +131,7 @@ func main() {
 		Log:       logger,
 		Alerts:    notify.New(cfg, logger),
 		BaseDir:   *baseDir,
-		ResetCode: api.NewResetCode(),
 	}
-	// The recovery code gates the login screen's destructive "reset login +
-	// wipe data" — printing it here (console + log file) means a reset proves
-	// access to the machine, not just to the port. New code every start.
-	log.Printf("auth: recovery code %s — needed for the login screen's reset (wipes all data)", deps.ResetCode)
-	logger.Infof("auth: recovery code %s — needed for the login screen's reset (wipes all data)", deps.ResetCode)
 
 	// Seed the manual stats layer from config (user-entered join dates) so
 	// account-age works on first load, even before any fetch.

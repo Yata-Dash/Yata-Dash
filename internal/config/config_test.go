@@ -188,3 +188,38 @@ func TestDigestDefaultsNotReappliedOnceTouched(t *testing.T) {
 		t.Fatalf("existing digest config was overwritten: got %+v, want enabled/Sunday/00:00 preserved", dig)
 	}
 }
+
+// TestMigrateRetiredTrackerType: a config written before the gazelle type was
+// renamed must keep working. An unresolvable type collects nothing and says
+// nothing, so leaving it would quietly break an existing user's tracker.
+func TestMigrateRetiredTrackerType(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	seed := `{"trackers":[
+		{"id":"a","name":"Anthelion","url":"https://anthelion.me","type":"gazelle","enabled":true},
+		{"id":"b","name":"Other","url":"https://example.org","type":"unit3d","enabled":true}
+	]}`
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	trackers := m.Trackers()
+	if trackers[0].Type != "gazelle_antneb" {
+		t.Errorf("retired type = %q, want gazelle_antneb", trackers[0].Type)
+	}
+	if trackers[1].Type != "unit3d" {
+		t.Errorf("an unrelated type was rewritten: %q", trackers[1].Type)
+	}
+	// The rewrite must be persisted, not just applied in memory — otherwise it
+	// runs again on every start and never actually fixes the file.
+	m2, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if m2.Trackers()[0].Type != "gazelle_antneb" {
+		t.Error("the migration was not written back to disk")
+	}
+}

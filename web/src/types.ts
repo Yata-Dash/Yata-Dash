@@ -10,7 +10,7 @@ export interface Tracker {
   abbr: string;        // from def registry; "" for manual trackers
   def_key: string;     // trackerdef registry key e.g. "fearnopeer"; "" for manual
   url: string;
-  type: string;        // "unit3d" | "gazelle" | "custom" | "test" | ...
+  type: string;        // "unit3d" | "gazelle_antneb" | "custom" | "test" | ...
   enabled: boolean;
   has_key: boolean;
   api_key_masked: string;  // "••••••••" or ""
@@ -71,6 +71,11 @@ export interface Tracker {
 
 /** Sentinel value meaning "credential unchanged" in PUT/POST payloads. */
 export const MASKED_KEY = '••••••••';
+
+/** Type key for a tracker with no definition whose software hasn't been
+ *  identified yet. It fetches and scrapes nothing until a real type is set —
+ *  see defs/types/unknown.json. */
+export const UNKNOWN_TYPE = 'unknown';
 
 /** Create/update payload for POST /api/trackers and PUT /api/trackers/{id}. */
 export interface TrackerPayload {
@@ -411,7 +416,33 @@ export interface LogsResponse {
 export interface AuthStatus {
   configured: boolean;     // an account exists → login protection is on
   authenticated: boolean;  // the current request has a valid session
+  // Everything below is only sent to an authenticated caller.
   username?: string;
+  totp_enabled?: boolean;
+  /** The password predates the current length floor — nudge, don't force. */
+  password_weak?: boolean;
+  min_password_len?: number;
+  recovery_codes_left?: number;
+}
+
+// ── Tracker type detection (POST /api/trackers/{id}/detect) ───────────────
+
+/** One candidate type's outcome, so the user sees what was tried rather than
+ *  just "nothing worked". */
+export interface DetectAttempt {
+  type: string;
+  label: string;
+  status: string;   // ok | fail | not_configured
+  detail?: string;
+  fields?: number;
+}
+
+export interface DetectTypeResponse {
+  detected?: string;   // type key; absent/empty = nothing matched
+  label?: string;
+  applied: boolean;    // the type was saved to the tracker
+  attempts: DetectAttempt[];
+  error?: string;
 }
 
 // ── Group definition types (from /api/tracker-groups) ─────────────────────
@@ -511,6 +542,9 @@ export interface TypeInfo {
 export interface DefIssue {
   file: string;
   error: string;
+  /** The def still loaded — something inside it was ignored (e.g. a
+   *  misspelled key). Without this flag it reads as "def skipped". */
+  warning?: boolean;
 }
 
 /** A tracker that has asked NOT to be supported by Yata (defs/optout.json). */

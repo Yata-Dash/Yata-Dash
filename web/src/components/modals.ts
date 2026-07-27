@@ -3,10 +3,10 @@
 // (#settings-page); the historical "modal" naming is kept for the element IDs
 // and exported function names so existing wiring keeps working.
 import type {
-  AppSettings, DefInfo, DefsPayload, GroupDef, GroupRequirements, OptOutEntry, StatsMap,
+  AppSettings, DefInfo, DefsPayload, DetectAttempt, GroupDef, GroupRequirements, OptOutEntry, StatsMap,
   Tracker, TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, UpdateStatus,
 } from '../types';
-import { MASKED_KEY } from '../types';
+import { MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
 import { approvalIcon, approvalWarns } from '../utils/approval';
 import { eventGlobeSvg } from '../utils/icons';
@@ -134,6 +134,102 @@ function populateTypeSelect(defs: DefsPayload) {
   sel.innerHTML =
     `<option value="">— Select type —</option>` +
     visible.map(t => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
+}
+
+// ── Type picker for trackers with no definition ──────────────────────────────
+
+/** The tracker being edited, when it has no def and its type is the user's to
+ *  set. Empty for every other tracker — which is what hides the control. */
+let _editTypeTrackerId = '';
+
+/** Show the type picker only for def-less trackers, and preselect what they
+ *  are currently set to. A tracker with a def takes its type from the def, so
+ *  offering a choice there would be offering to break it. */
+function setupEditTypeSection(t: Tracker): void {
+  const group = document.getElementById('modal-edit-type-group');
+  const sel = document.getElementById('modal-edit-type') as HTMLSelectElement | null;
+  if (!group || !sel) return;
+
+  if (t.def_key) {
+    group.style.display = 'none';
+    _editTypeTrackerId = '';
+    return;
+  }
+  _editTypeTrackerId = t.id;
+  group.style.display = '';
+  const hint = document.getElementById('modal-edit-type-hint');
+  const undefinedType = !t.type || t.type === UNKNOWN_TYPE;
+  if (hint) {
+    hint.textContent = undefinedType
+      ? "Yata has no definition for this tracker, so its software couldn't be identified. Pick the type it runs, or use Detect to try each one with your API key. Nothing is collected until a type is set."
+      : 'Yata has no definition for this tracker, so this type was set by hand. Change it if the stats look wrong, or use Detect to try each type with your API key.';
+  }
+  const detectResult = document.getElementById('modal-detect-result');
+  if (detectResult) { detectResult.style.display = 'none'; detectResult.innerHTML = ''; }
+
+  void ensureDefsLoaded().then(() => {
+    const types = (_defsCache?.types ?? []).slice().sort((a, b) => a.label.localeCompare(b.label));
+    sel.innerHTML = types.map(ty =>
+      `<option value="${esc(ty.key)}" ${ty.key === t.type ? 'selected' : ''}>${esc(ty.label)}</option>`
+    ).join('');
+    if (t.type) sel.value = t.type;
+  });
+}
+
+/** Probe each candidate type with the user's own key and adopt the first that
+ *  answers. Manual by design — it means several deliberately failing requests
+ *  to a tracker, which is not something to do on a timer. */
+export async function detectTrackerType(): Promise<void> {
+  const id = _editTypeTrackerId;
+  const box = document.getElementById('modal-detect-result');
+  const btn = document.getElementById('modal-detect-btn') as HTMLButtonElement | null;
+  if (!id || !box) return;
+  const show = (html: string, color = 'text3') => {
+    box.style.display = 'block';
+    box.innerHTML = `<span style="color:var(--${color})">${html}</span>`;
+  };
+  if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+  show('Trying each tracker type with your API key…');
+  const { ok, data, status } = await api.detectTrackerType(id);
+  if (btn) { btn.disabled = false; btn.textContent = 'Detect'; }
+
+  if (!ok) {
+    const msg = status === 400 && data.error === 'no_key'
+      ? 'Add and save your API key first — detection works by trying it against each type.'
+      : data.error === 'has_definition'
+      ? 'This tracker has a definition, so its type is already known.'
+      : data.error === 'tracker_opted_out'
+      ? 'This tracker has asked not to be contacted by Yata.'
+      : 'Detection failed — check the tracker URL and your connection.';
+    show(esc(msg), 'red');
+    return;
+  }
+  if (!data.detected) {
+    const tried = (data.attempts ?? []).map((a: DetectAttempt) =>
+      `<div style="margin-top:3px">· ${esc(a.label)} — ${esc(detectDetailText(a.status, a.detail))}</div>`).join('');
+    show(`No type matched. What was tried:${tried}<div style="margin-top:6px">If you know what software this tracker runs, pick it above and save.</div>`, 'amber');
+    return;
+  }
+  const sel = document.getElementById('modal-edit-type') as HTMLSelectElement | null;
+  if (sel) sel.value = data.detected;
+  const hit = (data.attempts ?? []).find((a: DetectAttempt) => a.type === data.detected);
+  show(`Detected <strong>${esc(data.label ?? data.detected)}</strong> — ${hit?.fields ?? 0} stats returned. Saved.`, 'green');
+  _sd?.toast(`Type detected: ${data.label ?? data.detected}`, 'success');
+}
+
+/** Plain-English rendering of one detection attempt's outcome. */
+function detectDetailText(status: string, detail?: string): string {
+  if (status === 'ok') return 'answered, but with nothing that looks like account stats';
+  if (status === 'not_configured') return detail === 'no_username' ? 'needs a username' : 'needs an API key';
+  switch (detail) {
+    case 'http_401':
+    case 'http_403':        return 'rejected the key';
+    case 'http_404':        return 'no such endpoint';
+    case 'timeout':         return 'timed out';
+    case 'connection_error': return 'could not connect';
+    case 'parse_error':     return 'replied in an unexpected format';
+    default:                return detail ? detail.replace(/_/g, ' ') : 'no match';
+  }
 }
 
 /** Populate the mock-scenario <select> from GET /api/mock/scenarios. */
@@ -336,10 +432,11 @@ function showFormForType(typeKey: string) {
     hide('modal-session-cookie-group');
     show('modal-mock-group');
     populateScenarioSelect();
-  } else if (typeKey === 'gazelle') {
-    // Gazelle needs the full set: API key + username for the ajax.php API,
-    // session cookie for profile scraping (applyPredefinedDef hides the
-    // cookie afterwards when the def disables scraping).
+  } else if (typeKey === 'gazelle_antneb') {
+    // The Anthelion/Nebulance family needs the full set: API key + username
+    // for the api.php call (the key authenticates, the username selects the
+    // account), session cookie for profile scraping (applyPredefinedDef hides
+    // the cookie afterwards when the def disables scraping).
     resetStandardCredentialLabels(typeKey);
     show('modal-username-group');
     show('modal-key-group');
@@ -708,6 +805,7 @@ export function openEditModal(
   // Required fields (e.g. gazelle username) + opt-out check for this URL.
   applyRequiredFieldsUI(t.required_fields ?? typeRequiredFields(t.type));
   applySessionCookieLabel();
+  setupEditTypeSection(t);
 
   // API key — the mask sentinel means "unchanged"; clearing the field removes the key.
   setVal('modal-key', t.has_key ? (t.api_key_masked || MASKED_KEY) : '');
@@ -1105,7 +1203,12 @@ export async function saveTracker(deps: ModalDeps) {
   }
 
   const cookieVal   = getVal('modal-session-cookie');
-  const trackerType = isNew ? (_selectedDef?.type || _selectedTypeKey || undefined) : undefined;
+  // On add, the type comes from the chosen def or the type dropdown. On edit
+  // it is only sent for def-less trackers, where the picker is shown — the
+  // backend re-asserts the def's type for everything else regardless.
+  const trackerType = isNew
+    ? (_selectedDef?.type || _selectedTypeKey || undefined)
+    : (_editTypeTrackerId ? (getVal('modal-edit-type') || undefined) : undefined);
   const minScrape   = parseInt(getVal('modal-min-scrape-interval'), 10);
 
   // Block a too-low scrape interval (also red-flagged on the field).
@@ -1416,6 +1519,51 @@ function acctError(msg: string) {
   if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
 }
 
+/** Minimum password length. The server is authoritative and reports it in
+ *  /api/auth/status; this is the fallback before that response arrives. */
+let _minPwLen = 12;
+
+/** Length-only strength read-out. Composition rules ("must contain a symbol")
+ *  push people towards short predictable passwords that tick every box, so the
+ *  meter rewards the one thing that actually helps: more characters. */
+export function passwordStrength(pw: string): { label: string; color: string; pct: number } {
+  const n = pw.length;
+  if (n === 0) return { label: '', color: 'text3', pct: 0 };
+  // The too-short range is compressed into the bottom third so the bar only
+  // ever grows: filling it further as you approach the floor, then further
+  // again once past it. Scaling it across the full width made an invalid
+  // password look stronger than a valid one.
+  if (n < _minPwLen) {
+    const missing = _minPwLen - n;
+    return {
+      label: `Too short — ${missing} more character${missing === 1 ? '' : 's'}`,
+      color: 'red',
+      pct: Math.round((n / _minPwLen) * 33),
+    };
+  }
+  if (n < 16) return { label: 'Acceptable', color: 'amber', pct: 55 };
+  if (n < 20) return { label: 'Good',       color: 'green', pct: 78 };
+  return { label: 'Excellent — a passphrase like this is very hard to crack', color: 'green', pct: 100 };
+}
+
+/** Live meter under a new-password field. Wired via oninput. */
+export function acctPwMeter(inputId: string, meterId: string): void {
+  const pw = (document.getElementById(inputId) as HTMLInputElement | null)?.value ?? '';
+  const box = document.getElementById(meterId);
+  if (!box) return;
+  const s = passwordStrength(pw);
+  box.innerHTML = pw
+    ? `<div class="pw-meter-track"><div class="pw-meter-fill" style="width:${s.pct}%;background:var(--${s.color})"></div></div>
+       <div class="pw-meter-label" style="color:var(--${s.color})">${esc(s.label)}</div>`
+    : '';
+}
+
+function pwField(id: string, placeholder: string): string {
+  return `<input class="form-input" type="password" id="${id}" placeholder="${esc(placeholder)}"
+            autocomplete="new-password" oninput="acctPwMeter('${id}','${id}-meter')"/>
+          <div class="pw-meter" id="${id}-meter"></div>`;
+}
+
 /** Render the Account section based on whether login protection is configured. */
 export async function renderAccountSection(): Promise<void> {
   const box = document.getElementById('s-account-section');
@@ -1425,6 +1573,7 @@ export async function renderAccountSection(): Promise<void> {
     box.innerHTML = `<div style="font-size:12px;color:var(--text3)">Could not load account status.</div>`;
     return;
   }
+  if (data.min_password_len) _minPwLen = data.min_password_len;
   const errBox = `<div id="s-acct-error" class="login-error" style="display:none;margin-top:10px"></div>`;
 
   if (!data.configured) {
@@ -1432,7 +1581,7 @@ export async function renderAccountSection(): Promise<void> {
       <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Protect this instance with a username and password. Recommended if Yata is reachable beyond <code>localhost</code> (an open port). Once enabled, signing in is required.</div>
       <div style="display:flex;flex-direction:column;gap:8px;max-width:320px">
         <input class="form-input" type="text" id="s-acct-username" placeholder="Username" autocomplete="username"/>
-        <input class="form-input" type="password" id="s-acct-password" placeholder="Password (min 8 characters)" autocomplete="new-password"/>
+        ${pwField('s-acct-password', `Password (min ${_minPwLen} characters)`)}
         <input class="form-input" type="password" id="s-acct-password2" placeholder="Confirm password" autocomplete="new-password"/>
       </div>
       ${errBox}
@@ -1444,12 +1593,23 @@ export async function renderAccountSection(): Promise<void> {
     return;
   }
 
+  // Grandfathered account: the password predates the current floor. A nudge,
+  // never a forced reset — locking someone out of their own dashboard over a
+  // policy change would be worse than the password.
+  const weakNote = data.password_weak
+    ? `<div class="acct-nudge">
+         <i class="fas fa-triangle-exclamation" style="color:var(--amber)"></i>
+         <div>Your password is shorter than the current ${_minPwLen}-character minimum. It still works, but a longer one is worth the minute it takes — especially as Yata holds your tracker API keys.</div>
+       </div>`
+    : '';
+
   box.innerHTML = `
     <div style="font-size:12px;color:var(--text);margin-bottom:4px"><i class="fas fa-lock" style="margin-right:6px;color:var(--green)"></i>Login protection is <strong>on</strong> — signed in as <strong>${esc(data.username ?? '')}</strong>.</div>
+    ${weakNote}
     <div style="font-size:13px;font-weight:600;color:var(--text);margin:14px 0 8px">Change password</div>
     <div style="display:flex;flex-direction:column;gap:8px;max-width:320px">
       <input class="form-input" type="password" id="s-acct-curpw" placeholder="Current password" autocomplete="current-password"/>
-      <input class="form-input" type="password" id="s-acct-newpw" placeholder="New password (min 8 characters)" autocomplete="new-password"/>
+      ${pwField('s-acct-newpw', `New password (min ${_minPwLen} characters)`)}
       <input class="form-input" type="password" id="s-acct-newpw2" placeholder="Confirm new password" autocomplete="new-password"/>
     </div>
     ${errBox}
@@ -1457,12 +1617,210 @@ export async function renderAccountSection(): Promise<void> {
       <button type="button" class="btn btn-primary btn-sm" onclick="accountChangePassword()">Change password</button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
     </div>
+
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin:20px 0 6px">Two-factor authentication</div>
+    <div id="s-2fa-section"></div>
+
     <div style="font-size:13px;font-weight:600;color:var(--text);margin:18px 0 6px">Disable protection</div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Removes the account and turns login off. Enter your current password to confirm.</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:420px">
       <input class="form-input" type="password" id="s-acct-disablepw" placeholder="Current password" autocomplete="current-password" style="max-width:200px"/>
       <button type="button" class="btn btn-danger btn-sm" onclick="accountDisable()">Disable login protection</button>
     </div>`;
+
+  render2FASection(data.totp_enabled === true, data.recovery_codes_left);
+}
+
+// ── Two-factor authentication (Settings → General → Account) ─────────────────
+
+/** Renders the 2FA block in one of its three states: off, mid-enrolment, on. */
+function render2FASection(enabled: boolean, codesLeft?: number): void {
+  const box = document.getElementById('s-2fa-section');
+  if (!box) return;
+
+  if (!enabled) {
+    box.innerHTML = `
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">A code from your phone on top of your password. Worth turning on if Yata is reachable from outside your network — a password alone is one leak away from someone else's hands. Works with any authenticator app.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:460px">
+        <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:200px"/>
+        <button type="button" class="btn btn-primary btn-sm" onclick="twoFactorStart()">Set up two-factor</button>
+      </div>
+      <div id="s-2fa-error" class="login-error" style="display:none;margin-top:10px"></div>
+      <div id="s-2fa-enrol"></div>`;
+    return;
+  }
+
+  const low = (codesLeft ?? 0) <= 2;
+  box.innerHTML = `
+    <div style="font-size:12px;color:var(--text);margin-bottom:6px"><i class="fas fa-shield-halved" style="margin-right:6px;color:var(--green)"></i>Two-factor authentication is <strong>on</strong>.</div>
+    <div style="font-size:11px;color:var(--${low ? 'amber' : 'text3'});margin-bottom:10px">
+      ${codesLeft ?? 0} recovery code${codesLeft === 1 ? '' : 's'} remaining${low ? ' — generate a new set before you run out, or losing your phone locks you out.' : '.'}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:520px">
+      <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:180px"/>
+      <input class="form-input" type="text" id="s-2fa-code" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" style="max-width:120px"/>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="twoFactorRegenerate()">New recovery codes</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="twoFactorDisable()">Turn off</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">New recovery codes need your password. Turning 2FA off needs your password <em>and</em> a current code.</div>
+    <div id="s-2fa-error" class="login-error" style="display:none;margin-top:10px"></div>
+    <div id="s-2fa-enrol"></div>`;
+}
+
+function twoFactorError(msg: string) {
+  const el = document.getElementById('s-2fa-error');
+  if (el) { el.textContent = msg; el.style.display = msg ? 'block' : 'none'; }
+}
+
+/** Step one: get a secret + QR, and show them until a code proves it works. */
+export async function twoFactorStart(): Promise<void> {
+  twoFactorError('');
+  const pw = acctVal('s-2fa-pw');
+  if (!pw) { twoFactorError('Enter your current password to continue.'); return; }
+  const { ok, data, status } = await api.authTOTPStart(pw);
+  if (!ok) {
+    twoFactorError(status === 401 ? 'That password is not correct.' : 'Could not start two-factor setup.');
+    return;
+  }
+  const panel = document.getElementById('s-2fa-enrol');
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="totp-enrol">
+      <div class="totp-enrol-steps">
+        <div style="font-weight:600;color:var(--text);margin-bottom:8px">1. Scan this with your authenticator app</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Google Authenticator, Microsoft Authenticator, Aegis, 1Password — any of them.</div>
+        <div style="font-weight:600;color:var(--text);margin:14px 0 6px">Can't scan it?</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Add an account manually and type this key in:</div>
+        <code class="totp-secret" id="s-2fa-secret">${esc(data.secret)}</code>
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="copyTOTPSecret()">Copy key</button>
+        <div style="font-weight:600;color:var(--text);margin:16px 0 6px">2. Enter the code it shows</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input class="form-input" type="text" id="s-2fa-verify" placeholder="6-digit code" inputmode="numeric"
+                 autocomplete="one-time-code" maxlength="6" style="max-width:140px"/>
+          <button type="button" class="btn btn-primary btn-sm" onclick="twoFactorEnable()">Verify &amp; turn on</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">Nothing changes until this code checks out — so a mistyped key can't lock you out.</div>
+      </div>
+      <div class="totp-qr">${data.qr_svg || '<div style="font-size:11px;color:var(--text3)">QR unavailable — use the key on the left.</div>'}</div>
+    </div>`;
+  _pendingSecret = data.secret_compact;
+  (document.getElementById('s-2fa-verify') as HTMLInputElement | null)?.focus();
+}
+
+/** The secret being enrolled, held here rather than passed through an inline
+ *  handler — attribute escaping happens before the JS parser sees the value,
+ *  so a string in an onclick can never be made safe by escaping alone. */
+let _pendingSecret = '';
+
+export async function copyTOTPSecret(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(_pendingSecret);
+    _sd?.toast('Setup key copied', 'success');
+  } catch {
+    _sd?.toast('Could not copy — select the key and copy it manually', 'error');
+  }
+}
+
+/** Step two: verify a generated code, which switches 2FA on and issues the
+ *  recovery codes. */
+export async function twoFactorEnable(): Promise<void> {
+  twoFactorError('');
+  const code = acctVal('s-2fa-verify').trim();
+  if (!code) { twoFactorError('Enter the code from your authenticator app.'); return; }
+  const { ok, data } = await api.authTOTPEnable(code);
+  if (!ok || !data.ok) {
+    twoFactorError(data.error === 'totp_invalid'
+      ? 'That code did not match. Codes change every 30 seconds — try the one showing now.'
+      : 'Could not enable two-factor authentication.');
+    return;
+  }
+  _sd?.toast('Two-factor authentication enabled', 'success');
+  await renderAccountSection();
+  showRecoveryCodes(data.recovery_codes ?? []);
+}
+
+/** Turn 2FA off — needs the password and a current second factor. */
+export async function twoFactorDisable(): Promise<void> {
+  twoFactorError('');
+  const pw = acctVal('s-2fa-pw');
+  const code = acctVal('s-2fa-code').trim();
+  if (!pw || !code) { twoFactorError('Enter your password and a current code.'); return; }
+  if (!confirm('Turn off two-factor authentication?\n\nYour account will be protected by its password alone, and your recovery codes will stop working.')) return;
+  const { ok, data, status } = await api.authTOTPDisable(pw, code);
+  if (!ok || !data.ok) {
+    twoFactorError(status === 401 && data.error === 'totp_invalid'
+      ? 'That code is not valid.'
+      : status === 401 ? 'That password is not correct.'
+      : 'Could not turn off two-factor authentication.');
+    return;
+  }
+  _sd?.toast('Two-factor authentication turned off', 'success');
+  await renderAccountSection();
+}
+
+/** Issue a fresh set of recovery codes, invalidating the old ones. */
+export async function twoFactorRegenerate(): Promise<void> {
+  twoFactorError('');
+  const pw = acctVal('s-2fa-pw');
+  if (!pw) { twoFactorError('Enter your current password to continue.'); return; }
+  if (!confirm('Generate new recovery codes?\n\nYour existing codes will stop working immediately.')) return;
+  const { ok, data, status } = await api.authTOTPRegenerateRecovery(pw);
+  if (!ok || !data.ok) {
+    twoFactorError(status === 401 ? 'That password is not correct.' : 'Could not generate new recovery codes.');
+    return;
+  }
+  await renderAccountSection();
+  showRecoveryCodes(data.recovery_codes ?? []);
+}
+
+/** Show the codes once. Only their hashes are stored, so this is the single
+ *  opportunity to save them — hence the deliberately obstructive panel. */
+function showRecoveryCodes(codes: string[]): void {
+  const panel = document.getElementById('s-2fa-enrol');
+  if (!panel || !codes.length) return;
+  panel.innerHTML = `
+    <div class="recovery-codes">
+      <div style="font-weight:600;color:var(--text);margin-bottom:4px"><i class="fas fa-key" style="margin-right:6px;color:var(--amber)"></i>Save your recovery codes</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Each works once, in place of a code from your app — this is how you get back in if you lose your phone. They are shown now and never again.</div>
+      <div class="recovery-code-grid">${codes.map(c => `<code>${esc(c)}</code>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="copyRecoveryCodes()">Copy all</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="downloadRecoveryCodes()">Download</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="dismissRecoveryCodes()">I've saved them</button>
+      </div>
+    </div>`;
+  _recoveryCodes = codes;
+}
+
+let _recoveryCodes: string[] = [];
+
+export async function copyRecoveryCodes(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(_recoveryCodes.join('\n'));
+    _sd?.toast('Recovery codes copied', 'success');
+  } catch {
+    _sd?.toast('Could not copy — select the codes and copy them manually', 'error');
+  }
+}
+
+export function downloadRecoveryCodes(): void {
+  const body = [
+    'Yata two-factor recovery codes',
+    'Each code can be used once, in place of a code from your authenticator app.',
+    '', ..._recoveryCodes, '',
+  ].join('\n');
+  const url = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'yata-recovery-codes.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function dismissRecoveryCodes(): void {
+  _recoveryCodes = [];
+  const panel = document.getElementById('s-2fa-enrol');
+  if (panel) panel.innerHTML = '';
 }
 
 /** Create the first account (enable login protection). */
@@ -1472,15 +1830,24 @@ export async function accountSetup(): Promise<void> {
   const pw = acctVal('s-acct-password');
   const pw2 = acctVal('s-acct-password2');
   if (!username) { acctError('Enter a username.'); return; }
-  if (pw.length < 8) { acctError('Password must be at least 8 characters.'); return; }
+  if (pw.length < _minPwLen) { acctError(`Password must be at least ${_minPwLen} characters.`); return; }
   if (pw !== pw2) { acctError('Passwords do not match.'); return; }
   const { ok, data } = await api.authSetup(username, pw);
   if (ok && data.ok) {
     _sd?.toast('Login protection enabled', 'success');
     await renderAccountSection();
   } else {
-    acctError(data.error === 'password_too_short' ? 'Password must be at least 8 characters.' : 'Could not enable login protection.');
+    acctError(pwErrorText(data.error) ?? 'Could not enable login protection.');
   }
+}
+
+/** Maps the server's password-policy error codes to something readable. */
+function pwErrorText(err?: string): string | null {
+  if (err === 'password_too_short') return `Password must be at least ${_minPwLen} characters.`;
+  // bcrypt ignores anything past 72 bytes, so a longer one is refused rather
+  // than silently half-checked.
+  if (err === 'password_too_long') return 'Password is too long — 72 characters maximum.';
+  return null;
 }
 
 /** Change the account password. */
@@ -1489,14 +1856,14 @@ export async function accountChangePassword(): Promise<void> {
   const cur = acctVal('s-acct-curpw');
   const nw = acctVal('s-acct-newpw');
   const nw2 = acctVal('s-acct-newpw2');
-  if (nw.length < 8) { acctError('New password must be at least 8 characters.'); return; }
+  if (nw.length < _minPwLen) { acctError(`New password must be at least ${_minPwLen} characters.`); return; }
   if (nw !== nw2) { acctError('New passwords do not match.'); return; }
   const { ok, data, status } = await api.authChangePassword(cur, nw);
   if (ok && data.ok) {
     _sd?.toast('Password changed', 'success');
     await renderAccountSection();
   } else {
-    acctError(status === 401 ? 'Current password is incorrect.' : 'Could not change password.');
+    acctError(pwErrorText(data.error) ?? (status === 401 ? 'Current password is incorrect.' : 'Could not change password.'));
   }
 }
 
@@ -1780,7 +2147,7 @@ function resetStandardCredentialLabels(typeKey?: string) {
   const hint = document.getElementById('modal-key-hint');
   const uLbl = document.getElementById('modal-username-label');
   if (lbl)  lbl.textContent = 'API Key';
-  if (hint) hint.textContent = typeKey === 'gazelle'
+  if (hint) hint.textContent = typeKey === 'gazelle_antneb'
     ? 'Settings → Access Settings → API Keys (user profile scope)'
     : 'Profile → API Token settings';
   if (uLbl) uLbl.innerHTML  = 'Username';
@@ -1870,7 +2237,9 @@ export async function reloadDefs(toastFn?: (msg: string, type?: ToastType) => vo
     notify?.('Failed to reload definitions', 'error');
   }
   for (const issue of data?.issues ?? []) {
-    notify?.(`${issue.file}: ${issue.error}`, 'error');
+    // A warning means the def loaded with something in it ignored — worth
+    // seeing, but not the same as a def that was thrown away.
+    notify?.(`${issue.file}: ${issue.error}`, issue.warning ? 'warning' : 'error');
   }
   return success;
 }
@@ -2044,6 +2413,10 @@ function clearModal() {
   if (rows) rows.innerHTML = '';
   renderGroupHint('', '');
   hide('modal-target-builder');
+  // The type picker belongs to one specific def-less tracker — it must never
+  // survive into the next tracker's modal.
+  _editTypeTrackerId = '';
+  hide('modal-edit-type-group');
 }
 
 function setEl(id: string, text: string)        { const el = document.getElementById(id);                     if (el) el.textContent = text; }

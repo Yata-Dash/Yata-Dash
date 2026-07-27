@@ -106,7 +106,7 @@ func main() {
 			t: models.Tracker{
 				// Deliberately young account (~2 months) — exercises the History
 				// view's short-data cases (range clamping, sparse charts).
-				ID: "demoant000000001", Name: "Anthelion", URL: "https://anthelion.me", Type: "gazelle",
+				ID: "demoant000000001", Name: "Anthelion", URL: "https://anthelion.me", Type: "gazelle_antneb",
 				Enabled: true, Username: user, JoinDate: "2026-05-11", TargetGroup: "Power User",
 				Targets: map[string]string{"uploaded": "1 TiB", "ratio": "1", "bonus_points": "25000", "days": "30"},
 			},

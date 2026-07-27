@@ -677,6 +677,7 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .toast{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px;animation:toastIn .25s ease forwards;pointer-events:all}
 .toast.success{border-left:3px solid var(--green)}
 .toast.error{border-left:3px solid var(--red)}
+.toast.warning{border-left:3px solid var(--amber)}
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
 /* ══ QUI Live Stats Bar ══ */
@@ -1127,6 +1128,12 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   font-family:'Geist Mono',monospace;letter-spacing:.2px;
 }
 .trk-def-badge.manual{background:var(--surface3);color:var(--text3);border-color:var(--border2)}
+/* No def and no type chosen — nothing is being collected at all. */
+.trk-def-badge.needs-type{
+  background:color-mix(in srgb,var(--amber) 16%,transparent);
+  color:var(--amber);border-color:color-mix(in srgb,var(--amber) 40%,transparent);
+  cursor:help;
+}
 /* Opt-out badge — an already-added tracker whose operator has since asked not
    to be supported. Stronger than the amber approval warning: Yata has stopped
    all traffic to it, so it reads as blocked (red). */
@@ -1737,3 +1744,52 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   background:none;white-space:nowrap;
 }
 .auth-nudge-dontwarn:hover{background:color-mix(in srgb,var(--amber) 14%,transparent)}
+
+/* Password strength meter — length only, no composition rules */
+.pw-meter{margin-top:-2px}
+.pw-meter-track{
+  height:4px;border-radius:2px;overflow:hidden;
+  background:color-mix(in srgb,var(--text3) 25%,transparent);
+}
+.pw-meter-fill{height:100%;border-radius:2px;transition:width .18s ease,background .18s ease}
+.pw-meter-label{font-size:11px;margin-top:4px}
+
+/* Grandfathered-password nudge in Settings → Account */
+.acct-nudge{
+  display:flex;align-items:flex-start;gap:9px;margin:10px 0 2px;padding:9px 11px;
+  max-width:520px;font-size:12px;line-height:1.45;color:var(--text2);border-radius:6px;
+  background:color-mix(in srgb,var(--amber) 10%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--amber) 30%,transparent);
+}
+
+/* Two-factor enrolment: instructions beside the QR, stacking when narrow */
+.totp-enrol{
+  display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;
+  margin-top:14px;padding:14px;max-width:620px;border-radius:8px;
+  background:var(--surface2,var(--surface));border:1px solid var(--border);
+}
+.totp-enrol-steps{flex:1 1 260px;min-width:0;font-size:12px;color:var(--text2)}
+/* The QR carries its own white background — it must not be themed, inverted
+   or filtered, or it stops scanning. */
+.totp-qr{flex:0 0 168px;width:168px;line-height:0;border-radius:6px;overflow:hidden}
+.totp-qr svg{width:100%;height:auto;display:block}
+.totp-secret{
+  display:inline-block;padding:6px 9px;border-radius:5px;font-size:13px;letter-spacing:.06em;
+  color:var(--text);background:var(--bg);border:1px solid var(--border);
+  user-select:all;word-break:break-all;max-width:100%;
+}
+
+/* Recovery codes — shown exactly once */
+.recovery-codes{
+  margin-top:14px;padding:14px;max-width:520px;border-radius:8px;font-size:12px;
+  background:color-mix(in srgb,var(--amber) 8%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--amber) 32%,transparent);
+}
+.recovery-code-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px;
+}
+.recovery-code-grid code{
+  padding:6px 8px;border-radius:5px;text-align:center;letter-spacing:.05em;
+  font-size:12.5px;color:var(--text);background:var(--bg);border:1px solid var(--border);
+  user-select:all;
+}

@@ -136,6 +136,12 @@ async function dontWarnLogin() {
 function showLogin() {
   const ov = document.getElementById('login-overlay');
   if (ov) ov.style.display = 'flex';
+  // Start every visit at the first leg: whether 2FA applies is the server's
+  // answer to this login, not a leftover from the last one.
+  const group = document.getElementById('login-2fa-group');
+  if (group) group.style.display = 'none';
+  const codeEl = document.getElementById('login-code') as HTMLInputElement | null;
+  if (codeEl) codeEl.value = '';
   (document.getElementById('login-username') as HTMLInputElement | null)?.focus();
 }
 
@@ -144,54 +150,58 @@ function hideLogin() {
   if (ov) ov.style.display = 'none';
 }
 
+/** Reveal the second-factor field and move focus into it. */
+function showLogin2FA() {
+  const group = document.getElementById('login-2fa-group');
+  if (group) group.style.display = '';
+  const input = document.getElementById('login-code') as HTMLInputElement | null;
+  input?.focus();
+}
+
 async function submitLogin(e: Event) {
   e.preventDefault();
   const u = (document.getElementById('login-username') as HTMLInputElement).value.trim();
   const p = (document.getElementById('login-password') as HTMLInputElement).value;
+  const codeEl = document.getElementById('login-code') as HTMLInputElement | null;
+  const code = codeEl?.value.trim() ?? '';
   const errEl = document.getElementById('login-error');
   const btn = document.getElementById('login-submit') as HTMLButtonElement;
   if (errEl) errEl.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Signing in…';
-  const { ok, data, status } = await api.authLogin(u, p);
+  const { ok, data, status } = await api.authLogin(u, p, code || undefined);
   btn.disabled = false; btn.textContent = 'Sign in';
   if (ok && data.ok) {
     (document.getElementById('login-password') as HTMLInputElement).value = '';
+    if (codeEl) codeEl.value = '';
     hideLogin();
     await boot();
     return;
   }
-  // Locked out after too many attempts → show the wait + recovery option.
+  // The password was right and the account has 2FA — ask for the code. This
+  // is the normal path, not an error, so nothing is shown in red.
+  if (status === 401 && data.error === 'totp_required') {
+    showLogin2FA();
+    return;
+  }
+  // Locked out after too many attempts.
   if (status === 429 && data.error === 'locked') {
     const mins = Math.max(1, Math.ceil((data.retry_after ?? 0) / 60));
     const locked = document.getElementById('login-locked');
     const msg = document.getElementById('login-locked-msg');
-    if (msg) msg.textContent = `Too many failed attempts — temporarily locked out. Try again in about ${mins} minute${mins === 1 ? '' : 's'}, or reset your login now.`;
+    if (msg) msg.textContent = `Too many failed attempts — temporarily locked out. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`;
     if (locked) locked.style.display = 'block';
     return;
   }
   if (errEl) {
-    errEl.textContent = status === 401 ? 'Invalid username or password.' : 'Sign in failed — please try again.';
+    errEl.textContent = data.error === 'totp_invalid'
+      ? 'That code is not valid. Codes change every 30 seconds — try the current one, or use a recovery code.'
+      : status === 401 ? 'Invalid username or password.'
+      : 'Sign in failed — please try again.';
     errEl.style.display = 'block';
+    if (data.error === 'totp_invalid' && codeEl) { codeEl.value = ''; codeEl.focus(); }
   }
 }
 (window as any).submitLogin = submitLogin;
-
-/** Locked-out / forgotten-password recovery — wipes the account + all data.
- *  Requires the recovery code from the server console/log, so network access
- *  alone can never trigger the wipe. */
-async function resetLogin() {
-  if (!confirm('Reset login and ERASE ALL DATA?\n\nThis deletes your account, trackers, stats, settings and alerts so you can get back in. Your tracker accounts themselves are NOT affected. This cannot be undone.')) return;
-  const code = prompt('Enter the recovery code from the server console or log file.\n\nIt is printed at every start, e.g.:\n  auth: recovery code 3F2A-9C41 — …');
-  if (!code?.trim()) return;
-  const { ok, status } = await api.authReset(code.trim());
-  if (ok) { location.reload(); return; }
-  alert(status === 403
-    ? 'Wrong recovery code — check the server console or log file (a new code is printed at every start).'
-    : status === 429
-      ? 'Too many attempts — temporarily locked out. Wait a few minutes and try again.'
-      : 'Reset failed — please try again.');
-}
-(window as any).resetLogin = resetLogin;
 
 /** Log out and re-show the gate (used by Settings → Account). */
 async function doLogout() {
@@ -1031,6 +1041,16 @@ modalsReady.then(m => {
   (window as any).accountSetup          = () => m.accountSetup();
   (window as any).accountChangePassword = () => m.accountChangePassword();
   (window as any).accountDisable        = () => m.accountDisable();
+  (window as any).acctPwMeter           = m.acctPwMeter;
+  (window as any).twoFactorStart        = () => { void m.twoFactorStart(); };
+  (window as any).twoFactorEnable       = () => { void m.twoFactorEnable(); };
+  (window as any).twoFactorDisable      = () => { void m.twoFactorDisable(); };
+  (window as any).twoFactorRegenerate   = () => { void m.twoFactorRegenerate(); };
+  (window as any).copyTOTPSecret        = () => { void m.copyTOTPSecret(); };
+  (window as any).copyRecoveryCodes     = () => { void m.copyRecoveryCodes(); };
+  (window as any).downloadRecoveryCodes = m.downloadRecoveryCodes;
+  (window as any).dismissRecoveryCodes  = m.dismissRecoveryCodes;
+  (window as any).detectTrackerType     = () => { void m.detectTrackerType(); };
   (window as any).backupNow             = () => m.backupNow();
   (window as any).checkForUpdates       = () => { void m.checkForUpdates(); };
   (window as any).toggleAutoUpdate      = () => { void m.toggleAutoUpdate(); };

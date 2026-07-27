@@ -4,7 +4,7 @@
 import type {
   CheckResult, OptOutEntry, ProwlarrIndexer, TestStatusMap, Tracker, TrackerTestResult,
 } from '../types';
-import { MASKED_KEY } from '../types';
+import { MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
 import { appSettings } from '../state';
 import { approvalIcon, approvalTitle, approvalWarns } from '../utils/approval';
@@ -137,9 +137,17 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
     const optOutBadge = t.opted_out
       ? `<span class="trk-optout-badge" title="${esc(optedOutTitle(t))}">⛔ opted out</span>`
       : '';
+    // A tracker with no def and no type chosen collects nothing at all, which
+    // is invisible otherwise — it just looks like a tracker that never
+    // returns stats. Say so where the user is already looking.
+    const needsType = !t.def_key && (!t.type || t.type === UNKNOWN_TYPE);
+    const typeBadge = needsType
+      ? ` <span class="trk-def-badge needs-type" title="Yata has no definition for this tracker and no type is set, so nothing is being collected. Open Edit to pick a type or run Detect.">needs type</span>`
+      : '';
     const defBadge = (t.def_key
       ? `<span class="trk-def-badge">def: ${esc(t.def_key)}</span>`
       : `<span class="trk-def-badge manual">manual</span>`)
+      + typeBadge
       + approvalIcon(t.def_approval, t.def_approval_note)
       + optOutBadge;
     const testCell = _testing.has(t.id)

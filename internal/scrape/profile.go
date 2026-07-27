@@ -11,7 +11,6 @@
 package scrape
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,12 +40,14 @@ type Spec struct {
 	EventTitleClass string
 	// StatCardClasses enables the label/value class-pair strategy.
 	StatCardClasses *defs.StatCardClasses
-	// Gazelle enables Gazelle-specific behaviour (ID-based profile URL via
-	// API lookup, id-keyed <li> extraction). Keyed off the type's api.kind.
+	// Gazelle enables the id-keyed <li> extraction Gazelle profile pages use
+	// for their stat list. Keyed off the tracker's TYPE, not its api.kind:
+	// several families now share the "custom" fetcher, so the kind no longer
+	// identifies the page layout.
 	Gazelle bool
-	// KnownUserID fills "{id}" profile paths on NON-gazelle trackers (from a
-	// previous scrape's user_id stat). Empty → the id is discovered from the
-	// site header (the logged-in user's own profile link).
+	// KnownUserID fills "{id}" profile paths (from a previous scrape's user_id
+	// stat). Empty → the id is discovered from the site header (the logged-in
+	// user's own profile link).
 	KnownUserID string
 	// PresenceFlags detect boolean header states (unread mail/notifications)
 	// by element presence — zero extra requests, the header is in the page.
@@ -290,28 +291,21 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	}
 	profileURL := baseURL + strings.ReplaceAll(path, "{username}", t.Username)
 
-	// Gazelle: resolve the ID-based profile URL and capture authoritative API
-	// values (invites, join_date, snatched) that override scraped values.
-	var gz *gazelleProfileData
-	if spec.Gazelle {
-		if strings.TrimSpace(t.APIKey) == "" {
-			return nil, serr(http.StatusBadRequest, "no_key")
-		}
-		gd, gerr := fetchGazelleProfileData(t, spec.Identify)
-		if gerr != nil {
-			return nil, gerr
-		}
-		gz = gd
-		profileURL = baseURL + "/user.php?id=" + strconv.Itoa(gd.UserID)
-	}
-
-	// Non-gazelle "{id}" profile paths (TBDev-family /userdetails.php?id={id}):
-	// use the id from a previous scrape when known, otherwise discover it from
-	// the site header — every page links the logged-in user's own profile.
-	// The resolved id is stored as user_id so future scrapes (and the UI's
-	// profile link) skip discovery.
+	// "{id}" profile paths (Gazelle /user.php?id={id}, TBDev-family
+	// /userdetails.php?id={id}): use the id from a previous scrape when known,
+	// otherwise discover it from the site header — every page links the
+	// logged-in user's own profile. The resolved id is stored as user_id so
+	// future scrapes (and the UI's profile link) skip discovery.
+	//
+	// Gazelle sites used to take a separate route here: a second call to
+	// api.php purely to learn the user id, which also required an API key and
+	// re-fetched invites, join_date and snatched to override the scraped
+	// values. All three now arrive through the stats API, which already
+	// outranks the scrape layer in the merge, so the override was doing work
+	// the merge repeats — and the id can be discovered from the page like
+	// every other tracker's, without a key.
 	userID := strings.TrimSpace(spec.KnownUserID)
-	if !spec.Gazelle && strings.Contains(path, "{id}") {
+	if strings.Contains(path, "{id}") {
 		if userID == "" {
 			uid, derr := discoverUserID(baseURL, path, t, spec.Identify)
 			if derr != nil {
@@ -373,12 +367,6 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 		return nil, serr(http.StatusBadGateway, "empty_scrape")
 	}
 
-	// Gazelle: API values are authoritative for these fields.
-	if spec.Gazelle && gz != nil {
-		result["invites"] = fmt.Sprintf("%d", gz.Invites)
-		result["join_date"] = gz.JoinDate
-		result["snatched"] = fmt.Sprintf("%d", gz.Snatched)
-	}
 	// Persist the resolved user id (SaveScrape replaces the whole layer, so
 	// it must be re-included every time or the next scrape re-discovers it).
 	if userID != "" {
@@ -979,60 +967,6 @@ func parseUSDateTime(s string) int64 {
 // Gazelle-specific helpers (keyed off api.kind, not any specific tracker)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type gazelleProfileData struct {
-	UserID   int
-	Invites  int
-	Snatched int
-	JoinDate string
-}
-
-func fetchGazelleProfileData(t models.Tracker, identify string) (*gazelleProfileData, *Error) {
-	apiURL := fmt.Sprintf(
-		"%s/api.php?action=user&apikey=%s&method=getuserinfo&type=username&user=%s",
-		strings.TrimRight(t.URL, "/"), t.APIKey, t.Username)
-	req, _ := http.NewRequest(http.MethodGet, apiURL, nil)
-	ident.Apply(req, identify)
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, serr(http.StatusBadGateway, "connection_error")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, serr(http.StatusBadGateway, fmt.Sprintf("http_%d", resp.StatusCode))
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, serr(http.StatusBadGateway, "read_error")
-	}
-	var raw struct {
-		Status   string `json:"status"`
-		Response struct {
-			ID       int    `json:"ID"`
-			Invites  int    `json:"Invites"`
-			Snatched int    `json:"Snatched"`
-			JoinDate string `json:"JoinDate"`
-		} `json:"response"`
-	}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, serr(http.StatusBadGateway, "parse_error")
-	}
-	if raw.Status != "success" || raw.Response.ID == 0 {
-		return nil, serr(http.StatusBadGateway, "api_error")
-	}
-	jd := raw.Response.JoinDate
-	if len(jd) >= 10 {
-		jd = jd[:10]
-	}
-	return &gazelleProfileData{
-		UserID:   raw.Response.ID,
-		Invites:  raw.Response.Invites,
-		Snatched: raw.Response.Snatched,
-		JoinDate: jd,
-	}, nil
-}
-
-// extractGazelleIDStats scrapes id-keyed <li> fields (bonus_points from
-// <li id="bonus_points">, uploads_approved from <li id="comm_upload">).
 func extractGazelleIDStats(rawHTML string, result map[string]string) {
 	doc, err := html.Parse(strings.NewReader(rawHTML))
 	if err != nil {

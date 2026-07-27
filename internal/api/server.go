@@ -31,10 +31,6 @@ type Deps struct {
 	Alerts  *notify.Engine
 	Paths   *pathways.Data // nil = pathways feature hidden
 	BaseDir string         // directory containing static/ and templates/
-	// ResetCode gates /api/auth/reset (the destructive recovery wipe). It is
-	// generated fresh each start and printed to the console + log, so a reset
-	// proves console/filesystem access. Empty disables reset entirely.
-	ResetCode string
 }
 
 // NewRouter builds the full application router.

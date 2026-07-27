@@ -122,6 +122,112 @@ func (r *Registry) ResolveAPIFieldMap(trackerURL, typeKey string) map[string]str
 	return merged
 }
 
+// TypeKeyFor resolves which type a tracker actually is: its def's type when it
+// has a def, otherwise the type stored on the tracker itself. Callers that need
+// to key behaviour on a specific tracker FAMILY should use this rather than
+// APIKind — several families now share the "custom" fetcher, so the kind no
+// longer identifies them.
+func (r *Registry) TypeKeyFor(trackerURL, typeKey string) string {
+	if td, ok := r.TrackerByURL(trackerURL); ok && td.Type != "" {
+		return td.Type
+	}
+	return typeKey
+}
+
+// ResolveCustomAPI returns the effective custom-API description for a tracker:
+// the TYPE's shared block with the tracker def's own block merged over it.
+// Returns nil when neither supplies one.
+//
+// The two levels exist because tracker families share an API. Anthelion and
+// Nebulance run the same software from the same developers, so the endpoint,
+// the auth style and the field names belong to the family, while the API-key
+// hint (a path through each site's own settings UI) belongs to the tracker.
+func (r *Registry) ResolveCustomAPI(trackerURL, typeKey string) *CustomAPI {
+	td, hasDef := r.TrackerByURL(trackerURL)
+	if hasDef && td.Type != "" {
+		typeKey = td.Type
+	}
+	var base *CustomAPI
+	if tt, ok := r.Type(typeKey); ok && tt.CustomAPI != nil {
+		clone := *tt.CustomAPI
+		base = &clone
+	}
+	if !hasDef || td.API == nil {
+		return base
+	}
+	if base == nil {
+		return td.API
+	}
+	merged := *base
+	mergeCustomAPI(&merged, td.API)
+	return &merged
+}
+
+// mergeCustomAPI overlays the non-empty parts of over onto dst. Scalars are
+// replaced when set; maps are merged key by key so a def can add one mapping
+// without restating its family's whole field map.
+func mergeCustomAPI(dst *CustomAPI, over *CustomAPI) {
+	setStr := func(d *string, o string) {
+		if o != "" {
+			*d = o
+		}
+	}
+	setStr(&dst.Path, over.Path)
+	setStr(&dst.BaseURL, over.BaseURL)
+	setStr(&dst.AuthMethod, over.AuthMethod)
+	setStr(&dst.JSONRPCMethod, over.JSONRPCMethod)
+	setStr(&dst.CookieName, over.CookieName)
+	setStr(&dst.APIKeyParam, over.APIKeyParam)
+	setStr(&dst.SuccessField, over.SuccessField)
+	setStr(&dst.SuccessValue, over.SuccessValue)
+	setStr(&dst.ClassField, over.ClassField)
+	setStr(&dst.APIKeyHint, over.APIKeyHint)
+	// Booleans only ever turn ON here: a family that computes ratio from bytes
+	// does so for every member, and there is no "false" to distinguish from
+	// "unset" in JSON. A member that genuinely differs needs its own type.
+	dst.BufferFromBytes = dst.BufferFromBytes || over.BufferFromBytes
+	dst.RatioFromBytes = dst.RatioFromBytes || over.RatioFromBytes
+
+	dst.FieldMap = mergeStrMap(dst.FieldMap, over.FieldMap)
+	dst.ByteFields = mergeStrMap(dst.ByteFields, over.ByteFields)
+	dst.UnixFields = mergeStrMap(dst.UnixFields, over.UnixFields)
+	dst.BoolFields = mergeStrMap(dst.BoolFields, over.BoolFields)
+	dst.ClassMap = mergeStrMap(dst.ClassMap, over.ClassMap)
+	dst.SumFields = mergeSliceMap(dst.SumFields, over.SumFields)
+	dst.SumBytesFields = mergeSliceMap(dst.SumBytesFields, over.SumBytesFields)
+	if len(over.RequiredFields) > 0 {
+		dst.RequiredFields = append(append([]string{}, dst.RequiredFields...), over.RequiredFields...)
+	}
+}
+
+func mergeStrMap(base, over map[string]string) map[string]string {
+	if len(base) == 0 && len(over) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range over {
+		out[k] = v
+	}
+	return out
+}
+
+func mergeSliceMap(base, over map[string][]string) map[string][]string {
+	if len(base) == 0 && len(over) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(base)+len(over))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range over {
+		out[k] = v
+	}
+	return out
+}
+
 // NormalizeAPIFields renames tracker-specific API field names to canonical
 // names in-place. When both the alias and the canonical name exist in the
 // response, the alias source wins — it is authoritative (v1: Unit3D returns
@@ -152,8 +258,19 @@ func (r *Registry) APIKind(trackerURL, typeKey string) string {
 			typeKey = td.Type
 		}
 	}
+	// A type can supply the path for a whole family of trackers, in which case
+	// its members fetch through the custom fetcher without restating it.
+	if tt, ok := r.Type(typeKey); ok && tt.CustomAPI != nil && tt.CustomAPI.Path != "" {
+		return "custom"
+	}
 	if tt, ok := r.Type(typeKey); ok {
 		return tt.API.Kind
 	}
-	return "unit3d" // sensible default for manual trackers with unknown type
+	// An unresolvable type means we do not know what software the site runs.
+	// This used to fall back to UNIT3D, which turned every unrecognised
+	// tracker into a stream of requests to endpoints it does not have — and
+	// presented the result to the user as a UNIT3D tracker that was merely
+	// failing. Collecting nothing is the honest answer; the UI prompts for a
+	// type instead.
+	return "none"
 }

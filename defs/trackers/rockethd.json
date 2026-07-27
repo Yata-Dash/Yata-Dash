@@ -10,7 +10,7 @@
     "name": "sudo2k16",
     "role": "Systems Engineer",
     "date": "2026-07-15",
-    "notes": "Definition maintained by RocketHD staff (Systems Engineer)."
+    "note": "Definition maintained by RocketHD staff (Systems Engineer)."
   },
   "scrape": {
     "disable_scraping": true

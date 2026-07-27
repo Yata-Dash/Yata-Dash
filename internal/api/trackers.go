@@ -20,6 +20,7 @@ func registerTrackers(r chi.Router, d *Deps) {
 	r.Put("/trackers/{id}", updateTracker(d))
 	r.Delete("/trackers/{id}", deleteTracker(d))
 	r.Post("/trackers/{id}/test", testTracker(d))
+	r.Post("/trackers/{id}/detect", detectTrackerType(d))
 	r.Get("/trackers/test-status", testStatusAll(d))
 	r.Post("/trackers/test-adhoc", testAdhocTracker(d))
 }
@@ -67,9 +68,6 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		if v.Name == "" {
 			v.Name = td.Name
 		}
-		if td.API != nil && td.API.APIKeyHint != "" {
-			v.APIKeyHint = td.API.APIKeyHint
-		}
 		if td.Rules != nil {
 			v.MinRatio = td.Rules.MinRatio
 			v.MinSeedDays = td.Rules.MinSeedDays
@@ -78,12 +76,19 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 			v.MinSeedDaysSeason = td.Rules.MinSeedDaysSeason
 			v.RuleNote = td.Rules.Note
 		}
-		customAPI = td.API
 	}
+	// The effective API description: the tracker def's own block over its
+	// type's shared one, so a family member inherits the endpoint and field
+	// map while keeping its own key hint.
+	customAPI = d.Reg.ResolveCustomAPI(t.URL, t.Type)
 	if tt, ok := d.Reg.Type(typeKey); ok {
 		// Fields the def's API already provides aren't required from the user
 		// (e.g. HUNO's member_since → join_date).
 		v.RequiredFields = requiredFieldsFor(tt.API.RequiredFields, customAPI)
+		v.APIKeyHint = tt.API.APIKeyHint // type default…
+	}
+	if customAPI != nil && customAPI.APIKeyHint != "" {
+		v.APIKeyHint = customAPI.APIKeyHint // …overridden per tracker
 	}
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	v.SupportsHTMLScrape = !rs.SkipHTMLScrape && !rs.DisableScraping
@@ -209,7 +214,12 @@ func createTracker(d *Deps) http.HandlerFunc {
 		}
 		applyPayload(&t, p)
 		if t.Type == "" {
-			t.Type = "unit3d"
+			// No definition matched and the caller named no type — most often a
+			// Prowlarr/Jackett import of a tracker Yata doesn't know. Guessing
+			// UNIT3D here made every such tracker claim to be one, which is
+			// what a PTP import looked like in the wild. Park it as
+			// undefined and let the user pick.
+			t.Type = models.TypeUnknown
 		}
 		if t.Name == "" {
 			t.Name = t.URL
@@ -235,6 +245,13 @@ func updateTracker(d *Deps) http.HandlerFunc {
 		}
 		err := d.Cfg.UpdateTracker(id, func(t *models.Tracker) {
 			applyPayload(t, p)
+			// A tracker Yata has a definition for takes its type from that
+			// definition. The type picker is only offered for undefined
+			// trackers, so a type arriving for a defined one is either a stale
+			// form or a hand-made request — either way the def wins.
+			if td, ok := d.Reg.TrackerByURL(t.URL); ok && td.Type != "" {
+				t.Type = td.Type
+			}
 			clampTrackerScrape(d, t)
 		})
 		if err != nil {
