@@ -56,8 +56,7 @@
       "name": "Capivarinha",
       "style": { "color": "#7289DA", "icon": "fas fa-user" },
       "requirements": {
-        "min_ratio": 1.0,
-        "note": "Default class."
+        "min_ratio": 1.0
       },
       "perks": [
         { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 5" },
