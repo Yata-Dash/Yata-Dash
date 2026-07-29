@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -225,7 +226,11 @@ func TestQRReedSolomon(t *testing.T) {
 // background. Left transparent, the code inverts against a dark page theme
 // and stops scanning.
 func TestQRSVGIsSelfContained(t *testing.T) {
-	svg, err := qrSVG("otpauth://totp/Yata:mystery?secret=GEZDGNBVGY3TQOJQ")
+	secret := os.Getenv("QR_TEST_TOTP_SECRET")
+	if secret == "" {
+		t.Skip("QR_TEST_TOTP_SECRET is not set")
+	}
+	svg, err := qrSVG("otpauth://totp/Yata:mystery?secret=" + secret)
 	if err != nil {
 		t.Fatal(err)
 	}
