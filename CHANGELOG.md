@@ -6,6 +6,10 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+
+
+## [Beta-20260725]
+
 ### Added
 
 - **Tracker capability indicators — "what does this tracker actually give me?"**
