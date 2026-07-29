@@ -1,5 +1,10 @@
 package defs
 
+import (
+	"slices"
+	"sort"
+)
+
 // ResolvedScrape is the fully-merged scrape behaviour for one tracker,
 // combining type-level and tracker-level ScrapeSpecs. The user/global layer
 // of the rate-limit cascade is applied later by internal/scrape (policy),
@@ -225,6 +230,169 @@ func mergeSliceMap(base, over map[string][]string) map[string][]string {
 	for k, v := range over {
 		out[k] = v
 	}
+	return out
+}
+
+// ── Capabilities ─────────────────────────────────────────────────────────────
+
+// ResolvedCapabilities is what a tracker can actually report, split by how it
+// gets there. Callers compare these sets against a group ladder's requirements
+// to answer "how much of my promotion progress can Yata even see here?".
+type ResolvedCapabilities struct {
+	// APIStats are canonical fields the tracker's API returns.
+	APIStats []string
+	// ScrapeStats are canonical fields its profile page yields — empty when
+	// scraping is architecturally impossible or forbidden by the operator, so
+	// callers never have to re-check the policy themselves.
+	ScrapeStats []string
+	// ScrapePossible records why ScrapeStats may be empty: false means the
+	// operator forbids it or the type can't scrape, rather than the page
+	// simply offering nothing.
+	ScrapePossible bool
+	// Derived is true when APIStats came from a def that describes its own API
+	// (a custom field_map) rather than from a declaration. Consumers use it to
+	// decide whether a missing declaration is worth warning about.
+	Derived bool
+}
+
+// Has reports whether a canonical field is obtainable at all, by either route.
+func (rc ResolvedCapabilities) Has(field string) bool {
+	return slices.Contains(rc.APIStats, field) || slices.Contains(rc.ScrapeStats, field)
+}
+
+// HasAPI reports whether a canonical field comes from the API specifically.
+func (rc ResolvedCapabilities) HasAPI(field string) bool {
+	return slices.Contains(rc.APIStats, field)
+}
+
+// ResolveCapabilities works out what a tracker can report.
+//
+// The API set comes from whichever source can be trusted: a def describing its
+// own API through a field_map is derived from directly, otherwise the type's
+// declared baseline with the tracker's add/omit deltas applied. The scrape set
+// is derived from the resolved label map and presence flags, and is empty
+// whenever scraping is impossible or forbidden.
+func (r *Registry) ResolveCapabilities(trackerURL, typeKey string) ResolvedCapabilities {
+	td, hasDef := r.TrackerByURL(trackerURL)
+	if hasDef && td.Type != "" {
+		typeKey = td.Type
+	}
+	out := ResolvedCapabilities{}
+
+	// A custom API states its own output, so believe it over any declaration.
+	if api := r.ResolveCustomAPI(trackerURL, typeKey); api != nil && api.Path != "" {
+		out.APIStats = canonicalFieldsOf(api)
+		out.Derived = true
+	} else {
+		set := map[string]bool{}
+		if tt, ok := r.Type(typeKey); ok && tt.Capabilities != nil {
+			for _, f := range tt.Capabilities.APIStats {
+				set[f] = true
+			}
+		}
+		if hasDef && td.Capabilities != nil {
+			// A tracker restating the whole list replaces the baseline; the
+			// usual case is a delta on top of it.
+			if len(td.Capabilities.APIStats) > 0 {
+				set = map[string]bool{}
+				for _, f := range td.Capabilities.APIStats {
+					set[f] = true
+				}
+			}
+			for _, f := range td.Capabilities.APIStatsAdd {
+				set[f] = true
+			}
+			for _, f := range td.Capabilities.APIStatsOmit {
+				delete(set, f)
+			}
+		}
+		// A field the user is REQUIRED to enter is, by definition, one this
+		// tracker's API doesn't supply — that is what api.required_fields
+		// means. Subtracting it here keeps the two from being maintained
+		// separately and disagreeing: three UNIT3D forks already declare
+		// join_date that way, and none of them should count it as an API stat.
+		if hasDef && td.API != nil {
+			for _, f := range td.API.RequiredFields {
+				delete(set, f)
+			}
+		}
+		out.APIStats = sortedKeys(set)
+	}
+
+	// Scraping: policy first, then what the page can actually yield.
+	rs := r.ResolveScrape(trackerURL, typeKey)
+	out.ScrapePossible = !rs.SkipHTMLScrape && !rs.DisableScraping && !rs.OptedOut
+	if out.ScrapePossible {
+		if hasDef && td.Capabilities != nil && len(td.Capabilities.ScrapeStats) > 0 {
+			out.ScrapeStats = append([]string(nil), td.Capabilities.ScrapeStats...)
+			sort.Strings(out.ScrapeStats)
+		} else {
+			out.ScrapeStats = scrapeFieldsOf(rs)
+		}
+	}
+	return out
+}
+
+// canonicalFieldsOf lists every canonical field a custom API description can
+// produce, across all the ways it can produce one.
+func canonicalFieldsOf(api *CustomAPI) []string {
+	set := map[string]bool{}
+	for _, m := range []map[string]string{api.FieldMap, api.ByteFields, api.UnixFields, api.BoolFields} {
+		for _, canonical := range m {
+			set[canonical] = true
+		}
+	}
+	for canonical := range api.SumFields {
+		set[canonical] = true
+	}
+	for canonical := range api.SumBytesFields {
+		set[canonical] = true
+	}
+	if api.ClassField != "" {
+		set["group"] = true
+	}
+	// Derived values: computed from the byte fields rather than mapped, so
+	// they appear in no map but do reach the user.
+	if api.BufferFromBytes {
+		set["buffer"] = true
+	}
+	if api.RatioFromBytes {
+		set["ratio"] = true
+	}
+	return sortedKeys(set)
+}
+
+// scrapeFieldsOf lists the canonical fields a profile page can yield: whatever
+// the resolved label vocabulary maps to, plus the presence flags. The scraper's
+// own base label map is not consulted here — it is generic English label text
+// shared by every tracker, so counting it would claim every tracker can scrape
+// every stat regardless of what its page actually shows.
+func scrapeFieldsOf(rs ResolvedScrape) []string {
+	set := map[string]bool{}
+	for _, canonical := range rs.Labels {
+		set[canonical] = true
+	}
+	for field := range rs.PresenceFlags {
+		set[field] = true
+	}
+	// Event banners come from the scraper's own extraction pass, not from the
+	// label map, so no def mentions them — but every scraped page goes through
+	// it, and a tracker showing a freeleech banner does report events. Without
+	// this, trackers whose banner Yata displays perfectly well were reporting
+	// "events: not available" on the same screen.
+	set["active_event"] = true
+	return sortedKeys(set)
+}
+
+func sortedKeys(set map[string]bool) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
 	return out
 }
 

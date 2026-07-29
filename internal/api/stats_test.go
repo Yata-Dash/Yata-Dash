@@ -17,6 +17,12 @@ import (
 
 func testDeps(t *testing.T) *Deps {
 	t.Helper()
+	// The login lockout is package-level state keyed by IP, and every test
+	// arrives from httptest's single RemoteAddr — so one test exhausting the
+	// attempt limit locks out every test that runs after it, for fifteen
+	// minutes of simulated time. Clearing it here keeps tests independent of
+	// their order.
+	resetLoginLimiter()
 	dir := t.TempDir()
 	cfg, err := config.Open(filepath.Join(dir, "config.json"))
 	if err != nil {
@@ -37,6 +43,11 @@ func testDeps(t *testing.T) *Deps {
 		Reg:   reg,
 		Fetch: fetch.NewClient(reg, filepath.Join(dir, "missing.json")),
 		Stats: stats.New(db),
+		// httptest.NewRequest stamps every request with Host "example.com",
+		// which the host guard rightly refuses. Allowing it here keeps that
+		// guard out of the way of tests aimed at other things; hostguard_test
+		// builds its own Deps to exercise the check itself.
+		AllowedHosts: []string{"example.com"},
 	}
 }
 

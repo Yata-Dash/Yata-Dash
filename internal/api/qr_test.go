@@ -225,7 +225,10 @@ func TestQRReedSolomon(t *testing.T) {
 // background. Left transparent, the code inverts against a dark page theme
 // and stops scanning.
 func TestQRSVGIsSelfContained(t *testing.T) {
-	svg, err := qrSVG("otpauth://totp/Yata:mystery?secret=GEZDGNBVGY3TQOJQ")
+	// The secret is the RFC 4226 test vector, not a credential — see
+	// rfcSecret in totp_test.go. Secret scanners flag it; there is nothing
+	// behind it to rotate.
+	svg, err := qrSVG("otpauth://totp/Yata:mystery?secret=GEZDGNBVGY3TQOJQ") //nolint:gosec // RFC 4226 test vector
 	if err != nil {
 		t.Fatal(err)
 	}

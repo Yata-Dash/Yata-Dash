@@ -5,6 +5,13 @@
   "description": "Tracker without a usable stats API — every stat comes from HTML profile scraping with the user's session cookie. Requires the username (to locate the profile page from the site header) and a join date (these sites report none in a parseable form). Typical for TBDev-family software.",
   "api": {
     "kind": "none",
-    "required_fields": ["username", "join_date"]
+    "required_fields": [
+      "username",
+      "join_date"
+    ]
+  },
+  "last_updated": "2026-07-28",
+  "capabilities": {
+    "api_stats": []
   }
 }

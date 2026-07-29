@@ -1692,3 +1692,97 @@ func TestFetchGazelleANTNEBType(t *testing.T) {
 		}
 	}
 }
+
+// TestFetcherCapabilitiesMatchDefs pins the two hardcoded Gazelle fetchers to
+// the capability lists their type defs advertise.
+//
+// Those lists are the only description of what these fetchers return — the defs
+// carry no field map for them — so without this they would drift the first time
+// someone adds a field to the Go code, and the UI would go on promising the old
+// set. Every field the fetcher produces from a maximal response must be
+// declared, and every declared field must be reachable.
+func TestFetcherCapabilitiesMatchDefs(t *testing.T) {
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+
+	cases := []struct {
+		typeKey string
+		handler http.HandlerFunc
+	}{
+		{"gazelle_json", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Query().Get("action") {
+			case "index":
+				fmt.Fprint(w, `{"status":"success","response":{
+					"username":"listener","id":42,"giftTokens":30,"meritTokens":109,
+					"userstats":{"uploaded":300,"downloaded":100,"ratio":3,"requiredratio":0.6,"class":"Elite"}}}`)
+			case "user":
+				fmt.Fprint(w, `{"status":"success","response":{"username":"listener",
+					"stats":{"joinedDate":"2025-02-03 04:05:06","uploaded":300,"downloaded":100,"ratio":3,"buffer":200,"requiredRatio":0.6},
+					"personal":{"class":"Elite","warned":true,"enabled":true},
+					"community":{"posts":1,"requestsFilled":2,"perfectFlacs":500,"uploaded":50,"groups":510,"seeding":20,"leeching":1,"snatched":30,"invited":4}}}`)
+			case "community_stats":
+				fmt.Fprint(w, `{"status":"success","response":{"leeching":1,"seeding":"20","snatched":"30","seedingsize":"476.55 GB"}}`)
+			default:
+				http.Error(w, "unexpected action", http.StatusBadRequest)
+			}
+		}},
+		{"gazelle_games", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Query().Get("request") {
+			case "quick_user":
+				fmt.Fprint(w, `{"status":"success","response":{"username":"player","id":24,
+					"userstats":{"uploaded":4398046511104,"downloaded":1099511627776,"ratio":4,"requiredratio":0.6,"class":"Legendary Gamer"}}}`)
+			case "user_stats_ratio":
+				fmt.Fprint(w, `{"status":"success","response":{"uploaded":4398046511104,"downloaded":1099511627776,
+					"ratio":4,"buffer":3298534883328,"disposable":3848290697216,"reqratio":0.6}}`)
+			case "user":
+				// Every optional pointer populated — a capability is "can this
+				// arrive at all", so the fixture has to offer all of them.
+				fmt.Fprint(w, `{"status":"success","response":{"username":"player",
+					"stats":{"joinedDate":"2025-01-02 03:04:05","ratio":"4.0","requiredRatio":0.6,"shareScore":1.25,"gold":1000},
+					"personal":{"class":"Legendary Gamer","hnrs":3,"warned":true,"invites":2},
+					"community":{"hourlyGold":2.5,"actualPosts":7,"ircActualLines":14,"seeding":20,"leeching":2,"snatched":100,"uniqueSnatched":90,"seedSize":34359738368},
+					"achievements":{"userLevel":"Legendary Gamer","nextLevel":"Master Gamer","totalPoints":3000,"pointsToNextLvl":1200}}}`)
+			default:
+				http.Error(w, "unexpected request", http.StatusBadRequest)
+			}
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.typeKey, func(t *testing.T) {
+			ts := httptest.NewServer(tc.handler)
+			defer ts.Close()
+
+			// The URL matches no def, so capabilities resolve to the TYPE's
+			// declared baseline — which is what's under test.
+			declared := map[string]bool{}
+			for _, f := range reg.ResolveCapabilities(ts.URL, tc.typeKey).APIStats {
+				declared[f] = true
+			}
+			if len(declared) == 0 {
+				t.Fatalf("type %q declares no api_stats", tc.typeKey)
+			}
+
+			data, ferr := NewClient(reg, "").Fetch(models.Tracker{
+				URL: ts.URL, Type: tc.typeKey, APIKey: "sekrit", Username: "player",
+			})
+			if ferr != nil {
+				t.Fatalf("Fetch: %v", ferr)
+			}
+
+			for field := range data {
+				if !declared[field] {
+					t.Errorf("fetcher returns %q but the type def does not declare it", field)
+				}
+				delete(declared, field)
+			}
+			for field := range declared {
+				t.Errorf("type def declares %q but the fetcher never produces it", field)
+			}
+		})
+	}
+}

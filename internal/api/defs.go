@@ -37,6 +37,52 @@ type defInfo struct {
 	// config fields (see requiredFieldsFor). No omitempty: an empty list
 	// must reach the UI as [] so it doesn't fall back to the type default.
 	RequiredFields []string `json:"required_fields"`
+	// Capabilities is what this tracker can actually report, so the picker can
+	// show it BEFORE the tracker is added — which is the whole point: a user
+	// choosing between two trackers can't consult stats they don't have yet.
+	Capabilities *capabilityView `json:"capabilities,omitempty"`
+}
+
+// capabilityView is the UI-facing shape of a tracker's capabilities: the
+// ladder-coverage counts, and a per-field source map for the icons.
+type capabilityView struct {
+	// LadderTotal, MetAPI and MetScrape are the "N of M" figures. MetScrape
+	// INCLUDES everything MetAPI covers — it is "with scraping as well", not a
+	// separate tally, so the UI can render "4 via API · 6 with scraping".
+	LadderTotal int `json:"ladder_total"`
+	MetAPI      int `json:"met_api"`
+	MetScrape   int `json:"met_scrape"`
+	// Missing names the ladder requirements neither route can reach, so the
+	// tooltip can say WHICH stats are unavailable rather than just how many.
+	Missing []string `json:"missing,omitempty"`
+	// ScrapePossible is false when the operator forbids scraping or the type
+	// can't scrape — the reason MetScrape may equal MetAPI.
+	ScrapePossible bool `json:"scrape_possible"`
+	// Notables maps the capabilities worth their own icon to "api", "scrape"
+	// or "" (not available).
+	Notables map[string]string `json:"notables"`
+	// APIStats is the full field set, for the detailed breakdown.
+	APIStats []string `json:"api_stats,omitempty"`
+	// Known is false when nothing has been declared or derived for this
+	// tracker — the UI must then say "not recorded" rather than "reports
+	// nothing", which are very different claims.
+	Known bool `json:"known"`
+}
+
+// buildCapabilityView resolves one def's capabilities into the UI shape.
+func buildCapabilityView(d *Deps, td defs.TrackerDef) *capabilityView {
+	caps := d.Reg.ResolveCapabilities(td.URL, td.Type)
+	sum := caps.Summarise(td)
+	return &capabilityView{
+		LadderTotal:    len(sum.Required),
+		MetAPI:         len(sum.MetAPI),
+		MetScrape:      len(sum.MetScrape),
+		Missing:        sum.Missing,
+		ScrapePossible: sum.ScrapePossible,
+		Notables:       caps.Notables(),
+		APIStats:       sum.APIStats,
+		Known:          len(sum.APIStats) > 0 || len(caps.ScrapeStats) > 0,
+	}
 }
 
 // requiredFieldsFor resolves the required config fields for one tracker.
@@ -129,6 +175,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 			// whenever the API itself needs it — a custom def with auth_method
 			// "session_cookie" resolves "session_cookie" into RequiredFields.
 			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
+			info.Capabilities = buildCapabilityView(d, td)
 			tout = append(tout, info)
 		}
 		types := d.Reg.Types()
@@ -156,6 +203,10 @@ func reloadDefs(d *Deps) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// A corrected declaration should stop warning on the next fetch, and a
+		// newly-broken one should warn again rather than staying quiet because
+		// the previous version already did.
+		resetCapDriftMemory()
 		d.logInfof("defs: reloaded — %d trackers, %d types, %d issues",
 			len(d.Reg.Trackers()), len(d.Reg.Types()), len(d.Reg.Issues()))
 		jsonOK(w, map[string]any{

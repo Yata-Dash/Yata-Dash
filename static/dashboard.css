@@ -1330,13 +1330,21 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 /* Label→value lists, so capped: auto-fit would happily stretch the three
    columns to 1100px each on an ultrawide, putting every value a screen's width
    from its label. The charts above are free to use the whole row. */
+/* Masonry columns rather than a grid. With a grid, a card that wraps to the
+   next row starts below the TALLEST card in the row above — so on a narrow
+   screen the timelines card sat in a lane of its own with a stretch of empty
+   space beside the short Stats card. Balanced columns tuck it up instead.
+   Cards are body-appended for popovers, so nothing is clipped by the
+   multi-column context. */
 .detail-cols{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-  gap:16px;align-items:start;max-width:var(--reading-max);
+  columns:4 280px;column-gap:16px;max-width:var(--reading-max);
 }
 .detail-col{
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:14px 16px;
+  /* A card must never be split down the middle across a column boundary. */
+  break-inside:avoid;-webkit-column-break-inside:avoid;
+  margin-bottom:16px;
 }
 .detail-empty{font-size:11.5px;color:var(--text3);font-style:italic}
 .detail-menu-hint{font-size:10px;color:var(--text3);padding:6px 4px 2px;font-style:italic}
@@ -1744,6 +1752,80 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   background:none;white-space:nowrap;
 }
 .auth-nudge-dontwarn:hover{background:color-mix(in srgb,var(--amber) 14%,transparent)}
+
+/* ── Tracker capability indicators ──────────────────────────────────────────
+   Tri-state throughout: available via API (solid), via scraping only (amber
+   outline), not available (dimmed + struck through). The third state has to
+   look deliberate — a missing icon would read as "we didn't check". */
+.cap-row{display:inline-flex;align-items:center;gap:4px;margin-left:6px;vertical-align:middle}
+.cap-chip{
+  display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:9px;
+  font-size:10.5px;font-weight:600;line-height:1.6;cursor:help;
+  border:1px solid transparent;white-space:nowrap;
+}
+.cap-chip i{font-size:9px}
+.cap-chip.cap-full{color:var(--green);background:color-mix(in srgb,var(--green) 14%,transparent);border-color:color-mix(in srgb,var(--green) 34%,transparent)}
+.cap-chip.cap-part{color:var(--amber);background:color-mix(in srgb,var(--amber) 14%,transparent);border-color:color-mix(in srgb,var(--amber) 34%,transparent)}
+.cap-chip.cap-none{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent);border-color:color-mix(in srgb,var(--red) 32%,transparent)}
+/* The "+N with scraping" half, deliberately quieter than the API figure it
+   follows — scraping is conditional on a cookie the user may not have. */
+.cap-plus{opacity:.7;font-size:9.5px;margin-left:3px}
+.cap-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:17px;height:17px;border-radius:4px;font-size:9.5px;cursor:help;
+}
+.cap-icon.cap-on{color:var(--green);background:color-mix(in srgb,var(--green) 13%,transparent)}
+.cap-icon.cap-scrape{color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent)}
+.cap-icon.cap-off{color:var(--text3);opacity:.42}
+.cap-icon.cap-off i{text-decoration:line-through}
+.cap-icon.cap-apionly{color:var(--blue);background:color-mix(in srgb,var(--blue) 13%,transparent)}
+
+/* Add-tracker modal: the row sits under the def's name/URL header. */
+.modal-def-caps{margin-top:8px}
+.modal-def-caps .cap-row{margin-left:0}
+
+/* Detail page: collapsed by default, with the headline figure still on the
+   summary line so the answer is one glance away and the detail one click. */
+.cap-card{border-top:1px solid var(--border);padding-top:10px}
+.cap-card-summary{
+  display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;
+  font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text3);
+}
+.cap-card-summary::-webkit-details-marker{display:none}
+.cap-card-summary::before{
+  content:'';border:4px solid transparent;border-left-color:currentColor;
+  margin-right:-2px;transition:transform .15s ease;transform-origin:2px 50%;
+}
+.cap-card[open] > .cap-card-summary::before{transform:rotate(90deg)}
+.cap-card-summary:hover{color:var(--text2)}
+.cap-card-count{margin-left:auto;color:var(--text2);font-size:11px;letter-spacing:0}
+.cap-card .cap-panel{margin-top:10px}
+.cap-panel{display:flex;flex-direction:column;gap:8px;font-size:12px}
+.cap-panel-empty{font-size:11.5px;color:var(--text3);line-height:1.5}
+.cap-panel-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}
+.cap-panel-row--flag{justify-content:space-between}
+.cap-panel-label{color:var(--text2)}
+.cap-panel-label i{width:13px;margin-right:3px;opacity:.75}
+.cap-panel-val{color:var(--text);font-weight:600;margin-left:auto}
+.cap-panel-val.cap-api{color:var(--green)}
+.cap-panel-val.cap-scrape{color:var(--amber)}
+.cap-panel-val.cap-off{color:var(--text3);font-weight:500}
+.cap-plus-txt{color:var(--text3);font-weight:500;font-size:11px}
+.cap-bar{width:100%;height:4px;border-radius:2px;background:color-mix(in srgb,var(--text3) 22%,transparent);overflow:hidden}
+.cap-bar-fill{height:100%;border-radius:2px;background:var(--green)}
+.cap-panel-note{
+  font-size:11.5px;line-height:1.5;color:var(--text2);padding:8px 10px;border-radius:5px;
+  background:color-mix(in srgb,var(--amber) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--amber) 26%,transparent);
+}
+.cap-panel-details summary{cursor:pointer;font-size:11.5px;color:var(--text3)}
+.cap-panel-details summary:hover{color:var(--text2)}
+.cap-stat-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.cap-stat-list span{
+  padding:2px 6px;border-radius:4px;font-size:10.5px;color:var(--text2);
+  background:var(--surface3);border:1px solid var(--border2);
+}
 
 /* Password strength meter — length only, no composition rules */
 .pw-meter{margin-top:-2px}

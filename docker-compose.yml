@@ -18,4 +18,9 @@ services:
       # - ./static/themes:/app/static/themes  # optional: drop in custom themes
     environment:
       - TZ=Etc/UTC           # optional: your timezone, e.g. Australia/Brisbane
+      # Only needed if you reach Yata by a HOSTNAME (a domain, a Tailscale
+      # MagicDNS name) rather than by IP address or localhost. Yata refuses
+      # names it wasn't told about, which is what blocks DNS rebinding — and
+      # it tells you on the page if you've hit it. Comma-separate several.
+      # - YATA_ALLOWED_HOSTS=yata.example.com,box.tailnet-name.ts.net
     restart: unless-stopped  # auto-start on reboot / after a crash

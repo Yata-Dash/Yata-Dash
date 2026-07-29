@@ -29,11 +29,28 @@ func newRollingFile(path string, maxBytes int64, maxBackups int) (*rollingFile, 
 	if err := r.open(); err != nil {
 		return nil, err
 	}
+	// Existing logs from before this became private stay world-readable
+	// otherwise, and on a shared seedbox those are the ones with history in
+	// them. Rotated backups are tightened too — they hold the same content.
+	r.hardenExisting()
 	return r, nil
 }
 
+// hardenExisting tightens the active log and its rotated backups to 0600.
+// Failures are ignored: a log that cannot be chmod'd is not a reason to refuse
+// to start, and on Windows the call is a no-op the OS reports as success.
+func (r *rollingFile) hardenExisting() {
+	_ = os.Chmod(r.path, 0o600)
+	for i := 1; i <= r.maxBackups; i++ {
+		_ = os.Chmod(fmt.Sprintf("%s.%d", r.path, i), 0o600)
+	}
+}
+
 func (r *rollingFile) open() error {
-	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	// 0600, not 0644: the log records tracker names, usernames and error
+	// details, and on a shared host (seedboxes especially) every other local
+	// account could read it.
+	f, err := os.OpenFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
 	}

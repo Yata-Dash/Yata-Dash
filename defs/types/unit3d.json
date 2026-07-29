@@ -2,9 +2,9 @@
   "schema_version": 1,
   "key": "unit3d",
   "label": "UNIT3D",
-  "last_updated": "2026-07-25",
+  "last_updated": "2026-07-28",
   "description": "Standard UNIT3D private tracker. Provides /api/user stats and scrapes the /users/{username} profile page for extended stats.",
-  "api": { 
+  "api": {
     "kind": "unit3d",
     "api_key_hint": "Settings → API"
   },
@@ -14,8 +14,14 @@
   "scrape": {
     "profile_path": "/users/{username}",
     "presence_flags": {
-      "unread_mail":          { "link_suffix": "/conversations", "marker": "svg" },
-      "unread_notifications": { "link_suffix": "/notifications", "marker": "svg" }
+      "unread_mail": {
+        "link_suffix": "/conversations",
+        "marker": "svg"
+      },
+      "unread_notifications": {
+        "link_suffix": "/notifications",
+        "marker": "svg"
+      }
     },
     "labels": {
       "account upload (total)": "uploaded",
@@ -24,8 +30,23 @@
       "total leeching": "leeching",
       "bon": "bonus_points",
       "hit and run count (all time)": "hit_and_runs",
-      "seeding size": "seed_size",
-      "Total uploads (Non-Anonymous)": "uploads"
+      "seeding size": "seed_size"
     }
-  }
+  },
+  "capabilities": {
+    "api_stats": [
+      "username",
+      "group",
+      "join_date",
+      "uploaded",
+      "downloaded",
+      "buffer",
+      "ratio",
+      "seeding",
+      "leeching",
+      "bonus_points",
+      "hit_and_runs"
+    ]
+  },
+  "notes": "capabilities.api_stats is the STOCK UNIT3D /api/user response. Forks vary: one returning more should say so with api_stats_add in its own def (see zenith), one returning less with api_stats_omit. join_date is listed here because the forks that omit it already declare api.required_fields: [\"join_date\"], which is subtracted automatically. NEEDS CONFIRMATION against a live stock instance — assembled from the test fixture and field map rather than from UNIT3D's own documentation."
 }

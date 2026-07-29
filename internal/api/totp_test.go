@@ -8,7 +8,13 @@ import (
 
 // rfcSecret is the shared secret from RFC 4226 Appendix D / RFC 6238 Appendix
 // B — the ASCII string "12345678901234567890", base32-encoded.
-const rfcSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+//
+// NOT A CREDENTIAL. Secret scanners flag this as a generic API key; it is
+// published standards text, the fixture every TOTP implementation is checked
+// against, and there is nothing behind it to rotate. It must not be replaced
+// with a generated value: the point of the test is that our output matches the
+// codes printed in the RFC, which only holds for this exact input.
+const rfcSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" //nolint:gosec // RFC 4226 test vector
 
 // TestTOTPCodeRFCVectors checks the HOTP core against the published test
 // values in RFC 4226 Appendix D. TOTP is HOTP with the counter derived from

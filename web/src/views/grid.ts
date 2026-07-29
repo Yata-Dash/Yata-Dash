@@ -4,7 +4,7 @@ import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../s
 import { getSortedTrackers } from '../utils/sort';
 import type { SortDir } from '../types';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeUrl, srcDot } from '../utils/format';
+import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -278,14 +278,11 @@ export function renderCard(
       </span>`
     : '';
 
-  // Unread mail/notification flags (scraped header presence — freshness is
-  // the scrape cadence, so at most once per interval). Each icon has its own
-  // Display toggle: mail matters to most users, notifications vary.
-  const unreadFlags =
-    (settings.show_unread_mail !== false && strOf(stats, 'unread_mail') === 'true'
-      ? `<span class="unread-flag" title="Unread mail on ${esc(tracker.name)} (as of the last scrape) — check your inbox"><i class="fas fa-envelope"></i></span>` : '') +
-    (settings.show_unread_notifications !== false && strOf(stats, 'unread_notifications') === 'true'
-      ? `<span class="unread-flag" title="Unread notifications on ${esc(tracker.name)} (as of the last scrape)"><i class="fas fa-bell"></i></span>` : '');
+  // Unread mail/notification flags. Freshness follows whichever source
+  // actually supplied the flag — an API that reports it directly, or the
+  // profile scrape's header presence — so the tooltip is right for both.
+  const unreadFlags = unreadFlagsHtml(
+    tracker.name, fieldOf(stats, 'unread_mail'), fieldOf(stats, 'unread_notifications'), settings);
 
   // Favicon sits next to the tracker name in the header
   const favicon = settings.show_favicons && tracker.url
@@ -305,7 +302,7 @@ export function renderCard(
       <div class="card-tracker-name" style="display:flex;align-items:center;gap:5px">
         ${favicon}
         <span class="tracker-name-link" title="Open tracker detail"
-          onclick="event.stopPropagation();openTrackerDetail('${tracker.id}')"
+          onclick="event.stopPropagation();openTrackerDetail('${jsId(tracker.id)}')"
           style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fmtTrackerName(tracker.name, tracker.abbr, settings.tracker_name_mode))}</span><span style="flex-shrink:0">${tracker.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${eventBeacon}${unreadFlags}</span>
       </div>
       <div class="card-header-meta">
@@ -901,7 +898,7 @@ export function buildTargets(
   // trackers without def groups (nothing to load from).
   const pencil = hasGroups
     ? `<button type="button" class="btn btn-ghost btn-icon btn-sm targets-edit-btn" title="Edit targets"
-        onclick="event.stopPropagation();openTargetsPopover('${esc(tracker.id)}', this)">
+        onclick="event.stopPropagation();openTargetsPopover('${jsId(tracker.id)}', this)">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>

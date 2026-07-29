@@ -461,6 +461,57 @@ export function fieldLabel(key: string): string {
 }
 
 /**
+ * How fresh a single stat is, and where it came from — e.g. "as of the last
+ * API update (2026-07-28 14:32)". Returns '' when the field carries no
+ * provenance, so callers say nothing rather than guessing.
+ *
+ * Every stat records the source it was merged from, so this is what actually
+ * happened rather than an assumption about the tracker. That matters for the
+ * trackers whose answer changes over time: a UNIT3D site whose API reports
+ * unread mail directly, one where it only comes from the profile page, and
+ * one where the API provides it until it fails and the scrape takes over —
+ * all three get the right wording without anything being declared anywhere.
+ */
+export function fieldFreshness(field: StatField | undefined): string {
+  if (!field?.source) return '';
+  const when = field.updated_at ? ` (${fmtStamp(field.updated_at)})` : '';
+  switch (field.source) {
+    case 'scrape': return `as of the last profile scrape${when}`;
+    case 'manual': return 'entered manually';
+    case 'qui':    return `as of the last qui sync${when}`;
+    default:       return `as of the last API update${when}`;
+  }
+}
+
+/**
+ * The unread mail / notification flags shown beside a tracker's name, in one
+ * place rather than three. Each icon follows its own Display toggle and only
+ * renders when the flag is actually true.
+ *
+ * Built here because the previous copies in the grid, table and detail views
+ * were identical by convention alone — which is how all three ended up
+ * asserting "as of the last scrape" for trackers that are never scraped.
+ * Callers pass the fields so this stays free of app-state imports.
+ */
+export function unreadFlagsHtml(
+  trackerName: string,
+  mail: StatField | undefined,
+  notifications: StatField | undefined,
+  settings: AppSettings,
+): string {
+  const flag = (field: StatField | undefined, on: boolean, icon: string, what: string, suffix = '') => {
+    if (!on || String(field?.value ?? '') !== 'true') return '';
+    const fresh = fieldFreshness(field);
+    // Comma, not parentheses: fieldFreshness already parenthesises its
+    // timestamp, and nesting the two reads as a typo.
+    const tip = `${what} on ${trackerName}${fresh ? `, ${fresh}` : ''}${suffix}`;
+    return `<span class="unread-flag" title="${esc(tip)}"><i class="fas ${icon}"></i></span>`;
+  };
+  return flag(mail, settings.show_unread_mail !== false, 'fa-envelope', 'Unread mail', ' — check your inbox')
+    + flag(notifications, settings.show_unread_notifications !== false, 'fa-bell', 'Unread notifications');
+}
+
+/**
  * Per-stat source indicator dot. Returns '' unless settings.show_stat_sources
  * is on and the field carries provenance. Tooltip includes the update time.
  */

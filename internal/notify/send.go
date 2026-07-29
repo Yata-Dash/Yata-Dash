@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,9 +16,21 @@ import (
 	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
+	"github.com/Yata-Dash/Yata-Dash/internal/redact"
 )
 
-var httpClient = &http.Client{Timeout: 15 * time.Second}
+// Notification destinations are usually internet services (Discord, Telegram)
+// but a self-hosted Gotify on the LAN is an ordinary setup, so private
+// addresses stay allowed. What the policy does buy here is the scheme
+// allow-list — a destination URL is free text in the settings form, and
+// without it a file:// or similar destination turns a webhook field into
+// something else — plus link-local (cloud metadata) being refused outright.
+// Redirects are re-checked but not pinned: a generic webhook may legitimately
+// redirect, and Discord's CDN does.
+var destinationPolicy = netguard.Policy{AllowPrivate: true}
+
+var httpClient = netguard.Client(15*time.Second, destinationPolicy)
 
 // maxSendAttempts bounds 429 retries (1 initial try + retries).
 const maxSendAttempts = 4
@@ -137,6 +150,11 @@ func postWithRetry(url string, headers map[string]string, payload map[string]any
 	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("missing URL")
 	}
+	// Checked before the first attempt so a rejected destination reports the
+	// reason once, rather than as four identical transport failures.
+	if _, err := netguard.Validate(url, destinationPolicy); err != nil {
+		return err
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -145,7 +163,10 @@ func postWithRetry(url string, headers map[string]string, payload map[string]any
 	for attempt := 0; attempt < maxSendAttempts; attempt++ {
 		status, retryAfter, snippet, err := doPost(url, headers, body)
 		if err != nil {
-			return err // network/transport error — not retryable here
+			// Not retryable here. Flattened to a redacted string because a
+			// transport error renders the destination URL, and for Telegram
+			// that URL contains the bot token.
+			return errors.New(redact.Error(err))
 		}
 		if status < 300 {
 			return nil
@@ -186,7 +207,11 @@ func doPost(url string, headers map[string]string, body []byte) (int, time.Durat
 	}
 	defer resp.Body.Close()
 	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
-	return resp.StatusCode, retryAfterFrom(resp.Header.Get("Retry-After"), snippet), strings.TrimSpace(string(snippet)), nil
+	// The destination's own reply is surfaced to the user and logged by the
+	// digest — some services echo the request URL (bot token included) back in
+	// their error bodies.
+	return resp.StatusCode, retryAfterFrom(resp.Header.Get("Retry-After"), snippet),
+		redact.String(strings.TrimSpace(string(snippet))), nil
 }
 
 // retryAfterFrom extracts a retry delay from the Retry-After header (seconds)

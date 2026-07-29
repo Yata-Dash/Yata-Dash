@@ -124,9 +124,23 @@ func TestTokenAuthGating(t *testing.T) {
 	}
 
 	// READ-ONLY GUARANTEE: session-only endpoints reject the token.
-	for _, path := range []string{"/api/trackers", "/api/settings", "/api/stats", "/api/tokens", "/api/config/export"} {
+	for _, path := range []string{"/api/trackers", "/api/settings", "/api/stats", "/api/tokens"} {
 		if c := get(path, bearer); c != 401 {
 			t.Errorf("token accepted on session-only %s: %d, want 401", path, c)
+		}
+	}
+	// The config export is the sharpest case — it is every stored credential —
+	// and it is POST-only, so it needs its own check rather than a GET that
+	// would pass on a 405 without ever reaching the auth decision.
+	{
+		req := httptest.NewRequest("POST", "/api/config/export",
+			strings.NewReader(`{"password":"password123"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("token accepted on the config export: %d, want 401", rec.Code)
 		}
 	}
 

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/redact"
 )
 
 // Level is a log severity. Lower levels are more verbose.
@@ -128,7 +130,11 @@ func (l *Logger) logf(lvl Level, format string, args ...any) {
 		return
 	}
 	now := time.Now()
-	msg := fmt.Sprintf(format, args...)
+	// Redact centrally rather than at each caller. Credentials reach the log
+	// through error values that render a full request URL, which no call site
+	// can see when it writes "%v" — and this file is meant to be attached to
+	// GitHub issues, so a miss is a published secret.
+	msg := redact.String(fmt.Sprintf(format, args...))
 	line := fmt.Sprintf("%s %s %s\n", now.Format("2006-01-02 15:04:05"), lvl.short(), msg)
 	if l.out != nil {
 		_, _ = io.WriteString(l.out, line)

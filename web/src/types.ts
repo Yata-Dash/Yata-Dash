@@ -46,6 +46,9 @@ export interface Tracker {
   profile_url?: string;
   /** Extra config fields this tracker's type needs (e.g. gazelle: ["username"]). */
   required_fields?: string[];
+  /** What this tracker can report, resolved from its def (absent for a
+   *  tracker with no definition). */
+  capabilities?: TrackerCapabilities;
   /** Tracker's account-wide required ratio (0/absent = unknown). */
   min_ratio?: number;
   /** Tracker's minimum per-torrent seed time in days (0/absent = unknown).
@@ -302,6 +305,9 @@ export interface AppSettings {
   hide_login_warning?: boolean;                // opt-out of the "login protection is off" banner (default false = warn)
   update_check_auto?: boolean;                 // opt-in daily update check (default false)
   trust_proxy_headers?: boolean;               // honor X-Forwarded-* behind a reverse proxy (default false)
+  /** Hostnames this instance answers to, beyond IP addresses and localhost.
+   *  Empty for anyone browsing to an IP or localhost. Applies without a restart. */
+  allowed_hosts?: string[];
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
   pathway_not_interested?: string[];           // pathway targets pushed to the bottom, excluded from reqs-met
   pathways_include_disabled?: boolean;         // disabled trackers can start paths (stats always unknown)
@@ -529,6 +535,32 @@ export interface DefInfo {
   approval_note?: string;
   /** Type's required config fields minus any the def's API provides. */
   required_fields?: string[];
+  capabilities?: TrackerCapabilities;
+}
+
+/**
+ * What a tracker can actually report, resolved from its definition — so the UI
+ * can tell "Yata is broken" apart from "this tracker's API doesn't expose that
+ * stat" and "the operator doesn't allow scraping".
+ */
+export interface TrackerCapabilities {
+  /** Stats this tracker's own promotion ladder needs — the "of M". */
+  ladder_total: number;
+  /** How many of those the API covers. */
+  met_api: number;
+  /** How many with scraping as well — INCLUDES met_api, not a separate tally. */
+  met_scrape: number;
+  /** Which ladder requirements neither route reaches. */
+  missing?: string[];
+  /** False when the operator forbids scraping or the type can't scrape. */
+  scrape_possible: boolean;
+  /** Canonical field → "api" | "scrape" | "" (not available). */
+  notables: Record<string, string>;
+  /** The full API field set, for the detailed breakdown. */
+  api_stats?: string[];
+  /** False when nothing is declared or derived — "not recorded", which is a
+   *  different claim from "reports nothing". */
+  known: boolean;
 }
 
 export interface TypeInfo {

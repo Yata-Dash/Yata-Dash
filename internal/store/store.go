@@ -10,6 +10,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/fsperm"
 )
 
 // DB wraps the SQLite handle.
@@ -30,7 +32,19 @@ func Open(path string) (*DB, error) {
 		h.Close()
 		return nil, err
 	}
+	// Hardened AFTER migrate, not before: the driver creates the database on
+	// first use and the WAL/SHM sidecars on the first write, so migrating is
+	// what brings all three into existence. They hold live bearer session
+	// tokens and the TOTP secret, and the driver creates them 0644.
+	_ = Harden(path)
 	return db, nil
+}
+
+// Harden tightens the database and its WAL/SHM sidecars to owner-only.
+// Exported so startup can re-run it on a database created by an earlier
+// version; see package fsperm for why failure is not fatal.
+func Harden(path string) error {
+	return fsperm.Files(path, path+"-wal", path+"-shm")
 }
 
 // Close closes the database.

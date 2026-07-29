@@ -83,7 +83,7 @@ Tracker rank icons use the same Font Awesome classes the tracker sites themselve
 
 - **Connectivity test** per tracker — one click tells you whether the API, the scrape cookie, or both are working, and why not
 - **48-hour sparklines** and aggregate trend cards
-- **Login protection** — optional single-user auth (bcrypt + sessions) for instances reachable beyond localhost, with brute-force lockout
+- **Login protection** — optional single-user auth (bcrypt + sessions) for instances reachable beyond localhost, with optional TOTP two-factor, single-use recovery codes and brute-force lockout
 - **Backups & portability** — one-click config export/import (with automatic pre-import backup), opt-in scheduled backups, tracker history CSV export
 - **Rolling log viewer** — live logs in Settings for troubleshooting and bug reports; query strings never reach the log
 - **qui integration** — live qBittorrent stat bars via [qui](https://github.com/autobrr/qui)
@@ -159,11 +159,13 @@ Also: `--config`, `--data` (SQLite file), `--defs`, `--base`, `--log` — each w
 
 **Treat `config.json` like a password file:**
 
-- Restrict its permissions so only you can read it (`chmod 600 config.json` on Linux/macOS; under Docker keep the `./data` volume private).
-- Never commit it to git, paste it into a bug report, or share it — the config export in Settings → General strips webhook secrets for sharing, but the raw `config.json` does **not**.
+- Yata sets the permissions itself: `config.json`, its backups, `yata.db` (and its `-wal`/`-shm` sidecars) and `yata.log` are created owner-only (`0600`), the backup directory `0700`, and anything left world-readable by an older version is tightened at startup. Verify with `ls -l` if you like — and if you see a startup warning that permissions could not be set, your filesystem doesn't support them and the directory itself needs locking down.
+- Never commit it to git, paste it into a bug report, or share it. **The config export is not a sanitised copy** — `Settings → General → Export config` sends you `config.json` byte for byte, API keys and session cookies included. It is a backup, and nobody legitimate will ever ask you for it. Exporting asks for your password (and your authenticator code if 2FA is on), so a borrowed session can't take it. The one export that *is* stripped is **Export alerts** (`yata-alerts.json`), which blanks webhook URLs, tokens and chat IDs, and is the one safe to share. To get help with a problem, send a **log** — those have credentials stripped out.
 - Be especially careful on **shared or multi-user boxes such as seedboxes**: anyone who can read your home directory can read your tracker credentials. If you can't lock the file down there, prefer **API-only** setups (an API key alone, no session cookie) and rotate/revoke keys you no longer use.
 
 Both files are yours to back up and move (export/import from Settings → General) — just treat every backup as the bundle of credentials it is.
+
+**The log is safe to share.** `yata.log` is meant to be attached to a GitHub issue, so credentials are stripped on the way in: URL query strings, the userinfo part of a URL, and API responses are all redacted before anything is written, whichever code path did the logging. A failed API response records the *shape* of what came back — the field names and their types — never the values, because a tracker's user endpoint carries your email and IRC key. Skim it before posting all the same.
 
 ### Add your trackers
 
@@ -174,7 +176,61 @@ Both files are yours to back up and move (export/import from Settings → Genera
 
 ### If your instance is reachable from outside localhost
 
-Yata binds to `0.0.0.0` by default (so Docker/LAN/Tailscale setups just work) and will warn you at startup and in the UI: **anyone who can reach the port has full access until you enable login protection** (Settings → General → Account). Sessions are httpOnly cookies; five failed logins lock the IP for 15 minutes. If you ever lose the password, the reset path deliberately wipes all config and data — a stolen box can't be pried open that way. Put it behind a reverse proxy with TLS if you expose it beyond your LAN.
+Yata binds to `0.0.0.0` by default (so Docker/LAN/Tailscale setups just work) and will warn you at startup and in the UI: **anyone who can reach the port has full access until you enable login protection** (Settings → General → Account). Passwords are a minimum of 12 characters; sessions are httpOnly cookies; five failed attempts lock the IP for 15 minutes.
+
+If Yata is reachable from outside your network, turn on **two-factor authentication** in the same place. It works with any authenticator app, and enrolment gives you ten single-use recovery codes — save them, as they're shown only once.
+
+**If you're locked out:** use a recovery code. With no second factor and no codes left, stop Yata and run it once with `-reset-auth` on the machine hosting it (`docker exec` works too). That removes the login and nothing else — every tracker, stat and setting is kept. There is deliberately no way to reset the login over the network.
+
+Put it behind a reverse proxy with TLS if you expose it beyond your LAN.
+
+### Reaching Yata by a hostname
+
+**If you browse to an IP address or to `localhost`, skip this — there is nothing to set.**
+
+Yata answers to IP addresses and `localhost` out of the box. Any *other* hostname — a domain, a Tailscale MagicDNS name — has to be named first. That one rule blocks **DNS rebinding**, where a web page you visit re-points its own domain at your machine so its scripts can read Yata as if they were part of it. It works even when Yata is bound to `127.0.0.1`, and no cookie or CORS setting stops it. Rebinding needs a hostname the attacker controls, so Yata simply won't answer to names it wasn't told about.
+
+You need this if you reach Yata at something like `https://yata.example.com` or `http://box.tailnet-name.ts.net:8420`. **You'll know**: the page says so and names the exact setting to add — it never fails silently.
+
+You can list more than one (comma-separated), which is what you want if you use both a domain and a Tailscale name. `*` turns the check off entirely.
+
+**Docker / docker-compose** — add it to the `environment:` block:
+
+```yaml
+environment:
+  - TZ=Etc/UTC
+  - YATA_ALLOWED_HOSTS=yata.example.com,box.tailnet-name.ts.net
+```
+
+**Windows, or running the binary directly** — easiest is `config.json`, next to the exe, in the `server` block you may already have edited for host/port:
+
+```json
+"server": {
+  "host": "0.0.0.0",
+  "port": 8420,
+  "allowed_hosts": ["yata.example.com", "box.tailnet-name.ts.net"]
+}
+```
+
+Restart Yata after saving. If you'd rather not touch the file, add `--allowed-hosts=yata.example.com` to the shortcut or batch file that starts it.
+
+**Linux with systemd** — in the unit file:
+
+```ini
+Environment=YATA_ALLOWED_HOSTS=yata.example.com
+```
+
+All three do the same thing. If more than one is set, the flag wins, then the environment variable, then `config.json` — the same order as every other Yata setting.
+
+#### Does my reverse proxy need this?
+
+It depends on the proxy, which is worth knowing because two people with "a reverse proxy" can get different answers:
+
+- **Caddy** (`reverse_proxy`) passes your domain through by default → **you need to set it**.
+- **nginx** with `proxy_set_header Host $host;` → **you need to set it**. Without that line, nginx sends the upstream address instead and it works untouched.
+- **Traefik**, **Nginx Proxy Manager** → pass the domain through → **you need to set it**.
+
+Tailscale is the same story: reaching the machine by its `100.x.y.z` address needs nothing, but MagicDNS names and `tailscale serve` both put a hostname in front and need naming.
 
 ## For tracker staff
 
@@ -194,36 +250,42 @@ Any trackers not approved should only be used in API only mode until approval ha
 If you are a tracker not on this list please reach out.
 If you are a tracker on this list and wish to approve or ask to opt out entirely, please reach out. 
 
-| Tracker | Platform | Approved by tracker | Limit | Notes |
-|---|---|---|---|---|
-| Aither | Unit3D | Yes | 180min | Monthly Uploads not currently retrievable |
-| AnimeBytes | Custom | No | API Only | Uses the personal stats API; account age is entered manually |
-| Anthelion | Gazelle | Yes | API Only | Possibily adding API stats in the future |
-| Aura4K | Unit3D | Yes | 180min |  |
-| Blutopia | Unit3D | No | API Only | Seed-size and average-seedtime progress unavailable through the API |
-| BroadcastTheNet | Custom | No | API Only | JSON-RPC userInfo; 150 API calls per hour |
-| Darkpeers | Unit3D | Yes | 180min |  |
-| GazelleGames | Gazelle | No | API Only |  |
-| Huno | Unit3D | No | API Only | Not on this tracker can't seek approval |
-| InfinityHD | Unit3D | Yes | 60min |  |
-| LST | Unit3D | Yes | 180min |  |
-| Luminarr | Unit3D | Yes | 120min |  |
-| MidnightScene | Unit3D | Yes | 60min |  |
-| MyAnonamouse | Custom | Yes | API Only | |
-| Nebulance | Custom | No | API Only | Ratioless; episode and season seed-time rules differ |
-| Oldtoons | Unit3D | Yes | API Only | Added all required stats to API - Thanks team! |
-| OnlyEncodes+ | Unit3D | Yes | Once per day |  |
-| Orpheus | Gazelle | No | API Only | Required ratio is calculated dynamically |
-| Redacted | Gazelle | No | API Only |  |
-| ReelFliX | Unit3D | No | API Only | Seed-size, average-seedtime, and rolling-upload progress unavailable through the API |
-| RetroFlix | Custom | Yes | API Only | Added API stats - Thanks team! |
-| RocketHD | Unit3D | Yes | API Only |  |
-| Seedpool | Unit3D | Yes | 180min |  |
-| Speedapp | Custom | Yes | API Only | Added API stats - Thanks team! |
-| Unwalled | Unit3D | Yes | 180min |  |
-| Upload.cx | Unit3D | No | API Only | Seed-size, average-seedtime, and upload-count progress unavailable through the API |
-| YUSCENE | Unit3D | Yes | 180min |  |
-| Zenith | Unit3D | Yes | API Only | API reworked include extended stats and events |
+<!-- BEGIN GENERATED TRACKER TABLE (go run ./tools/defsdoc) -->
+| Tracker | Platform | Approved | Stats | Limit | Notes |
+|---|---|---|---|---|---|
+| Aither | UNIT3D | Yes | 3/6 (4 scraped) | 180min | Monthly Uploads not currently retrievable |
+| AnimeBytes | Custom API | No | 4/4 | API only | Uses the personal stats API; account age is entered manually |
+| Anthelion | Gazelle (ANT/NEB) | Yes | 6/6 | API only | Expanded API stats added 2026-07, shared with Nebulance |
+| Aura4K | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
+| Blutopia | UNIT3D | No | 3/5 | API only |  |
+| BroadcastTheNet | Custom API | No | 5/6 | API only | JSON-RPC userInfo; 150 API calls per hour |
+| DarkPeers | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
+| GazelleGames | GazelleGames | No | 1/1 | API only |  |
+| Hawke-uno | UNIT3D | No | 6/6 | API only | Not on this tracker can't seek approval |
+| InfinityHD | UNIT3D | Yes | 3/6 (4 scraped) | Default |  |
+| LST | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
+| Luminarr | UNIT3D | Yes | 3/6 (4 scraped) | 120min |  |
+| MidnightScene | UNIT3D | Yes | 3/5 (4 scraped) | 60min |  |
+| MyAnonamouse | Custom API | Yes | 3/3 | API only |  |
+| Nebulance | Gazelle (ANT/NEB) | No | 5/5 | API only | Ratioless; episode and season seed-time rules differ |
+| OldToonsWorld | UNIT3D | Yes | 5/5 | API only | Added all required stats to API - Thanks team! |
+| OnlyEncodes+ | UNIT3D | Yes | 3/6 (4 scraped) | Once per day |  |
+| Orpheus | Gazelle (ajax.php) | No | 6/6 | API only | Required ratio is calculated dynamically |
+| Redacted | Gazelle (ajax.php) | No | 6/6 | API only |  |
+| ReelFliX | UNIT3D | No | 5/5 | API only | Rolling monthly uploads not retrievable |
+| RetroFlix | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
+| RocketHD | UNIT3D | Yes | 3/6 | API only |  |
+| Seedpool | UNIT3D | Yes | 2/3 (3 scraped) | 180min |  |
+| SpeedApp | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
+| Unwalled | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
+| Upload.cx | UNIT3D | No | 3/6 | API only |  |
+| YUSCENE | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
+| Zenith | UNIT3D | Yes | 6/6 | API only | API reworked: extended stats and events, proposed upstream |
+<!-- END GENERATED TRACKER TABLE -->
+
+**Stats** is how much of that tracker's *own* promotion ladder Yata can follow from its API — "3/6" means three of the six stats its ranks are based on are reported, so progress toward the other three can't be shown. "(4 scraped)" is the figure with profile scraping on, where the operator permits it. A low number is the tracker's API being incomplete, not Yata failing; the app names the exact missing stats on each tracker's page.
+
+Everything but Notes is generated from the definitions (`go run ./tools/defsdoc`), so it can't drift from what the app actually does.
 
   — plus a credential-free demo tracker. Definitions include the full group ladders (colors, icons, promotion requirements incl. either/or paths, perks) where the tracker publishes them.
 

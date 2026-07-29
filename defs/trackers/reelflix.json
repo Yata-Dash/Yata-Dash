@@ -5,7 +5,7 @@
   "abbr": "RFX",
   "url": "https://reelflix.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-21",
+  "last_updated": "2026-07-28",
   "scrape": {
     "disable_scraping": true
   },
@@ -18,25 +18,49 @@
   "groups": [
     {
       "name": "Leech",
-      "style": { "color": "#96281b", "icon": "fal fa-user-ninja" },
+      "style": {
+        "color": "#96281b",
+        "icon": "fal fa-user-ninja"
+      },
       "requirements": {},
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "0 download slots" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "0 download slots"
+        }
       ]
     },
     {
       "name": "User",
-      "style": { "color": "#adb0b7", "icon": "fal fa-user-large" },
-      "requirements": { "min_uploaded": "50 GiB", "min_ratio": 0.8 },
+      "style": {
+        "color": "#adb0b7",
+        "icon": "fal fa-user-large"
+      },
+      "requirements": {
+        "min_uploaded": "50 GiB",
+        "min_ratio": 0.8
+      },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "1 download slot" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "1 download slot"
+        }
       ]
     },
     {
       "name": "Member",
-      "style": { "color": "#f2f2f2", "icon": "fal fa-user-graduate" },
+      "style": {
+        "color": "#f2f2f2",
+        "icon": "fal fa-user-graduate"
+      },
       "requirements": {
         "min_uploaded": "100 GiB",
         "min_ratio": 0.9,
@@ -45,13 +69,22 @@
         "note": "Average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "5 download slots" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "5 download slots"
+        }
       ]
     },
     {
       "name": "Pro",
-      "style": { "color": "#50c878", "icon": "fal fa-user-helmet-safety" },
+      "style": {
+        "color": "#50c878",
+        "icon": "fal fa-user-helmet-safety"
+      },
       "requirements": {
         "min_uploaded": "500 GiB",
         "min_ratio": 1.0,
@@ -60,14 +93,26 @@
         "note": "Average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "10 download slots" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "10 download slots"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        }
       ]
     },
     {
       "name": "Expert",
-      "style": { "color": "#b2f7b2", "icon": "fal fa-user-astronaut" },
+      "style": {
+        "color": "#b2f7b2",
+        "icon": "fal fa-user-astronaut"
+      },
       "requirements": {
         "min_uploaded": "1 TiB",
         "min_ratio": 1.1,
@@ -76,15 +121,30 @@
         "note": "Average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        }
       ]
     },
     {
       "name": "Elite",
-      "style": { "color": "#39ff14", "icon": "fal fa-user-crown" },
+      "style": {
+        "color": "#39ff14",
+        "icon": "fal fa-user-crown"
+      },
       "requirements": {
         "min_uploaded": "2.5 TiB",
         "min_ratio": 1.2,
@@ -93,17 +153,38 @@
         "note": "Average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        }
       ]
     },
     {
       "name": "Distributor",
-      "style": { "color": "#580aff", "icon": "fal fa-hat-wizard" },
+      "style": {
+        "color": "#580aff",
+        "icon": "fal fa-hat-wizard"
+      },
       "requirements": {
         "min_uploaded": "5 TiB",
         "min_ratio": 1.25,
@@ -113,18 +194,42 @@
         "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fas fa-percentage", "label": "Refundable torrents" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fas fa-percentage",
+          "label": "Refundable torrents"
+        }
       ]
     },
     {
       "name": "Curator",
-      "style": { "color": "#5c95ff", "icon": "fal fa-helmet-battle" },
+      "style": {
+        "color": "#5c95ff",
+        "icon": "fal fa-helmet-battle"
+      },
       "requirements": {
         "min_uploaded": "10 TiB",
         "min_ratio": 1.5,
@@ -134,18 +239,42 @@
         "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fal fa-star text-gold", "label": "25% freeleech" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fal fa-star text-gold",
+          "label": "25% freeleech"
+        }
       ]
     },
     {
       "name": "Archivist",
-      "style": { "color": "#0aefff", "icon": "fal fa-crown" },
+      "style": {
+        "color": "#0aefff",
+        "icon": "fal fa-crown"
+      },
       "requirements": {
         "min_uploaded": "25 TiB",
         "min_ratio": 1.75,
@@ -155,18 +284,42 @@
         "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fal fa-star text-gold", "label": "50% freeleech" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fal fa-star text-gold",
+          "label": "50% freeleech"
+        }
       ]
     },
     {
       "name": "Uploader",
-      "style": { "color": "#ff5f1f", "icon": "fal fa-video-plus" },
+      "style": {
+        "color": "#ff5f1f",
+        "icon": "fal fa-video-plus"
+      },
       "requirements": {
         "min_uploaded": "500 GiB",
         "min_ratio": 1.0,
@@ -176,55 +329,152 @@
         "note": "Average-seedtime and rolling 30-day upload progress is unavailable through the API."
       },
       "perks": [
-        { "icon": "fal fa-upload text-success", "label": "Upload torrents" },
-        { "icon": "fal fa-arrow-down-short-wide text-blue", "label": "Unlimited download slots" },
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fal fa-hands-helping", "label": "Request torrents" },
-        { "icon": "fas fa-tasks", "label": "Bypass torrent moderation" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fas fa-percentage", "label": "Refundable torrents" },
-        { "icon": "fas fa-chevron-double-up torrent-icons__double-upload", "label": "Double upload" }
+        {
+          "icon": "fal fa-upload text-success",
+          "label": "Upload torrents"
+        },
+        {
+          "icon": "fal fa-arrow-down-short-wide text-blue",
+          "label": "Unlimited download slots"
+        },
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fal fa-hands-helping",
+          "label": "Request torrents"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Bypass torrent moderation"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fas fa-percentage",
+          "label": "Refundable torrents"
+        },
+        {
+          "icon": "fas fa-chevron-double-up torrent-icons__double-upload",
+          "label": "Double upload"
+        }
       ]
     },
     {
       "name": "Celebrity",
-      "style": { "color": "#af7ac5", "icon": "fal fa-martini-glass-citrus" },
-      "requirements": { "description": "Internal member or staff member from another respected tracker." },
+      "style": {
+        "color": "#af7ac5",
+        "icon": "fal fa-martini-glass-citrus"
+      },
+      "requirements": {
+        "description": "Internal member or staff member from another respected tracker."
+      },
       "perks": [
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fas fa-percentage", "label": "Refundable torrents" }
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fas fa-percentage",
+          "label": "Refundable torrents"
+        }
       ]
     },
     {
       "name": "Legend",
-      "style": { "color": "#dbb42c", "icon": "fal fa-star-shooting", "sparkle": true },
-      "requirements": { "description": "Former ReelFliX internal member or staff member." },
+      "style": {
+        "color": "#dbb42c",
+        "icon": "fal fa-star-shooting",
+        "sparkle": true
+      },
+      "requirements": {
+        "description": "Former ReelFliX internal member or staff member."
+      },
       "perks": [
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fal fa-star text-gold", "label": "100% freeleech" }
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fal fa-star text-gold",
+          "label": "100% freeleech"
+        }
       ]
     },
     {
       "name": "Internal",
-      "style": { "color": "#c40018", "icon": "far fa-cassette-vhs" },
-      "requirements": { "description": "Internal release-group member of ReelFliX." },
+      "style": {
+        "color": "#c40018",
+        "icon": "far fa-cassette-vhs"
+      },
+      "requirements": {
+        "description": "Internal release-group member of ReelFliX."
+      },
       "perks": [
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fal fa-star text-gold", "label": "100% freeleech" }
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fal fa-star text-gold",
+          "label": "100% freeleech"
+        }
       ]
     },
     {
       "name": "Torrent Moderator",
-      "style": { "color": "#15b097", "icon": "fal fa-badge-check" },
-      "requirements": { "description": "Checks uploaded torrents for compliance with ReelFliX rules." },
+      "style": {
+        "color": "#15b097",
+        "icon": "fal fa-badge-check"
+      },
+      "requirements": {
+        "description": "Checks uploaded torrents for compliance with ReelFliX rules."
+      },
       "perks": [
-        { "icon": "fal fa-paper-plane", "label": "Send invites" },
-        { "icon": "fab fa-wpforms", "label": "Access invite forums" },
-        { "icon": "fal fa-star text-gold", "label": "100% freeleech" }
+        {
+          "icon": "fal fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fab fa-wpforms",
+          "label": "Access invite forums"
+        },
+        {
+          "icon": "fal fa-star text-gold",
+          "label": "100% freeleech"
+        }
       ]
     }
-  ]
+  ],
+  "capabilities": {
+    "api_stats_add": [
+      "active_events",
+      "avg_seed_time",
+      "fl_tokens",
+      "invites",
+      "real_ratio",
+      "seed_size",
+      "total_seedtime",
+      "unread_mail",
+      "unread_notifications",
+      "upload_snatches",
+      "uploads_approved",
+      "warnings"
+    ]
+  }
 }

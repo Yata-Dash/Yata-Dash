@@ -104,6 +104,10 @@ type TrackerView struct {
 	// already provides. No omitempty: an empty list must reach the UI as []
 	// so it doesn't fall back to the type-level default.
 	RequiredFields []string `json:"required_fields"`
+	// Capabilities is what this tracker can report, as resolved from its def.
+	// Serialised opaquely (the API layer owns the shape) so models stays free
+	// of presentation concerns.
+	Capabilities any `json:"capabilities,omitempty"`
 	// MinRatio is the tracker's account-wide required ratio (0 = unknown).
 	// The UI colors the ratio red only below this when set.
 	MinRatio float64 `json:"min_ratio,omitempty"`
@@ -207,6 +211,22 @@ type Settings struct {
 	// terminating proxies). Enable ONLY behind a reverse proxy you control:
 	// directly exposed, these headers are client-spoofable.
 	TrustProxyHeaders bool `json:"trust_proxy_headers"`
+	// AllowedHosts are extra hostnames this instance answers to, beyond IP
+	// addresses and localhost — a reverse proxy's domain, a Tailscale MagicDNS
+	// name. Empty is correct for anyone reaching Yata by IP or localhost.
+	// See internal/api/hostguard.go for what it defends against.
+	//
+	// It lives in settings, beside TrustProxyHeaders, rather than in the
+	// server block: it is the one network setting a user is likely to need
+	// AFTER first run — set up on localhost today, add the domain before
+	// going away tomorrow — and settings is what the UI can write. Changes
+	// take effect immediately; the check reads this list per request.
+	//
+	// The wildcard "*" is deliberately NOT accepted here. Turning the check
+	// off entirely is a deployment decision, so it requires --allowed-hosts
+	// or YATA_ALLOWED_HOSTS, which need access to the host rather than just
+	// a browser session.
+	AllowedHosts []string `json:"allowed_hosts,omitempty"`
 	// UpdateCheckAuto opts in to a DAILY check of versions.json on the repo
 	// (contacts raw.githubusercontent.com). Default OFF — privacy stance: the
 	// app contacts nothing the user didn't ask for. Manual checks always work.

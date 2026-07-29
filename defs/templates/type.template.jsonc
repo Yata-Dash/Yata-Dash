@@ -49,6 +49,27 @@
     "seedbonus": "bonus_points"
   },
 
+  // [OPTIONAL] The STOCK response for this software — the baseline every
+  // tracker of this type inherits. Individual defs then declare only how they
+  // differ (api_stats_add / api_stats_omit), so a fork returning one extra
+  // field says one thing rather than restating the lot, and a correction here
+  // reaches every tracker that didn't opt out of it.
+  //
+  // Use canonical field names (the api_field_map vocabulary, plus unread_mail,
+  // unread_notifications and active_events). Omit this block entirely for
+  // kind "custom": those defs describe their own output through a field_map
+  // and are read directly.
+  //
+  // If this type is served by a hardcoded fetcher in internal/fetch/fetch.go,
+  // this list must match what that function emits — add a case to
+  // TestFetcherCapabilitiesMatchDefs so the two cannot drift apart.
+  "capabilities": {
+    "api_stats": [
+      "username", "group", "join_date", "uploaded", "downloaded",
+      "buffer", "ratio", "seeding", "leeching", "bonus_points", "hit_and_runs"
+    ]
+  },
+
   // [OPTIONAL] Type-level scrape defaults. Tracker defs override/merge.
   "scrape": {
     // Architectural: this type has no scrapeable profile page at all

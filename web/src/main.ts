@@ -24,6 +24,7 @@ import * as alertsTab from './components/alertsTab';
 import * as tokensTab from './components/tokensTab';
 import { FEATURES } from './config';
 import { initPathways } from './views/pathways';
+import { setCapsOpen } from './components/capabilities';
 import type { ColPref, HistoryPoint, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
 
 // modals.ts is loaded dynamically (it's large); store the promise so route
@@ -135,8 +136,18 @@ async function dontWarnLogin() {
 
 function showLogin() {
   const ov = document.getElementById('login-overlay');
+  // Already showing: leave the form exactly as the user left it.
+  //
+  // This is wired as the handler for EVERY 401, and the background pollers
+  // keep running while the gate is up — so it fires every few seconds. Reset
+  // the fields here and a second-factor code is wiped out from under someone
+  // mid-type, which made 2FA login effectively impossible to complete.
+  // Stopping the pollers (see stopBackgroundRefresh) removes most of those
+  // calls; this makes the remainder harmless.
+  if (ov && ov.style.display === 'flex') return;
   if (ov) ov.style.display = 'flex';
-  // Start every visit at the first leg: whether 2FA applies is the server's
+  stopBackgroundRefresh();
+  // A fresh visit starts at the first leg: whether 2FA applies is the server's
   // answer to this login, not a leftover from the last one.
   const group = document.getElementById('login-2fa-group');
   if (group) group.style.display = 'none';
@@ -148,6 +159,19 @@ function showLogin() {
 function hideLogin() {
   const ov = document.getElementById('login-overlay');
   if (ov) ov.style.display = 'none';
+}
+
+/** True while the login gate is covering the app. */
+function loginGateOpen(): boolean {
+  return document.getElementById('login-overlay')?.style.display === 'flex';
+}
+
+/** Stop the polling timers. Every poll while logged out is a guaranteed 401:
+ *  it fills the console, hammers the server, and re-triggers the unauthorized
+ *  handler. boot() re-arms them after a successful sign-in. */
+function stopBackgroundRefresh() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  if (quiTimer) { clearInterval(quiTimer); quiTimer = null; }
 }
 
 /** Reveal the second-factor field and move focus into it. */
@@ -740,7 +764,9 @@ function switchSettingsTab(tab: string) {
 (window as any).downloadLogs   = logsTab.downloadLogs;
 
 // ── Data: config import/export + history CSV (Settings → General → Data) ────
-(window as any).exportConfig    = () => window.open(api.configExportUrl(), '_blank');
+// The config export is a POST behind a password re-check, so it is registered
+// with the other modal handlers below. History CSV carries no credentials and
+// stays a plain link.
 (window as any).exportHistoryCsv = () => window.open(api.historyCsvUrl(), '_blank');
 
 /** Import a config file — destructive replace, guarded by a confirm dialog.
@@ -815,14 +841,23 @@ async function fullRefreshCycle(force = false) {
   autoSyncScrapes();
 }
 
+// Both pollers skip a tick while the login gate is up. Belt and braces with
+// stopBackgroundRefresh: that clears the timers when the gate opens, and this
+// covers any path that re-arms them while it is still showing.
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(() => { void fullRefreshCycle(); }, refreshMs());
+  refreshTimer = setInterval(() => {
+    if (loginGateOpen()) return;
+    void fullRefreshCycle();
+  }, refreshMs());
 }
 
 function scheduleQuiRefresh() {
   if (quiTimer) clearInterval(quiTimer);
-  quiTimer = setInterval(() => refreshQuiStats(state.appSettings), quiRefreshMs());
+  quiTimer = setInterval(() => {
+    if (loginGateOpen()) return;
+    refreshQuiStats(state.appSettings);
+  }, quiRefreshMs());
 }
 
 /** Re-arm both timers with the latest settings — call after a settings save so
@@ -999,6 +1034,11 @@ modalsReady.then(m => {
   (window as any).openEditModal   = (id: string) => { gotoSettingsTrackers(); m.openEditModal(id, state.trackers, state.statsCache, state.appSettings, editDeps()); };
   (window as any).openAddModal    = () => { gotoSettingsTrackers(); void m.openAddModal({ loadTrackers, refreshSingle, loadScrapeStatus, loadTestStatus: trackersTab.loadTestStatus, toast }); };
   (window as any).closeModal      = m.closeModal;
+  // Config export: a confirmation panel plus a password re-check, because the
+  // exported file unlocks every tracker the user has added.
+  (window as any).openExportConfirm   = () => { void m.openExportConfirm(); };
+  (window as any).cancelExportConfirm = m.cancelExportConfirm;
+  (window as any).confirmExportConfig = () => { void m.confirmExportConfig(); };
   (window as any).toggleSettingsSync      = m.toggleSettingsSync;
   (window as any).toggleSettingsFavicon   = m.toggleSettingsFavicon;
   (window as any).toggleSettingsPrivate   = m.toggleSettingsPrivate;
@@ -1051,10 +1091,13 @@ modalsReady.then(m => {
   (window as any).downloadRecoveryCodes = m.downloadRecoveryCodes;
   (window as any).dismissRecoveryCodes  = m.dismissRecoveryCodes;
   (window as any).detectTrackerType     = () => { void m.detectTrackerType(); };
+  // <details> fires ontoggle after the user opens/closes it; remember which.
+  (window as any).capsToggled = (el: HTMLDetailsElement) => setCapsOpen(el.open);
   (window as any).backupNow             = () => m.backupNow();
   (window as any).checkForUpdates       = () => { void m.checkForUpdates(); };
   (window as any).toggleAutoUpdate      = () => { void m.toggleAutoUpdate(); };
   (window as any).toggleTrustProxy      = () => { void m.toggleTrustProxy(); };
+  (window as any).saveAllowedHosts      = () => { void m.saveAllowedHosts(); };
 });
 
 // ── Trackers tab wiring (trackersTab.ts, exposed on window) ───────────────

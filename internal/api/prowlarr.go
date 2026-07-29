@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
 // Prowlarr import: users who run Prowlarr have already entered every tracker
@@ -42,7 +44,15 @@ type prowlarrIndexer struct {
 	Enabled       bool   `json:"enabled"`       // enabled in Prowlarr
 }
 
-var prowlarrClient = &http.Client{Timeout: 15 * time.Second}
+// Prowlarr and Jackett are companion apps, normally on localhost or the same
+// LAN, so private destinations must stay reachable — the usual "reject private
+// addresses" advice would break the ordinary deployment. Redirects are pinned
+// instead: neither app has a reason to bounce Yata to another origin, and
+// without the pin a host named by the caller could answer 302 to somewhere
+// internal and the LAN allowance would carry it.
+var indexerManagerPolicy = netguard.Policy{AllowPrivate: true, PinOrigin: true}
+
+var prowlarrClient = netguard.Client(15*time.Second, indexerManagerPolicy)
 
 func prowlarrIndexers(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -60,10 +70,22 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 			req.URL = strings.TrimRight(strings.TrimSpace(stored.ProwlarrURL), "/")
 		}
 		if req.APIKey == "" || req.APIKey == maskedKey {
+			// A stored credential only travels to the stored origin. Without
+			// this, "let the form test an unsaved URL" also means "send the
+			// saved Prowlarr key to any host someone names".
+			if !netguard.SameOriginStr(req.URL, stored.ProwlarrURL) {
+				jsonError(w, "an API key is required when connecting to a different Prowlarr address",
+					http.StatusBadRequest)
+				return
+			}
 			req.APIKey = stored.ProwlarrAPIKey
 		}
 		if req.URL == "" || req.APIKey == "" {
 			jsonError(w, "url and api_key are required", http.StatusBadRequest)
+			return
+		}
+		if _, err := netguard.Validate(req.URL, indexerManagerPolicy); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 

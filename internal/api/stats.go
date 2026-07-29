@@ -88,6 +88,9 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.OK = true
 		logFetchTransition(d, t, "")
 		recordConnection(d, t, "api", "")
+		// Keeps hand-written capability declarations honest — reports only,
+		// never alters what was stored.
+		checkCapabilityDrift(d, t, data)
 
 		// Auto-save username/join date the first time the API reveals them.
 		if u, ok := data["username"].(string); ok && u != "" && t.Username == "" {

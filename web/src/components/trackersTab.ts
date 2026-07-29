@@ -11,6 +11,7 @@ import { approvalIcon, approvalTitle, approvalWarns } from '../utils/approval';
 import { jsId, esc, safeUrl } from '../utils/format';
 import { findOptOut } from '../utils/optout';
 import { renderTestPills } from './trackerTest';
+import { capabilityRow } from './capabilities';
 import type { ToastType } from './toast';
 
 interface TabDeps {
@@ -149,7 +150,8 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
       : `<span class="trk-def-badge manual">manual</span>`)
       + typeBadge
       + approvalIcon(t.def_approval, t.def_approval_note)
-      + optOutBadge;
+      + optOutBadge
+      + capabilityRow(t.capabilities);
     const testCell = _testing.has(t.id)
       ? `<span class="trk-test-untested"><i class="fas fa-spinner fa-spin"></i> Testing…</span>`
       : renderTestPills(_testStatus[t.id]);

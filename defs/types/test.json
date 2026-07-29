@@ -3,11 +3,40 @@
   "key": "test",
   "label": "Test / Demo",
   "description": "Local demo tracker. All stats come from test_data.json scenarios. No real HTTP requests are ever made.",
-  "api": { "kind": "demo" },
+  "api": {
+    "kind": "demo"
+  },
   "api_field_map": {
     "seedbonus": "bonus_points"
   },
   "scrape": {
     "skip_html_scrape": true
-  }
+  },
+  "last_updated": "2026-07-28",
+  "capabilities": {
+    "api_stats": [
+      "active_event",
+      "active_event_ends_at",
+      "avg_seed_time",
+      "bonus_points",
+      "buffer",
+      "downloaded",
+      "fl_tokens",
+      "group",
+      "hit_and_runs",
+      "invites",
+      "join_date",
+      "leeching",
+      "ratio",
+      "real_ratio",
+      "requests_filled",
+      "seed_size",
+      "seeding",
+      "uploaded",
+      "uploads_approved",
+      "username",
+      "warnings"
+    ]
+  },
+  "notes": "api_stats is the union of every field in test_data.json across all scenarios — the demo tracker exists to show the whole UI, so it must not render as a tracker with a threadbare API. Regenerate from that file if the scenarios gain fields."
 }

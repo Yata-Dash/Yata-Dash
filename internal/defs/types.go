@@ -44,6 +44,11 @@ type TypeDef struct {
 	// this needs api.kind "custom".
 	CustomAPI *CustomAPI `json:"custom_api,omitempty"`
 
+	// Capabilities declares what a tracker of this type can report. Set on the
+	// TYPE it is the baseline for that software; tracker defs then state only
+	// how they differ. See Capabilities.
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
+
 	// APIFieldMap maps API JSON field names → canonical field names,
 	// applied to every response before storage (e.g. "seedbonus" → "bonus_points").
 	APIFieldMap map[string]string `json:"api_field_map,omitempty"`
@@ -172,6 +177,9 @@ type TrackerDef struct {
 	// the UI. Several defs already carried one before the field existed, so
 	// the text was being silently discarded on load.
 	Notes string `json:"notes,omitempty"`
+	// Capabilities states how this tracker differs from its type's baseline —
+	// usually a short api_stats_add or api_stats_omit rather than a full list.
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
 	// ApprovedBy records which tracker staff member approved Yata's
 	// support for this tracker (name, their role, and the date). The derived
 	// STATUS (see ApprovalStatus) is shown in the UI as a warning icon on
@@ -345,6 +353,41 @@ type ExtendedStatsSpec struct {
 	// ByteFields lists response fields returned as raw byte counts that must be
 	// formatted as human-readable sizes (e.g. seed_size, real_uploaded).
 	ByteFields []string `json:"byte_fields,omitempty"`
+}
+
+// Capabilities declares which stats a tracker can actually report, so the UI
+// can tell "Yata is broken" apart from "this tracker's API doesn't expose that"
+// and "the operator doesn't allow scraping" — three situations that otherwise
+// look identical to anyone who hasn't read the defs.
+//
+// The vocabulary is just CANONICAL STAT FIELD NAMES, deliberately: unread_mail,
+// unread_notifications and active_events are already stat fields, so "does this
+// tracker report unread mail?" is "is unread_mail in its set?" with no second
+// vocabulary to keep in step.
+//
+// Declared rather than inferred, because for most trackers it cannot be
+// inferred: a plain UNIT3D def carries no field information at all, and what
+// /api/user returns varies by fork. So the TYPE declares its software's
+// baseline and each tracker states only its delta. Where a def CAN be trusted
+// to describe itself — a custom API with a field_map — the set is derived
+// instead and needs no declaration at all.
+type Capabilities struct {
+	// APIStats is the full set of canonical fields this tracker's API returns.
+	// Normally set on the type (the stock response for that software); a
+	// tracker setting it replaces the baseline outright.
+	APIStats []string `json:"api_stats,omitempty"`
+	// APIStatsAdd and APIStatsOmit are the usual tracker-level form: this fork
+	// returns its software's stock set plus/minus a few. Deltas rather than a
+	// restated list, so each def reads as "how I differ from my siblings" and a
+	// change to the baseline reaches everyone who didn't opt out of it.
+	APIStatsAdd  []string `json:"api_stats_add,omitempty"`
+	APIStatsOmit []string `json:"api_stats_omit,omitempty"`
+
+	// ScrapeStats overrides the set derived from scrape.labels and
+	// presence_flags. Rarely needed — the label map already describes what a
+	// profile page yields — but a tracker whose page carries a stat the
+	// generic vocabulary misses can say so here.
+	ScrapeStats []string `json:"scrape_stats,omitempty"`
 }
 
 // CustomAPI describes a non-standard tracker API entirely as data.

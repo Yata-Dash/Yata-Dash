@@ -76,6 +76,38 @@
     "seedbonus": "bonus_points"
   },
 
+  // [OPTIONAL] What this tracker can actually report.
+  //
+  // Yata shows these as capability icons when adding a tracker and in
+  // Settings, so a user can tell "Yata is broken" apart from "this tracker's
+  // API doesn't expose that stat". Without it, a tracker whose API covers only
+  // half its own promotion requirements looks like a bug.
+  //
+  // Your TYPE (defs/types/<type>.json) already declares the stock response for
+  // that software, so most defs need NOTHING here — say only how you differ:
+  //
+  //   "api_stats_add":  fields your fork returns on top of the stock set
+  //   "api_stats_omit": stock fields your API does NOT return
+  //   "api_stats":      the complete set, replacing the type baseline
+  //                     (rarely needed — prefer the deltas)
+  //   "scrape_stats":   override what the profile page yields; by default
+  //                     this is derived from scrape.labels + presence_flags
+  //
+  // Use CANONICAL field names — the same vocabulary as api_field_map above,
+  // plus unread_mail, unread_notifications and active_events. There is no
+  // separate list of "features": if your API reports unread mail, that is
+  // simply unread_mail appearing in your stats.
+  //
+  // Two things are worked out automatically and must NOT be repeated here:
+  //   * a def with its own "api" block (path + field_map) is read directly —
+  //     leave capabilities out entirely
+  //   * anything in api.required_fields is already known to be missing from
+  //     your API (that is what the field means), so never list it as omitted
+  "capabilities": {
+    "api_stats_add": ["seed_size", "unread_mail"],
+    "api_stats_omit": ["bonus_points"]
+  },
+
   // [OPTIONAL] Scrape behaviour overrides. ALL sub-fields optional.
   "scrape": {
     // Operator request: never HTML-scrape this tracker. Users cannot

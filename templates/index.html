@@ -348,15 +348,50 @@
               <div style="font-size:11px;color:var(--text3);margin-top:6px">Enable only when Yata sits behind a reverse proxy you control (nginx, Caddy, Traefik…). Uses <code>X-Forwarded-For</code> for login rate-limiting (so one bad client can't lock everyone out through the proxy) and <code>X-Forwarded-Proto</code> to mark the session cookie Secure behind HTTPS. <strong style="color:var(--amber)">Leave off when directly exposed — these headers can be faked by clients.</strong></div>
             </div>
 
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label" for="s-allowed-hosts" style="font-size:12px">Hostnames this instance answers to</label>
+              <input class="form-input" type="text" id="s-allowed-hosts" placeholder="yata.example.com, box.tailnet-name.ts.net"
+                     onchange="saveAllowedHosts()" autocapitalize="off" autocorrect="off" spellcheck="false"/>
+              <div style="font-size:11px;color:var(--text3);margin-top:6px">
+                Leave empty unless you reach Yata by a <em>name</em>. Browsing to an IP address or <code>localhost</code> always works and needs nothing here.
+                Add your domain or Tailscale name — comma-separated for more than one — and it applies straight away, no restart.
+                <strong>Set this before you need it:</strong> if you set Yata up on this machine but reach it by a domain when you're away, add the domain now, while you can still get to this page.
+                <br>Names Yata wasn't told about are refused, which is what stops a web page you visit from re-pointing its own domain at your machine to read this dashboard.
+              </div>
+            </div>
+
             <p class="settings-section-label" style="margin-top:16px">Data</p>
 
             <div class="form-group" style="margin-bottom:16px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Configuration</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Download a full backup of your configuration (trackers, targets, settings) as a JSON file, or import one to restore it. <strong style="color:var(--amber)">The exported file contains API keys and session cookies — keep it private.</strong></div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Download a full backup of your configuration (trackers, targets, settings) as a JSON file, or import one to restore it. <strong style="color:var(--amber)">This file is a backup, not something to share — it holds every tracker API key and session cookie you have entered.</strong></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="exportConfig()"><i class="fas fa-download" style="margin-right:6px"></i>Export config</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="openExportConfirm()"><i class="fas fa-download" style="margin-right:6px"></i>Export config</button>
                 <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('s-import-file').click()"><i class="fas fa-upload" style="margin-right:6px"></i>Import config</button>
                 <input type="file" id="s-import-file" accept="application/json,.json" style="display:none" onchange="importConfigFile(this)"/>
+              </div>
+
+              <!-- Export confirmation. The password stops someone at a borrowed
+                   machine; the wording is the only thing that helps a user who
+                   has been ASKED for this file, so it names that case. -->
+              <div id="s-export-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--amber);border-radius:6px;background:var(--bg2)">
+                <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:6px">
+                  <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>This file unlocks every tracker you have added
+                </div>
+                <div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.5">
+                  It contains your API keys and session cookies in plain text. Anyone who gets a copy can act as you on those trackers.
+                  <strong>Nobody legitimate will ever ask you for it</strong> — not tracker staff, not this project, not anyone offering help with a problem.
+                  Send a <em>log</em> instead: those have credentials stripped out.
+                </div>
+                <div id="s-export-authrow" style="display:none">
+                  <input class="form-input" type="password" id="s-export-pw" placeholder="Your Yata password" autocomplete="current-password" style="margin-bottom:8px"/>
+                  <input class="form-input" type="text" id="s-export-code" inputmode="numeric" autocomplete="one-time-code" placeholder="Authenticator code" style="display:none;margin-bottom:8px"/>
+                </div>
+                <div id="s-export-error" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none"></div>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="btn btn-primary btn-sm" onclick="confirmExportConfig()">Download backup</button>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="cancelExportConfirm()">Cancel</button>
+                </div>
               </div>
               <div style="font-size:11px;color:var(--amber);margin-top:8px"><i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>Importing <strong>overwrites</strong> your current trackers and settings — the existing config is replaced and that data is lost. A backup of the current config is saved automatically first.</div>
             </div>
@@ -817,6 +852,10 @@
                       <span class="modal-def-url-text" id="modal-def-url-text"></span>
                     </div>
                     <div class="modal-def-approval" id="modal-def-approval" style="display:none"></div>
+                    <!-- What this tracker can actually report, before you add
+                         it — so an incomplete API reads as tracker policy
+                         rather than as Yata failing later. -->
+                    <div class="modal-def-caps" id="modal-def-caps" style="display:none"></div>
                   </div>
 
                   <!-- Divider between selection and form fields -->

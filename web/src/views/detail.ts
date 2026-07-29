@@ -10,8 +10,9 @@ import * as api from '../api';
 import { renderChart } from '../components/chart';
 import type { ChartSeries } from '../components/chart';
 import { buildStatRows } from '../components/profile';
-import { appSettings, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
-import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind } from '../utils/format';
+import { capabilityCard } from '../components/capabilities';
+import { appSettings, fieldOf, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
+import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
 import { buildTargets, fmtDateTime } from './grid';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { eventGlobeSvg } from '../utils/icons';
@@ -206,12 +207,9 @@ function render(): void {
     : '';
 
   // Unread mail/notification flags — same icons and Display toggles as the
-  // grid cards and table rows; only shown when the flag is actually "true".
-  const unreadFlags =
-    (appSettings.show_unread_mail !== false && strOf(stats, 'unread_mail') === 'true'
-      ? `<span class="unread-flag" title="Unread mail on ${esc(t.name)} (as of the last scrape) — check your inbox"><i class="fas fa-envelope"></i></span>` : '') +
-    (appSettings.show_unread_notifications !== false && strOf(stats, 'unread_notifications') === 'true'
-      ? `<span class="unread-flag" title="Unread notifications on ${esc(t.name)} (as of the last scrape)"><i class="fas fa-bell"></i></span>` : '');
+  // grid cards and table rows.
+  const unreadFlags = unreadFlagsHtml(
+    t.name, fieldOf(stats, 'unread_mail'), fieldOf(stats, 'unread_notifications'), appSettings);
 
   const eventBanner = renderEventBanners(stats);
 
@@ -448,7 +446,12 @@ function renderTargetsCol(t: Tracker): void {
     + (rules.length ? `<div style="margin-top:14px">
         <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>
         <div class="exp-stat-list">${rules.join('')}</div>
-      </div>` : '');
+      </div>` : '')
+    // What this tracker can report, right beneath the targets it feeds — the
+    // one place a "Not available" row above has an explanation to point to.
+    // Collapsed by default — it explains the targets above when you need it,
+    // and stays out of the way when you don't.
+    + (t.capabilities ? `<div style="margin-top:14px">${capabilityCard(t.capabilities)}</div>` : '');
 }
 
 /** Direct invite routes leaving this tracker (community data, first-hop

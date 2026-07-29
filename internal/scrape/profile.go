@@ -26,6 +26,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/ident"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
 )
 
@@ -184,7 +185,10 @@ func validForField(key, v string) bool {
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+// Same policy as the API fetchers: a profile scrape goes to the same tracker
+// the fetcher does, so the two paths should agree about where they may
+// connect. See fetch.TrackerPolicy for why private addresses stay allowed.
+var httpClient = netguard.Client(30*time.Second, netguard.Policy{AllowPrivate: true})
 
 // mergedLabels combines the base vocabulary with tracker/type extra labels.
 func mergedLabels(extra map[string]string) map[string]string {

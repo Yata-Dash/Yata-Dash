@@ -99,8 +99,41 @@ export const clearLogs = () =>
 export const logsDownloadUrl = () => '/api/logs/download';
 
 // ── Config import/export + backups ──────────────────────────────────────────
-export const configExportUrl = () => '/api/config/export';
 export const historyCsvUrl = () => '/api/history/export.csv';
+
+export type ConfigExportResult =
+  | { ok: true; blob: Blob }
+  | { ok: false; status: number; error?: string; retryAfter?: number };
+
+/**
+ * POST /api/config/export — the config backup, re-authenticated.
+ *
+ * A POST returning a blob rather than a link the browser navigates to. As a
+ * GET this was reachable by cross-site navigation (safe methods skip the
+ * cross-site check, and a SameSite=Lax cookie still travels on a top-level
+ * navigation), so any page the user visited could make their credentials
+ * download themselves. It also has nowhere to put the password.
+ *
+ * `code` is only read when the account has 2FA enabled.
+ */
+export async function exportConfigFile(password: string, code = ''): Promise<ConfigExportResult> {
+  try {
+    const res = await fetch('/api/config/export', {
+      method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ password, code }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}) as Record<string, unknown>);
+      return {
+        ok: false, status: res.status,
+        error: typeof data['error'] === 'string' ? data['error'] : undefined,
+        retryAfter: typeof data['retry_after'] === 'number' ? data['retry_after'] : undefined,
+      };
+    }
+    return { ok: true, blob: await res.blob() };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
 
 /** Import a full config (raw JSON text). Backend backs up the current one first. */
 export const importConfig = (json: string) =>
@@ -252,18 +285,19 @@ export const fetchMockScenarios = () => call<string[]>('/api/mock/scenarios');
 // ── QUI ───────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/qui/instances — the optional url/key override the STORED settings
+ * POST /api/qui/instances — the optional url/key override the STORED settings
  * so the settings form can test credentials that haven't been saved yet.
- * A key equal to the mask sentinel makes the backend use the stored key.
+ * An omitted key means "use the stored one", which the backend allows only
+ * for the stored address; testing a different one requires its key.
+ *
+ * A POST rather than a GET because it sends a stored credential to a
+ * caller-named destination: safe methods skip the cross-site check, and a
+ * top-level navigation still carries the session cookie, so as a GET any page
+ * the user visited could aim it at a host of its choosing.
  */
-export const fetchQUIInstances = (url?: string, key?: string) => {
-  const qs = new URLSearchParams();
-  if (url) qs.set('url', url);
-  if (key) qs.set('key', key);
-  const q = qs.toString();
-  return call<{ id: number; name: string; connected: boolean; host: string }[]>(
-    `/api/qui/instances${q ? `?${q}` : ''}`);
-};
+export const fetchQUIInstances = (url?: string, key?: string) =>
+  call<{ id: number; name: string; connected: boolean; host: string }[]>(
+    '/api/qui/instances', { method: 'POST', body: JSON.stringify({ url: url ?? '', key: key ?? '' }) });
 
 export const fetchQUIStats = (instanceId: number) =>
   call<Record<string, unknown>>(`/api/qui/stats?id=${instanceId}`);

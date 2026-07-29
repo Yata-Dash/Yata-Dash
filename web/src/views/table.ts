@@ -1,6 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
-import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot } from '../utils/format';
+import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
@@ -164,7 +164,11 @@ function buildTableRow(
   });
 
   const hnrHighlight = settings.highlight_hnr !== false;
-  const mainTr = `<tr class="tr-main${hnr >= 1 && hnrHighlight ? ' hnr-row' : ''}" id="trow-${t.id}" onclick="toggleRow('${jsId(t.id)}')">
+  // esc() on the id attribute and jsId() in the handler: the same value, two
+  // contexts, two different rules. The handler's jsId() does nothing for the
+  // attribute — a quote there closes it and opens an onmouseover of the
+  // author's choosing, before any JavaScript is parsed.
+  const mainTr = `<tr class="tr-main${hnr >= 1 && hnrHighlight ? ' hnr-row' : ''}" id="trow-${esc(t.id)}" onclick="toggleRow('${jsId(t.id)}')">
     <td style="text-align:center;padding-left:10px">
       <svg class="expand-chev ${isExp ? 'open' : ''}" width="14" height="14" viewBox="0 0 24 24"
         fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -176,7 +180,7 @@ function buildTableRow(
     <td style="text-align:right;padding-right:6px"></td>
   </tr>`;
 
-  const expTr = `<tr class="tr-expanded ${isExp ? 'visible' : ''}" id="trow-exp-${t.id}">
+  const expTr = `<tr class="tr-expanded ${isExp ? 'visible' : ''}" id="trow-exp-${esc(t.id)}">
     <td colspan="${colspan}"><div class="tr-expanded-inner">${isExp ? buildExpanded(t, s, historyData, settings, groupDefs, userGroupDef, tKey) : ''}</div></td>
   </tr>`;
 
@@ -205,17 +209,13 @@ function buildCell(
     case 'name': {
       const activeEvent = strOf(s, 'active_event');
       // Unread mail/notification flags — same at-a-glance icons as the grid
-      // cards, sitting next to the event beacon. Each follows its own
-      // Display toggle; only rendered when the flag is actually "true".
-      const unreadFlags =
-        (settings.show_unread_mail !== false && strOf(s, 'unread_mail') === 'true'
-          ? `<span class="unread-flag" title="Unread mail on ${esc(t.name)} (as of the last scrape) — check your inbox"><i class="fas fa-envelope"></i></span>` : '') +
-        (settings.show_unread_notifications !== false && strOf(s, 'unread_notifications') === 'true'
-          ? `<span class="unread-flag" title="Unread notifications on ${esc(t.name)} (as of the last scrape)"><i class="fas fa-bell"></i></span>` : '');
+      // cards, sitting next to the event beacon.
+      const unreadFlags = unreadFlagsHtml(
+        t.name, fieldOf(s, 'unread_mail'), fieldOf(s, 'unread_notifications'), settings);
       return `<td>
       <div class="td-tracker-wrap">
         ${settings.show_favicons && t.url ? `<img class="tracker-favicon" src="${getFaviconUrl(t.url)}" alt="" onerror="this.style.display='none'">` : ''}
-        <span class="td-tracker-name"><span class="td-name-text tracker-name-link" title="Open tracker detail" onclick="event.stopPropagation();openTrackerDetail('${t.id}')">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}${unreadFlags}</span>
+        <span class="td-tracker-name"><span class="td-name-text tracker-name-link" title="Open tracker detail" onclick="event.stopPropagation();openTrackerDetail('${jsId(t.id)}')">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}${unreadFlags}</span>
         <a class="td-tracker-url" href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(t.url)}</a>
       </div></td>`;
     }

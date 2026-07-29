@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -165,12 +166,56 @@ func clearLoginFailures(ip string) {
 	loginLimiter.mu.Unlock()
 }
 
+// authState is what the account table says — including the case where it could
+// not be read at all.
+//
+// Three states rather than a bool because "no account exists" and "the
+// question could not be answered" demand opposite responses, and collapsing
+// them picks the dangerous one. The open first-run instance is a deliberate
+// feature, so a bool has to default to "open", and then any database error —
+// a lock timeout under load is enough, given the single writer connection —
+// silently unlocks every protected route.
+type authState int
+
+const (
+	authUnconfigured authState = iota // no account: first run, nothing to protect
+	authEnabled                       // an account exists: a session is required
+	authUnknown                       // the account could not be read: assume protected
+)
+
+func authStateOf(d *Deps) authState {
+	_, ok, err := d.DB.GetUser()
+	switch {
+	case err != nil:
+		return authUnknown
+	case ok:
+		return authEnabled
+	default:
+		return authUnconfigured
+	}
+}
+
 // requireAuth gates protected routes. When no account is configured the app is
-// open (first-run / opt-in); once configured, a valid session cookie is required.
+// open (first-run / opt-in); once configured, a valid session cookie is
+// required; and when the account can't be read at all, the route is closed.
 func requireAuth(d *Deps) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !isAuthenticated(d, r) && authConfigured(d) {
+			switch authStateOf(d) {
+			case authUnconfigured:
+				next.ServeHTTP(w, r) // nothing to protect yet
+				return
+			case authUnknown:
+				// 503, not 401: the caller's credentials are not the problem,
+				// and answering "unauthorized" sends someone to re-enter a
+				// password that cannot be checked either. Login is broken too
+				// in this state, so say so.
+				d.logErrorf("auth: account lookup failed — refusing %s %s until the database is readable",
+					r.Method, r.URL.Path)
+				jsonError(w, "auth_unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			if !hasValidSession(d, r) {
 				jsonError(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -179,17 +224,9 @@ func requireAuth(d *Deps) func(http.Handler) http.Handler {
 	}
 }
 
-func authConfigured(d *Deps) bool {
-	_, ok, err := d.DB.GetUser()
-	return err == nil && ok
-}
-
-// isAuthenticated returns true when the request carries a valid session cookie.
-// When no account is configured it is vacuously true (nothing to protect).
-func isAuthenticated(d *Deps, r *http.Request) bool {
-	if !authConfigured(d) {
-		return true
-	}
+// hasValidSession reports whether the request carries a live session cookie.
+// It asks nothing about whether an account exists.
+func hasValidSession(d *Deps, r *http.Request) bool {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
 		return false
@@ -198,9 +235,31 @@ func isAuthenticated(d *Deps, r *http.Request) bool {
 	return err == nil && ok
 }
 
+// isAuthenticated reports whether the caller may act. When no account is
+// configured it is vacuously true (nothing to protect); when the account
+// cannot be read it is false, so handlers that guard themselves with it fail
+// closed like the middleware does.
+func isAuthenticated(d *Deps, r *http.Request) bool {
+	switch authStateOf(d) {
+	case authUnconfigured:
+		return true
+	case authUnknown:
+		return false
+	}
+	return hasValidSession(d, r)
+}
+
 func authStatus(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		u, configured, _ := d.DB.GetUser()
+		u, configured, err := d.DB.GetUser()
+		if err != nil {
+			// The SPA boots off this endpoint. Reporting "not configured" here
+			// would tell it the instance is open and send an unauthenticated
+			// visitor to the setup screen.
+			d.logErrorf("auth: status lookup failed — %v", err)
+			jsonError(w, "auth_unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		authed := isAuthenticated(d, r)
 		resp := map[string]any{
 			"configured":    configured,
@@ -242,8 +301,17 @@ func decodeCreds(r *http.Request) authCreds {
 // authSetup creates the first (and only) account. Allowed only when none exists.
 func authSetup(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if authConfigured(d) {
+		// Explicitly "no account exists", never merely "not known to exist":
+		// this is an unauthenticated endpoint that writes the account row, so
+		// treating a failed lookup as "unconfigured" would let a database
+		// error hand the account to whoever asks first.
+		switch authStateOf(d) {
+		case authEnabled:
 			jsonError(w, "already_configured", http.StatusConflict)
+			return
+		case authUnknown:
+			d.logErrorf("auth: account lookup failed — refusing setup until the database is readable")
+			jsonError(w, "auth_unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		c := decodeCreds(r)
@@ -299,7 +367,17 @@ func authLogin(d *Deps) http.HandlerFunc {
 		}
 		if bcrypt.CompareHashAndPassword(hash, []byte(c.Password)) != nil || !userMatch {
 			locked := recordLoginFailure(ip, now)
-			d.logWarnf("auth: failed login attempt for %q from %s", c.Username, ip)
+			// The submitted username is echoed only when it matches the
+			// account. An unmatched value is whatever was typed into the
+			// field, and the commonest way to get one is a password entered a
+			// box too high — logging it verbatim would write the password to
+			// a file meant for sharing. "unrecognised" loses nothing: there is
+			// exactly one account, so which name was tried says little.
+			who := "an unrecognised username"
+			if userMatch {
+				who = fmt.Sprintf("%q", u.Username)
+			}
+			d.logWarnf("auth: failed login attempt for %s from %s", who, ip)
 			if locked > 0 {
 				d.logWarnf("auth: %s locked out for %s after %d failures", ip, locked, maxLoginFailures)
 				jsonStatus(w, http.StatusTooManyRequests, map[string]any{
@@ -469,6 +547,74 @@ func authDisable(d *Deps) http.HandlerFunc {
 		d.logInfof("auth: login protection disabled (account removed)")
 		jsonOK(w, map[string]any{"ok": true})
 	}
+}
+
+// reauthenticate re-proves the account holder is present, for an action a
+// live session alone should not be enough to perform. Returns false having
+// already written the response.
+//
+// Unlike confirmPassword (which guards account settings), this feeds the login
+// lockout. Without that, an endpoint taking a password becomes an oracle with
+// no rate limit at all while /api/auth/login stops after five tries — an
+// attacker who has a session but not the password would simply guess here
+// instead.
+//
+// On an instance with no account configured there is nothing to prove, and the
+// caller is let through: the whole app is open in that state, so demanding a
+// password that does not exist would only block the legitimate user.
+func reauthenticate(d *Deps, w http.ResponseWriter, r *http.Request, what string) bool {
+	if authStateOf(d) == authUnconfigured {
+		return true
+	}
+	if !isAuthenticated(d, r) {
+		jsonError(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	ip := clientIP(d, r)
+	now := time.Now()
+	if locked, remain := loginLocked(ip, now); locked {
+		jsonStatus(w, http.StatusTooManyRequests, map[string]any{
+			"error": "locked", "retry_after": int(remain.Seconds()) + 1,
+		})
+		return false
+	}
+	c := decodeCreds(r)
+	u, ok, err := d.DB.GetUser()
+	if err != nil || !ok {
+		jsonError(w, "store_error", http.StatusInternalServerError)
+		return false
+	}
+	// A failure here reports the lockout on the attempt that triggers it, the
+	// same way login does — otherwise the two paths disagree about when the
+	// limit bites and the UI has to explain both.
+	fail := func(errCode string) bool {
+		if locked := recordLoginFailure(ip, now); locked > 0 {
+			d.logWarnf("auth: %s locked out %s for %s", what, ip, locked)
+			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
+				"error": "locked", "retry_after": int(locked.Seconds()) + 1,
+			})
+			return false
+		}
+		jsonStatus(w, http.StatusUnauthorized, map[string]any{"error": errCode})
+		return false
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(c.Password)) != nil {
+		d.logWarnf("auth: %s refused — wrong password from %s", what, ip)
+		return fail("invalid_credentials")
+	}
+	if u.TOTPEnabled {
+		valid, _, err := consumeSecondFactor(d, u, strings.TrimSpace(c.Code), now)
+		if err != nil {
+			jsonError(w, "store_error", http.StatusInternalServerError)
+			return false
+		}
+		if !valid {
+			d.logWarnf("auth: %s refused — wrong second factor from %s", what, ip)
+			return fail("totp_invalid")
+		}
+	}
+	clearLoginFailures(ip)
+	return true
 }
 
 // issueSession generates a token, stores it, and sets the session cookie.

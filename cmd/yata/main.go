@@ -8,6 +8,15 @@
 //	--defs / YATA_DEFS     defs directory          (default ./defs)
 //	--data / YATA_DATA     SQLite database path    (default ./yata.db)
 //	--base / YATA_BASE     static/templates dir    (default .)
+//	--allowed-hosts / YATA_ALLOWED_HOSTS
+//	                       extra hostnames this instance answers to, comma
+//	                       separated (default none). Access by IP address or
+//	                       via localhost always works; a reverse proxy's
+//	                       domain has to be named. "*" disables the check, and
+//	                       can only be set here. Adds to (does not replace)
+//	                       the list in Settings → Network, which is editable
+//	                       from the dashboard and applies without a restart.
+//	                       See internal/api/hostguard.go.
 package main
 
 import (
@@ -41,16 +50,32 @@ func envOr(key, def string) string {
 	return def
 }
 
+// splitHosts parses the comma-separated --allowed-hosts value, dropping blanks
+// so a trailing comma or a stray space cannot become an empty hostname that
+// matches nothing but still looks configured.
+func splitHosts(s string) []string {
+	var out []string
+	for _, h := range strings.Split(s, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 func main() {
 	var (
-		host       = flag.String("host", envOr("YATA_HOST", ""), "listen address (overrides config)")
-		port       = flag.Int("port", atoi(envOr("YATA_PORT", "0")), "listen port (overrides config)")
-		configPath = flag.String("config", envOr("YATA_CONFIG", "config.json"), "path to config.json")
-		defsDir    = flag.String("defs", envOr("YATA_DEFS", "defs"), "tracker definitions directory")
-		dataPath   = flag.String("data", envOr("YATA_DATA", "yata.db"), "SQLite database path")
-		baseDir    = flag.String("base", envOr("YATA_BASE", "."), "directory containing static/ and templates/")
-		logPath    = flag.String("log", envOr("YATA_LOG", ""), "log file path (default: yata.log next to the database)")
-		resetAuth  = flag.Bool("reset-auth", false, "remove the login account and exit (trackers, stats and settings are kept)")
+		host         = flag.String("host", envOr("YATA_HOST", ""), "listen address (overrides config)")
+		port         = flag.Int("port", atoi(envOr("YATA_PORT", "0")), "listen port (overrides config)")
+		configPath   = flag.String("config", envOr("YATA_CONFIG", "config.json"), "path to config.json")
+		defsDir      = flag.String("defs", envOr("YATA_DEFS", "defs"), "tracker definitions directory")
+		dataPath     = flag.String("data", envOr("YATA_DATA", "yata.db"), "SQLite database path")
+		baseDir      = flag.String("base", envOr("YATA_BASE", "."), "directory containing static/ and templates/")
+		logPath      = flag.String("log", envOr("YATA_LOG", ""), "log file path (default: yata.log next to the database)")
+		allowedHosts = flag.String("allowed-hosts", envOr("YATA_ALLOWED_HOSTS", ""),
+			"comma-separated hostnames this instance answers to, beyond IP addresses and localhost "+
+				"(e.g. a reverse proxy's domain). \"*\" disables the check.")
+		resetAuth = flag.Bool("reset-auth", false, "remove the login account and exit (trackers, stats and settings are kept)")
 	)
 	flag.Parse()
 
@@ -98,6 +123,18 @@ func main() {
 	}
 	defer db.Close()
 
+	// Tighten state written by an earlier version. New files are created
+	// private, but an existing install's database, WAL sidecars and config
+	// backups were world-readable, and those are the ones with a history of
+	// credentials in them. Warn rather than fail: a filesystem without Unix
+	// modes is a bad reason to refuse to boot (see package fsperm).
+	if err := store.Harden(*dataPath); err != nil {
+		logger.Warnf("store: could not make the database private: %v", err)
+	}
+	if err := cfg.HardenBackups(); err != nil {
+		logger.Warnf("config: could not make existing backups private: %v", err)
+	}
+
 	// Last-resort recovery for someone locked out with no second factor and no
 	// recovery codes. Running it requires a shell on the machine (or `docker
 	// exec`), which is the point: there is deliberately no way to reach this
@@ -123,14 +160,17 @@ func main() {
 	// layer in the merge without a restart.
 	statsEngine.QUISeedMode = func() string { return cfg.Settings().QUISeedsizeMode }
 	deps := &api.Deps{
-		Cfg:       cfg,
-		DB:        db,
-		Reg:       reg,
-		Fetch:     fetch.NewClient(reg, "test_data.json"),
-		Stats:     statsEngine,
-		Log:       logger,
-		Alerts:    notify.New(cfg, logger),
-		BaseDir:   *baseDir,
+		Cfg:     cfg,
+		DB:      db,
+		Reg:     reg,
+		Fetch:   fetch.NewClient(reg, "test_data.json"),
+		Stats:   statsEngine,
+		Log:     logger,
+		Alerts:  notify.New(cfg, logger),
+		BaseDir: *baseDir,
+		// Deployment-level only. Names added in Settings → Network are read
+		// live per request (see allowedHostsFor), so they need no restart.
+		AllowedHosts: splitHosts(*allowedHosts),
 	}
 
 	// Seed the manual stats layer from config (user-entered join dates) so

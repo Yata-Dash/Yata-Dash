@@ -5,19 +5,21 @@
   "abbr": "ZNTH",
   "url": "https://znth.cx",
   "type": "unit3d",
-  "last_updated": "2026-07-25",
+  "last_updated": "2026-07-28",
   "approved_by": {
     "name": "Zenith Staff",
     "role": "Staff",
     "date": "2026-07-07",
     "note": "Staff expanded /api/user (2026-07) to cover the formerly scrape-only stats — seed size, seed times, unread flags, real ratio and a structured active_events list — and have proposed the same schema upstream to UNIT3D. Sizes are integer bytes, seed times integer seconds, real_ratio null when actual downloaded bytes are zero. No extended_stats block is needed: it is all on /api/user with the same auth. Coverage confirmed against a live account 2026-07-26 with nothing important missing, so scraping is off; join_date is the one field the API doesn't report and is required at setup"
   },
-    "rules": {
+  "rules": {
     "min_seed_days": 3,
     "note": "Ratioless"
   },
   "api": {
-    "required_fields": ["join_date"]
+    "required_fields": [
+      "join_date"
+    ]
   },
   "scrape": {
     "disable_scraping": true
@@ -496,5 +498,23 @@
         }
       ]
     }
-  ]
+  ],
+  "capabilities": {
+    "api_stats_add": [
+      "active_events",
+      "avg_seed_time",
+      "fl_tokens",
+      "invites",
+      "real_downloaded",
+      "real_ratio",
+      "real_uploaded",
+      "seed_size",
+      "total_seedtime",
+      "unread_mail",
+      "unread_notifications",
+      "upload_snatches",
+      "uploads_approved",
+      "warnings"
+    ]
+  }
 }

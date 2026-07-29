@@ -9,6 +9,7 @@ import type {
 import { MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
 import { approvalIcon, approvalWarns } from '../utils/approval';
+import { capabilityRow } from './capabilities';
 import { eventGlobeSvg } from '../utils/icons';
 import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
 import { parseAgeDays, parseSeedTime } from '../utils/parse';
@@ -398,6 +399,16 @@ function applyPredefinedDef(def: DefInfo) {
     } else {
       apEl.style.display = 'none';
     }
+  }
+
+  // Capability row: what this tracker reports, shown while the user is still
+  // deciding. Silent when nothing has been declared for it — an empty row
+  // would read as "reports nothing".
+  const capsEl = document.getElementById('modal-def-caps');
+  if (capsEl) {
+    const row = capabilityRow(def.capabilities);
+    capsEl.innerHTML = row;
+    capsEl.style.display = row ? '' : 'none';
   }
 
   show('modal-def-header');
@@ -1881,6 +1892,90 @@ export async function accountDisable(): Promise<void> {
   }
 }
 
+// ── Config export (Settings → General → Data) ────────────────────────────────
+//
+// The export is the one artifact Yata produces that is never safe to share, so
+// it is the one download that asks twice: a warning aimed at the person who
+// has been ASKED for the file, and the account password, which a borrowed
+// session does not supply.
+
+function exportEl<T extends HTMLElement>(id: string): T | null {
+  return document.getElementById(id) as T | null;
+}
+
+function exportError(msg: string): void {
+  const el = exportEl('s-export-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? '' : 'none';
+}
+
+/** Reveal the confirmation, showing the password fields the account needs. */
+export async function openExportConfirm(): Promise<void> {
+  const box = exportEl('s-export-confirm');
+  if (!box) return;
+  box.style.display = '';
+  exportError('');
+
+  // An instance with no account has no password to ask for — the backend
+  // skips the check there too, so asking would be a prompt nothing can answer.
+  const { data } = await api.fetchAuthStatus();
+  const authRow = exportEl('s-export-authrow');
+  const pw = exportEl<HTMLInputElement>('s-export-pw');
+  const code = exportEl<HTMLInputElement>('s-export-code');
+  if (authRow) authRow.style.display = data.configured ? '' : 'none';
+  if (code) code.style.display = data.configured && data.totp_enabled ? '' : 'none';
+  if (pw) { pw.value = ''; if (data.configured) pw.focus(); }
+  if (code) code.value = '';
+}
+
+export function cancelExportConfirm(): void {
+  const box = exportEl('s-export-confirm');
+  if (box) box.style.display = 'none';
+  const pw = exportEl<HTMLInputElement>('s-export-pw');
+  const code = exportEl<HTMLInputElement>('s-export-code');
+  if (pw) pw.value = '';
+  if (code) code.value = '';
+  exportError('');
+}
+
+/** Re-authenticate, then save the returned blob as a file. */
+export async function confirmExportConfig(): Promise<void> {
+  exportError('');
+  const pw = exportEl<HTMLInputElement>('s-export-pw')?.value ?? '';
+  const code = exportEl<HTMLInputElement>('s-export-code')?.value ?? '';
+
+  const res = await api.exportConfigFile(pw, code);
+  if (!res.ok) {
+    exportError(exportErrorText(res));
+    return;
+  }
+  // The browser cannot save a POST response by navigating to it, so the blob
+  // is turned into a one-shot object URL and clicked.
+  const url = URL.createObjectURL(res.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'yata-config.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  cancelExportConfirm();
+  _sd?.toast('Backup downloaded — keep it private', 'success');
+}
+
+function exportErrorText(res: Extract<api.ConfigExportResult, { ok: false }>): string {
+  if (res.error === 'locked') {
+    const mins = Math.ceil((res.retryAfter ?? 0) / 60);
+    return `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`;
+  }
+  if (res.error === 'totp_invalid') return 'That authenticator code is not valid.';
+  if (res.status === 401) return 'That password is not correct.';
+  if (res.status === 0) return 'Could not reach Yata.';
+  return 'Could not export the configuration.';
+}
+
 // ── Config backups (Settings → General → Data) ───────────────────────────────
 
 /** Render the list of existing config backups. */
@@ -1982,6 +2077,35 @@ export async function toggleAutoUpdate(): Promise<void> {
 /** Persist the reverse-proxy header opt-in immediately (like the other toggles).
  *  On failure, revert appSettings AND the checkbox — mirrors togglePrivacyQuick
  *  (main.ts) — so the UI never claims a setting persisted when it didn't. */
+/** The Network hostname field, parsed into the list the API expects. */
+function readAllowedHostsField(): string[] {
+  const el = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
+  if (!el) return appSettings.allowed_hosts ?? [];
+  return el.value.split(',').map(h => h.trim()).filter(Boolean);
+}
+
+/** Save the allowed-hosts list on edit, reverting the field if it is refused.
+ *
+ *  Worth getting right: someone typing their domain here is usually doing it
+ *  BEFORE they travel, and will not find out it failed until they are away
+ *  from the machine. So a rejection has to be visible now, not silent. */
+export async function saveAllowedHosts(): Promise<void> {
+  if (!_sd) return;
+  const hosts = readAllowedHostsField();
+  const previous = appSettings.allowed_hosts ?? [];
+  const { ok, data } = await api.saveSettings({ ...appSettings, allowed_hosts: hosts });
+  if (ok) {
+    appSettings.allowed_hosts = hosts;
+    _sd.toast(hosts.length
+      ? `Yata will answer to ${hosts.join(', ')}`
+      : 'Hostnames cleared — IP and localhost access still work', 'success');
+    return;
+  }
+  const el = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
+  if (el) el.value = previous.join(', ');
+  _sd.toast((data as { error?: string })?.error ?? 'Could not save the hostname list', 'error');
+}
+
 export async function toggleTrustProxy(): Promise<void> {
   if (!_sd) return;
   const cb = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
@@ -2108,6 +2232,8 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   void renderAccountSection();
   const trustProxy = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
   if (trustProxy) trustProxy.checked = settings.trust_proxy_headers ?? false;
+  const allowedHosts = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
+  if (allowedHosts) allowedHosts.value = (settings.allowed_hosts ?? []).join(', ');
 
   // Data: automatic backup settings + backup list (General tab).
   const backupTrack = document.getElementById('s-backup-track');
@@ -2340,6 +2466,10 @@ export async function saveSettings(deps: SettingsDeps) {
     max_scrapes_per_day:     Math.max(0, parseInt((document.getElementById('s-max-scrapes') as HTMLInputElement | null)?.value ?? '0', 10) || 0),
     refresh_interval_minutes: Math.max(15, parseInt((document.getElementById('s-refresh-interval') as HTMLInputElement | null)?.value ?? '30', 10) || 30),
     qui_refresh_seconds:      Math.max(1,  parseInt((document.getElementById('s-qui-refresh') as HTMLInputElement | null)?.value ?? '10', 10) || 10),
+    // Must be included: this PUT replaces the whole settings object, so
+    // omitting it would clear the list every time any other setting is
+    // saved — locking the user out of their own domain from a distance.
+    allowed_hosts:            readAllowedHostsField(),
   };
 
   const { ok } = await api.saveSettings(payload);

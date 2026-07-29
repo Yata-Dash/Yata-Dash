@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 	"github.com/Yata-Dash/Yata-Dash/internal/version"
 )
 
@@ -54,7 +55,11 @@ var (
 	updErr       string
 )
 
-var updateClient = &http.Client{Timeout: 15 * time.Second}
+// The manifest URL is a fixed constant, so there is no caller-controlled
+// destination here — the policy is about where a REDIRECT could lead. GitHub
+// has no reason to bounce this to a private address, so nothing legitimate is
+// lost by refusing it.
+var updateClient = netguard.Client(15*time.Second, netguard.Policy{})
 
 func registerUpdates(r chi.Router, d *Deps) {
 	r.Get("/updates", getUpdates(d))

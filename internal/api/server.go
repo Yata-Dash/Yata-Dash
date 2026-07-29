@@ -31,12 +31,20 @@ type Deps struct {
 	Alerts  *notify.Engine
 	Paths   *pathways.Data // nil = pathways feature hidden
 	BaseDir string         // directory containing static/ and templates/
+	// AllowedHosts are extra hostnames this instance answers to, beyond IP
+	// literals and localhost — a reverse proxy's domain, typically. "*"
+	// disables the check. See hostguard.go for why the default is narrow.
+	AllowedHosts []string
 }
 
 // NewRouter builds the full application router.
 func NewRouter(d *Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	// Before anything else: a request arriving under a hostname we do not
+	// answer to is a DNS-rebinding attempt, and the cross-site check below
+	// cannot see it — the browser reports such a request as same-origin.
+	r.Use(hostGuard(d))
 	r.Use(securityHeaders)
 	// No CORS headers: the SPA is served from the same origin as the API, so
 	// it never makes a cross-origin request. Emitting "Access-Control-Allow-

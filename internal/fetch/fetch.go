@@ -21,7 +21,9 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/ident"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
+	"github.com/Yata-Dash/Yata-Dash/internal/redact"
 )
 
 // Error classifies a fetch failure for the UI.
@@ -30,9 +32,14 @@ type Error struct {
 	Err  error
 }
 
+// Error renders the failure with credentials removed. The underlying error is
+// very often a *url.Error, whose message carries the full request URL — and
+// for a def using api_key_query that URL contains the tracker's API key. This
+// string reaches both the log and the tracker-test modal, so it is redacted
+// here rather than trusting every consumer to remember.
 func (e *Error) Error() string {
 	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", e.Kind, e.Err)
+		return fmt.Sprintf("%s: %s", e.Kind, redact.Error(e.Err))
 	}
 	return e.Kind
 }
@@ -46,11 +53,27 @@ type Client struct {
 	TestDataPath string // path to test_data.json for demo trackers
 }
 
+// TrackerPolicy constrains where a tracker fetch may connect.
+//
+// The destination comes from a definition rather than from a request, so this
+// guards a narrower surface than the integration endpoints do — but a
+// definition is data, and community-contributed definitions are the direction
+// of travel. What it enforces is the scheme (http/https only) and the
+// addresses that are never a legitimate tracker: link-local, and so the cloud
+// instance-metadata endpoint, plus multicast.
+//
+// Private addresses are deliberately still allowed. Trackers are public sites,
+// so blocking RFC1918 and loopback would cost nothing in production — but it
+// would also break every local stub tracker used to develop against, and the
+// test suite, which points fetchers at httptest servers on 127.0.0.1. Set
+// AllowPrivate to false here to tighten it, and expect those to need rework.
+var TrackerPolicy = netguard.Policy{AllowPrivate: true}
+
 // NewClient builds a Client with a sane default HTTP timeout.
 func NewClient(reg *defs.Registry, testDataPath string) *Client {
 	return &Client{
 		Registry:     reg,
-		HTTP:         &http.Client{Timeout: 30 * time.Second},
+		HTTP:         netguard.Client(30*time.Second, TrackerPolicy),
 		TestDataPath: testDataPath,
 	}
 }
@@ -427,11 +450,11 @@ func (c *Client) getGazelleJSON(url string, headers map[string]string, identify 
 	}
 	var env gazelleJSONEnvelope
 	if err := json.Unmarshal(body, &env); err != nil {
-		snippet := string(body)
-		if len(snippet) > 300 {
-			snippet = snippet[:300]
-		}
-		return errf("parse_error", fmt.Errorf("%w — body: %q", err, snippet))
+		// The SHAPE of the response, never its contents. Diagnosing a parse
+		// failure needs to know which keys arrived and what types they held;
+		// the values are the account's own details (a Gazelle user endpoint
+		// carries email, IRC key and inviter) and this text is logged.
+		return errf("parse_error", fmt.Errorf("%w — body shape: %s", err, redact.JSONShape(body)))
 	}
 	if env.Status != "success" {
 		message := env.Error

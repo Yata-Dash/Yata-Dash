@@ -5,40 +5,69 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
 // QUI is a qBittorrent management UI (github.com/autobrr/qui). Yata can
 // display its live torrent stats bars above the tracker table.
 
 func registerQUI(r chi.Router, d *Deps) {
-	r.Get("/qui/instances", quiInstances(d))
+	// POST, not GET, because this endpoint takes a destination from the caller
+	// and attaches a stored credential to it. blockCrossSite exempts safe
+	// methods, and SameSite=Lax sends the session cookie on a top-level
+	// navigation — so as a GET, any page the user visited could open
+	// /api/qui/instances?url=http://attacker/ and collect the QUI API key from
+	// its own logs. As a POST it is covered by the cross-site check.
+	r.Post("/qui/instances", quiInstances(d))
 	r.Get("/qui/stats", quiStats(d))
 }
 
-var quiClient = &http.Client{Timeout: 10 * time.Second}
+// quiPolicy: QUI is a companion app, normally on localhost or the LAN, so
+// private destinations have to be allowed. Redirects are pinned to the
+// configured origin — a qui instance has no reason to bounce Yata elsewhere,
+// and without the pin an attacker-controlled host could answer 302 to
+// somewhere internal and the LAN allowance would let it through.
+var quiPolicy = netguard.Policy{AllowPrivate: true, PinOrigin: true}
 
-// GET /api/qui/instances?url=…&key=…
-// The optional url/key query params let the settings form TEST credentials
-// that haven't been saved yet ("reload instances" before hitting Save).
-// A key equal to the mask sentinel means "use the stored key".
+var quiClient = netguard.Client(10*time.Second, quiPolicy)
+
+type quiRequest struct {
+	URL string `json:"url"`
+	Key string `json:"key"`
+}
+
+// POST /api/qui/instances {url, key}
+// The optional url/key let the settings form TEST credentials that haven't
+// been saved yet ("reload instances" before hitting Save). An empty key, or
+// the mask sentinel, means "use the stored key" — but only for the stored
+// destination; see quiCredentials.
 func quiInstances(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var req quiRequest
+		if r.Body != nil {
+			// An empty body is a valid request meaning "use everything stored".
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+				jsonError(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+		}
 		set := d.Cfg.Settings()
-		url, key := set.QUIURL, set.QUIAPIKey
-		if q := r.URL.Query().Get("url"); q != "" {
-			url = q
-		}
-		if q := r.URL.Query().Get("key"); q != "" && q != maskedKey {
-			key = q
-		}
-		if url == "" {
-			jsonError(w, "QUI not configured", http.StatusBadRequest)
+		target, key, errMsg := quiCredentials(set.QUIURL, set.QUIAPIKey, req)
+		if errMsg != "" {
+			jsonError(w, errMsg, http.StatusBadRequest)
 			return
 		}
-		body, status, err := quiFetch(url+"/api/instances", key)
+		if _, err := netguard.Validate(target, quiPolicy); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		body, status, err := quiFetch(strings.TrimRight(target, "/")+"/api/instances", key)
 		if err != nil {
 			jsonError(w, err.Error(), upstreamStatus(status))
 			return
@@ -73,7 +102,16 @@ func quiStats(d *Deps) http.HandlerFunc {
 				instID = "1"
 			}
 		}
-		url := fmt.Sprintf("%s/api/instances/%s/torrents?page=1&limit=1", set.QUIURL, instID)
+		// Instance ids are integers in qui. Enforcing that stops the id from
+		// steering the request path — the destination host is fixed here, but
+		// a value carrying "../" or "?" still rewrites which endpoint is
+		// called and what it is asked for.
+		if _, err := strconv.Atoi(instID); err != nil {
+			jsonError(w, "invalid instance id", http.StatusBadRequest)
+			return
+		}
+		url := fmt.Sprintf("%s/api/instances/%s/torrents?page=1&limit=1",
+			strings.TrimRight(set.QUIURL, "/"), instID)
 		body, _, err := quiFetch(url, set.QUIAPIKey)
 		if err != nil {
 			jsonOK(w, map[string]any{"error": err.Error(), "instance_id": instID})
@@ -123,6 +161,33 @@ func quiStats(d *Deps) http.HandlerFunc {
 			"total_size":           ts["totalSize"],
 		})
 	}
+}
+
+// quiCredentials decides which destination and which key a request should
+// use, and refuses the combination that leaks.
+//
+// The rule is that a STORED credential only ever travels to the STORED
+// origin. Falling back to the saved key for a caller-supplied destination is
+// what turns "let the settings form test an unsaved URL" into "hand the key
+// to any host someone names". Testing a different QUI still works — the
+// caller just has to supply the key for it, which someone configuring their
+// own instance has and an attacker forging a request does not.
+func quiCredentials(storedURL, storedKey string, req quiRequest) (target, key, errMsg string) {
+	target = strings.TrimSpace(req.URL)
+	if target == "" {
+		target = strings.TrimSpace(storedURL)
+	}
+	if target == "" {
+		return "", "", "QUI not configured"
+	}
+	key = strings.TrimSpace(req.Key)
+	if key == "" || key == maskedKey {
+		if !netguard.SameOriginStr(target, storedURL) {
+			return "", "", "an API key is required when testing a different QUI address"
+		}
+		key = storedKey
+	}
+	return target, key, ""
 }
 
 func quiFetch(url, apiKey string) ([]byte, int, error) {

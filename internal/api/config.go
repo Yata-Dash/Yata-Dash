@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,21 +14,49 @@ import (
 )
 
 func registerConfigIO(r chi.Router, d *Deps) {
-	r.Get("/config/export", exportConfig(d))
+	// POST, not GET. As a GET this was reachable by cross-site navigation:
+	// safe methods skip the cross-site check and a SameSite=Lax cookie still
+	// travels on a top-level navigation, so any page the user visited could
+	// make their config.json download itself. The response is opaque to the
+	// attacker, but a file full of credentials landing in Downloads on cue is
+	// a workable first step for "your backup is ready, send it over".
+	r.Post("/config/export", exportConfig(d))
 	r.Post("/config/import", importConfig(d))
 	r.Get("/backups", listBackups(d))
 	r.Post("/backups", createBackup(d))
 	r.Get("/history/export.csv", exportHistoryCSV(d))
 }
 
-// exportConfig streams the current config.json as a download. It contains
-// secrets (API keys, cookies) — it's the user's own backup, served only to an
-// authenticated session.
+// exportConfig sends config.json as a download. It is a BACKUP, and the only
+// artifact Yata produces that is never safe to share: every tracker API key
+// and session cookie is in it verbatim.
+//
+// The password is re-checked even though the caller already holds a session,
+// because the two protect against different things. A session is enough for
+// someone at a borrowed or unlocked machine; the password is not. This is the
+// same bar disabling 2FA and changing the password already meet.
+//
+// It does not, and cannot, protect a user who has been talked into exporting
+// deliberately — that is what the warning on the button is for.
 func exportConfig(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !reauthenticate(d, w, r, "config export") {
+			return
+		}
+		// Read rather than ServeFile: this is a POST, and ServeFile's
+		// conditional/range handling assumes a GET. The config is small and
+		// saveLocked writes it by atomic rename, so a concurrent save yields
+		// either the whole old file or the whole new one, never a torn read.
+		data, err := os.ReadFile(d.Cfg.Path())
+		if err != nil {
+			jsonError(w, "read_error", http.StatusInternalServerError)
+			return
+		}
+		d.logInfof("config: exported (%d bytes) — the file contains every stored credential", len(data))
 		w.Header().Set("Content-Disposition", `attachment; filename="yata-config.json"`)
 		w.Header().Set("Content-Type", "application/json")
-		http.ServeFile(w, r, d.Cfg.Path())
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(data)
 	}
 }
 

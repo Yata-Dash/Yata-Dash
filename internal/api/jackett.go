@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
 // Jackett import: like the Prowlarr import, but Jackett's admin API is
@@ -68,10 +70,22 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 			req.URL = strings.TrimRight(strings.TrimSpace(stored.JackettURL), "/")
 		}
 		if req.AdminPassword == "" || req.AdminPassword == maskedKey {
+			// The stored admin password only travels to the stored origin —
+			// otherwise testing an unsaved URL doubles as a way to POST the
+			// saved password to a host named by the caller.
+			if !netguard.SameOriginStr(req.URL, stored.JackettURL) {
+				jsonError(w, "the admin password is required when connecting to a different Jackett address",
+					http.StatusBadRequest)
+				return
+			}
 			req.AdminPassword = stored.JackettAdminPassword
 		}
 		if req.URL == "" {
 			jsonError(w, "url is required", http.StatusBadRequest)
+			return
+		}
+		if _, err := netguard.Validate(req.URL, indexerManagerPolicy); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -155,7 +169,9 @@ func jackettClient() (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Timeout: 15 * time.Second, Jar: jar}, nil
+	// Wrapped so the policy applies to the login POST and every subsequent
+	// call; Wrap keeps the jar, which the whole flow depends on.
+	return netguard.Wrap(&http.Client{Timeout: 15 * time.Second, Jar: jar}, indexerManagerPolicy), nil
 }
 
 // jackettLogin authenticates the client's session. Returns ("", 0) on

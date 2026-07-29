@@ -2,7 +2,7 @@
   "schema_version": 1,
   "key": "gazelle_json",
   "label": "Gazelle (ajax.php)",
-  "last_updated": "2026-07-25",
+  "last_updated": "2026-07-28",
   "description": "Gazelle tracker using ajax.php — the standard API endpoint shipped by upstream Gazelle and present on essentially every fork, so this is the type to reach for first when adding a new Gazelle site. API-key auth on it is a newer per-fork addition (upstream used the session cookie). The key identifies the current user, so no username is required. Profile pages use ID-based URLs (/user.php?id=N).",
   "api": {
     "kind": "gazelle_json",
@@ -14,5 +14,31 @@
       "tokens": "fl_tokens",
       "torrents uploaded": "uploads_approved"
     }
-  }
+  },
+  "capabilities": {
+    "api_stats": [
+      "username",
+      "user_id",
+      "group",
+      "uploaded",
+      "downloaded",
+      "buffer",
+      "ratio",
+      "required_ratio",
+      "join_date",
+      "warnings",
+      "seeding",
+      "leeching",
+      "snatched",
+      "users_invited",
+      "uploads_approved",
+      "requests_filled",
+      "forum_posts",
+      "groups_uploaded",
+      "perfect_flacs",
+      "fl_tokens",
+      "seed_size"
+    ]
+  },
+  "notes": "capabilities.api_stats mirrors exactly what fetchGazelleJSON in internal/fetch/fetch.go emits — a fixed set, so change one and change the other. TestFetcherCapabilitiesMatchDefs asserts they agree."
 }

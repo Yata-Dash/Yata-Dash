@@ -8,6 +8,34 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Tracker capability indicators — "what does this tracker actually give me?"**
+  A tracker can fail to show a stat for three completely different reasons:
+  Yata is broken, its API doesn't expose the stat, or its operator forbids
+  scraping. Only one of those is worth reporting as a bug, and until now they
+  looked identical. Anthelion is the worked example — until this month its API
+  covered three of the six stats its own promotion ladder is based on.
+
+  Each tracker now carries a capability row: **how much of its own ladder can
+  be tracked** ("3/6 +1"), and whether it reports unread mail, notifications
+  and site events. It appears **while you're choosing a tracker to add**, in
+  Settings → Trackers, and in full on the Tracker Detail page, right beneath
+  the targets it explains — naming the exact stats that can't be tracked and
+  noting that the requirement still applies.
+
+  API and scrape coverage are counted **separately** ("3/6, 4 with scraping"),
+  because scraping starts disabled on unapproved trackers and needs a session
+  cookie the user may not have added — a single combined figure would flatter
+  most trackers and understate the approved ones.
+
+  Capabilities are declared in each definition, so a tracker's own staff can
+  state them. Two things resolve automatically rather than being written
+  twice: a def that describes its own API is read directly from its field map,
+  and `api.required_fields` (which already means "the API doesn't supply
+  this") is subtracted. And because a hand-written declaration can quietly
+  stop being true, **every successful fetch checks it** — a tracker returning
+  something undeclared is reported once, naming the field and the file, and
+  never changes what was stored.
+
 - **Connection timeline on the Tracker Detail page.** A second timeline
   beside Group timeline, listing when Yata stopped being able to reach the
   tracker and when it could again, with the reason for each outage. These are
@@ -59,39 +87,18 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   Its key is now sent as `api_key` rather than `apikey`, as their developers
   asked. Both spellings work today, but only `api_key` works for the family.
 
-  **The old `Gazelle (api.php)` type is retired.** We adopted it as a generic
-  Gazelle base before learning that each fork invents its own query grammar;
-  the three Gazelle trackers added since went to their own types, leaving it
-  describing precisely the Anthelion/Nebulance family it now names properly.
-  Configs storing the old key are migrated on load, so nothing needs doing.
-  Going with it: the bespoke Go fetcher that existed solely for Anthelion, and
-  a *second* copy of the same `api.php` call buried in the scraper — still on
-  the old parameter, requiring an API key just to look up a user id, and
-  re-fetching invites, join date and snatches to override scraped values. All
-  three now arrive through the stats API, which already outranks the scrape
-  layer, so the override was redoing what the merge does. The user id is
-  discovered from the page like every other tracker's.
+  **The old `Gazelle (api.php)` type is retired.** 
 
   Anthelion's new stats are mapped: Orbs (bonus points), Uploads, Adoptions,
   Seed Size, seeding count, unread mail, invites, user id, and Grabbed and
   Snatched alongside each other. That takes its promotion requirements from
   three of six measurable to all six, with no scraping.
 
-  **The response also carries an IRC key, an email address and the handle of
-  whoever invited you, and none of them are mapped — deliberately.** Every
-  mapped field is written to the stats database and rendered on the profile
-  panel, so mapping the IRC key would put a live credential on screen and into
-  a file users are asked to attach to bug reports. The type def says so, and a
-  test asserts it.
 
 - **A tracker Yata has no definition for no longer claims to be UNIT3D.**
-  Adding or importing a tracker that matched no definition silently typed it as
-  UNIT3D — so a Prowlarr import of, say, PassThePopcorn arrived labelled as
-  UNIT3D software it does not run, was probed with endpoints it does not have,
-  and reported the resulting failures as though the tracker were simply broken.
+  Adding or importing a tracker that matched no definition defaulted to UNIT3D
   Unmatched trackers now land in a **No definition** type that fetches and
-  scrapes nothing, and say so: a "needs type" badge in the trackers table, and
-  a type picker in the edit panel with a **Detect** button that tries each
+  scrapes nothing, a **Detect** was added button that tries each
   candidate with your own API key and adopts the first that returns real stats.
   Detection is a button and never automatic — it means several deliberately
   failing requests to a tracker whose operator has agreed to nothing.
@@ -100,49 +107,17 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   as often as you like. A tracker *with* a definition takes its type from that
   definition, and the backend re-asserts it regardless of what a request says.
 
-  Two more silent UNIT3D assumptions went with it: the ad-hoc "Test" before a
-  tracker is saved, and the registry's own fallback for an unrecognised type.
-  A fetcher kind no handler recognises is now a loud error rather than a
-  UNIT3D attempt that fails in a plausible-looking way.
+- **Pathways from here is its own card on the Tracker Detail page**
 
-- **Connection state is tracked per channel.** A tracker whose API is down
-  while its profile scrape still works was recording a "went down" and a "came
-  back" on every single refresh — the two channels disagreed, and one shared
-  state machine flipped between them forever. The API and the scrape now keep
-  their own state, so that week records one event ("API unreachable: Server
-  error (500)") instead of hundreds, and it says which half is broken. The
-  reverse case — a good API with an expired scrape cookie — reads the same way
-  from the other side. Timelines and History markers name the channel;
-  events recorded before this change keep their original wording.
+- **The detail timelines no longer run off the page.** 
 
-- **Pathways from here is its own card on the Tracker Detail page**, no longer
-  sharing one with the timelines, and lists up to twelve routes before
-  "+N more" now that it has the room. It's hidden entirely when a tracker has
-  no routes rather than leaving an empty card in the row.
-
-- **The detail timelines no longer run off the page.** A tracker whose API is
-  failing while its profile scrape still works records a down/up pair on every
-  single refresh, which piled up hundreds of rows and buried the group changes
-  underneath them. The card now shows the twelve most recent changes across
-  both timelines, split so neither can starve the other — ten of each gives six
-  and six, not twelve and none, while two group changes beside two hundred
-  connection changes gives two and ten. Each list says how many it left out,
-  and the History chart still marks every one of them.
+- **Uptime as a History metric.**
 
 - **Connection changes on the History chart.** A new Overlays toggle draws
   outages and recoveries as ▼/▲ markers alongside the group-change ones. The
   flag stays short ("Down" / "Up") with the reason in the hover text, and
   because only state changes are recorded, a tracker that has been up all year
   adds no clutter at all.
-
-- **Uptime as a History metric.** Chart how reliably Yata could reach a
-  tracker, day by day, next to everything else you track. It behaves like the
-  bounded quantity it is: the axis is pinned to 0–100% instead of being fitted
-  to the data (so a steady 100% reads as steady, and a 100%-vs-98% week doesn't
-  look like a collapse), and Rate/day and Projection are switched off, since
-  neither means anything for a percentage. Days Yata never contacted the
-  tracker leave a **gap** in the line rather than a flat stretch claiming
-  uptime nobody measured. Also available as a Tracker Detail mini-chart.
 
 - **A tracker's API can lose priority once it goes stale.** Stats were merged
   in strict source order — the tracker's own API always beat a profile scrape,
@@ -161,19 +136,136 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Security
 
+The automated review in
+[#18](https://github.com/Yata-Dash/Yata-Dash/issues/18), plus three credential
+leaks found alongside it that the review didn't cover.
+
+- **The QUI instance lookup was handing out the stored API key.** It was a
+  `GET` that took its destination from a query parameter and attached the
+  saved QUI key to whatever it named. 
+  The lookup is now a `POST`, which the cross-site check covers.
+
+- **Stored credentials no longer travel to an address they weren't saved
+  for.** The Prowlarr, Jackett and QUI endpoints all let the settings form
+  test an address before saving it, and all three fell back to the saved
+  credential when the caller left it blank.
+  A credential now only goes to the origin it was stored against; testing a
+  different address requires supplying its own credential, which whoever owns
+  it has and a forged request does not.
+
+- **Server-side requests are constrained centrally** (`internal/netguard`).
+  Only `http` and `https` destinations are allowed, redirects are re-checked
+  at every hop, and link-local addresses are refused everywhere — that range
+  holds the cloud instance-metadata endpoint, which gives credentials to
+  anything that can reach it.
+
+  Checks run in the dialer, at connect time, rather than against the URL.
+  Validating a hostname and connecting afterwards leaves a gap for DNS to
+  answer differently the second time, and misses redirect targets entirely;
+  the dialer sees the address actually being connected to, on every hop.
+
+  Private and loopback destinations stay **allowed**, deliberately. Prowlarr,
+  Jackett, QUI and a self-hosted Gotify normally run on localhost or the LAN —
+  the standard advice to "reject private destinations" would break the
+  ordinary deployment rather than protect it. For those four, redirects are
+  additionally pinned to the configured origin, which is what stops a named
+  host from answering `302` to somewhere inside the network.
+
+- **DNS rebinding is blocked.** 
+  Yata now only answers to hostnames it was told about. IP addresses and
+  `localhost` always work and need no configuration, because rebinding
+  fundamentally requires a *name*.
+
+  **If you reach Yata by a hostname — a domain, a Tailscale MagicDNS name,
+  anything behind Caddy or Traefik or an nginx that forwards `Host` — you need
+  to name it once.** Three places, whichever suits how you run it:
+  `YATA_ALLOWED_HOSTS` (Docker), `"allowed_hosts"` in `config.json`'s `server`
+  block (Windows or a bare binary), or `--allowed-hosts`. Flag beats
+  environment beats file, as everywhere else; comma-separate or list several;
+  `*` disables the check.
+
+  You will not have to guess: a refused request returns a page naming the
+  exact hostname and showing all three ways to add it, and each unknown
+  hostname is logged once rather than on every retry. Access by IP or
+  localhost is unaffected, so most installs need nothing.
+
+- **Exporting the config now asks for your password.** That file is the one
+  thing Yata produces that is never safe to share — every tracker API key and
+  session cookie, in plain text . Now re-checks account password, authenticator 
+  code when 2FA is on. Failed attempts feed the same lockout as login, so the export
+  can't be used as a password oracle that sidesteps the login limiter.
+  This is now also a `POST` rather than a `GET`.
+
+- **Dependencies updated.** `golang.org/x/net` → 0.56.0, `golang.org/x/crypto` → 0.53.0,
+  `go-chi/chi` → 5.3.0, `vite` → 6.4.3 (which brings `esbuild` 0.25 and
+  `postcss` 8.5.24). `go vet`, the full Go suite and the browser build all
+  pass on the new versions; `npm audit` reports zero.
+
+  Yata uses `x/crypto` for `bcrypt` and nothing else, so was ever callable. The same goes
+  for chi's `RealIP` advisories: Yata doesn't use that middleware, and derives
+  the client IP itself with proxy headers trusted only when explicitly
+  enabled.
+
+  Release builds now pin a Go **minor line** (`1.26.x`) rather than reading
+  `go.mod`. That directive is a minimum language version, so building against
+  it would have pinned releases to the oldest toolchain that still compiles.
+
+- **Tracker API keys and Telegram bot tokens no longer reach the log file.**
+  Go's `*url.Error` renders the full request URL in its message, so any
+  timeout or connection error from a tracker whose definition authenticates
+  with `api_key_query` carried that tracker's API key in its text — and two
+  handlers logged it verbatim with `%v`. Telegram does the same with the bot
+  token, which lives in the URL path. The log is explicitly meant to be
+  attached to GitHub issues, so this was a key waiting to be published.
+
+  Redaction is applied centrally, at the single point every log line passes
+  through, rather than asked of each caller: the leak is invisible at the call
+  site, which just sees an error value. Query strings are dropped whole rather
+  than matched against known parameter names, because the name is set by each
+  definition and a definition added tomorrow can choose anything.
+
+  A failed API response no longer logs the response **body** either. It logs
+  the body's *shape* — every key kept, every value replaced by its type —
+  which is what diagnosing a parse failure actually needs. The values were the
+  account's own details: a Gazelle user endpoint carries the email address,
+  IRC key and inviter, none of which Yata stores anywhere else.
+
+- **State on disk is now private to the account running Yata.** Config
+  backups were written `0644` in a `0755` directory, and the database `0644`
+  by the SQLite driver. Backups are verbatim copies of `config.json` — every
+  tracker API key and session cookie. `config.json` itself was
+  already private, so the backups had been routing around protection the main
+  file already had.
+
+  Backups, the database, its WAL/SHM sidecars and the log file are now `0600`,
+  the backup directory `0700`. Files written by an earlier version are
+  tightened at startup, since those are the ones with a history in them. A
+  filesystem that can't express Unix modes logs a warning rather than
+  refusing to start.
+
+- **A database error no longer unlocks every protected route.** 
+  Configured, unconfigured and unreadable are now three distinct states.
+  Unreadable answers `503`, not `401`: the caller's credentials aren't the
+  problem, and logging in wouldn't work either, so saying "unauthorized" would
+  send someone to re-enter a password that can't be checked.
+
+- **Imported tracker IDs can no longer inject markup or script.** Tracker IDs
+  are generated by the server, but a config import accepted any string, and
+  the value reached five places in the dashboard unguarded.
+  Import now enforces the ID grammar, rejecting rather than rewriting: an ID
+  is the key every stat layer, history row and scrape-log entry is filed
+  under, so silently fixing one would orphan that tracker's stored history
+  while appearing to succeed. All five sinks were corrected independently of
+  the validation.
+
 - **Two-factor authentication.** An optional TOTP second factor, in Settings →
   General → Account, working with any authenticator app — Google, Microsoft,
   Aegis, 1Password. Enrolment shows a QR to scan and the same key in typeable
   form for anyone entering it by hand, and **nothing is switched on until a code
   generated from the secret has been verified**, so a mistyped key or a phone
-  with a wrong clock can't lock you out of your own dashboard. Ten single-use
+  with a wrong clock can't lock you out of your own dashboard. Single-use
   recovery codes are issued at enrolment and shown exactly once; only their
-  hashes are kept. Turning 2FA off needs the password *and* a current code —
-  otherwise anyone who got past the first factor could simply remove the second.
-
-  Codes can't be replayed: the time step a code belongs to is recorded when it
-  is spent, so a code glimpsed over a shoulder or sitting in a proxy log is
-  already dead. Wrong codes count toward the same lockout as wrong passwords.
+  hashes are kept. Turning 2FA off needs the password *and* a current code.
 
   Implemented on the standard library — RFC 6238 and a small QR encoder — so
   2FA adds no dependency to a project that deliberately has four. Both were
@@ -181,10 +273,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   published test vectors and a WebCrypto implementation in the browser, and the
   QR output against jsQR across every symbol version it can emit.
 
-- **The minimum password length is now 12, and hashes are stronger.** Eight was
-  too short for anything in 2026, let alone a store of tracker API keys. Length
-  is the only rule — composition requirements reliably produce short predictable
-  passwords that satisfy every class and resist nothing — and a meter shows
+- **The minimum password length is now 12, and hashes are stronger.** 
+  and a meter shows
   where you stand as you type. Passwords over bcrypt's 72-byte limit are now
   refused rather than silently truncated at 72 while appearing to be honoured
   in full. New hashes use a higher work factor, and existing ones are quietly
@@ -197,34 +287,28 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 - **The log-printed recovery code is gone, along with the wipe it unlocked.**
   `POST /api/auth/reset` erased the account, trackers, stats and settings, and
-  was gated on a code printed to the console *and the log file* — so anyone
-  handed a log for debugging held the ability to erase the instance remotely.
-  Recovery is now a 2FA recovery code, or, for an account with no second
-  factor, running the binary once with `-reset-auth` on its host. That requires
-  access to the machine by construction, and unlike the reset it replaces it
-  removes only the login: every tracker, stat and setting survives.
+  was gated on a code printed to the console *and the log file*.
+  Recovery is now a 2FA recovery code or a full reset.
 
 - **Inline click handlers validate their arguments instead of escaping them.**
-  `esc()` now escapes single quotes too, which matters for quoted attributes —
-  but it cannot help an inline handler, because a browser decodes an
-  attribute's character references *before* the JavaScript is parsed, so an
-  escaped quote arrives at the JS parser as a real one. The values these
-  handlers carry have always been server-generated IDs and canonical field
-  keys; that is now enforced rather than assumed, and anything outside
-  `[A-Za-z0-9_-]` makes the button inert instead of an injection point.
+  `esc()` now escapes single quotes too, which matters for quoted attributes.
 
 - **Links supplied by a tracker are checked before they become clickable.**
-  Yata renders URLs it didn't author — the active-events list carries a link
-  per event, Prowlarr/Jackett imports bring tracker URLs, and the pathways
-  dataset has a source link. HTML-escaping makes those safe as text but says
-  nothing about the *scheme*, so a hostile or compromised tracker returning
-  `{"url": "javascript:…"}` would have had a script URL sitting in a
-  logged-in dashboard waiting for a click. Only `http` and `https` now
-  survive; anything else renders as plain text with no link. Event icon
-  classes are likewise restricted to class-name characters, so a tracker
-  can't borrow Yata's own styling to reshape the page.
+  Only `http` and `https` now survive; anything else renders as plain text with no link. 
+  Event icon classes are likewise restricted to class-name characters.
 
 ### Fixed
+
+- **"As of the last scrape" no longer appears on trackers that are never
+  scraped.**
+
+- **The Detail page's cards no longer leave a hole when they wrap.**
+
+- **Long event banners no longer push the countdown off the edge.** 
+
+- **The top bar no longer forces the whole page to scroll sideways.** .
+
+- **Grid drag-reorder now puts the card where you dropped it.** 
 
 - **A misspelled key in a tracker definition is no longer silent.** Unknown
   fields are tolerated so a def written for a different Yata version still
@@ -234,60 +318,12 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   now reported at startup and in Settings → Definitions, naming the field,
   while the def still loads.
 
-  Turning this on immediately found three live cases, all of them data that
-  had been quietly discarded:
-  - **UNIT3D's API key hint never reached anyone.** `defs/types/unit3d.json`
-    has set `api_key_hint` since it was written, but no Go field read it, so
-    every plain UNIT3D tracker showed the generic hint instead of
-    "Settings → API". Type-level hints now work, with a tracker's own hint
-    overriding.
-  - **Six defs lost their approval notes** to `notes` where the field is
-    `note` — including the informal-approval context the UI shows in its
-    tooltip, which is exactly where that wording matters.
-  - Def files can now carry a `notes` field of their own for whoever edits
-    them next.
-
-- **Long event banners no longer push the countdown off the edge.** In table
-  rows and grid cards the whole announcement lives in one text span, and a
-  regression earlier in this release stopped it shrinking, so trackers running
-  several events at once lost the end date off the right-hand side. The message
-  truncates again; the countdown and end time never do — a shortened headline
-  still says what's running and the tracker has the detail, but a missing end
-  time can't be recovered by reading harder.
-
-- **The top bar no longer forces the whole page to scroll sideways.** Below
-  ~800px the logo, badge, four view buttons, refresh time and four actions
-  added up to more than the viewport, dragging every view under it off-centre.
-  Nothing was removed — decoration goes first (badge, separator, "updated N
-  ago"), then the view-button labels below 640px leaving titled icons, then the
-  wordmark below 420px. All four views stay reachable down to 320px.
-
-- **Grid drag-reorder now puts the card where you dropped it.** Two faults
-  compounded, which is why it looked random. The destination was read from the
-  list *before* the dragged card was removed, so dragging forward landed it one
-  slot past the target while dragging backward worked — the same gesture
-  behaving differently by direction, and a neighbour appearing to move on its
-  own. And the move was applied to the full tracker list while the grid shows
-  only enabled ones, so any disabled tracker lying between source and target
-  displaced the card by however many hidden entries were in the way. Dropping
-  onto the last card also used to land you second-to-last, forever; direction
-  now decides whether the card lands before or after the target, so every
-  position is reachable.
-
-- **A tracker def can now require a join date on its own.** Whether the setup
-  form demands one was decided entirely by the tracker TYPE, so a def's
-  `api.required_fields` parsed into nothing and was silently ignored — Aura4K
-  had asked for a join date since July and no user was ever prompted. It now
+- **A tracker def can now require a join date on its own.** It now
   unions with the type's list (and still drops anything the def's own
-  `field_map` provides, so declaring a mapped field stays a no-op). Zenith
-  needs this: it's API-only now, and its API is the one thing that doesn't
+  `field_map` provides, so declaring a mapped field stays a no-op). Some
+  trackers needs this if API-only, and if the one thing it doesn't
   report a join date, so without the prompt account-age tracking silently
   never works.
-
-- **The join-date hint no longer sticks.** Selecting a tracker that requires
-  one and then switching to a tracker that doesn't left "This tracker doesn't
-  report a join date" standing over a tracker that does. The label and the
-  asterisk already reverted; only the hint had no path back.
 
 - **Seed size no longer displays as a raw byte count.** The expanded UNIT3D
   stats send sizes as integer bytes from `/api/user`; only three core fields
@@ -302,17 +338,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   list had no handler, so it fell through to the generic stat row and was
   stringified. It now drives the existing event banner and countdown
   everywhere, and renders in full on the Detail page.
-
-- **Absolute dates read year-first everywhere the connection surfaces show
-  one.** The freshness tooltips were rendering through the browser's locale,
-  which for most people means `7/22/2026` — the least widely used ordering, and
-  ambiguous against `22/7/2026` for everyone else. Tooltips, timeline rows and
-  chart-marker hovers now use `2026-07-22` (with `2026-07-22 15:55` where a
-  time is needed), matching the dates the table cells already showed. The
-  dashboard's date formatter also builds those from local time rather than UTC:
-  it decides "is this today" locally, so answering in UTC meant an evening east
-  of Greenwich could stop counting as today and jump straight to tomorrow's
-  date.
 
 - **"Last API Update" now shows the last time the API actually returned
   data**, not the last time Yata tried. On a tracker whose API had been failing
