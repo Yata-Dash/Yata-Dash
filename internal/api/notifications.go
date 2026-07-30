@@ -160,6 +160,7 @@ func testNotification(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		auditPrivateDestination(d, "notification", dest.URL)
 		if err := notify.Send(dest, "Yata test notification",
 			"If you can read this, your destination is working. 🎉"); err != nil {
 			jsonStatus(w, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})

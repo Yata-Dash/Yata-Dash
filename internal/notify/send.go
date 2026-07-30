@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,9 +160,29 @@ func postWithRetry(url string, headers map[string]string, payload map[string]any
 	if err != nil {
 		return err
 	}
+	// Whether this destination's REPLY may be shown to the user.
+	//
+	// Notification destinations are the one place a user types an arbitrary URL
+	// and gets the response back, so without this the feature is a way to read
+	// any HTTP service Yata can reach — including the LAN ones destinationPolicy
+	// deliberately allows. Echoing a private service's body is the difference
+	// between "Yata can be made to send a request there" and "Yata can be made
+	// to read it out", and only the second one is worth anything to an attacker.
+	//
+	// It is withheld rather than logged for private destinations: /api/logs is
+	// readable with the same session that reached this endpoint, so logging the
+	// body would relocate the disclosure rather than prevent it.
+	//
+	// Public destinations keep the snippet. That is Discord or Telegram or ntfy
+	// explaining what is wrong with the webhook you just typed, which is the
+	// whole value of a Test button.
+	echoReply := netguard.IsPublicHost(context.Background(), hostOf(url))
 	var lastErr error
 	for attempt := 0; attempt < maxSendAttempts; attempt++ {
 		status, retryAfter, snippet, err := doPost(url, headers, body)
+		if !echoReply {
+			snippet = ""
+		}
 		if err != nil {
 			// Not retryable here. Flattened to a redacted string because a
 			// transport error renders the destination URL, and for Telegram
@@ -183,9 +204,23 @@ func postWithRetry(url string, headers map[string]string, payload map[string]any
 			time.Sleep(wait)
 			continue
 		}
+		if snippet == "" {
+			return fmt.Errorf("destination returned %d", status)
+		}
 		return fmt.Errorf("destination returned %d: %s", status, snippet)
 	}
 	return fmt.Errorf("gave up after %d attempts: %v", maxSendAttempts, lastErr)
+}
+
+// hostOf extracts the hostname from a URL that netguard.Validate has already
+// accepted, so a parse failure here is not expected. It returns "" on one
+// anyway, which callers read as "not public".
+func hostOf(raw string) string {
+	u, err := neturl.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
 
 // doPost performs a single POST and returns the status, any retry-after hint,

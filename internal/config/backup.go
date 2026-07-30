@@ -175,6 +175,14 @@ func (m *Manager) Import(data []byte) error {
 	if err := validateTrackerIDs(incoming.Trackers); err != nil {
 		return err
 	}
+	// An import replaces the whole settings object, so it has to answer the
+	// same question the settings handler does — otherwise a crafted config is
+	// a way to set allowed_hosts to "*" and switch the host guard off.
+	cleanedHosts, err := CleanAllowedHosts(incoming.Settings.AllowedHosts)
+	if err != nil {
+		return fmt.Errorf("allowed_hosts: %w", err)
+	}
+	incoming.Settings.AllowedHosts = cleanedHosts
 
 	// Always back up the current config before overwriting it.
 	if _, err := m.Backup(); err != nil {

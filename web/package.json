@@ -10,6 +10,6 @@
   "devDependencies": {
     "puppeteer-core": "^24.43.1",
     "typescript": "^5.4.0",
-    "vite": "^5.2.0"
+    "vite": "^6.4.3"
   }
 }

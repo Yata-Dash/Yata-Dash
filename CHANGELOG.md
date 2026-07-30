@@ -195,11 +195,18 @@ leaks found alongside it that the review didn't cover.
 
   **If you reach Yata by a hostname — a domain, a Tailscale MagicDNS name,
   anything behind Caddy or Traefik or an nginx that forwards `Host` — you need
-  to name it once.** Three places, whichever suits how you run it:
-  `YATA_ALLOWED_HOSTS` (Docker), `"allowed_hosts"` in `config.json`'s `server`
-  block (Windows or a bare binary), or `--allowed-hosts`. Flag beats
-  environment beats file, as everywhere else; comma-separate or list several;
-  `*` disables the check.
+  to name it once.** Four places, whichever suits how you run it:
+  **Settings → Network** (applies immediately, no restart — so someone who set
+  Yata up on `localhost` can add their domain before they travel rather than
+  needing to be at the machine), `YATA_ALLOWED_HOSTS` (Docker, and the one that
+  works on a first start before any config file exists), `"allowed_hosts"` in
+  `config.json`'s `settings` block, or `--allowed-hosts`.
+
+  They combine rather than override, since they all answer the same question.
+  The exception is `*`, which turns the check off: that is a deployment
+  decision, so it is accepted only from the flag or the environment variable —
+  never from the dashboard or an imported config, which would let anything
+  holding a session disable it.
 
   You will not have to guess: a refused request returns a page naming the
   exact hostname and showing all three ways to add it, and each unknown
@@ -225,7 +232,73 @@ leaks found alongside it that the review didn't cover.
 
   Release builds now pin a Go **minor line** (`1.26.x`) rather than reading
   `go.mod`. That directive is a minimum language version, so building against
-  it would have pinned releases to the oldest toolchain that still compiles.
+  it would have pinned releases to the oldest toolchain that still compiles —
+  shipping binaries containing stdlib bugs that were fixed long ago.
+
+- **A tracker definition can no longer aim Yata at your own network.** A def
+  can override the tracker URL you typed, via `api.base_url` — BTN needs it,
+  because its API is on a different hostname from its site. That makes it the
+  one field where a *file* rather than a person decides where Yata sends a
+  request, which matters as contributed definitions become the norm: an address
+  pointed inward, in an otherwise correct-looking def, is not something a
+  reviewer checking field mappings would reliably catch.
+
+  That override is now restricted to public addresses. A tracker's API is never
+  inside your house, so nothing legitimate is lost, and **nobody's setup
+  changes** — all 29 bundled definitions pass. The URL *you* type is untouched
+  and can still be a LAN address, a Tailscale name or a personal domain, since
+  that is your decision about your own machine and cannot arrive from a
+  stranger. Checked at connect time, so a hostname that resolves inward is
+  refused too, and flagged in the Definitions list when it is obvious on sight.
+
+- **A failed notification no longer reads out internal services.** Testing a
+  notification destination reported what came back, body and all — so pointing
+  one at `http://192.168.1.1/` and pressing Test returned that page's contents.
+  Destination URLs are meant to reach a self-hosted Gotify on the LAN, so the
+  address itself is allowed on purpose; handing back the *reply* is what turned
+  that into a way to read anything on the network.
+
+  The status code still comes back, and so does the body for destinations on
+  the public internet — that part is Discord or ntfy explaining what is wrong
+  with the webhook you just typed, which is the entire point of a Test button.
+  For a private address the body is withheld rather than logged, because the
+  Logs tab is readable by the same session that would have seen it.
+
+- **Requests to private addresses are now recorded.** The Prowlarr, Jackett,
+  qui and notification endpoints accept a destination from the caller and are
+  allowed to reach your LAN, because that is where those services live. A
+  normal install now logs two or three lines saying so, once per address. The
+  point is the shape: several unfamiliar addresses in that list means something
+  is using those endpoints to probe the network, which previously left no trace
+  at all.
+
+- **Discord webhook tokens no longer reach the log file.** Redaction covered
+  Telegram's bot token, which lives in a URL path, but not Discord's, which
+  lives in the same place — `/api/webhooks/<id>/<token>`. A timeout posting a
+  notification put the whole webhook credential into the error text, and the
+  log is meant to be attachable to a GitHub issue. Slack's `/services/…` form
+  is covered too, and the masking now also applies on the fallback path taken
+  when a URL is too malformed to parse.
+
+- **An imported config can no longer disable the hostname check.** Setting
+  `allowed_hosts` to `*` switches off the DNS-rebinding defence, so the
+  dashboard refuses it — but importing a config replaced the whole settings
+  object without that check, making a crafted file a longer route to the
+  setting the UI wouldn't accept. The check moved down to the config layer,
+  which is where both write paths meet.
+
+- **Outbound requests through a proxy are checked again.** The destination
+  policy is enforced in the dialer, which is the right place — it sees the
+  address actually being connected to, on every redirect hop, and cannot be
+  raced by DNS. With `HTTP_PROXY`/`HTTPS_PROXY` set, though, that socket goes
+  to the *proxy*, so the address check quietly stopped applying at exactly the
+  moment an operator thought they had added a layer — including the link-local
+  block that keeps Yata away from cloud metadata endpoints. Proxied requests
+  now resolve and vet the destination before handing it over. This is weaker
+  than the dialer check and is documented as such: it resolves separately from
+  the connection, and a name that fails to resolve locally is left to the
+  proxy rather than refused, because a proxy is often there precisely because
+  the local host cannot resolve the destination itself.
 
 - **Tracker API keys and Telegram bot tokens no longer reach the log file.**
   Go's `*url.Error` renders the full request URL in its message, so any

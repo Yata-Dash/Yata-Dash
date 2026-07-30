@@ -130,3 +130,48 @@ func TestSendChunkedSplitsOnLineBoundaries(t *testing.T) {
 		t.Errorf("chunks don't losslessly rejoin into the original text on line boundaries")
 	}
 }
+
+// A notification destination is the one place a user types an arbitrary URL
+// and is shown what came back, so it is the one place a request-forgery bug
+// becomes a way to READ an internal service rather than just reach one.
+// httptest servers bind to 127.0.0.1, which is exactly the case that must not
+// be echoed.
+func TestPrivateDestinationReplyIsNotEchoed(t *testing.T) {
+	const secret = "router-admin-token-abc123"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprintf(w, `{"error":"forbidden","internal_secret":%q}`, secret)
+	}))
+	defer srv.Close()
+
+	err := Send(models.NotifyDestination{Type: "generic", URL: srv.URL, Enabled: true}, "t", "m")
+	if err == nil {
+		t.Fatal("expected the 403 to be reported as an error")
+	}
+	if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "internal_secret") {
+		t.Fatalf("a private destination's body was echoed to the caller: %q", err)
+	}
+	// The status still comes back — it is what makes the Test button useful,
+	// and it says far less than the body does.
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("the status code should still be reported, got %q", err)
+	}
+}
+
+// The retry path must not become a way around the same check.
+func TestPrivateDestinationReplyIsNotEchoedAfterRetries(t *testing.T) {
+	const secret = "leaked-through-the-retry-path"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = fmt.Fprintf(w, `{"secret":%q}`, secret)
+	}))
+	defer srv.Close()
+
+	err := Send(models.NotifyDestination{Type: "generic", URL: srv.URL, Enabled: true}, "t", "m")
+	if err == nil {
+		t.Fatal("expected a give-up error")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("the 429 path echoed a private destination's body: %q", err)
+	}
+}

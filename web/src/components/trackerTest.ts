@@ -33,6 +33,8 @@ export function friendlyDetail(detail?: string): string {
     api_error: 'The tracker API returned an error',
     read_error: 'Could not read the response',
     no_def: 'No matching tracker definition',
+    blocked_destination:
+      'Refused — this tracker’s definition points its API at an address that is not on the public internet. That is a bug in the definition, not in your setup; please report it.',
   };
   if (map[detail]) return map[detail];
   const http = detail.match(/^http_(\d+)$/);

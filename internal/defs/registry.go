@@ -3,11 +3,15 @@ package defs
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
 // LoadIssue reports a definition file that failed to load. Bad user-supplied
@@ -106,6 +110,16 @@ func (r *Registry) Reload() error {
 		if _, dup := trackers[td.Key]; dup {
 			issues = append(issues, LoadIssue{File: filepath.Base(f), Error: fmt.Sprintf("duplicate tracker key %q", td.Key)})
 			continue
+		}
+		// A warning, not a rejection: the def still loads, so the tracker does
+		// not silently vanish from the picker, and the request is refused at
+		// connect time regardless (fetch.DefBaseURLPolicy). What this adds is
+		// visibility — the problem shows up in the Definitions list rather than
+		// only as a failed fetch.
+		if td.API != nil {
+			if err := validateDefBaseURL(td.API.BaseURL); err != nil {
+				issues = append(issues, LoadIssue{File: filepath.Base(f), Error: err.Error(), Warning: true})
+			}
 		}
 		trackers[td.Key] = td
 	}
@@ -249,6 +263,47 @@ func validateTracker(td TrackerDef, types map[string]TypeDef) error {
 		if !typeHasPath && !defHasPath {
 			return fmt.Errorf("type %q requires an \"api\" object with a path in the tracker def "+
 				"(or a \"custom_api\" block on the type)", td.Type)
+		}
+	}
+	return nil
+}
+
+// validateDefBaseURL checks the one field in a definition that decides where
+// Yata sends a request.
+//
+// `api.base_url` overrides the URL the user typed, which makes it the only
+// place a def file — data, and increasingly data from contributors — picks a
+// destination. A tracker's API is on the public internet, so an address inside
+// the user's network is never correct here and is refused rather than warned
+// about.
+//
+// This catches the obvious form, a literal private address, at load time so a
+// bad def is visible in the Definitions list rather than only when a fetch
+// fails. It is not the enforcement: a hostname that RESOLVES to a private
+// address passes this and is stopped at connect time by fetch.DefBaseURLPolicy,
+// which is the check that cannot be evaded by DNS.
+func validateDefBaseURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("api.base_url is not a valid URL: %q", raw)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return fmt.Errorf("api.base_url must be http or https, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("api.base_url has no host: %q", raw)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if err := netguard.CheckIP(ip, netguard.Policy{}); err != nil {
+			return fmt.Errorf("api.base_url points at %s, which is not a public address — "+
+				"a tracker API is never inside the user's own network", host)
 		}
 	}
 	return nil

@@ -115,10 +115,10 @@ func hostGuard(d *Deps) func(http.Handler) http.Handler {
 			host := hostOnly(r.Host)
 			if _, seen := hostWarned.LoadOrStore(host, true); !seen {
 				d.logWarnf("security: refused a request for host %q — if this is your own "+
-					"reverse proxy or hostname, add it: YATA_ALLOWED_HOSTS=%s (Docker), "+
-					"\"allowed_hosts\": [%q] in config.json's server block, or "+
-					"--allowed-hosts=%s. If it is not yours, this was probably a "+
-					"DNS-rebinding attempt and nothing was served.", host, host, host, host)
+					"reverse proxy or hostname, add it in Settings → Network, or with "+
+					"YATA_ALLOWED_HOSTS=%s (Docker), \"allowed_hosts\": [%q] in config.json's "+
+					"settings block, or --allowed-hosts=%s. If it is not yours, this was "+
+					"probably a DNS-rebinding attempt and nothing was served.", host, host, host, host)
 			}
 			// The message matters more than the status: a user who has put
 			// Yata behind a proxy hits this on every page and needs to know
@@ -133,12 +133,15 @@ func hostGuard(d *Deps) func(http.Handler) http.Handler {
 				"Yata refused this request because it arrived for the hostname \"" + host + "\",\n" +
 					"which this instance was not told to answer to.\n\n" +
 					"If you reach Yata through a reverse proxy or a custom hostname, add it\n" +
-					"in whichever of these suits how you run Yata, then restart it:\n\n" +
+					"in whichever of these suits how you run Yata:\n\n" +
+					"  In the dashboard      Settings -> Network -> Allowed hostnames\n" +
+					"                        (applies immediately, no restart — reach Yata\n" +
+					"                        by its IP address or localhost to get in)\n\n" +
 					"  Docker / compose      environment:\n" +
 					"                          - YATA_ALLOWED_HOSTS=" + host + "\n\n" +
-					"  config.json           \"server\": { ..., \"allowed_hosts\": [\"" + host + "\"] }\n\n" +
+					"  config.json           \"settings\": { ..., \"allowed_hosts\": [\"" + host + "\"] }\n\n" +
 					"  command line          --allowed-hosts=" + host + "\n\n" +
-					"Comma-separate (or list) several if you use more than one name.\n" +
+					"The last three need a restart. List several if you use more than one name.\n" +
 					"Access by IP address or via localhost always works and needs no setting.\n\n" +
 					"This check exists to block DNS rebinding, where a web page you visit\n" +
 					"re-points its own domain at your machine to read this app's data.\n"))

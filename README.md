@@ -192,9 +192,13 @@ Yata answers to IP addresses and `localhost` out of the box. Any *other* hostnam
 
 You need this if you reach Yata at something like `https://yata.example.com` or `http://box.tailnet-name.ts.net:8420`. **You'll know**: the page says so and names the exact setting to add — it never fails silently.
 
-You can list more than one (comma-separated), which is what you want if you use both a domain and a Tailscale name. `*` turns the check off entirely.
+You can list more than one, which is what you want if you use both a domain and a Tailscale name.
 
-**Docker / docker-compose** — add it to the `environment:` block:
+**Already able to reach the dashboard? Use Settings → Network.** Add the hostname to *Allowed hostnames* and save — it applies immediately, with no restart. This is the one to use if you set Yata up on `localhost` and want your domain to work before you next travel, because it doesn't need you to be at the machine.
+
+For the other cases — a new install you'll only ever reach by its domain, or a hostname you can't get in to add — set it before Yata starts:
+
+**Docker / docker-compose** — add it to the `environment:` block. This is the one to use for a remote-first install, since it works on the very first start, before a config file exists:
 
 ```yaml
 environment:
@@ -202,17 +206,15 @@ environment:
   - YATA_ALLOWED_HOSTS=yata.example.com,box.tailnet-name.ts.net
 ```
 
-**Windows, or running the binary directly** — easiest is `config.json`, next to the exe, in the `server` block you may already have edited for host/port:
+**Windows, or running the binary directly** — add `--allowed-hosts=yata.example.com` to the shortcut or batch file that starts it. To put it in `config.json` instead (next to the exe), it goes in the `settings` block, not `server`:
 
 ```json
-"server": {
-  "host": "0.0.0.0",
-  "port": 8420,
+"settings": {
   "allowed_hosts": ["yata.example.com", "box.tailnet-name.ts.net"]
 }
 ```
 
-Restart Yata after saving. If you'd rather not touch the file, add `--allowed-hosts=yata.example.com` to the shortcut or batch file that starts it.
+Restart Yata after editing the file.
 
 **Linux with systemd** — in the unit file:
 
@@ -220,7 +222,7 @@ Restart Yata after saving. If you'd rather not touch the file, add `--allowed-ho
 Environment=YATA_ALLOWED_HOSTS=yata.example.com
 ```
 
-All three do the same thing. If more than one is set, the flag wins, then the environment variable, then `config.json` — the same order as every other Yata setting.
+These combine rather than override: a name set any of these ways works, so a flag and a name added in Settings are both honoured. The one exception is `*`, which turns the check off entirely — that's accepted only from `--allowed-hosts` or `YATA_ALLOWED_HOSTS`, never from Settings or an imported config, so disabling it takes access to the machine rather than a browser session.
 
 #### Does my reverse proxy need this?
 

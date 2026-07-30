@@ -48,8 +48,11 @@ func errf(kind string, err error) *Error { return &Error{Kind: kind, Err: err} }
 
 // Client fetches stats using definitions from the registry.
 type Client struct {
-	Registry     *defs.Registry
-	HTTP         *http.Client
+	Registry *defs.Registry
+	HTTP     *http.Client
+	// HTTPDefBase is used only when a DEFINITION chose the destination rather
+	// than the user — see DefBaseURLPolicy.
+	HTTPDefBase  *http.Client
 	TestDataPath string // path to test_data.json for demo trackers
 }
 
@@ -62,20 +65,55 @@ type Client struct {
 // addresses that are never a legitimate tracker: link-local, and so the cloud
 // instance-metadata endpoint, plus multicast.
 //
-// Private addresses are deliberately still allowed. Trackers are public sites,
-// so blocking RFC1918 and loopback would cost nothing in production — but it
-// would also break every local stub tracker used to develop against, and the
-// test suite, which points fetchers at httptest servers on 127.0.0.1. Set
-// AllowPrivate to false here to tighten it, and expect those to need rework.
+// Private addresses stay allowed HERE because this policy governs the URL the
+// user typed when they added the tracker. Pointing Yata at an address on your
+// own network is a decision about your own machine, and it is not hypothetical:
+// a tracker reached over Tailscale resolves into 100.64.0.0/10, and one behind
+// a personal domain with split-horizon DNS resolves to an RFC1918 address.
+// Both are ordinary setups that a public-only policy would break, and neither
+// instruction can arrive from a stranger.
+//
+// The half that CAN arrive from a stranger — a def's api.base_url — is held to
+// DefBaseURLPolicy instead. That split is the point: the restriction lands on
+// the input Yata does not control.
 var TrackerPolicy = netguard.Policy{AllowPrivate: true}
+
+// DefBaseURLPolicy constrains the one case where a DEFINITION, rather than the
+// user, chooses the destination: `api.base_url`, which overrides the URL the
+// user typed when they added the tracker.
+//
+// That override is legitimate — BTN's API is on a different hostname from its
+// website — but it means a def file decides where Yata sends a request, and
+// defs are data. Bundled ones are reviewed here; contributed ones are the
+// direction of travel, and a `base_url` aimed at 192.168.1.1 in an otherwise
+// correct-looking def is not something a reviewer checking field mappings
+// would reliably catch.
+//
+// So this half gets no private allowance. A tracker's API is on the public
+// internet by definition, which makes the restriction free: no legitimate def
+// can want an address inside the user's house. The URL the USER typed keeps
+// TrackerPolicy — pointing Yata at your own network is your decision to make,
+// and unlike a def it cannot arrive from a stranger.
+var DefBaseURLPolicy = netguard.Policy{}
 
 // NewClient builds a Client with a sane default HTTP timeout.
 func NewClient(reg *defs.Registry, testDataPath string) *Client {
 	return &Client{
 		Registry:     reg,
 		HTTP:         netguard.Client(30*time.Second, TrackerPolicy),
+		HTTPDefBase:  netguard.Client(30*time.Second, DefBaseURLPolicy),
 		TestDataPath: testDataPath,
 	}
+}
+
+// defBaseClient returns the client for a def-chosen destination, falling back
+// to building one so a hand-constructed Client cannot silently lose the
+// restriction by leaving the field nil.
+func (c *Client) defBaseClient() *http.Client {
+	if c.HTTPDefBase != nil {
+		return c.HTTPDefBase
+	}
+	return netguard.Client(30*time.Second, DefBaseURLPolicy)
 }
 
 // Fetch retrieves stats for one tracker, dispatching on the type's api.kind.
@@ -729,9 +767,13 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 		method = http.MethodPost
 		requestBody = bytes.NewReader(payload)
 	}
-	baseURL := t.URL
+	// Which client is used follows where the ADDRESS came from, not what is
+	// being fetched: a def-chosen destination is held to DefBaseURLPolicy.
+	// Enforcement is at connect time, in the dialer, so a hostname that
+	// resolves inward is caught as well as a literal private address.
+	baseURL, client := t.URL, c.HTTP
 	if strings.TrimSpace(api.BaseURL) != "" {
-		baseURL = api.BaseURL
+		baseURL, client = api.BaseURL, c.defBaseClient()
 	}
 	req, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, requestBody)
 	if err != nil {
@@ -769,8 +811,13 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 		// The key is already embedded as the first positional request param.
 	}
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
+		if netguard.IsBlocked(err) {
+			// A def naming a destination Yata refuses is a def bug, not a
+			// network failure, and reads very differently in the UI.
+			return nil, errf("blocked_destination", err)
+		}
 		return nil, errf(classifyNetErr(err), err)
 	}
 	defer resp.Body.Close()

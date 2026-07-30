@@ -88,6 +88,7 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		auditPrivateDestination(d, "jackett", req.URL)
 
 		client, err := jackettClient()
 		if err != nil {

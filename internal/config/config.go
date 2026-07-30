@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
@@ -340,6 +341,11 @@ func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 
 // UpdateSettings replaces the settings (server config untouched) and persists.
 func (m *Manager) UpdateSettings(s models.Settings) error {
+	cleaned, err := CleanAllowedHosts(s.AllowedHosts)
+	if err != nil {
+		return err
+	}
+	s.AllowedHosts = cleaned
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if s.ScrapeIntervalMinutes < 60 {
@@ -354,6 +360,42 @@ func (m *Manager) UpdateSettings(s models.Settings) error {
 	normalizeBackup(&s)
 	m.cfg.Settings = s
 	return m.saveLocked()
+}
+
+// CleanAllowedHosts tidies and checks a Settings.AllowedHosts list on its way
+// into the config, whatever wrote it.
+//
+// It lives here, at the config layer, rather than in the settings HTTP handler
+// because there are two write paths and the handler is only one of them: a
+// config IMPORT also replaces the whole settings object, so validating at the
+// handler left importing a crafted config as a way around this check.
+//
+// The wildcard is refused on purpose. Turning the host check off altogether is
+// a deployment decision, and requiring --allowed-hosts or YATA_ALLOWED_HOSTS
+// for it means it takes access to the machine rather than just a browser
+// session — so the one setting that can disable a security control cannot be
+// flipped by anything holding a session, including by feeding it a config file.
+//
+// Values that are plainly not hostnames are rejected rather than silently
+// ignored: pasting a whole URL is the obvious mistake, and a list that quietly
+// does nothing is worse than an error saying why.
+func CleanAllowedHosts(in []string) ([]string, error) {
+	var out []string
+	for _, h := range in {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		if h == "*" {
+			return nil, errors.New("the \"*\" wildcard can only be set with --allowed-hosts " +
+				"or YATA_ALLOWED_HOSTS, not from the dashboard or an imported config")
+		}
+		if strings.Contains(h, "://") || strings.ContainsAny(h, " \t/\\?#@") {
+			return nil, fmt.Errorf("%q is not a hostname — use just the name, e.g. yata.example.com", h)
+		}
+		out = append(out, h)
+	}
+	return out, nil
 }
 
 // Reset restores a fresh default config (no trackers, default settings, no

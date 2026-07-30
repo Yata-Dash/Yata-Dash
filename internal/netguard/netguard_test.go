@@ -1,6 +1,7 @@
 package netguard
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -246,5 +247,104 @@ func TestBlockedErrorsAreRecognisableThroughURLError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "loopback") {
 		t.Errorf("error should say why: %v", err)
+	}
+}
+
+// With a proxy configured the guarded dialer only ever sees the proxy's
+// address, so the destination check has to happen before the request is handed
+// over. Without this, setting HTTP_PROXY silently disabled the address policy —
+// including the link-local block that keeps Yata off cloud metadata endpoints.
+
+// proxyTo makes an already-wrapped client behave as if HTTP_PROXY were set,
+// without touching the process environment (which other tests share).
+func proxyTo(t *testing.T, c *http.Client, proxy string) {
+	t.Helper()
+	g, ok := c.Transport.(*proxyGuard)
+	if !ok {
+		t.Fatalf("Wrap no longer installs a proxyGuard, got %T", c.Transport)
+	}
+	u, err := url.Parse(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.base.Proxy = func(*http.Request) (*url.URL, error) { return u, nil }
+}
+
+func TestProxiedRequestStillChecksTheDestination(t *testing.T) {
+	// lan policy: loopback and RFC1918 are permitted, link-local never is.
+	c := Client(2*time.Second, lan)
+	proxyTo(t, c, "http://127.0.0.1:9")
+
+	_, err := c.Get("http://169.254.169.254/latest/meta-data/") //nolint:bodyclose
+	if err == nil {
+		t.Fatal("a proxy let a link-local destination through")
+	}
+	if !IsBlocked(err) {
+		t.Fatalf("want a policy refusal, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "link-local") {
+		t.Errorf("error should say why: %v", err)
+	}
+}
+
+func TestProxiedRequestAppliesThePrivatePolicy(t *testing.T) {
+	c := Client(2*time.Second, public)
+	proxyTo(t, c, "http://127.0.0.1:9")
+
+	_, err := c.Get("http://10.1.2.3/") //nolint:bodyclose
+	if err == nil || !IsBlocked(err) {
+		t.Fatalf("a proxy let a private destination past the public policy: %v", err)
+	}
+
+	// The same destination is legitimate for the LAN integrations, proxy or
+	// not — the check must not become a blanket refusal.
+	lanClient := Client(2*time.Second, lan)
+	proxyTo(t, lanClient, "http://127.0.0.1:9")
+	_, err = lanClient.Get("http://10.1.2.3/") //nolint:bodyclose
+	if err != nil && IsBlocked(err) {
+		t.Errorf("the LAN policy refused a private destination: %v", err)
+	}
+}
+
+// A name nothing can resolve must not become a refusal: a proxy is often there
+// precisely because the local host cannot resolve the destination itself.
+func TestUnresolvableHostIsLeftToTheProxy(t *testing.T) {
+	if err := checkDestination(context.Background(), "no-such-host.invalid", public); err != nil {
+		t.Errorf("resolution failure became a policy refusal: %v", err)
+	}
+}
+
+func TestUnproxiedRequestsSkipThePreflight(t *testing.T) {
+	// Nothing to assert about DNS here — the point is that the dialer, not the
+	// pre-flight, is what refuses, and it still does.
+	c := Client(2*time.Second, public)
+	_, err := c.Get("http://127.0.0.1:1/") //nolint:bodyclose
+	if !IsBlocked(err) {
+		t.Fatalf("the direct path stopped enforcing the policy: %v", err)
+	}
+}
+
+// IsPublicHost answers a disclosure question — may this destination's reply be
+// shown to the user — so every uncertain answer has to come back false.
+func TestIsPublicHostOnLiteralAddresses(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+		why  string
+	}{
+		{"8.8.8.8", true, "an ordinary public address"},
+		{"2606:4700:4700::1111", true, "public IPv6"},
+		{"127.0.0.1", false, "loopback is what httptest and a LAN service look like"},
+		{"10.1.2.3", false, "RFC1918"},
+		{"192.168.0.10", false, "RFC1918"},
+		{"100.64.0.1", false, "CGNAT / Tailscale"},
+		{"169.254.169.254", false, "cloud instance metadata"},
+		{"", false, "no host at all"},
+		{"not an ip", false, "unresolvable, so not known to be public"},
+	}
+	for _, c := range cases {
+		if got := IsPublicHost(context.Background(), c.host); got != c.want {
+			t.Errorf("IsPublicHost(%q) = %v, want %v — %s", c.host, got, c.want, c.why)
+		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/config"
 )
 
 func TestHostAllowedDefaults(t *testing.T) {
@@ -218,7 +220,7 @@ func TestFlagAndSettingsHostsAreBothHonoured(t *testing.T) {
 // reachable through the API — otherwise the one setting that disables a
 // security control could be flipped from a browser session.
 func TestWildcardIsRefusedFromTheAPIButWorksFromTheFlag(t *testing.T) {
-	if _, err := cleanAllowedHosts([]string{"*"}); err == nil {
+	if _, err := config.CleanAllowedHosts([]string{"*"}); err == nil {
 		t.Error("the API accepted a \"*\" wildcard")
 	}
 	if !hostAllowed("anything.example", []string{"*"}) {
@@ -228,15 +230,15 @@ func TestWildcardIsRefusedFromTheAPIButWorksFromTheFlag(t *testing.T) {
 
 func TestCleanAllowedHostsRejectsThingsThatAreNotHostnames(t *testing.T) {
 	for _, bad := range []string{"https://yata.example.com", "yata.example.com/path", "two hosts", "a@b"} {
-		if _, err := cleanAllowedHosts([]string{bad}); err == nil {
-			t.Errorf("cleanAllowedHosts accepted %q", bad)
+		if _, err := config.CleanAllowedHosts([]string{bad}); err == nil {
+			t.Errorf("CleanAllowedHosts accepted %q", bad)
 		}
 	}
-	got, err := cleanAllowedHosts([]string{" yata.example.com ", "", "  ", "box.tailnet.ts.net:8420"})
+	got, err := config.CleanAllowedHosts([]string{" yata.example.com ", "", "  ", "box.tailnet.ts.net:8420"})
 	if err != nil {
 		t.Fatalf("rejected a valid list: %v", err)
 	}
 	if len(got) != 2 || got[0] != "yata.example.com" || got[1] != "box.tailnet.ts.net:8420" {
-		t.Errorf("cleanAllowedHosts = %v, want the two real entries trimmed", got)
+		t.Errorf("CleanAllowedHosts = %v, want the two real entries trimmed", got)
 	}
 }

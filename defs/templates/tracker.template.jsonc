@@ -174,6 +174,14 @@
     // the value and marks username as required during tracker setup.
     "path": "/api/stats.php?summary",
     // Optional dedicated API origin when it differs from the tracker URL.
+    //
+    // MUST be a public internet address. This is the only field in a def that
+    // decides where Yata sends a request — it overrides the URL the user
+    // typed — so it is restricted to addresses that cannot be inside the
+    // user's own network. A private, loopback, link-local or Tailscale
+    // address here is refused at connect time and flagged when the def loads.
+    // A tracker's API is never on the user's LAN, so this costs a real def
+    // nothing.
     "base_url": "https://api.tracker.example",
 
     // One of: "session_cookie", "api_key_query", "api_key_header", "api_key_json_rpc"

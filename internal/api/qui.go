@@ -67,6 +67,7 @@ func quiInstances(d *Deps) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		auditPrivateDestination(d, "qui", target)
 		body, status, err := quiFetch(strings.TrimRight(target, "/")+"/api/instances", key)
 		if err != nil {
 			jsonError(w, err.Error(), upstreamStatus(status))

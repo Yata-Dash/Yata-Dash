@@ -21,9 +21,15 @@
 // (rebinding), and it misses redirect targets entirely. The dialer sees the
 // address actually being connected to, on every hop, which closes both.
 //
-// Known limitation: with an HTTP proxy configured (HTTP_PROXY/HTTPS_PROXY),
-// the dialer connects to the proxy and cannot see the real destination. The
-// URL and redirect checks still apply; the address check does not.
+// Proxies are the one case the dialer cannot cover. With HTTP_PROXY/HTTPS_PROXY
+// set, the socket goes to the proxy and the real destination never reaches
+// Control — so the address check would silently stop applying at exactly the
+// moment an operator thinks they have added a layer. Proxied requests instead
+// get a pre-flight resolve-and-check (see proxyGuard), which is weaker: it
+// resolves separately from the connection, so a name that answers differently
+// the second time defeats it, and the proxy's own DNS may not agree with ours
+// at all. It is defence in depth over a proxy the operator configured, not a
+// boundary against a hostile one.
 package netguard
 
 import (
@@ -176,6 +182,39 @@ func port(u *url.URL) string {
 	return "80"
 }
 
+// IsPublicHost reports whether host is known to live entirely on the public
+// internet. It exists to answer a DISCLOSURE question, not an access one: may
+// what this destination said be shown to the user?
+//
+// The distinction matters because a private destination's reply is, by
+// definition, something the requester could not otherwise read — which is what
+// turns a request-forgery bug into a way to read internal services. A public
+// destination's reply is the service's own error message, which is exactly
+// what a user debugging a mistyped webhook needs to see.
+//
+// Conservative in every direction: a name that resolves to a mix of public and
+// private addresses is not public, and a name that will not resolve is not
+// public either. Callers withhold on false, so an uncertain answer withholds.
+func IsPublicHost(ctx context.Context, host string) bool {
+	if host == "" {
+		return false
+	}
+	strict := Policy{} // AllowPrivate false: the public-only policy
+	if ip := net.ParseIP(host); ip != nil {
+		return CheckIP(ip, strict) == nil
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return false
+	}
+	for _, a := range addrs {
+		if CheckIP(a.IP, strict) != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // Client returns an HTTP client that enforces the policy on every connection
 // and every redirect.
 func Client(timeout time.Duration, p Policy) *http.Client {
@@ -195,9 +234,71 @@ func Wrap(c *http.Client, p Policy) *http.Client {
 	return &http.Client{
 		Timeout:       c.Timeout,
 		Jar:           c.Jar,
-		Transport:     tr,
+		Transport:     &proxyGuard{base: tr, policy: p},
 		CheckRedirect: checkRedirect(p),
 	}
+}
+
+// proxyGuard restores a destination check for requests that go through a
+// proxy, where the guarded dialer sees only the proxy's address.
+//
+// ProxyFromEnvironment is deliberately left in place rather than cleared:
+// an operator who set HTTP_PROXY did so because the machine has no other route
+// out, and silently ignoring it would break every outbound request instead of
+// securing it. So the check moves earlier — resolve the destination and vet it
+// before handing the request to the proxy.
+//
+// Unproxied requests fall straight through, because the dialer already checks
+// them at connect time and that is strictly the better place: it cannot be
+// raced by DNS, and it sees every redirect hop.
+type proxyGuard struct {
+	base   *http.Transport
+	policy Policy
+}
+
+func (g *proxyGuard) RoundTrip(req *http.Request) (*http.Response, error) {
+	if g.base.Proxy != nil {
+		proxyURL, err := g.base.Proxy(req)
+		if err != nil {
+			return nil, err
+		}
+		if proxyURL != nil {
+			if err := checkDestination(req.Context(), req.URL.Hostname(), g.policy); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return g.base.RoundTrip(req)
+}
+
+// checkDestination resolves host and applies the policy to every address it
+// answers with. Used only on the proxy path.
+//
+// A resolution failure is NOT treated as a refusal. Proxies commonly exist
+// precisely because the local host cannot resolve or route to the destination
+// itself, so failing closed here would break the ordinary split-horizon setup
+// while blocking nothing an attacker could not simply route around. The proxy
+// reports the failure on its own terms instead.
+//
+// Every returned address must pass: the proxy chooses which one it connects
+// to, so one bad address in the set is enough to refuse.
+func checkDestination(ctx context.Context, host string, p Policy) error {
+	if host == "" {
+		return fmt.Errorf("%w: URL has no host", ErrBlocked)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return CheckIP(ip, p)
+	}
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil
+	}
+	for _, a := range addrs {
+		if err := CheckIP(a.IP, p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func guardedDial(p Policy) func(context.Context, string, string) (net.Conn, error) {

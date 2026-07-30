@@ -45,6 +45,16 @@ func TestStringDropsQueryStrings(t *testing.T) {
 			want: `Post "https://api.telegram.org/botREDACTED/sendMessage": timeout`,
 		},
 		{
+			name: "discord webhook token in the path",
+			in:   `Post "https://discord.com/api/webhooks/1234567890/aBcDeF-gh_ijKlMnOp.qrst": timeout`,
+			want: `Post "https://discord.com/api/webhooks/1234567890/REDACTED": timeout`,
+		},
+		{
+			name: "slack webhook secret in the path",
+			in:   `Post "https://hooks.slack.com/services/T0A1B2C3/B4D5E6F7/xyz789secret": timeout`,
+			want: `Post "https://hooks.slack.com/services/T0A1B2C3/B4D5E6F7/REDACTED": timeout`,
+		},
+		{
 			name: "trailing sentence punctuation is not eaten",
 			in:   `could not reach https://tracker.example/api?key=s3cret.`,
 			want: `could not reach https://tracker.example/api?REDACTED.`,

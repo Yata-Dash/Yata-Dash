@@ -29,9 +29,32 @@ const Mask = "REDACTED"
 // quote characters Go's error formatting wraps URLs in (`Get "https://…":`).
 var urlRe = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s"'<>\\]+`)
 
-// telegramBotRe matches Telegram's bot-token path segment, `/bot<id>:<secret>`.
-// The one secret Yata handles that lives in a path rather than a query.
-var telegramBotRe = regexp.MustCompile(`/bot[0-9]+:[A-Za-z0-9_-]+`)
+// pathSecretRes match the secrets Yata handles that live in a URL PATH rather
+// than in a query string. Dropping the query covers most credentials; these
+// three services put theirs where that does nothing.
+//
+// Each replacement keeps the identifying prefix and masks only the secret, so
+// a log line still says which service and (for Discord) which webhook failed.
+var pathSecretRes = []struct {
+	re   *regexp.Regexp
+	repl string
+}{
+	// Telegram: /bot<id>:<secret>/sendMessage
+	{regexp.MustCompile(`/bot[0-9]+:[A-Za-z0-9_-]+`), "/bot" + Mask},
+	// Discord: /api/webhooks/<id>/<token>. The token is the whole credential —
+	// anyone holding it can post to that channel — and it reaches an error
+	// message the same way Telegram's does, through *url.Error.
+	{regexp.MustCompile(`(/webhooks/[0-9]+/)[A-Za-z0-9_.-]+`), "${1}" + Mask},
+	// Slack: /services/T…/B…/<secret>
+	{regexp.MustCompile(`(/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/)[A-Za-z0-9]+`), "${1}" + Mask},
+}
+
+func redactPath(p string) string {
+	for _, s := range pathSecretRes {
+		p = s.re.ReplaceAllString(p, s.repl)
+	}
+	return p
+}
 
 // trailing punctuation that belongs to the surrounding sentence, not the URL.
 const trailingPunct = `.,;:!?)]}`
@@ -68,18 +91,20 @@ func redactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		// Unparseable — cut everything from the first '?' rather than give up,
-		// since the query is the part that matters.
+		// since the query is the part that matters. Path secrets still get
+		// masked: a URL malformed enough to fail Parse is exactly when the
+		// structured pass below is unavailable to do it.
 		if i := strings.IndexByte(raw, '?'); i >= 0 {
-			return raw[:i] + "?" + Mask + trail
+			return redactPath(raw[:i]) + "?" + Mask + trail
 		}
-		return raw + trail
+		return redactPath(raw) + trail
 	}
 	if u.User != nil {
 		u.User = url.User(Mask)
 	}
 	hadQuery := u.RawQuery != ""
 	u.RawQuery = ""
-	u.Path = telegramBotRe.ReplaceAllString(u.Path, "/bot"+Mask)
+	u.Path = redactPath(u.Path)
 	out := u.String()
 	if hadQuery {
 		out += "?" + Mask

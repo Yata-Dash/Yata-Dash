@@ -23,9 +23,14 @@ jobs:
         with:
           node-version: '20'
 
+      # Pin a Go minor LINE, not go.mod. The `go` directive there is a minimum
+      # language version (1.25.0), so go-version-file would build releases with
+      # the oldest toolchain that still compiles rather than a current one —
+      # shipping binaries with already-patched stdlib CVEs in them.
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.x'
+          check-latest: true
 
       - name: Build frontend
         run: |

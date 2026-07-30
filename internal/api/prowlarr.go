@@ -88,6 +88,7 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		auditPrivateDestination(d, "prowlarr", req.URL)
 
 		preq, err := http.NewRequest(http.MethodGet, req.URL+"/api/v1/indexer", nil)
 		if err != nil {
