@@ -42,7 +42,7 @@
     {
       "name": "Leech",
       "style": { "color": "#800000", "icon": "fas fa-mosquito" },
-      "requirements": { "description": "Automatic demotion group for accounts with ratio below 1.00 and a negative buffer." },
+      "requirements": { "description": "Starting group for new registrations. Accounts that fall below ratio 1.00 with a negative buffer are also placed here." },
       "perks": [
         { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: 0" },
         { "icon": "fas fa-upload text-success", "label": "Upload Torrents" }
@@ -273,19 +273,6 @@
       ]
     },
     {
-      "name": "Internal",
-      "style": { "color": "#BAAF92", "icon": "fas fa-magic", "sparkle": true },
-      "requirements": { "description": "Member of a Samaritano internal release group." },
-      "perks": [
-        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
-        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
-        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
-        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
-        { "icon": "fas fa-syringe", "label": "Immune to automated HnR warnings" },
-        { "icon": "fas fa-tasks", "label": "Moderação de Torrent bypass" }
-      ]
-    },
-    {
       "name": "Uploader",
       "style": { "color": "#00ff2d", "icon": "fas fa-upload", "sparkle": true },
       "requirements": { "description": "Discretionary group for trusted uploaders." },
@@ -302,19 +289,6 @@
       "name": "Torrent Moderator",
       "style": { "color": "#2980b9", "icon": "fas fa-badge-check" },
       "requirements": { "description": "Staff group that checks pending torrents in the moderation queue." },
-      "perks": [
-        { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
-        { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
-        { "icon": "fas fa-paper-plane", "label": "Enviar convite" },
-        { "icon": "fas fa-star text-gold", "label": "Freeleech" },
-        { "icon": "fas fa-syringe", "label": "Immune to automated HnR warnings" },
-        { "icon": "fas fa-tasks", "label": "Moderação de Torrent bypass" }
-      ]
-    },
-    {
-      "name": "Bot",
-      "style": { "color": "#d44b00", "icon": "fas fa-user-robot" },
-      "requirements": { "description": "Site bot accounts." },
       "perks": [
         { "icon": "fas fa-arrow-down-short-wide text-blue", "label": "DL slots: ∞" },
         { "icon": "fas fa-upload text-success", "label": "Upload Torrents" },
