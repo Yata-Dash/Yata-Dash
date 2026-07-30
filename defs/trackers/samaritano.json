@@ -5,13 +5,22 @@
   "abbr": "SAM",
   "url": "https://samaritano.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-29",
+  "last_updated": "2026-07-30",
+  "approved_by": {
+    "name": "ØVERLORD",
+    "role": "Owner/Admin",
+    "date": "2026-07-30"
+  },
   "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 3,
     "note": "Ratio below 1.00 with a negative buffer demotes the account to Leech."
   },
   "scrape": {
+    "disable_scraping": false,
+    "min_interval_minutes": 180,
+    "max_scrapes_per_day": 8,
+    "identify": "ua",
     "stat_card_classes": {
       "label": "profile-mini-stat__label",
       "value": "profile-mini-stat__value"
@@ -340,6 +349,21 @@
         { "icon": "fas fa-syringe", "label": "Immune to automated HnR warnings" },
         { "icon": "fas fa-tasks", "label": "Moderação de Torrent bypass" }
       ]
+    },
+    {
+      "name": "Moderador",
+      "style": { "color": "#4ECDC4", "icon": "fas fa-user-shield" },
+      "requirements": { "description": "Samaritano moderator." }
+    },
+    {
+      "name": "Administrator",
+      "style": { "color": "#f92672", "icon": "fas fa-user-secret" },
+      "requirements": { "description": "Samaritano administrator." }
+    },
+    {
+      "name": "Owner",
+      "style": { "color": "#c3f32f", "icon": "fas fa-crown" },
+      "requirements": { "description": "Samaritano owner." }
     }
   ]
 }
