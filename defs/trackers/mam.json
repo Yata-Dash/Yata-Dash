@@ -5,7 +5,7 @@
   "abbr": "MAM",
   "url": "https://www.myanonamouse.net",
   "type": "custom",
-  "last_updated": "2026-07-14",
+  "last_updated": "2026-07-30",
   "approved_by": {
     "name": "Support Staff",
     "role": "Staff",
@@ -23,7 +23,7 @@
     "min_seed_days": 3
   },
   "api": {
-    "path": "/jsonLoad.php?snatch_summary",
+    "path": "/jsonLoad.php?snatch_summary&notif=true",
     "auth_method": "api_key_query",
     "api_key_param": "mam_id",
     "field_map": {
@@ -31,6 +31,11 @@
       "inactHnr.count": "hit_and_runs",
       "inactSat.count": "inactive_satisfied",
       "leeching.count": "leeching",
+      "notifs.aboutToDropClient": "about_to_drop_client",
+      "notifs.requests": "request_notifications",
+      "notifs.tickets": "open_tickets",
+      "notifs.topics": "topic_notifications",
+      "notifs.waiting_tickets": "tickets_awaiting_reply",
       "ratio": "ratio",
       "reseed.count": "reseed_count",
       "sSat.count": "seeding_satisfied",
@@ -59,6 +64,9 @@
       "uploaded_bytes": "uploaded"
     },
     "buffer_from_bytes": true,
+    "bool_fields": {
+      "notifs.pms": "unread_mail"
+    },
     "api_key_hint": "Preferences > Security > Create Session"
   },
   "invite_requirements": {

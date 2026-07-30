@@ -701,7 +701,6 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if api == nil || api.Path == "" {
 		return nil, errf("no_def", fmt.Errorf("no custom API def for %s", t.URL))
 	}
-
 	path := api.Path
 	if strings.Contains(path, "{username}") {
 		if strings.TrimSpace(t.Username) == "" {

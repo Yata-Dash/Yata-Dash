@@ -6,6 +6,19 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **MyAnonamouse now reports unread mail**, so the envelope icon, the Tracker
+  Detail row and the "Unread mail" alert rule work there like they do on the
+  UNIT3D trackers. MAM was added before mail notifications existed and never
+  revisited.
+
+  `jsonLoad.php` answers according to the view you ask for, and MAM accepts
+  both at once — `?snatch_summary&notif=true` returns the seeding summary Yata
+  already read AND the notification block, so this costs **no extra request**.
+  Along with unread mail it brings MAM's support-ticket counts (open, and
+  awaiting your reply), its request and topic notification counts, and its
+  about-to-drop-client count.
 
 
 ## [Beta-20260725]

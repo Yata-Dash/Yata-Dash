@@ -1118,6 +1118,169 @@ func TestFetchCustomRetroflixNoUnread(t *testing.T) {
 	}
 }
 
+// ── Custom: MAM (query-param auth, notifications alongside seeding counts) ───
+
+// mamLoad is MAM's jsonLoad.php response for "?snatch_summary&notif=true" —
+// the seeding summary and the notification block in ONE payload. Trimmed to the
+// fields the def maps, but the shapes are verbatim, including the nulls MAM
+// sends for the size of an empty bucket.
+const mamLoad = `{
+  "classname": "VIP",
+  "downloaded_bytes": 4045526259,
+  "inactHnr":  {"count": 3, "red": true,  "size": null},
+  "inactSat":  {"count": 0, "red": false, "size": null},
+  "leeching":  {"count": 4, "red": false, "size": null},
+  "notifs": {
+    "pms": %s,
+    "iCloudRelay": false,
+    "aboutToDropClient": 2,
+    "tickets": 1,
+    "waiting_tickets": 0,
+    "requests": 5,
+    "topics": 7
+  },
+  "ratio": 117.3,
+  "reseed":    {"count": 0, "inactive": 0, "red": false},
+  "sSat":      {"count": 114, "red": false, "size": 151033647714},
+  "seedHnr":   {"count": 0, "red": true,  "size": null},
+  "seedUnsat": {"count": 0, "red": false, "size": null},
+  "seedbonus": 17330,
+  "uid": 271767,
+  "uploaded_bytes": 474683379435,
+  "username": "MysteryGodzilla",
+  "vip_until": "2026-08-19 21:18:17",
+  "wedges": 106
+}`
+
+// mamRegistry loads the REAL shipped MAM definition rather than a copy, with
+// only its URL redirected at the test server. The def is the thing under test
+// here — a transcription slip in its field paths is exactly the bug this
+// catches, and a hand-written copy would reproduce the slip instead.
+func mamRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, f := range []struct{ src, dst string }{
+		{"../../defs/types/custom.json", "types/custom.json"},
+		{"../../defs/trackers/mam.json", "trackers/mam.json"},
+	} {
+		body, err := os.ReadFile(f.src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.dst == "trackers/mam.json" {
+			var def map[string]any
+			if err := json.Unmarshal(body, &def); err != nil {
+				t.Fatal(err)
+			}
+			def["url"] = baseURL
+			if body, err = json.Marshal(def); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(dir, f.dst), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+// mamServer serves jsonLoad.php, recording the query it was asked for and
+// rejecting an unauthenticated call the way MAM does.
+func mamServer(t *testing.T, pms string) (*httptest.Server, *string) {
+	t.Helper()
+	var query string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		if r.URL.Path != "/jsonLoad.php" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("mam_id") == "" {
+			http.Error(w, "no session", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, mamLoad, pms)
+	}))
+	return ts, &query
+}
+
+// TestFetchCustomMAM covers the shipped MAM def end to end: the mam_id session
+// travels as a query param, and one request yields both the seeding summary and
+// the notification block — the unread-mail flag among them. MAM answers
+// jsonLoad.php differently per view (?snatch_summary vs ?notif=true) and
+// asking for both together is what makes the flag free, so the query itself is
+// asserted: dropping either param silently costs a whole half of the response.
+func TestFetchCustomMAM(t *testing.T) {
+	ts, query := mamServer(t, "3")
+	defer ts.Close()
+
+	c := NewClient(mamRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	for _, want := range []string{"mam_id=sekrit", "snatch_summary", "notif=true"} {
+		if !strings.Contains(*query, want) {
+			t.Errorf("query %q is missing %q", *query, want)
+		}
+	}
+	want := map[string]any{
+		// Notifications.
+		"unread_mail":            "true", // 3 unread PMs → truthy flag
+		"open_tickets":           1,
+		"tickets_awaiting_reply": 0,
+		"request_notifications":  5,
+		"topic_notifications":    7,
+		"about_to_drop_client":   2,
+		// Seeding summary, from the same payload.
+		"username":     "MysteryGodzilla",
+		"group":        "VIP",
+		"seeding":      114, // sSat + seedHnr + seedUnsat
+		"seed_size":    "140.66 GiB",
+		"hit_and_runs": 3,
+		"leeching":     4,
+		"fl_tokens":    106.0,
+		"ratio":        117.3,
+		"uploaded":     "442.08 GiB",
+		"downloaded":   "3.77 GiB",
+		"buffer":       "438.32 GiB",
+	}
+	for k, w := range want {
+		if got, ok := data[k]; !ok {
+			t.Errorf("missing field %q", k)
+		} else if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+// TestFetchCustomMAMNoUnread: an empty inbox must yield an explicit "false",
+// not a missing field. "No mail" is an answer, and the envelope icon depends on
+// being able to tell it from "we don't know".
+func TestFetchCustomMAMNoUnread(t *testing.T) {
+	ts, _ := mamServer(t, "0")
+	defer ts.Close()
+
+	c := NewClient(mamRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if got := data["unread_mail"]; got != "false" {
+		t.Errorf("unread_mail = %#v, want \"false\"", got)
+	}
+}
+
 // TestFetchCustomInfRatio: HUNO returns ratio as the string "Inf" when
 // downloaded is 0 — it must be normalised to "Infinity" (which the frontend
 // parses to a real Infinity and renders as ∞).

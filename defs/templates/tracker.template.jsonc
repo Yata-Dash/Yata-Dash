@@ -224,6 +224,13 @@
     // byte_fields entries mapped to "uploaded" and "downloaded").
     "buffer_from_bytes": true,
 
+    // Map paths → canonical BOOLEAN fields, emitting "true"/"false" from any
+    // truthy value. An unread-message COUNT becomes the unread_mail flag this
+    // way — the flag is what the UI's envelope icon and alert rules read.
+    "bool_fields": {
+      "notifs.pms": "unread_mail"
+    },
+
     // Hint shown under the API key field in the tracker edit modal —
     // tell users where to find their token.
     "api_key_hint": "Preferences > Security > Create Session"

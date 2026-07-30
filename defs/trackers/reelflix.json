@@ -5,7 +5,12 @@
   "abbr": "RFX",
   "url": "https://reelflix.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-28",
+  "last_updated": "2026-07-30",
+  "approved_by": {
+    "name": "Slikk",
+    "role": "SysOp",
+    "date": "2026-07-28"
+  },
   "scrape": {
     "disable_scraping": true
   },
