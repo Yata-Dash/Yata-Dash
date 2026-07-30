@@ -26,7 +26,6 @@
       "value": "profile-mini-stat__value"
     },
     "labels": {
-      "ratio": "real_ratio",
       "tempo total de seed": "total_seedtime",
       "tempo médio de seed": "avg_seed_time",
       "top seedsize": "seed_size",
@@ -35,7 +34,7 @@
       "total em seed": "seeding",
       "total em leech": "leeching",
       "convites": "invites",
-      "token freeleech": "fl_tokens",
+      "meus tokens fl": "fl_tokens",
       "data de registro": "join_date"
     }
   },
