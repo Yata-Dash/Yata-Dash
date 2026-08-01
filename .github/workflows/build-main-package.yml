@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
 
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          tags: type=raw,value=main
+          tags: type=ref,event=branch
           flavor: latest=false
 
       - name: Build and push image
