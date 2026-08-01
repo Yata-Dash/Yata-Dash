@@ -1,0 +1,89 @@
+name: ci
+
+# Checks that the code builds and its tests pass, on a clean machine.
+#
+# Two triggers, deliberately:
+#   pull_request — gates merging. This is the check to mark "required" in the
+#                  branch protection rules for main and dev.
+#   push         — runs again after a merge lands, because
+#                  build-main-package.yml publishes a container image on every
+#                  push to main. If anything ever reaches a branch without a PR
+#                  (a hotfix, an edit in the web UI, an admin bypass), this is
+#                  what stops an untested image shipping unnoticed.
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+# Cancel an in-progress run when new commits arrive on the same branch or PR:
+# only the latest commit's result is meaningful, and this keeps queues short.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    # Windows is here because Yata is developed and largely run on Windows,
+    # and Go genuinely behaves differently there — path handling, file modes,
+    # line endings. The permission tests in particular exercise Unix modes and
+    # cannot be run from a Windows dev machine without WSL, which makes the
+    # Windows side the least covered by local testing.
+    #
+    # This does NOT affect what gets released. Release binaries for every
+    # platform are cross-compiled from a single Linux runner by
+    # scripts/package.sh; this matrix only decides where the TESTS run.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Same pin as release.yml: a Go minor line, not go.mod's directive, which
+      # is a minimum language version rather than the toolchain to build with.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          check-latest: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `npm ci` and not `npm install`: it installs strictly from the lockfile
+      # into a clean tree. `npm install` over an existing node_modules is what
+      # produces a half-updated dependency tree after a major version bump —
+      # the failure mode where esbuild's JS wrapper and its platform binary end
+      # up on different versions and refuse to start.
+      - name: Install dependencies
+        run: npm ci
+        working-directory: web
+
+      # Runs tsc then vite build — type errors fail here.
+      - name: Build frontend
+        run: npm run build
+        working-directory: web
