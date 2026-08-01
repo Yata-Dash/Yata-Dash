@@ -1,10 +1,19 @@
 name: Build main package
 
+# Runs only after ci has passed on main or dev, so an image is never published
+# from a commit whose tests failed.
+#
+# Two things about workflow_run that are easy to get wrong:
+#   - the key is `workflows` (plural, a list), and it matches the upstream
+#     workflow's `name:` field — not its filename. ci.yml declares `name: ci`.
+#   - GitHub only fires workflow_run for a workflow file that exists on the
+#     DEFAULT branch. This file must be merged to main before it will trigger
+#     for anything, including pushes to dev.
 on:
-  push:
-    branches:
-      - main
-      - dev
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -13,10 +22,14 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -33,7 +46,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
-          tags: type=ref,event=branch
+          tags: |
+            type=raw,value=${{ github.event.workflow_run.head_branch }}
+            type=raw,value=${{ github.event.workflow_run.head_sha }}
           flavor: latest=false
 
       - name: Build and push image
