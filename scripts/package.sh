@@ -11,6 +11,15 @@ VERSION="${1:?usage: package.sh <version>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Build identity, shown in Settings -> Updates. The version string alone cannot
+# identify a build: the :dev image moves with every merge, so several different
+# builds report the same version. YATA_COMMIT lets CI pass the SHA it tested;
+# otherwise fall back to the checkout's own HEAD.
+COMMIT="${YATA_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}"
+BUILT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VPKG="github.com/Yata-Dash/Yata-Dash/internal/version"
+LDFLAGS="-s -w -X ${VPKG}.commit=${COMMIT} -X ${VPKG}.buildDate=${BUILT}"
+
 DIST="$ROOT/dist"
 rm -rf "$DIST"
 mkdir -p "$DIST"
@@ -29,7 +38,7 @@ for t in "${TARGETS[@]}"; do
   stage="$DIST/$name"
   mkdir -p "$stage"
   echo "building $name"
-  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="-s -w" -o "$stage/$bin" ./cmd/yata
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="$LDFLAGS" -o "$stage/$bin" ./cmd/yata
   for a in "${ASSETS[@]}"; do
     [ -e "$a" ] && cp -r "$a" "$stage/"
   done

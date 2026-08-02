@@ -41,11 +41,21 @@ type updateComponent struct {
 }
 
 type updateStatus struct {
-	App       updateComponent `json:"app"`
-	Defs      updateComponent `json:"defs"`
-	Pathways  updateComponent `json:"pathways"`
-	CheckedAt int64           `json:"checked_at,omitempty"` // unix seconds; 0 = never
-	Error     string          `json:"error,omitempty"`      // last check's failure, if any
+	App      updateComponent `json:"app"`
+	Defs     updateComponent `json:"defs"`
+	Pathways updateComponent `json:"pathways"`
+	// Commit and BuildDate identify the exact build. The version alone does
+	// not: the :dev container image moves with every merge, so several
+	// different builds report the same version string. Empty when the binary
+	// was built without stamping and outside a git checkout.
+	//
+	// This endpoint needs a session. /api/version stays public and stays
+	// version-only — a precise build identifier is a fingerprint, and there is
+	// no reason to hand one to an unauthenticated caller.
+	Commit    string `json:"commit,omitempty"`
+	BuildDate string `json:"build_date,omitempty"`
+	CheckedAt int64  `json:"checked_at,omitempty"` // unix seconds; 0 = never
+	Error     string `json:"error,omitempty"`      // last check's failure, if any
 }
 
 var (
@@ -99,10 +109,12 @@ func buildStatus(d *Deps) updateStatus {
 
 	newer := func(cur, latest string) bool { return latest != "" && cur != "" && latest > cur }
 	s := updateStatus{
-		App:      updateComponent{Current: local.App},
-		Defs:     updateComponent{Current: local.Defs},
-		Pathways: updateComponent{Current: local.Pathways},
-		Error:    errMsg,
+		App:       updateComponent{Current: local.App},
+		Defs:      updateComponent{Current: local.Defs},
+		Pathways:  updateComponent{Current: local.Pathways},
+		Commit:    version.Commit(),
+		BuildDate: version.BuildDate(),
+		Error:     errMsg,
 	}
 	if !at.IsZero() {
 		s.CheckedAt = at.Unix()

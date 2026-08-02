@@ -324,6 +324,10 @@
                 <div class="ver-row"><span class="ver-label">App</span><code id="s-ver-app" class="ver-val">…</code><span id="s-ver-app-badge" class="ver-badge"></span></div>
                 <div class="ver-row"><span class="ver-label">Definitions</span><code id="s-ver-defs" class="ver-val">…</code><span id="s-ver-defs-badge" class="ver-badge"></span></div>
                 <div class="ver-row"><span class="ver-label">Pathways</span><code id="s-ver-pathways" class="ver-val">…</code><span id="s-ver-pathways-badge" class="ver-badge"></span></div>
+                <!-- Hidden until the build is stamped: a blank row would just
+                     look broken on a build that has no commit to report. -->
+                <div class="ver-row" id="s-ver-commit-row" hidden><span class="ver-label">Commit</span><code id="s-ver-commit" class="ver-val">…</code><span id="s-ver-commit-badge" class="ver-badge"></span></div>
+                <div class="ver-row" id="s-ver-built-row" hidden><span class="ver-label">Built</span><code id="s-ver-built" class="ver-val">…</code></div>
               </div>
               <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
                 <button type="button" id="s-update-check" class="btn btn-ghost btn-sm" onclick="checkForUpdates()">Check for updates</button>

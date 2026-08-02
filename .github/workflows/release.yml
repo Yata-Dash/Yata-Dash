@@ -1,50 +1,118 @@
 name: release
 
-# Cut a release by pushing a version tag (dev.ps1 → "Cut a release" does this):
-#   git tag Beta-20260710 && git push origin Beta-20260710
-# That builds the cross-platform binaries and creates the GitHub Release — all
-# from the tagged commit. Docker/GHCR packages are built separately by their own
-# auto-build workflow, so they are intentionally NOT built here.
+# Publishes a release automatically when a promotion to main lands.
+#
+# The trigger is "ci finished successfully on main", not "a tag was pushed", so
+# a release can only ever come from code whose tests passed.
+#
+# What decides WHETHER to release is internal/version/version.go. On each run
+# this reads the Version const and looks for a matching tag:
+#   * no tag yet -> build the binaries, create the tag, publish the release
+#   * tag exists -> do nothing
+#
+# So the release gate is simply "did you bump the version?". Bump it in the last
+# PR before promoting and the merge ships it; promote without bumping and main
+# updates with no release. That keeps the decision human and the mechanics
+# automatic.
+#
+# workflow_dispatch is the manual escape hatch — re-run a release that failed
+# part way, without another commit.
 on:
-  push:
-    tags:
-      - 'Beta-*'
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write   # create the GitHub Release + upload the zips
+  contents: write   # create the tag + the GitHub Release
+
+# Never let two releases build at once; a second promotion should wait rather
+# than race the first to the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  binaries:
+  release:
     runs-on: ubuntu-latest
+    # For workflow_run, only when ci actually passed. A manual dispatch has no
+    # upstream run, so it is allowed through.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The exact commit ci tested, not whatever main points at now.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          # Full history so the tag lands on a real commit and git describe works.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Read the version the code will report at runtime, and decide whether
+      # this is a release or a no-op.
+      - name: Read version and check for an existing tag
+        id: ver
+        run: |
+          version=$(sed -n 's/.*Version = "\(.*\)".*/\1/p' internal/version/version.go)
+          if [ -z "$version" ]; then
+            echo "could not parse Version from internal/version/version.go" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "tag $version already exists — nothing to release"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version $version is not yet tagged — releasing"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
+        if: steps.ver.outputs.release == 'true'
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
-      # Pin a Go minor LINE, not go.mod. The `go` directive there is a minimum
-      # language version (1.25.0), so go-version-file would build releases with
-      # the oldest toolchain that still compiles rather than a current one —
-      # shipping binaries with already-patched stdlib CVEs in them.
+      # Same pin as ci.yml. go.mod's directive is a minimum language version,
+      # not the toolchain to build releases with.
       - uses: actions/setup-go@v5
+        if: steps.ver.outputs.release == 'true'
         with:
           go-version: '1.26.x'
           check-latest: true
 
       - name: Build frontend
-        run: |
-          cd web
-          npm install
-          npm run build
+        if: steps.ver.outputs.release == 'true'
+        run: npm ci && npm run build
+        working-directory: web
 
       - name: Build + package binaries
-        run: bash scripts/package.sh "${GITHUB_REF_NAME}"
+        if: steps.ver.outputs.release == 'true'
+        env:
+          YATA_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: bash scripts/package.sh "${{ steps.ver.outputs.version }}"
 
+      # Creates the tag at this commit as a side effect of creating the release,
+      # so there is no separate tag push to keep in sync.
       - name: Create GitHub Release
+        if: steps.ver.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.event.workflow_run.head_sha || github.sha }}
           files: dist/*.zip
           body_path: dist/RELEASE_NOTES.md
           prerelease: true                 # beta builds aren't "Latest stable"
           fail_on_unmatched_files: true
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.ver.outputs.release }}" = "true" ]; then
+            echo "Released ${{ steps.ver.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No release: ${{ steps.ver.outputs.version }} is already tagged." >> "$GITHUB_STEP_SUMMARY"
+            echo "Bump internal/version/version.go to publish a new one." >> "$GITHUB_STEP_SUMMARY"
+          fi
