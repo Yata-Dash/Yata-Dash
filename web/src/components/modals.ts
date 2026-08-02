@@ -2023,6 +2023,34 @@ function renderUpdateStatus(s: UpdateStatus, checked: boolean): void {
       badge.textContent = '';
     }
   }
+  // Build identity. Both rows stay hidden on an unstamped build rather than
+  // showing an empty value, which reads as a fault rather than as "not
+  // recorded".
+  const commitRow = document.getElementById('s-ver-commit-row');
+  if (commitRow) {
+    commitRow.hidden = !s.commit;
+    if (s.commit) {
+      setVal2('s-ver-commit', s.commit);
+      // "-dirty" means the working tree had uncommitted changes, so the SHA
+      // does NOT describe the code that produced this binary. Worth calling
+      // out: it is the difference between a reproducible build and a local one.
+      const badge = document.getElementById('s-ver-commit-badge');
+      if (badge) {
+        const dirty = s.commit.endsWith('-dirty');
+        badge.className = dirty ? 'ver-badge out' : 'ver-badge';
+        badge.textContent = dirty ? 'built from uncommitted changes' : '';
+      }
+    }
+  }
+  const builtRow = document.getElementById('s-ver-built-row');
+  if (builtRow) {
+    builtRow.hidden = !s.build_date;
+    if (s.build_date) {
+      const d = new Date(s.build_date);
+      setVal2('s-ver-built', isNaN(d.getTime()) ? s.build_date : d.toLocaleString());
+    }
+  }
+
   const status = document.getElementById('s-update-status');
   if (status) {
     if (s.error) status.textContent = `Check failed: ${s.error}`;

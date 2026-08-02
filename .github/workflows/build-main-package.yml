@@ -57,5 +57,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          # The image has no .git, so the commit has to be handed in for the
+          # build panel to report which build a tester is running.
+          build-args: |
+            YATA_COMMIT=${{ github.event.workflow_run.head_sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

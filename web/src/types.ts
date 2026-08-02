@@ -385,6 +385,11 @@ export interface UpdateStatus {
   app: UpdateComponent;
   defs: UpdateComponent;
   pathways: UpdateComponent;
+  // The exact build. The version alone can't identify one — the :dev image
+  // moves with every merge, so many builds share a version string. Absent when
+  // the binary was built without stamping.
+  commit?: string;          // short SHA, "-dirty" suffixed if built from uncommitted changes
+  build_date?: string;      // RFC 3339, UTC
   checked_at?: number;      // unix seconds; absent = never checked
   error?: string;
 }
