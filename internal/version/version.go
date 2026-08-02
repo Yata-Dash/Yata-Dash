@@ -11,7 +11,7 @@ import (
 )
 
 // Version is the current build identifier.
-const Version = "Beta-20260730"
+const Version = "Beta-20260802"
 
 // Commit and BuildDate identify the exact build, which Version alone cannot:
 // the :dev container image moves with every merge, so "Beta-20260730" stops
