@@ -75,6 +75,7 @@ func NewRouter(d *Deps) http.Handler {
 		api.Group(func(ro chi.Router) {
 			ro.Use(requireAuthOrToken(d))
 			ro.Get("/summary", getSummary(d))
+			ro.Get("/highlights", getHighlights(d))
 			ro.Get("/history/series", getHistorySeries(d))
 		})
 
