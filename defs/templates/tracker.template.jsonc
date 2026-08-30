@@ -71,7 +71,11 @@
   // Canonical names: username, group, uploaded, downloaded, ratio, real_ratio,
   //   buffer, bonus_points, seeding, leeching, hit_and_runs, fl_tokens,
   //   seed_size, avg_seed_time, total_seedtime, join_date, snatched,
-  //   upload_snatches, invites, warnings, uploads_approved, requests_filled.
+  //   upload_snatches, invites, warnings, uploads_approved, requests_filled,
+  //   last_login.
+  // uploads_approved is named for the scrape-era label; where a tracker's
+  // ladder counts plain uploads, map that counter here — it is the number
+  // the progression is actually measured against.
   "api_field_map": {
     "seedbonus": "bonus_points"
   },

@@ -148,7 +148,27 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		return nil, ferr
 	}
 	fieldMap := c.Registry.ResolveAPIFieldMap(t.URL, t.Type)
-	return defs.NormalizeAPIFields(fieldMap, data), nil
+	return normalizeStrings(defs.NormalizeAPIFields(fieldMap, data)), nil
+}
+
+// normalizeStrings applies the canonical-string cleanups to every fetcher's
+// output. It runs HERE, after NormalizeAPIFields, because the cleanup is keyed
+// by CANONICAL name and the field map has only just produced those — a def
+// mapping joined_at → join_date still has the raw key inside its fetcher.
+//
+// join_date is what forced this. pathways parses it with a strict
+// time.Parse("2006-01-02"), so an untrimmed "2026-08-21T03:58:59+00:00" fails
+// and the account reads as brand new: every age requirement silently unmet,
+// with no error anywhere. fetchCustom already normalised its own values (it
+// resolves canonical names itself), so for that path this is a no-op — the
+// cleanups are idempotent.
+func normalizeStrings(data map[string]any) map[string]any {
+	for k, v := range data {
+		if str, ok := v.(string); ok {
+			data[k] = normalizeCanonicalString(k, str)
+		}
+	}
+	return data
 }
 
 // ── Unit3D ───────────────────────────────────────────────────────────────────
@@ -954,7 +974,7 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 		}
 		switch val := v.(type) {
 		case string:
-			out[canonical] = normalizeCustomString(canonical, val)
+			out[canonical] = normalizeCanonicalString(canonical, val)
 		case float64:
 			// Ratio/points fields stay float; other numerics are counts.
 			if canonical == "ratio" || canonical == "bonus_points" || canonical == "fl_tokens" {
@@ -1076,12 +1096,16 @@ func anyTruthy(v any) bool {
 	}
 }
 
-// normalizeCustomString cleans up string values from custom APIs per
-// canonical field, so defs don't each need conversion machinery:
+// normalizeCanonicalString cleans up string values per canonical field, so
+// defs don't each need conversion machinery:
 //   - join_date: ISO datetimes ("2022-01-01T00:00:00+00:00") → date only.
 //   - ratio/real_ratio: "Inf"/"∞" (downloaded = 0) → "Infinity", which the
 //     frontend parses to a real Infinity and renders as ∞ (green).
-func normalizeCustomString(canonical, v string) string {
+//
+// Shared by the custom and UNIT3D fetchers. It was custom-only until a UNIT3D
+// tracker (HHD) started returning a join date from /api/user: stock UNIT3D
+// doesn't report one at all, so the UNIT3D path had never needed it.
+func normalizeCanonicalString(canonical, v string) string {
 	switch canonical {
 	case "join_date":
 		if len(v) > 10 && (v[10] == 'T' || v[10] == ' ') {
