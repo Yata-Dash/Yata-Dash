@@ -70,7 +70,15 @@ function saveMetrics(id: string, keys: string[]) {
   try { localStorage.setItem(METRICS_KEY, JSON.stringify(map)); } catch { /* private mode */ }
 }
 
-const MAX_CHARTS = 10;
+/** Charts a tracker's Detail page will show at once.
+ *
+ *  Tied to the metric list rather than being a number: at 10 it silently
+ *  withheld two of the 12 metrics from anyone who wanted them all, and the
+ *  ceiling had no reason behind it — the user opts into each chart from the
+ *  Charts menu, so the only real limit is how many metrics exist. If that list
+ *  ever grows enough for the page to feel silly, give this a real ceiling then,
+ *  with a reason. */
+const MAX_CHARTS = HISTORY_METRICS.length;
 
 /** Invite routes listed before "+N more". Its own card now, so it can afford
  *  more than it could when it shared one with the timelines. */
