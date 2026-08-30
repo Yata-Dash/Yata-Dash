@@ -1949,3 +1949,105 @@ func TestFetcherCapabilitiesMatchDefs(t *testing.T) {
 		})
 	}
 }
+
+// TestFetchUnit3DDataEnvelope covers the response shape LST moved to in
+// 2026-08: stats nested under "data", with a sibling "api_key" object carrying
+// an expiry. Before the unwrap this parsed cleanly and produced NOTHING — every
+// canonical field missed, with no error anywhere to notice.
+func TestFetchUnit3DDataEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		fmt.Fprint(w, `{
+			"data": {
+				"username":"testuser","group":"Whale",
+				"uploaded":"4.57 TiB","downloaded":"312.64 GiB","ratio":"14.97",
+				"buffer":"11.12 TiB","seeding":953,"leeching":0,
+				"seedbonus":"5473638.36","hit_and_runs":0
+			},
+			"api_key": { "expires_at": "2026-11-25T00:00:00+00:00" }
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Whale",
+		"uploaded": "4.57 TiB", "downloaded": "312.64 GiB", "ratio": "14.97",
+		"buffer": "11.12 TiB", "seeding": 953.0, "leeching": 0.0,
+		"bonus_points": "5473638.36", "hit_and_runs": 0.0,
+		"api_key_expires_at": "2026-11-25T00:00:00+00:00",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	// The envelope itself and the credential object must not survive into the
+	// stat layer — the second is what stops a future token field being stored.
+	for _, gone := range []string{"data", "api_key", "seedbonus"} {
+		if _, ok := data[gone]; ok {
+			t.Errorf("%q should not survive: %+v", gone, data)
+		}
+	}
+}
+
+// TestUnwrapUnit3DEnvelopeLeavesUnrelatedDataAlone guards the marker check: a
+// flat response that merely happens to carry a "data" object must pass through
+// untouched, or the unwrap would eat real fields.
+func TestUnwrapUnit3DEnvelopeLeavesUnrelatedDataAlone(t *testing.T) {
+	raw := map[string]any{
+		"username": "testuser",
+		"ratio":    "1.50",
+		"data":     map[string]any{"unrelated": 1.0},
+	}
+	got := unwrapUnit3DEnvelope(raw)
+	if got["username"] != "testuser" || got["ratio"] != "1.50" {
+		t.Errorf("flat fields lost: %+v", got)
+	}
+	inner, ok := got["data"].(map[string]any)
+	if !ok || inner["unrelated"] != 1.0 {
+		t.Errorf("unrelated data object should be preserved: %+v", got)
+	}
+}
+
+// TestUnwrapUnit3DEnvelopeInnerWinsCollision fixes the precedence: the envelope
+// holds the stats, the outer level describes the request.
+func TestUnwrapUnit3DEnvelopeInnerWinsCollision(t *testing.T) {
+	got := unwrapUnit3DEnvelope(map[string]any{
+		"ratio": "outer",
+		"data":  map[string]any{"username": "testuser", "ratio": "inner"},
+		"extra": "kept",
+	})
+	if got["ratio"] != "inner" {
+		t.Errorf("ratio = %#v, want inner value to win", got["ratio"])
+	}
+	if got["extra"] != "kept" {
+		t.Errorf("sibling of data should be kept: %+v", got)
+	}
+	if _, ok := got["data"]; ok {
+		t.Errorf("envelope key should be consumed: %+v", got)
+	}
+}
+
+// TestExtractAPIKeyExpiryDropsCredentialObject: the nested object goes even
+// when there is no usable expiry in it.
+func TestExtractAPIKeyExpiryDropsCredentialObject(t *testing.T) {
+	data := map[string]any{"api_key": map[string]any{"expires_at": ""}}
+	extractAPIKeyExpiry(data)
+	if _, ok := data["api_key"]; ok {
+		t.Errorf("api_key object should be removed: %+v", data)
+	}
+	if _, ok := data[APIKeyExpiryField]; ok {
+		t.Errorf("blank expiry should not be recorded: %+v", data)
+	}
+}
