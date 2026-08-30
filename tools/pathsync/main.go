@@ -111,12 +111,13 @@ func main() {
 				From:    src,
 				To:      dst,
 				Days:    days,
-				Reqs:    r.Reqs,
+				Reqs:    fixReqs(src, dst, r.Reqs),
 				Active:  r.Active == "Yes",
 				Updated: r.Updated,
 			})
 		}
 	}
+	reportUnusedFixups()
 	sort.Slice(o.Routes, func(i, j int) bool {
 		if o.Routes[i].From != o.Routes[j].From {
 			return o.Routes[i].From < o.Routes[j].From
@@ -184,6 +185,62 @@ func main() {
 // deriveUpdated returns the newest route date as YYYY-MM — the true freshness of
 // the upstream dataset. Upstream stamps each route "Mon YYYY" (e.g. "Jun 2026");
 // unparseable/blank entries are ignored.
+// ── Upstream corrections ─────────────────────────────────────────────────────
+
+// reqsFixup corrects a known-bad requirements string in the upstream dataset.
+// Keyed by route so a correction can never hit a different route that happens
+// to share the wrong text.
+type reqsFixup struct {
+	from, to string
+	wrong    string
+	right    string
+	used     bool
+}
+
+// reqsFixups are upstream typos we correct on the way in.
+//
+// They live HERE rather than as a hand edit to defs/pathways/routes.json
+// because that file is generated: an edit to it disappears the next time
+// anyone runs this tool, quietly and with no sign that a fix was lost.
+//
+// Each entry is a stopgap. Report it upstream, and delete the entry once the
+// fix lands there — reportUnusedFixups will say when that has happened.
+var reqsFixups = []*reqsFixup{
+	{
+		// Truncated mid-word upstream; the same requirement is spelled in full
+		// on other routes ("6 months, 3TB upload"), which is where the
+		// replacement comes from rather than a guess.
+		from:  "YuScene",
+		to:    "MidnightScene",
+		wrong: "6 months, 3TB uplo",
+		right: "6 months, 3TB upload",
+	},
+}
+
+// fixReqs applies any correction registered for this route.
+func fixReqs(from, to, reqs string) string {
+	for _, f := range reqsFixups {
+		if f.from == from && f.to == to && reqs == f.wrong {
+			f.used = true
+			return f.right
+		}
+	}
+	return reqs
+}
+
+// reportUnusedFixups flags corrections that matched nothing. That means either
+// upstream has fixed the entry — so the fixup should be deleted — or the route
+// changed shape and the correction is now silently doing nothing. Both are
+// worth knowing; neither is worth failing the run over.
+func reportUnusedFixups() {
+	for _, f := range reqsFixups {
+		if !f.used {
+			log.Printf("fixup no longer matches (upstream fixed, or route changed?): %s -> %s %q",
+				f.from, f.to, f.wrong)
+		}
+	}
+}
+
 func deriveUpdated(routes []route) string {
 	var newest time.Time
 	for _, r := range routes {

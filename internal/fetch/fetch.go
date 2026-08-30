@@ -163,7 +163,6 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
-	extractAPIKeyExpiry(data)
 	convertCoreBytes(data)
 	normalizeActiveEvents(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
@@ -192,13 +191,38 @@ func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
-	return unwrapUnit3DEnvelope(data), nil
+	data = unwrapUnit3DEnvelope(data)
+	// Both here, not in fetchUnit3D: mergeExtended copies every key the core
+	// response doesn't already have, so an api_key object on the EXTENDED
+	// endpoint would be merged into the stats and persisted. Sanitising only the
+	// core response made that strictly more likely, because deleting the core
+	// copy removes the overlap that would otherwise have blocked the merge.
+	extractAPIKeyExpiry(data)
+	return data, nil
 }
 
-// unit3dEnvelopeMarkers are core /api/user fields used to recognise the
-// envelope. Requiring one of them means a response that happens to carry an
+// unit3dEnvelopeMarkers are field names used to recognise an envelope.
+// Requiring one of them inside "data" means a response that happens to carry an
 // unrelated top-level "data" object is left alone.
-var unit3dEnvelopeMarkers = []string{"username", "group", "uploaded", "downloaded", "ratio", "seeding"}
+//
+// It covers BOTH endpoints getUnit3D serves. A tracker that wraps /api/user
+// almost certainly wraps its extended-stats endpoint too — it is a site-wide
+// API convention, not a per-endpoint one — and an extended response carries
+// supplementary fields (seed_size, avg_seed_time, …) rather than the core ones.
+// With core-only markers its envelope would go unrecognised, and mergeExtended
+// would then copy the literal "data" map into the stats as a field: every
+// extended stat lost, and a nested object persisted to the stat layer.
+//
+// Raw names, since this runs before NormalizeAPIFields — hence seedbonus
+// alongside bonus_points.
+var unit3dEnvelopeMarkers = []string{
+	// core /api/user
+	"username", "group", "uploaded", "downloaded", "ratio", "buffer",
+	"seeding", "leeching", "seedbonus", "bonus_points", "hit_and_runs",
+	// extended stats (ExtendedStatsSpec)
+	"seed_size", "avg_seed_time", "real_uploaded", "real_downloaded",
+	"real_ratio", "fl_tokens", "unread_mail",
+}
 
 // unwrapUnit3DEnvelope flattens the {"data": {...}, "api_key": {...}} shape LST
 // moved to in 2026-08 back into the flat map the rest of the pipeline expects.
