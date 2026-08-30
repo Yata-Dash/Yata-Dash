@@ -2051,3 +2051,116 @@ func TestExtractAPIKeyExpiryDropsCredentialObject(t *testing.T) {
 		t.Errorf("blank expiry should not be recorded: %+v", data)
 	}
 }
+
+// unit3dExtendedRegistry is unit3dRegistry plus an extended-stats endpoint on
+// the tracker def, so the supplementary-fetch path can be exercised.
+func unit3dExtendedRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"unit3d","label":"Unit3D",
+		"api":{"kind":"unit3d"},
+		"api_field_map":{"seedbonus":"bonus_points"}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"u3d","name":"Test U3D",
+		"abbr":"U3D","url":%q,"type":"unit3d",
+		"extended_stats":{"path":"/api/user/stats","byte_fields":["seed_size"]}}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "unit3d.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "u3d.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+// TestFetchUnit3DEnvelopeOnExtendedEndpoint: a tracker that wraps /api/user
+// wraps its extended endpoint too — it's a site-wide API convention. With
+// core-only envelope markers the extended response stayed wrapped and
+// mergeExtended copied the literal "data" map in as a field, losing every
+// extended stat and persisting a nested object to the stat layer.
+func TestFetchUnit3DEnvelopeOnExtendedEndpoint(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/user":
+			fmt.Fprint(w, `{
+				"data":{"username":"testuser","group":"Whale","ratio":"14.97","seeding":953},
+				"api_key":{"expires_at":"2026-11-25T00:00:00+00:00"}
+			}`)
+		case "/api/user/stats":
+			fmt.Fprint(w, `{
+				"data":{"seed_size":3005578784855,"avg_seed_time":864000,"real_ratio":"12.10"}
+			}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dExtendedRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "Whale", "ratio": "14.97", "seeding": 953.0,
+		"seed_size": "2.73 TiB", "avg_seed_time": 864000.0, "real_ratio": "12.10",
+		"api_key_expires_at": "2026-11-25T00:00:00+00:00",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	if _, ok := data["data"]; ok {
+		t.Errorf("extended envelope should be unwrapped, not merged as a field: %+v", data)
+	}
+}
+
+// TestFetchUnit3DExtendedAPIKeyNeverPersisted is the regression test for the
+// leak: mergeExtended copies every key the core response lacks, so sanitising
+// only the core response made an extended api_key MORE likely to be stored —
+// deleting the core copy removes the overlap that would have blocked the merge.
+func TestFetchUnit3DExtendedAPIKeyNeverPersisted(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/user":
+			// Flat, and carrying no api_key of its own — the case where the
+			// core response cannot shadow the extended one.
+			fmt.Fprint(w, `{"username":"testuser","group":"User","ratio":"2.00","seeding":10}`)
+		case "/api/user/stats":
+			fmt.Fprint(w, `{
+				"seed_size":1073741824,
+				"api_key":{"expires_at":"2027-01-01T00:00:00+00:00","token":"SHOULD-NEVER-BE-STORED"}
+			}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dExtendedRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	if _, ok := data["api_key"]; ok {
+		t.Errorf("api_key object from the extended endpoint must not reach the stat layer: %+v", data)
+	}
+	for k, v := range data {
+		if s, ok := v.(string); ok && strings.Contains(s, "SHOULD-NEVER-BE-STORED") {
+			t.Errorf("credential material leaked via %q: %+v", k, data)
+		}
+	}
+	// The expiry itself is still useful and should be kept.
+	if got := data["api_key_expires_at"]; got != "2027-01-01T00:00:00+00:00" {
+		t.Errorf("api_key_expires_at = %#v, want the extended endpoint's expiry", got)
+	}
+}
