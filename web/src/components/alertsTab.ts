@@ -26,7 +26,37 @@ let wired = false;
 
 // ── Field & operator catalogs (mirror internal/notify/engine.go) ────────────
 type FieldType = 'numeric' | 'size' | 'bool' | 'string' | 'event';
-interface FieldDef { value: string; label: string; type: FieldType; }
+interface OpDef { value: string; label: string; }
+interface FieldDef {
+  value: string;
+  label: string;
+  type: FieldType;
+  // ops overrides the type's default operator list for this field alone, and
+  // hint becomes the operator select's tooltip. Used by 'group', whose
+  // operators span two different trigger models — see GROUP_OPS.
+  ops?: OpDef[];
+  hint?: string;
+}
+
+const NUM_OPS: OpDef[] = [
+  { value: 'gt', label: '>' }, { value: 'gte', label: '≥' },
+  { value: 'lt', label: '<' }, { value: 'lte', label: '≤' },
+  { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
+];
+const BOOL_OPS: OpDef[] = [{ value: 'is_true', label: 'is true' }, { value: 'is_false', label: 'is false' }];
+const STR_OPS: OpDef[] = [{ value: 'changed', label: 'changed' }];
+const EVENT_OPS: OpDef[] = [{ value: 'is_true', label: 'occurs' }];
+
+// GROUP_OPS presents three ways a group/class can move as operators on one
+// field, rather than as one string field plus two event fields. The engine
+// still stores promotions and demotions as the event fields 'promoted' and
+// 'demoted' with op 'is_true' — see toDisplay/fromDisplay. Keeping the stored
+// shape means no migration, and rules written before this still load.
+const GROUP_OPS: OpDef[] = [
+  { value: 'changed',  label: 'changed' },
+  { value: 'promoted', label: 'promotions' },
+  { value: 'demoted',  label: 'demotions' },
+];
 
 const FIELDS: FieldDef[] = [
   { value: 'ratio',            label: 'Ratio',              type: 'numeric' },
@@ -50,26 +80,37 @@ const FIELDS: FieldDef[] = [
   { value: 'unread_notifications', label: 'Unread notifications (bell)', type: 'bool' },
   { value: 'reachable',        label: 'Tracker reachable',  type: 'bool' },
   { value: 'goal_behind_pace', label: 'Behind goal pace',   type: 'bool' },
-  { value: 'group',            label: 'Group / class',      type: 'string' },
+  { value: 'group', label: 'Group / class', type: 'string', ops: GROUP_OPS,
+    hint: '"changed" is checked on every refresh; promotions and demotions fire once, at the moment they are detected.' },
   // One-shot events (fire at the moment they happen, not polled) — see
-  // notify.EvaluateEvent/EvaluateTargets.
-  { value: 'promoted',   label: 'Promoted (group moved up)',   type: 'event' },
-  { value: 'demoted',    label: 'Demoted (group moved down)',  type: 'event' },
+  // notify.EvaluateEvent/EvaluateTargets. Promotions and demotions are events
+  // too, but are presented as operators on 'group' rather than as their own
+  // fields; toDisplay/fromDisplay do the translation.
   { value: 'target_met', label: 'Target met (any target row)', type: 'event' },
 ];
 
-const NUM_OPS = [
-  { value: 'gt', label: '>' }, { value: 'gte', label: '≥' },
-  { value: 'lt', label: '<' }, { value: 'lte', label: '≤' },
-  { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
-];
-const BOOL_OPS = [{ value: 'is_true', label: 'is true' }, { value: 'is_false', label: 'is false' }];
-const STR_OPS = [{ value: 'changed', label: 'changed' }];
-const EVENT_OPS = [{ value: 'is_true', label: 'occurs' }];
-
 function fieldDef(name: string): FieldDef { return FIELDS.find(f => f.value === name) ?? FIELDS[0]; }
-function opsFor(type: FieldType) {
-  return type === 'bool' ? BOOL_OPS : type === 'string' ? STR_OPS : type === 'event' ? EVENT_OPS : NUM_OPS;
+function opsFor(fd: FieldDef): OpDef[] {
+  if (fd.ops) return fd.ops;
+  return fd.type === 'bool' ? BOOL_OPS : fd.type === 'string' ? STR_OPS : fd.type === 'event' ? EVENT_OPS : NUM_OPS;
+}
+
+// ── Stored ⇄ displayed condition shape ──────────────────────────────────────
+// Stored, the engine's shape: {field:'promoted', op:'is_true'}.
+// Displayed, the user's shape: {field:'group', op:'promoted'}.
+// Only these two event fields move; everything else passes through unchanged.
+const GROUP_EVENT_FIELDS = ['promoted', 'demoted'];
+
+function toDisplay(c: AlertCondition): { field: string; op: string } {
+  return GROUP_EVENT_FIELDS.includes(c.field)
+    ? { field: 'group', op: c.field }
+    : { field: c.field, op: c.op };
+}
+
+function fromDisplay(field: string, op: string): { field: string; op: string } {
+  return field === 'group' && GROUP_EVENT_FIELDS.includes(op)
+    ? { field: op, op: 'is_true' }
+    : { field, op };
 }
 function genId(): string { return Math.random().toString(16).slice(2, 10) + Date.now().toString(16).slice(-6); }
 function opt(value: string, label: string, sel: string): string {
@@ -387,9 +428,11 @@ function renderRule(r: AlertRule, ri: number): string {
 }
 
 function renderCond(c: AlertCondition, ri: number, ci: number): string {
-  const fd = fieldDef(c.field);
-  const fieldSel = `<select class="form-input cond-field" data-action="cond-field" data-rule="${ri}" data-cond="${ci}" style="flex:2">${FIELDS.map(f => opt(f.value, f.label, c.field)).join('')}</select>`;
-  const opSel = `<select class="form-input cond-op" style="flex:1">${opsFor(fd.type).map(o => opt(o.value, o.label, c.op)).join('')}</select>`;
+  const d = toDisplay(c);
+  const fd = fieldDef(d.field);
+  const fieldSel = `<select class="form-input cond-field" data-action="cond-field" data-rule="${ri}" data-cond="${ci}" style="flex:2">${FIELDS.map(f => opt(f.value, f.label, d.field)).join('')}</select>`;
+  const opTitle = fd.hint ? ` title="${esc(fd.hint)}"` : '';
+  const opSel = `<select class="form-input cond-op" style="flex:1"${opTitle}>${opsFor(fd).map(o => opt(o.value, o.label, d.op)).join('')}</select>`;
   const needsValue = fd.type === 'numeric' || fd.type === 'size';
   const valInput = `<input class="form-input cond-value" placeholder="${fd.type === 'size' ? 'e.g. 1 TiB' : 'value'}" value="${esc(c.value)}" style="flex:1;${needsValue ? '' : 'visibility:hidden'}"/>`;
   return `<div class="alerts-row cond-row" data-rule="${ri}" data-cond="${ci}" style="margin-top:6px;gap:6px">
@@ -423,11 +466,13 @@ function collectFromDOM(): void {
   rules = [...root.querySelectorAll<HTMLElement>('.alerts-rule-row[data-rule], .alerts-card[data-rule]')].map((el, i) => {
     const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s);
     if (!q<HTMLInputElement>('.rule-name')) return rules[i]; // collapsed row — model is current
-    const conds: AlertCondition[] = [...el.querySelectorAll<HTMLElement>('.cond-row')].map(cr => ({
-      field: cr.querySelector<HTMLSelectElement>('.cond-field')?.value ?? 'ratio',
-      op: cr.querySelector<HTMLSelectElement>('.cond-op')?.value ?? 'lt',
-      value: cr.querySelector<HTMLInputElement>('.cond-value')?.value.trim() ?? '',
-    }));
+    const conds: AlertCondition[] = [...el.querySelectorAll<HTMLElement>('.cond-row')].map(cr => {
+      const { field, op } = fromDisplay(
+        cr.querySelector<HTMLSelectElement>('.cond-field')?.value ?? 'ratio',
+        cr.querySelector<HTMLSelectElement>('.cond-op')?.value ?? 'lt',
+      );
+      return { field, op, value: cr.querySelector<HTMLInputElement>('.cond-value')?.value.trim() ?? '' };
+    });
     const mode = el.querySelector<HTMLElement>('[data-action="rule-mode"].active')?.dataset['mode'] ?? 'include';
     return {
       id: rules[i]?.id || genId(),
@@ -560,7 +605,18 @@ function wire(): void {
       collectFromDOM();
       const ri = Number(el.dataset['rule']); const ci = Number(el.dataset['cond']);
       const c = rules[ri]?.conditions[ci];
-      if (c) { const ops = opsFor(fieldDef(c.field).type); if (!ops.some(o => o.value === c.op)) c.op = ops[0].value; }
+      // The op select still holds the previous field's operator, so reset it to
+      // the new field's first when it doesn't carry over. Done in DISPLAY space
+      // — c.field may be an event field that has no entry in FIELDS.
+      if (c) {
+        const d = toDisplay(c);
+        const ops = opsFor(fieldDef(d.field));
+        if (!ops.some(o => o.value === d.op)) {
+          const stored = fromDisplay(d.field, ops[0].value);
+          c.field = stored.field;
+          c.op = stored.op;
+        }
+      }
       render();
     }
   });

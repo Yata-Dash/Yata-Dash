@@ -185,13 +185,113 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 // we've probed accepts Bearer, so the fallback effectively never fires.
 func (c *Client) getUnit3D(url, key, identify string) (map[string]any, *Error) {
 	data, ferr := c.getJSON(url, map[string]string{"Authorization": "Bearer " + key}, identify)
-	if ferr == nil {
-		return data, nil
+	if ferr != nil && (ferr.Kind == "http_401" || ferr.Kind == "http_403") {
+		data, ferr = c.getJSON(url+"?api_token="+key, nil, identify)
 	}
-	if ferr.Kind == "http_401" || ferr.Kind == "http_403" {
-		return c.getJSON(url+"?api_token="+key, nil, identify)
+	if ferr != nil {
+		return nil, ferr
 	}
-	return nil, ferr
+	data = unwrapUnit3DEnvelope(data)
+	// Both here, not in fetchUnit3D: mergeExtended copies every key the core
+	// response doesn't already have, so an api_key object on the EXTENDED
+	// endpoint would be merged into the stats and persisted. Sanitising only the
+	// core response made that strictly more likely, because deleting the core
+	// copy removes the overlap that would otherwise have blocked the merge.
+	extractAPIKeyExpiry(data)
+	return data, nil
+}
+
+// unit3dEnvelopeMarkers are field names used to recognise an envelope.
+// Requiring one of them inside "data" means a response that happens to carry an
+// unrelated top-level "data" object is left alone.
+//
+// It covers BOTH endpoints getUnit3D serves. A tracker that wraps /api/user
+// almost certainly wraps its extended-stats endpoint too — it is a site-wide
+// API convention, not a per-endpoint one — and an extended response carries
+// supplementary fields (seed_size, avg_seed_time, …) rather than the core ones.
+// With core-only markers its envelope would go unrecognised, and mergeExtended
+// would then copy the literal "data" map into the stats as a field: every
+// extended stat lost, and a nested object persisted to the stat layer.
+//
+// Raw names, since this runs before NormalizeAPIFields — hence seedbonus
+// alongside bonus_points.
+var unit3dEnvelopeMarkers = []string{
+	// core /api/user
+	"username", "group", "uploaded", "downloaded", "ratio", "buffer",
+	"seeding", "leeching", "seedbonus", "bonus_points", "hit_and_runs",
+	// extended stats (ExtendedStatsSpec)
+	"seed_size", "avg_seed_time", "real_uploaded", "real_downloaded",
+	"real_ratio", "fl_tokens", "unread_mail",
+}
+
+// unwrapUnit3DEnvelope flattens the {"data": {...}, "api_key": {...}} shape LST
+// moved to in 2026-08 back into the flat map the rest of the pipeline expects.
+//
+// This matters more than it looks. NormalizeAPIFields, convertCoreBytes and
+// every def's api_field_map look fields up at the TOP level, so an envelope
+// makes all of them miss: the request succeeds, parses, and yields a tracker
+// reporting nothing at all. There is no error to notice — which is exactly how
+// LST went quiet.
+//
+// Unwrapping in getUnit3D covers /api/user and the extended-stats endpoint from
+// one place, and leaves every downstream step and every existing def untouched.
+//
+// Siblings of "data" are kept so metadata outside the envelope (api_key today,
+// whatever follows later) stays reachable. Inner keys win a collision: the
+// envelope holds the stats, the outer level describes the request.
+func unwrapUnit3DEnvelope(raw map[string]any) map[string]any {
+	inner, ok := raw["data"].(map[string]any)
+	if !ok {
+		return raw
+	}
+	marked := false
+	for _, m := range unit3dEnvelopeMarkers {
+		if _, found := inner[m]; found {
+			marked = true
+			break
+		}
+	}
+	if !marked {
+		return raw
+	}
+	out := make(map[string]any, len(inner)+len(raw))
+	for k, v := range inner {
+		out[k] = v
+	}
+	for k, v := range raw {
+		if k == "data" {
+			continue
+		}
+		if _, exists := out[k]; !exists {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// APIKeyExpiryField carries the expiry of an expiring API token, for trackers
+// that issue them (LST, 2026-08). The tracker's own RFC3339 string is kept
+// as-is; turning it into "expires in N days" is a presentation decision and
+// belongs above the fetcher, not here.
+const APIKeyExpiryField = "api_key_expires_at"
+
+// extractAPIKeyExpiry promotes api_key.expires_at to a canonical top-level
+// field and removes the nested object.
+//
+// The removal is deliberate, not tidiness: whatever remains in this map is
+// persisted to the API stat layer and its history. Today the object holds only
+// an expiry, but it is the tracker's description of the CREDENTIAL, and a
+// future field there could put the token itself into stored stats. Dropping it
+// at the boundary means that can never happen by accident.
+func extractAPIKeyExpiry(data map[string]any) {
+	meta, ok := data["api_key"].(map[string]any)
+	if !ok {
+		return
+	}
+	if s, ok := meta["expires_at"].(string); ok && strings.TrimSpace(s) != "" {
+		data[APIKeyExpiryField] = s
+	}
+	delete(data, "api_key")
 }
 
 // coreByteFields are the /api/user values that carry byte counts. Everything

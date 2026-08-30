@@ -4,8 +4,8 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-07-20",
-    "updated": "2026-07"
+    "fetched": "2026-08-30",
+    "updated": "2026-08"
   },
   "abbr": {
     "ABTorrents": "ABT",
@@ -17,7 +17,6 @@
     "ArabicSource": "AST",
     "AsianCinema": "ACM",
     "AudioNews": "AN",
-    "Aura4K": "A4K",
     "AvistaZ": "AZ",
     "BakaBT": "BBT",
     "Bemaniso": "SOWS",
@@ -47,6 +46,7 @@
     "DarkPeers": "DP",
     "DataScene": "DS",
     "DesiTorrents": "DT",
+    "DigitalCore": "DC",
     "DigitalCore.Club": "DCC",
     "Dolphin Is Coming": "DIC",
     "Empornium": "EMP",
@@ -97,7 +97,6 @@
     "Malayabits": "MYB",
     "Materialize": "MAT",
     "MidnightScene": "MNS",
-    "MoreThanTV": "MTV",
     "MyAnonamouse": "MAM",
     "MySpleen": "MS",
     "Nebulance": "NBL",
@@ -113,6 +112,7 @@
     "PTerClub": "PTer",
     "ParabellumHD": "PBH",
     "PassThePopcorn": "PTP",
+    "Periodical": "PER",
     "Phoenix Project": "PHX",
     "PixelCove": "PxC",
     "PixelHD": "PxHD",
@@ -124,7 +124,7 @@
     "RacingForMe": "RFM",
     "Rastastugan": "RAS",
     "Redacted": "RED",
-    "ReelFliX": "RFX",
+    "ReelFliX": "RF",
     "RetroFlix": "RTF",
     "RocketHD": "RHD",
     "SAMARITANO": "SAM",
@@ -132,6 +132,7 @@
     "Secret Cinema": "SC",
     "SexTorrent": "SXT",
     "ShareIsland": "SIL",
+    "Simurg": "SIM",
     "SkipTheCommercials": "STC",
     "SocietyGlitch": "SG",
     "Speed.cd": "SPD",
@@ -164,6 +165,7 @@
     "White Rabbit Network": "WRN",
     "XSpeeds": "XS",
     "YuScene": "YS",
+    "Zenith": "ZNTH",
     "eMuwarez": "EMW",
     "eShareNet": "eSN",
     "inTheShadow": "iTS",
@@ -265,7 +267,7 @@
       "days": 0,
       "reqs": "Prometheus+",
       "active": true,
-      "updated": "Dec 2025"
+      "updated": "Aug 2026"
     },
     {
       "from": "Aither",
@@ -305,7 +307,7 @@
       "days": 0,
       "reqs": "1TiB seedsize",
       "active": true,
-      "updated": "Dec 2025"
+      "updated": "Aug 2026"
     },
     {
       "from": "AlphaRatio",
@@ -344,14 +346,6 @@
       "to": "LzTr",
       "days": 0,
       "reqs": "20 uploads",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "AlphaRatio",
-      "to": "MoreThanTV",
-      "days": 0,
-      "reqs": "Ratio\u003e1.5",
       "active": true,
       "updated": "Jun 2026"
     },
@@ -621,14 +615,6 @@
     },
     {
       "from": "Anthelion",
-      "to": "Aura4K",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Anthelion",
       "to": "BakaBT",
       "days": 90,
       "reqs": "3 months",
@@ -752,24 +738,8 @@
       "to": "Nebulance",
       "days": 0,
       "reqs": "No requirement",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
-    },
-    {
-      "from": "Aura4K",
-      "to": "YuScene",
-      "days": 0,
-      "reqs": "No Requirement",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Aura4K",
-      "to": "seedpool",
-      "days": 0,
-      "reqs": "1 TiB seeding size",
-      "active": true,
-      "updated": "Feb 2026"
     },
     {
       "from": "AvistaZ",
@@ -896,14 +866,6 @@
       "to": "LST",
       "days": 0,
       "reqs": "Pro+",
-      "active": true,
-      "updated": "Dec 2025"
-    },
-    {
-      "from": "BeyondHD",
-      "to": "MoreThanTV",
-      "days": 0,
-      "reqs": "Pro+, ratio\u003e1.5",
       "active": true,
       "updated": "Dec 2025"
     },
@@ -1077,14 +1039,6 @@
     },
     {
       "from": "BitPorn",
-      "to": "Aura4K",
-      "days": 0,
-      "reqs": "Insane User",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "BitPorn",
       "to": "BrokenStones",
       "days": 0,
       "reqs": "Insane User",
@@ -1120,7 +1074,7 @@
       "to": "CapybaraBR",
       "days": 0,
       "reqs": "No requirement",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
     },
     {
@@ -1160,7 +1114,7 @@
       "to": "LST",
       "days": 180,
       "reqs": "6 months",
-      "active": false,
+      "active": true,
       "updated": "June 2026"
     },
     {
@@ -1590,9 +1544,9 @@
     {
       "from": "Cinemageddon",
       "to": "Aither",
-      "days": 180,
-      "reqs": "Superfan+, 6 months",
-      "active": true,
+      "days": 0,
+      "reqs": "Abandoned",
+      "active": false,
       "updated": "Mar 2025"
     },
     {
@@ -1713,15 +1667,15 @@
       "days": 30,
       "reqs": "5 TiB of uploaded, avg seedtime \u003e= 1 month",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "DarkPeers",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Apr 2026"
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "DarkPeers",
@@ -1729,15 +1683,15 @@
       "days": 120,
       "reqs": "Account age  \u003e=4 months minimum, 5TB upload, 2 additional proofs",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "DarkPeers",
       "to": "Luminarr",
-      "days": 90,
-      "reqs": "3 months",
-      "active": false,
-      "updated": "Apr 2026"
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "DarkPeers",
@@ -1745,15 +1699,63 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "DarkPeers",
       "to": "seedpool",
       "days": 0,
-      "reqs": "1 TiB seeding size",
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "BrokenStones",
+      "days": 0,
+      "reqs": "Sentry+",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "CapybaraBR",
+      "days": 0,
+      "reqs": "Sentry+",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "DarkPeers",
+      "days": 0,
+      "reqs": "Sentry+",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "HomieHelpDesk",
+      "days": 0,
+      "reqs": "Sentry+, 5TB upload, 2 proofs (upon request)",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "MidnightScene",
+      "days": 0,
+      "reqs": "Sentry+, 3TB upload",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "DigitalCore.Club",
+      "to": "YuScene",
+      "days": 0,
+      "reqs": "Sentry+",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Empornium",
@@ -1784,14 +1786,6 @@
       "to": "Immortal-s",
       "days": 0,
       "reqs": "Backstory, 3 profile links and screenshots",
-      "active": true,
-      "updated": "Mar 2025"
-    },
-    {
-      "from": "Empornium",
-      "to": "MoreThanTV",
-      "days": 180,
-      "reqs": "Great Perv+, ratio\u003e1.5, 6 months",
       "active": true,
       "updated": "Mar 2025"
     },
@@ -1960,14 +1954,6 @@
       "to": "LzTr",
       "days": 180,
       "reqs": "6 months",
-      "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "MoreThanTV",
-      "days": 180,
-      "reqs": "Elite Gamer, 6 months, ratio\u003e=1.5",
       "active": true,
       "updated": "Nov 2025"
     },
@@ -2256,8 +2242,8 @@
       "to": "M-Team",
       "days": 60,
       "reqs": "Elite+, 2 months",
-      "active": true,
-      "updated": "Aug 2025"
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "Great Poster Wall",
@@ -2385,7 +2371,7 @@
       "days": 30,
       "reqs": "HD Spacer, 1 month",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "HD-Torrents",
@@ -2589,11 +2575,19 @@
     },
     {
       "from": "HomieHelpDesk",
+      "to": "BrokenStones",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "HomieHelpDesk",
       "to": "DarkPeers",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "HomieHelpDesk",
@@ -2601,7 +2595,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "HomieHelpDesk",
@@ -2609,15 +2603,15 @@
       "days": 90,
       "reqs": "3 months",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "HomieHelpDesk",
       "to": "RocketHD",
       "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Mar 2026"
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "HomieHelpDesk",
@@ -2625,7 +2619,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "HomieHelpDesk",
@@ -2633,7 +2627,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "JPopsuki",
@@ -2809,7 +2803,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2817,7 +2811,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2825,7 +2819,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2833,7 +2827,7 @@
       "days": 180,
       "reqs": "6 months, 3 TB upload",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2841,7 +2835,7 @@
       "days": 365,
       "reqs": "1 year, avg seedtime 6 months, 1TiB seedsize",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2849,7 +2843,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2857,7 +2851,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2865,7 +2859,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2873,7 +2867,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "JUl 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Luminarr",
@@ -2881,7 +2875,7 @@
       "days": 0,
       "reqs": "1TiB seedsize",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "M-Team",
@@ -2936,112 +2930,48 @@
       "to": "TeamHD",
       "days": 0,
       "reqs": "No requirement",
-      "active": true,
+      "active": false,
       "updated": "Aug 2025"
     },
     {
-      "from": "MoreThanTV",
-      "to": "Aither",
-      "days": 180,
-      "reqs": "6 months",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "BeyondHD",
-      "days": 540,
-      "reqs": "Gaffer+, 18 months",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "CapybaraBR",
+      "from": "MidnightScene",
+      "to": "DarkPeers",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
-      "from": "MoreThanTV",
-      "to": "Cathode-Ray.Tube",
+      "from": "MidnightScene",
+      "to": "DigitalCore",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
-      "from": "MoreThanTV",
-      "to": "FunFile",
+      "from": "MidnightScene",
+      "to": "ReelFliX",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
-      "from": "MoreThanTV",
-      "to": "Immortal-s",
-      "days": 365,
-      "reqs": "3 additional 1 year old proofs",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "LST",
+      "from": "MidnightScene",
+      "to": "YuScene",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
-      "from": "MoreThanTV",
-      "to": "OldToonsWorld",
+      "from": "MidnightScene",
+      "to": "Zenith",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "Orpheus",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "PassThePopcorn",
-      "days": 730,
-      "reqs": "Engineer+, 2 years",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "PixelCove",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": false,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "Portugas",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jun 2026"
-    },
-    {
-      "from": "MoreThanTV",
-      "to": "Upload.cx",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jun 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3049,15 +2979,7 @@
       "days": 0,
       "reqs": "Some profile links/ratio proofs",
       "active": true,
-      "updated": "Jul 2026"
-    },
-    {
-      "from": "MyAnonamouse",
-      "to": "Aura4K",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3065,15 +2987,15 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
       "to": "Bit-HDTV",
       "days": 0,
       "reqs": "No requirement",
-      "active": true,
-      "updated": "Jul 2026"
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3081,7 +3003,7 @@
       "days": 180,
       "reqs": "9 months or 6 months and 10+ uploads",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3089,15 +3011,15 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
       "to": "Canal Street",
-      "days": 365,
-      "reqs": "1 year",
+      "days": 0,
+      "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3105,7 +3027,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3113,7 +3035,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3121,15 +3043,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
-    },
-    {
-      "from": "MyAnonamouse",
-      "to": "F1Carreras",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3137,7 +3051,7 @@
       "days": 365,
       "reqs": "3x 1 year old additional profile links and screenshots + profile links to any other BT forum you are a member of",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3145,7 +3059,7 @@
       "days": 270,
       "reqs": "9 months, No warning PU",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3153,15 +3067,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
-    },
-    {
-      "from": "MyAnonamouse",
-      "to": "MidnightScene",
-      "days": 180,
-      "reqs": "6 months, 3 TB upload",
-      "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3169,7 +3075,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3177,7 +3083,7 @@
       "days": 180,
       "reqs": "500GB download on MAM or 6 month account age, 1 TB Upload, and 500 GB Download on another approved tracker",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3185,7 +3091,7 @@
       "days": 365,
       "reqs": "1 year",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3193,7 +3099,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3201,7 +3107,7 @@
       "days": 180,
       "reqs": "3x 6 months old profile links (including MAM)",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3209,7 +3115,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3217,7 +3123,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3225,15 +3131,15 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
       "to": "Secret Cinema",
       "days": 360,
       "reqs": "VIP+, 1 TB Upload, 12 months",
-      "active": true,
-      "updated": "Jul 2026"
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3241,7 +3147,7 @@
       "days": 270,
       "reqs": "9 months or 10+ uploads",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3249,7 +3155,15 @@
       "days": 0,
       "reqs": "VIP+",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "MyAnonamouse",
+      "to": "Simurg",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3257,7 +3171,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3265,7 +3179,7 @@
       "days": 0,
       "reqs": "2-3x profile links and screenshots (including MAM)",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3273,7 +3187,7 @@
       "days": 0,
       "reqs": "25 seeded uploads",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3281,7 +3195,7 @@
       "days": 0,
       "reqs": "VIP+",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3289,7 +3203,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "MyAnonamouse",
@@ -3297,7 +3211,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Nebulance",
@@ -3390,10 +3304,10 @@
     {
       "from": "OldToonsWorld",
       "to": "BrokenStones",
-      "days": 90,
-      "reqs": "3 months",
+      "days": 0,
+      "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "OnlyEncodes+",
@@ -3401,15 +3315,15 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "OnlyEncodes+",
       "to": "LST",
       "days": 90,
-      "reqs": "3 months",
+      "reqs": "6TB seedsize with an average seedtime of 3 months. Account age 9 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "OnlyEncodes+",
@@ -3417,7 +3331,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "OnlyEncodes+",
@@ -3425,7 +3339,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Orpheus",
@@ -3517,14 +3431,6 @@
     },
     {
       "from": "Orpheus",
-      "to": "MoreThanTV",
-      "days": 180,
-      "reqs": "6 months (26 weeks), ratio \u003e= 1.5",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Orpheus",
       "to": "Nebulance",
       "days": 0,
       "reqs": "No requirement",
@@ -3554,6 +3460,14 @@
       "reqs": "TM+, 2 years",
       "active": true,
       "updated": "Feb 2026"
+    },
+    {
+      "from": "Orpheus",
+      "to": "Periodical",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Orpheus",
@@ -3656,8 +3570,8 @@
       "to": "BroadcasTheNet",
       "days": 365,
       "reqs": "TM, 1 year",
-      "active": true,
-      "updated": "Nov 2024"
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "PassThePopcorn",
@@ -3758,10 +3672,10 @@
     {
       "from": "PassThePopcorn",
       "to": "HDBits",
-      "days": 365,
-      "reqs": "TM, 1 year",
+      "days": 730,
+      "reqs": "2 years and be either TM or Elite with at least 40 personal uploads (subject to approval)",
       "active": true,
-      "updated": "May 2025"
+      "updated": "Aug 2026"
     },
     {
       "from": "PassThePopcorn",
@@ -3933,14 +3847,6 @@
     },
     {
       "from": "Redacted",
-      "to": "Aura4K",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Redacted",
       "to": "BakaBT",
       "days": 180,
       "reqs": "6 months",
@@ -3954,6 +3860,14 @@
       "reqs": "TM+, 18 months",
       "active": true,
       "updated": "Feb 2026"
+    },
+    {
+      "from": "Redacted",
+      "to": "Blutopia",
+      "days": 0,
+      "reqs": "PU+, 1 personal \"perfect FLAC\" physical media rip",
+      "active": true,
+      "updated": "Jul 2026"
     },
     {
       "from": "Redacted",
@@ -4093,14 +4007,6 @@
     },
     {
       "from": "Redacted",
-      "to": "MoreThanTV",
-      "days": 180,
-      "reqs": "6 months, ratio \u003e 1.0",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Redacted",
       "to": "MyAnonamouse",
       "days": 0,
       "reqs": "No requirement",
@@ -4194,6 +4100,14 @@
       "reqs": "6 months",
       "active": true,
       "updated": "Feb 2026"
+    },
+    {
+      "from": "Redacted",
+      "to": "Simurg",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Redacted",
@@ -4332,14 +4246,6 @@
       "updated": "Jul 2026"
     },
     {
-      "from": "RetroFlix",
-      "to": "SpeedApp",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jul 2026"
-    },
-    {
       "from": "RocketHD",
       "to": "AnimeWorld",
       "days": 0,
@@ -4361,7 +4267,7 @@
       "days": 365,
       "reqs": "1 year, 20TB upload in public tracker or 2TB upload in private tracker",
       "active": true,
-      "updated": "Jun 2025"
+      "updated": "Jul 2026"
     },
     {
       "from": "SAMARITANO",
@@ -4417,14 +4323,6 @@
       "days": 0,
       "reqs": "PU+, 10 torrents",
       "active": true,
-      "updated": "Apr 2025"
-    },
-    {
-      "from": "TV-Vault",
-      "to": "MoreThanTV",
-      "days": 180,
-      "reqs": "6 months, Elite+, ratio\u003e1.5",
-      "active": false,
       "updated": "Apr 2025"
     },
     {
@@ -4632,7 +4530,7 @@
       "to": "Audiences",
       "days": 0,
       "reqs": "Insane User+, 1TB seeding, ACG prove",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
     },
     {
@@ -4640,7 +4538,7 @@
       "to": "Great Poster Wall",
       "days": 0,
       "reqs": "Crazy User+, 1 upload",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
     },
     {
@@ -4648,7 +4546,7 @@
       "to": "KamePT",
       "days": 0,
       "reqs": "Elite User+",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
     },
     {
@@ -4664,64 +4562,104 @@
       "to": "Piggo",
       "days": 0,
       "reqs": "Insane User+",
-      "active": false,
+      "active": true,
       "updated": "Nov 2025"
+    },
+    {
+      "from": "Upload.cx",
+      "to": "DarkPeers",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "PU+",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Upload.cx",
+      "to": "HomieHelpDesk",
+      "days": 180,
+      "reqs": "6 months",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "LST",
       "days": 90,
-      "reqs": "PU+, 3 months",
+      "reqs": "3 months",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "Luminarr",
       "days": 90,
-      "reqs": "PU+, 3 months",
+      "reqs": "3 months",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Upload.cx",
+      "to": "MidnightScene",
+      "days": 180,
+      "reqs": "6 months, 3TB upload",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "ReelFliX",
       "days": 0,
-      "reqs": "PU+",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "YuScene",
       "days": 0,
-      "reqs": "PU+",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Upload.cx",
+      "to": "Zenith",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "Upload.cx",
       "to": "seedpool",
       "days": 0,
-      "reqs": "PU+, 1TiB seedsize",
-      "active": true,
-      "updated": "Apr 2026"
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
-      "to": "Aura4K",
+      "to": "BrokenStones",
       "days": 0,
       "reqs": "No requirements",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "YuScene",
+      "to": "CZTeam",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
@@ -4729,7 +4667,7 @@
       "days": 0,
       "reqs": "No requirements",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
@@ -4737,15 +4675,23 @@
       "days": 0,
       "reqs": "No requirements",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "No requirements",
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "YuScene",
+      "to": "HomieHelpDesk",
+      "days": 180,
+      "reqs": "6 months, 5TB upload",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
@@ -4753,7 +4699,23 @@
       "days": 90,
       "reqs": "3 months account age",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "YuScene",
+      "to": "MidnightScene",
+      "days": 180,
+      "reqs": "6 months, 3TB upload",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "YuScene",
+      "to": "Unwalled",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
@@ -4761,143 +4723,183 @@
       "days": 0,
       "reqs": "No requirements",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "YuScene",
+      "to": "Zenith",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "YuScene",
       "to": "seedpool",
-      "days": 0,
-      "reqs": "1 TiB seeding size",
+      "days": 90,
+      "reqs": "3 months, 1 TiB seed size, 1 month average seed time",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Aug 2026"
     },
     {
-      "from": "seedpool",
-      "to": "Aura4K",
+      "from": "Zenith",
+      "to": "BrokenStones",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Zenith",
+      "to": "LST",
+      "days": 90,
+      "reqs": "3 months seedtime, 6TB seedsize",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Zenith",
+      "to": "MidnightScene",
+      "days": 180,
+      "reqs": "6 months, 3TB upload",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Zenith",
+      "to": "YuScene",
+      "days": 0,
+      "reqs": "No requirements",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "BitPorn",
       "days": 0,
-      "reqs": "SuperPool, 5 TiB upload",
+      "reqs": "5 TiB upload",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "BrokenStones",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "CapybaraBR",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "DarkPeers",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "HDCity",
       "days": 0,
-      "reqs": "SuperPool, 5 TB upload, more proofs",
-      "active": true,
-      "updated": "Feb 2026"
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "HomieHelpDesk",
       "days": 0,
-      "reqs": "SuperPool, 3 TB upload, 2 more proofs",
+      "reqs": "3 TB upload, 2 more proofs",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "LST",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "Luminarr",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "ReelFliX",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "RetroFlix",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "RocketHD",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "seedpool",
+      "to": "SkipTheCommercials",
+      "days": 180,
+      "reqs": "6 months",
+      "active": true,
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "Upload.cx",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "White Rabbit Network",
       "days": 0,
-      "reqs": "SuperPool",
-      "active": true,
-      "updated": "Feb 2026"
+      "reqs": "Removed",
+      "active": false,
+      "updated": "Aug 2026"
     },
     {
       "from": "seedpool",
       "to": "YuScene",
       "days": 0,
-      "reqs": "SuperPool",
+      "reqs": "No requirements",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Aug 2026"
     }
   ],
   "unlocks": {
@@ -4924,10 +4926,6 @@
     "AsianCinema": {
       "days": 30,
       "text": "PU: 1 month, 1TB Upload"
-    },
-    "Aura4K": {
-      "days": 90,
-      "text": "Luminous: 20TB Upload, 3 month, ratio\u003e0.75"
     },
     "Bemaniso": {
       "days": 14,
@@ -5045,10 +5043,6 @@
       "days": 56,
       "text": "Torrent Master: 8 weeks, 250GB upload, 100 torrents, ratio\u003e=0.8"
     },
-    "MoreThanTV": {
-      "days": 56,
-      "text": "Camera operator (min requirement): 500GB upload, 8 weeks; Boom Operator: 12 weeks, 1000 GB upload, 10 checked uploads, 5 forum posts; Gaffer: 24 weeks, 2000 GB upload, 100 checked uploads, 10 forum posts; Engineer: 48 weeks, 3000 GB upload, 500 checked uploads, 25 forum posts"
-    },
     "MyAnonamouse": {
       "days": 180,
       "text": "PU: 6 months, 1 TiB upload, ratio\u003e=2"
@@ -5076,6 +5070,10 @@
     "PassThePopcorn": {
       "days": 28,
       "text": "PU: 4 weeks, 80GB upload, 1 torrent, ratio\u003e1.05"
+    },
+    "Periodical": {
+      "days": 0,
+      "text": "No requirement"
     },
     "PixelCove": {
       "days": 84,
@@ -5138,8 +5136,8 @@
       "text": "No requirement"
     },
     "YuScene": {
-      "days": 30,
-      "text": "Seeder: 1 month, ratio \u003e=0.40, seedsize 4 TiB"
+      "days": 60,
+      "text": "Super User: 2 months, ratio \u003e=0.70, uploaded \u003e=5 TiB"
     },
     "seedpool": {
       "days": 180,
