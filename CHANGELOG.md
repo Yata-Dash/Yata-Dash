@@ -6,6 +6,67 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260830]
+
+### Added
+
+- **HHD (homiehelpdesk.net) is supported**, API-only. Its `/api/user` covers
+  every stat its ten-rung ladder is measured against — seed size, average seed
+  time, upload counts and the rest — so nothing is scraped and the def declares
+  no scrape at all.
+
+  It is also the first UNIT3D tracker to report a **join date** from the API.
+  Stock UNIT3D doesn't, which is why other UNIT3D defs ask you to type one at
+  setup; HHD's is read automatically. That exposed a latent bug worth naming:
+  the join date arrived as a full timestamp, and the pathway engine parses
+  dates strictly, so an established account would have read as brand new and
+  quietly failed every account-age requirement in its ladder. Timestamps are
+  now normalised for every fetcher rather than only the custom ones.
+
+  Its API also reports a **last login time**, which Yata now records. Nothing
+  displays it yet — it is there so history accumulates before the login-recency
+  warnings that need it.
+
+### Changed
+
+- **Group and class alert conditions are now one field with three options.**
+  Building "tell me when I'm promoted" meant knowing that *Group / class →
+  changed* and the separate *Promoted* and *Demoted* fields were three
+  different things. They are now one **Group / class** condition offering
+  **changed**, **promotions** and **demotions**.
+
+  This also closes a trap. "changed" is checked on every refresh while
+  promotions and demotions fire once at the moment they happen, so a rule
+  selecting both sent two notifications for the same promotion; one condition
+  row can now only pick one of them. Existing rules are untouched — the stored
+  form hasn't changed, so nothing needs migrating and rules written before this
+  simply display the new way.
+
+- **Pathway data refreshed** to the August 2026 community dataset (591 routes).
+
+### Fixed
+
+- **LST stopped reporting any stats after they changed their API.** The stats
+  moved inside a `data` wrapper, and every field Yata looks for is read from
+  the top level — so the request succeeded, the response parsed, and the
+  tracker reported *nothing*, with no error anywhere to notice. Wrapped
+  responses are now unwrapped for any UNIT3D tracker that adopts the same
+  shape, so this doesn't have to be fixed again one tracker at a time.
+
+  LST also began issuing **expiring API keys** and reports the expiry date
+  alongside the stats. Yata records it, ready for the warnings that come next.
+  The rest of that block — which describes the credential itself — is
+  deliberately discarded at the boundary, so nothing about a key can ever end
+  up in stored stats or their history.
+
+- **A pathway requirement was cut off mid-word.** The YuScene → MidnightScene
+  route read "6 months, 3TB uplo". The pathways file is generated from the
+  community dataset, so correcting the file alone would have been silently
+  undone by the next refresh; the correction now lives in the generator, keyed
+  to that one route so it cannot affect any other. When the upstream dataset is
+  fixed, the next refresh reports that the workaround is no longer needed
+  instead of leaving it in place forever.
+
 ## [Beta-20260804]
 
 ### Added

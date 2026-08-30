@@ -92,3 +92,55 @@ func TestShippedDefsResolveTheirFetcher(t *testing.T) {
 		}
 	}
 }
+
+// TestHHDDefResolves pins the HHD def's wiring. It is API-only, so a silent
+// regression in any of these leaves the tracker reporting less than it can
+// with nothing to notice — there is no scrape to fall back on.
+func TestHHDDefResolves(t *testing.T) {
+	r, err := Load("../../defs")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	const url = "https://homiehelpdesk.net"
+
+	// Stock /api/user, so the plain UNIT3D fetcher must handle it — an api
+	// block would divert it to the custom fetcher and lose convertCoreBytes.
+	if kind := r.APIKind(url, ""); kind != "unit3d" {
+		t.Errorf("APIKind = %q, want unit3d", kind)
+	}
+
+	fm := r.ResolveAPIFieldMap(url, "unit3d")
+	want := map[string]string{
+		"joined_at":      "join_date",
+		"seedtime_total": "total_seedtime",
+		"uploads_count":  "uploads_approved",
+		"seedbonus":      "bonus_points", // inherited from the type
+	}
+	for from, to := range want {
+		if got := fm[from]; got != to {
+			t.Errorf("field map %q = %q, want %q", from, got, to)
+		}
+	}
+
+	// Scraping off: the class ladder is fully covered by the API, and the def
+	// promises no HTTP beyond /api/user.
+	if sp := r.ResolveScrape(url, "unit3d"); !sp.DisableScraping {
+		t.Errorf("scraping should be disabled: %+v", sp)
+	}
+
+	// Every stat the ladder needs must be declared as an API capability, or
+	// the UI will show requirements it can never evaluate.
+	caps := r.ResolveCapabilities(url, "unit3d")
+	api := map[string]bool{}
+	for _, f := range caps.APIStats {
+		api[f] = true
+	}
+	for _, f := range []string{
+		"username", "group", "join_date", "uploaded", "ratio",
+		"seed_size", "avg_seed_time", "uploads_approved", "last_login",
+	} {
+		if !api[f] {
+			t.Errorf("capability %q missing; have %v", f, caps.APIStats)
+		}
+	}
+}
