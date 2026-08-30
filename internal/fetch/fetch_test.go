@@ -13,6 +13,7 @@ import (
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/parse"
 )
 
 func gazelleJSONRegistry(t *testing.T, baseURL string) *defs.Registry {
@@ -2162,5 +2163,107 @@ func TestFetchUnit3DExtendedAPIKeyNeverPersisted(t *testing.T) {
 	// The expiry itself is still useful and should be kept.
 	if got := data["api_key_expires_at"]; got != "2027-01-01T00:00:00+00:00" {
 		t.Errorf("api_key_expires_at = %#v, want the extended endpoint's expiry", got)
+	}
+}
+
+// hhdRegistry mirrors defs/trackers/homiehelpdesk.json's wiring onto a test
+// server URL, so the real def's field map can be exercised end-to-end.
+func hhdRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"unit3d","label":"Unit3D",
+		"api":{"kind":"unit3d"},
+		"api_field_map":{"seedbonus":"bonus_points"}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"hhd","name":"HHD",
+		"abbr":"HHD","url":%q,"type":"unit3d",
+		"api_field_map":{"joined_at":"join_date","seedtime_total":"total_seedtime","uploads_count":"uploads_approved"}}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "unit3d.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "hhd.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+// TestFetchUnit3DHHDResponseShape covers HHD, the first UNIT3D tracker to
+// report a join date from /api/user.
+//
+// The join_date assertion is the one that matters: pathways parses it with a
+// strict time.Parse("2006-01-02"), so an untrimmed "2026-08-21T03:58:59+00:00"
+// would make a year-old account read as brand new and quietly fail every age
+// requirement in the ladder.
+func TestFetchUnit3DHHDResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer (HHD rejects ?api_token=)", got)
+		}
+		fmt.Fprint(w, `{
+			"username":"testuser","group":"User",
+			"uploaded":"51.61 GiB","downloaded":"1 GiB","ratio":51.61,"buffer":"128.03 GiB",
+			"seedbonus":"11340.00","seeding":455,"leeching":0,"hit_and_runs":0,
+			"seed_size":"5.06 TiB","avg_seed_time":"1D  4h  30m  20s",
+			"fl_tokens":0,"invites":0,
+			"real_uploaded":1730497944,"real_downloaded":0,
+			"joined_at":"2026-08-21T03:58:59+00:00","last_login":"2026-08-30T01:12:50+00:00",
+			"seedtime_total":46692286,"uploads_count":0,"downloads_count":0
+		}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(hhdRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	want := map[string]any{
+		"username": "testuser", "group": "User",
+		"uploaded": "51.61 GiB", "downloaded": "1 GiB", "ratio": 51.61,
+		"buffer": "128.03 GiB", "bonus_points": "11340.00",
+		"seeding": 455.0, "leeching": 0.0, "hit_and_runs": 0.0,
+		"seed_size": "5.06 TiB", "avg_seed_time": "1D  4h  30m  20s",
+		"fl_tokens": 0.0, "invites": 0.0,
+		"join_date":        "2026-08-21", // trimmed from the ISO datetime
+		"total_seedtime":   46692286.0,
+		"uploads_approved": 0.0,
+		// NOT trimmed, unlike join_date above: nothing parses it yet, and a
+		// future login-recency rule may want the time of day.
+		"last_login": "2026-08-30T01:12:50+00:00",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v, want %#v", key, got, expected)
+		}
+	}
+	// real_uploaded arrives as a byte NUMBER and must be converted, unlike the
+	// pre-formatted core values beside it.
+	if got, ok := data["real_uploaded"].(string); !ok || !strings.HasSuffix(got, "GiB") {
+		t.Errorf("real_uploaded = %#v, want a converted size string", data["real_uploaded"])
+	}
+	if _, ok := data["seedbonus"]; ok {
+		t.Errorf("seedbonus alias should be normalized away: %+v", data)
+	}
+}
+
+// TestSeedTimeParsesHHDFormat confirms the formatted avg_seed_time HHD returns
+// resolves to exactly the avg_seed_time_raw it reports alongside it — which is
+// why the _raw twin is deliberately left unmapped in the def.
+func TestSeedTimeParsesHHDFormat(t *testing.T) {
+	got := parse.SeedTimeToSeconds("1D  4h  30m  20s")
+	if got == nil || *got != 102620 {
+		t.Errorf("SeedTimeToSeconds = %v, want 102620 (avg_seed_time_raw)", got)
 	}
 }

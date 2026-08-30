@@ -1,0 +1,695 @@
+{
+  "schema_version": 1,
+  "key": "homiehelpdesk",
+  "name": "HHD",
+  "abbr": "HHD",
+  "url": "https://homiehelpdesk.net",
+  "type": "unit3d",
+  "last_updated": "2026-08-30",
+  "api_field_map": {
+    "joined_at": "join_date",
+    "seedtime_total": "total_seedtime",
+    "uploads_count": "uploads_approved"
+  },
+  "capabilities": {
+    "api_stats_add": [
+      "avg_seed_time",
+      "fl_tokens",
+      "invites",
+      "last_login",
+      "real_downloaded",
+      "real_uploaded",
+      "seed_size",
+      "total_seedtime",
+      "uploads_approved"
+    ]
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "rules": {
+    "min_ratio": 0.4,
+    "min_seed_days": 7
+  },
+  "invite_requirements": {
+    "note": "Specialist or above for invite-forum access."
+  },
+  "notes": "API-only: /api/user covers every stat the class ladder needs, so nothing is scraped. Bearer auth only — ?api_token= returns 401. Unusually for UNIT3D it reports a join date (joined_at), so no api.required_fields entry is needed. uploads_count → uploads_approved is the tracker's OWN progression counter — the number its Min. Uploads rungs are measured against, confirmed by HHD staff usage; the canonical name is a leftover from when that stat could only be scraped, and carries no 'approved-only' meaning here. last_login is reported as a full ISO timestamp and is deliberately NOT trimmed to a date the way join_date is, so a future login-recency requirement (e.g. log in every 30 days) can still see the time of day; nothing consumes it yet. The API also returns *_raw twins of the formatted values (uploaded_raw, seed_size_raw, avg_seed_time_raw, …) which are deliberately unmapped: the formatted forms already parse, and avg_seed_time's string resolves to exactly avg_seed_time_raw. credited_uploaded, credited_downloaded, bonus_uploaded, downloads_count, is_donor and is_lifetime have no canonical equivalent and are left alone. Group colours are HHD's own hex values, taken from its Groups Requirements page. Its icons are Phosphor (ph-bold ph-battery-low, …), NOT FontAwesome, so they are translated to the nearest FontAwesome free equivalent rather than copied verbatim as other defs do: Yata ships FontAwesome, and an unresolvable class falls back to a generic star, which would have rendered all ten rungs identically. The battery progression HHD uses for User→Extreme survives the translation intact. Original Phosphor names, if the icon set is ever added: Leech=ph-prohibit, User=ph-battery-empty, Homies=ph-battery-low, Super User=ph-battery-medium, Specialist=ph-battery-high, Extreme=ph-battery-full, Seeder=ph-calculator, Insane User=ph-laptop, Veteran=ph-cube, Archivist=ph-robot. Groups run Leech → Bot in the tracker's own page order and include the staff and awarded ranks, so a user who holds one still sees their colour and icon; the pre-Leech states (Pruned, Banned, Disabled, Downtime, Validating) are omitted because the API stops answering for those accounts, so Yata could never observe them. Ranks with no measurable ladder requirement carry a description instead, per darkpeers. Jr Uploader and Uploader appear on HHD's page twice — once here and once on a separate Uploader Track with its own upload counts; those counts are recorded in the description rather than as min_uploads, because the track runs alongside the seeding ladder rather than continuing it. sparkle marks the ranks HHD renders with sparkels.gif behind the name.",
+  "groups": [
+    {
+      "name": "Leech",
+      "style": {
+        "color": "#581C0F",
+        "icon": "fas fa-ban"
+      },
+      "requirements": {},
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 0"
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "style": {
+        "color": "#14532D",
+        "icon": "fas fa-battery-empty"
+      },
+      "requirements": {
+        "min_ratio": 0.4
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 10"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        }
+      ]
+    },
+    {
+      "name": "Homies",
+      "style": {
+        "color": "#15803D",
+        "icon": "fas fa-battery-quarter"
+      },
+      "requirements": {
+        "min_uploaded": "1 TiB",
+        "min_ratio": 0.5,
+        "min_age": "1M",
+        "min_seedtime": "1W"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 15"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        }
+      ]
+    },
+    {
+      "name": "Super User",
+      "style": {
+        "color": "#22C55E",
+        "icon": "fas fa-battery-half"
+      },
+      "requirements": {
+        "min_uploaded": "2 TiB",
+        "min_ratio": 0.6,
+        "min_age": "1M",
+        "min_seedtime": "2W",
+        "min_seed_size": "1 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 30"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        }
+      ]
+    },
+    {
+      "name": "Specialist",
+      "style": {
+        "color": "#4ADE80",
+        "icon": "fas fa-battery-three-quarters"
+      },
+      "requirements": {
+        "min_uploaded": "4 TiB",
+        "min_ratio": 0.8,
+        "min_age": "6M",
+        "min_seedtime": "3W",
+        "min_seed_size": "1 TiB",
+        "min_uploads": 1
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 50"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Extreme",
+      "style": {
+        "color": "#86EFAC",
+        "icon": "fas fa-battery-full"
+      },
+      "requirements": {
+        "min_uploaded": "6 TiB",
+        "min_ratio": 1,
+        "min_age": "8M",
+        "min_seedtime": "1M",
+        "min_seed_size": "1 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 50"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Seeder",
+      "style": {
+        "color": "#67E8F9",
+        "icon": "fas fa-calculator"
+      },
+      "requirements": {
+        "min_uploaded": "8 TiB",
+        "min_ratio": 1,
+        "min_age": "2M",
+        "min_seedtime": "1M",
+        "min_seed_size": "2.5 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 75"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Insane User",
+      "style": {
+        "color": "#22D3EE",
+        "icon": "fas fa-laptop",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "12 TiB",
+        "min_ratio": 1,
+        "min_age": "1Y",
+        "min_seedtime": "2M",
+        "min_seed_size": "5 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Legend",
+      "style": {
+        "color": "#0EA5E9",
+        "icon": "fas fa-microchip",
+        "sparkle": true
+      },
+      "requirements": {
+        "description": "Elite uploader rank, awarded by staff for 1,000+ live uploads at a 95%+ survival rate over 6+ months on the team."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 150"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Internal",
+      "style": {
+        "color": "#FBBF24",
+        "icon": "fas fa-helicopter"
+      },
+      "requirements": {
+        "description": "Internal releases."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: Unlimited"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Jr Uploader",
+      "style": {
+        "color": "#FDE68A",
+        "icon": "fas fa-paper-plane"
+      },
+      "requirements": {
+        "description": "Trial uploader working toward full uploader status. Uploader track: 50 total approved uploads. The track is separate from the seeding ladder — entering it also needs 5 approved uploads in the last 30 days, and 90 days with none returns you to the ladder."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Veteran",
+      "style": {
+        "color": "#1D4ED8",
+        "icon": "fas fa-cube",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "16 TiB",
+        "min_ratio": 1,
+        "min_age": "1Y",
+        "min_seedtime": "6M",
+        "min_seed_size": "8 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 150"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Archivist",
+      "style": {
+        "color": "#1E3A8A",
+        "icon": "fas fa-robot",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "24 TiB",
+        "min_ratio": 1.5,
+        "min_age": "1Y 5M 3W 4D",
+        "min_seedtime": "2M",
+        "min_seed_size": "12 TiB",
+        "min_uploads": 50
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 200"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Uploader",
+      "style": {
+        "color": "#D97706",
+        "icon": "fas fa-rocket"
+      },
+      "requirements": {
+        "description": "Approved content uploader with additional privileges. Uploader track: 150 total approved uploads."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-shield",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        }
+      ]
+    },
+    {
+      "name": "Trustee",
+      "style": {
+        "color": "#FFA585",
+        "icon": "fas fa-shield-halved"
+      },
+      "requirements": {
+        "description": "Trusted members from a respected partner in the community."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Editor",
+      "style": {
+        "color": "#2DD4BF",
+        "icon": "fas fa-pen-nib"
+      },
+      "requirements": {
+        "description": "Improves metadata, descriptions, tags, and formatting."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Torrent Mod",
+      "style": {
+        "color": "#14B8A6",
+        "icon": "fas fa-circle-check"
+      },
+      "requirements": {
+        "description": "Reviews torrents for quality and rule compliance."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: 100"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-tv",
+          "label": "IPTV Access"
+        },
+        {
+          "icon": "fas fa-gamepad",
+          "label": "Games Access"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    },
+    {
+      "name": "Bot",
+      "style": {
+        "color": "#9CA3AF",
+        "icon": "fas fa-robot"
+      },
+      "requirements": {
+        "description": "Automated system account used for jobs and notices."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL Slots: Unlimited"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-shield",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-forward-fast",
+          "label": "Torrent moderation bypass"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Invite Forum Access"
+        }
+      ]
+    }
+  ]
+}

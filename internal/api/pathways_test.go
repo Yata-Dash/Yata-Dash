@@ -58,6 +58,12 @@ func TestPathwayNameForFallbacks(t *testing.T) {
 			models.Tracker{Name: "AR", URL: "https://example.invalid"}, "AlphaRatio"},
 		{"def-less, resolves via the URL host when the name doesn't match",
 			models.Tracker{Name: "My Random Import", URL: "https://alpharatio.cc"}, "AlphaRatio"},
+		// HHD's def is named "HHD" while the community dataset calls it
+		// "HomieHelpDesk" — they meet only through the dataset's abbr map. If
+		// that link ever breaks the tracker simply vanishes from Pathways,
+		// with no error and 14 routes silently orphaned.
+		{"def name matches the dataset only via its abbreviation",
+			models.Tracker{Name: "Homie Help Desk", URL: "https://homiehelpdesk.net"}, "HomieHelpDesk"},
 		{"unrelated tracker stays out of the dataset",
 			models.Tracker{Name: "Not A Real Tracker", URL: "https://nowhere.invalid"}, ""},
 	}
