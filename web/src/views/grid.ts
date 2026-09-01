@@ -1,5 +1,6 @@
 // views/grid.ts — tracker card grid view (reads merged stats fields)
 import type { AppSettings, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
+import { MANUAL_TYPE, usesAPIKey } from '../types';
 import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../state';
 import { getSortedTrackers } from '../utils/sort';
 import type { SortDir } from '../types';
@@ -319,7 +320,17 @@ export function renderCard(
   let body: string;
   const hasFields = !!stats && Object.keys(stats.fields ?? {}).length > 0;
 
-  if (!stats && !tracker.has_key && tracker.type !== 'test') {
+  if (!hasFields && tracker.type === MANUAL_TYPE) {
+    // A manual tracker is not missing a key — it is waiting for its numbers.
+    // Sending the user to "Configure API Key" would be a dead end.
+    body = `<div class="card-body"><div class="card-no-key">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+      </svg>
+      <p>No stats entered yet</p>
+      <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Add stats</button>
+    </div></div>`;
+  } else if (!stats && !tracker.has_key && usesAPIKey(tracker)) {
     body = `<div class="card-body"><div class="card-no-key">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -408,8 +419,13 @@ export function renderCard(
       ${buildRulesLine(tracker, settings)}
     </div>
     <div class="card-footer">
-      <span class="card-last-updated">API ${updated}</span>
+      <span class="card-last-updated">${stats?.manual_entry ? 'Entered' : 'API'} ${updated}</span>
       ${(() => {
+        // A manual tracker is never scraped BECAUSE it is never contacted at
+        // all. "API only" would be doubly wrong there — there is no API either.
+        if (stats?.manual_entry) {
+          return `<span class="scrape-limit-badge setup" title="Yata never contacts this tracker — its stats are the ones you typed in">Manual</span>`;
+        }
         const ss = scrapeStatus[tracker.id];
         if (!ss) return '';
         // A dead cookie outranks the policy text — it can coexist with
@@ -995,7 +1011,17 @@ export function buildTargets(
  *  STALE DATA RULE: an ok=false response with stored fields gets a dimmed
  *  offline dot (with error tooltip) — the stats themselves stay rendered. */
 export function makeSdot(tracker: Tracker, stats: TrackerStatsResponse | undefined): string {
-  if ((!tracker.has_key && tracker.type !== 'test') || !tracker.enabled) return `<div class="sdot amber"></div>`;
+  if (!tracker.enabled) return `<div class="sdot amber"></div>`;
+  // A manual tracker is healthy once it has numbers and waiting before that.
+  // It can never be "missing a key", and the amber no-key dot below would
+  // otherwise mark a perfectly complete tracker as needing attention forever.
+  if (tracker.type === MANUAL_TYPE) {
+    const hasFields = Object.keys(stats?.fields ?? {}).length > 0;
+    return hasFields
+      ? `<div class="sdot green" title="Entered by hand — Yata never contacts this tracker"></div>`
+      : `<div class="sdot amber" title="No stats entered yet"></div>`;
+  }
+  if (!tracker.has_key && usesAPIKey(tracker)) return `<div class="sdot amber"></div>`;
   if (!stats) return `<div class="sdot amber pulse"></div>`;
   if (!stats.ok) {
     const tip = errLabel(stats.error_kind || stats.error || 'error');

@@ -1065,6 +1065,8 @@ modalsReady.then(m => {
   (window as any).modalTestTracker = () => { void m.modalTestTracker(); };
   (window as any).modalAddTargetRow    = m.modalAddTargetRow;
   (window as any).modalRemoveTargetRow = m.modalRemoveTargetRow;
+  (window as any).modalAddManualRow    = m.modalAddManualRow;
+  (window as any).modalRemoveManualRow = m.modalRemoveManualRow;
   (window as any).showDeleteConfirm    = m.showDeleteConfirm;
   (window as any).closeDeletePopup     = m.closeDeletePopup;
   (window as any).confirmDeletePopup   = () => m.confirmDeletePopup(state.trackers, state.statsCache, state.expandedRows, { loadTrackers, loadScrapeStatus, toast });

@@ -222,3 +222,88 @@ func TestConcurrentScrapesNeverDoubleHit(t *testing.T) {
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
+
+// TestManualTypeTrackerKeepsTypedStats is the whole manual-entry feature end
+// to end: a tracker of type "manual" is never contacted, so its numbers must
+// come from what the user typed and must survive a refresh.
+//
+// The refresh is the part worth guarding. A "none" API kind still goes through
+// the normal fetch path — it just returns nothing — and that success writes an
+// EMPTY api layer. If an empty layer ever counted as an answer, or if the write
+// disturbed the manual layer, every stat on the tracker would vanish on the
+// first poll after the user entered them.
+func TestManualTypeTrackerKeepsTypedStats(t *testing.T) {
+	d := testDeps(t)
+	if _, ok := d.Reg.Type(models.TypeManual); !ok {
+		t.Fatal("the manual type def is missing from defs/types")
+	}
+	if kind := d.Reg.APIKind("https://manual.example", models.TypeManual); kind != "none" {
+		t.Fatalf("manual API kind = %q, want none — it must never make a request", kind)
+	}
+
+	tr := models.Tracker{
+		ID: "m1", Name: "TorrentLeech", URL: "https://manual.example",
+		Type: models.TypeManual, Enabled: true,
+		JoinDate:    "2021-03-04",
+		ManualStats: map[string]string{"uploaded": "5.50 TiB", "ratio": "4.58", "group": "Power User"},
+	}
+	syncManualLayer(d, tr)
+
+	merged, err := d.Stats.Merged(tr.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"uploaded": "5.50 TiB", "ratio": "4.58",
+		"group": "Power User", "join_date": "2021-03-04",
+	}
+	for field, w := range want {
+		got := merged[field]
+		if got.Value != w {
+			t.Errorf("%s = %v, want %q", field, got.Value, w)
+		}
+		if got.Source != models.SourceManual {
+			t.Errorf("%s source = %s, want manual", field, got.Source)
+		}
+	}
+
+	// A refresh pass: fetches nothing, writes an empty API layer, and must
+	// leave every typed value exactly where it was.
+	data, ferr := d.Fetch.Fetch(tr)
+	if ferr != nil {
+		t.Fatalf("a manual tracker must never fail a fetch, got %v", ferr)
+	}
+	if len(data) != 0 {
+		t.Errorf("fetch returned %#v, want nothing", data)
+	}
+	if err := d.Stats.SaveAPI(tr.ID, data); err != nil {
+		t.Fatal(err)
+	}
+	merged, err = d.Stats.Merged(tr.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, w := range want {
+		if got := merged[field]; got.Value != w {
+			t.Errorf("after refresh, %s = %v, want %q", field, got.Value, w)
+		}
+	}
+}
+
+// TestManualStatsClearedWhenRemoved: emptying the editor removes the stats
+// rather than leaving the last saved values standing. The manual layer is
+// replaced wholesale on every save, and this is what that buys.
+func TestManualStatsClearedWhenRemoved(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "m2", Type: models.TypeManual,
+		ManualStats: map[string]string{"ratio": "4.58"}}
+	syncManualLayer(d, tr)
+
+	tr.ManualStats = map[string]string{}
+	syncManualLayer(d, tr)
+
+	merged, _ := d.Stats.Merged(tr.ID)
+	if _, ok := merged["ratio"]; ok {
+		t.Errorf("ratio survived removal: %#v", merged["ratio"])
+	}
+}

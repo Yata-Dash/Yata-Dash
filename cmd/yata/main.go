@@ -173,12 +173,12 @@ func main() {
 		AllowedHosts: splitHosts(*allowedHosts),
 	}
 
-	// Seed the manual stats layer from config (user-entered join dates) so
-	// account-age works on first load, even before any fetch.
+	// Seed the manual stats layer from config (typed-in stats and join dates)
+	// so a manual-entry tracker has its numbers, and account-age works, on
+	// first load — before any fetch, and without one for trackers that have no
+	// API to fetch from.
 	for _, t := range cfg.Trackers() {
-		if jd := strings.TrimSpace(t.JoinDate); jd != "" {
-			_ = statsEngine.SaveManual(t.ID, map[string]any{"join_date": jd})
-		}
+		_ = statsEngine.SaveManual(t.ID, t.ManualLayer())
 	}
 
 	// Pathways data is optional — the feature hides itself when absent.

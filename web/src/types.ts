@@ -25,6 +25,10 @@ export interface Tracker {
   /** User-entered account creation date (YYYY-MM-DD); fallback when the
    *  tracker reports none. "" = unset. */
   join_date?: string;
+  /** Stat values typed in by the user (canonical field -> display value).
+   *  The whole stats picture for a "manual" type tracker; a gap-filler of
+   *  last resort on any other. */
+  manual_stats?: Record<string, string>;
   /** Per-tracker user override; 0 = unset (use global). */
   min_scrape_interval_minutes: number;
   /** Per-tracker daily cap; 0 = unset. */
@@ -80,6 +84,23 @@ export const MASKED_KEY = '••••••••';
  *  see defs/types/unknown.json. */
 export const UNKNOWN_TYPE = 'unknown';
 
+/** Type key for a tracker Yata deliberately never contacts — its stats are
+ *  typed in by hand. Unlike UNKNOWN_TYPE, which also fetches nothing, this is
+ *  a choice rather than a gap waiting to be filled.
+ *  See defs/types/manual.json. */
+export const MANUAL_TYPE = 'manual';
+
+/** Whether a tracker authenticates with an API key at all.
+ *
+ *  False for the two types that never make a request: demo trackers serve
+ *  fixture data, and manual trackers are never contacted. Both would otherwise
+ *  be met with "No API key configured — Configure", sending the user to hunt
+ *  for a token that has nothing to authenticate against. Lives here, beside
+ *  the type constants, because three separate views ask the same question. */
+export function usesAPIKey(t: { type?: string }): boolean {
+  return t.type !== 'test' && t.type !== MANUAL_TYPE;
+}
+
 /** Create/update payload for POST /api/trackers and PUT /api/trackers/{id}. */
 export interface TrackerPayload {
   name?: string;
@@ -97,6 +118,7 @@ export interface TrackerPayload {
   target_group?: string;
   target_deadlines?: Record<string, string>;
   join_date?: string;
+  manual_stats?: Record<string, string>;
   mock_scenario?: string;
 }
 
@@ -126,6 +148,9 @@ export interface TrackerStatsResponse {
   // When the API last actually returned data (0/absent = never). Diverges from
   // fetched_at whenever the API is failing while the tracker is still polled.
   api_updated_at?: number;
+  /** True when Yata never contacted this tracker — the values are typed in.
+   *  The card/table label their freshness as entered, not fetched. */
+  manual_entry?: boolean;
   rates?: Record<string, number>; // per-day growth (uploaded/downloaded/seed_size in GiB/day, bonus_points raw/day); omitted when flat
 }
 

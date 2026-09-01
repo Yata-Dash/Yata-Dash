@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "key": "manual",
+  "label": "Manual entry",
+  "description": "A tracker Yata never contacts. Nothing is fetched and nothing is scraped — every stat is a number you type in, and it stands until you change it. For sites with no usable stats API, or whose operators would rather Yata stayed away (TorrentLeech, for one). Everything downstream still works from your figures: targets, group ladders, history and alerts don't care where a number came from.",
+  "api": {
+    "kind": "none"
+  },
+  "scrape": {
+    "skip_html_scrape": true
+  },
+  "last_updated": "2026-09-01",
+  "capabilities": {
+    "api_stats": []
+  }
+}

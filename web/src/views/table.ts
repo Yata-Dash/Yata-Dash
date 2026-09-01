@@ -1,5 +1,6 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
+import { MANUAL_TYPE, usesAPIKey } from '../types';
 import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { getSortedTrackers } from '../utils/sort';
@@ -372,6 +373,14 @@ function buildCell(
     // isn't lost, it moves to the hover text, and the value turns amber while
     // the API is currently failing so the staleness is visible without it.
     case 'last_api_update': {
+      // Nothing was ever fetched for a manual tracker, so there is no API
+      // freshness to report — only when the user last typed the numbers in.
+      if (s?.manual_entry) {
+        const entered = s.fetched_at ?? 0;
+        return entered
+          ? `<td class="td-mono td-center" title="Entered by hand — Yata never contacts this tracker" style="color:var(--text3)">${esc(fmtDateTime(entered))}</td>`
+          : `<td class="td-center">${dash}</td>`;
+      }
       const ok = s?.api_updated_at ?? 0;
       const tried = s?.fetched_at ?? 0;
       const failing = scrapeStatus[t.id]?.api_down;
@@ -426,7 +435,12 @@ function buildExpanded(
 ): string {
   const hasFields = !!stats && Object.keys(stats.fields ?? {}).length > 0;
 
-  if (!stats && !tracker.has_key && tracker.type !== 'test') {
+  if (!hasFields && tracker.type === MANUAL_TYPE) {
+    // Nothing typed in yet — the one thing this tracker is waiting for. It has
+    // no API key to be missing.
+    return `<div style="padding:8px 0;color:var(--text3);font-size:13px">No stats entered yet. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Add stats</button></div>`;
+  }
+  if (!stats && !tracker.has_key && usesAPIKey(tracker)) {
     return `<div style="padding:8px 0;color:var(--text3);font-size:13px">No API key. <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(tracker.id)}')">Configure</button></div>`;
   }
   if (!stats) return `<div style="padding:8px 0;color:var(--text3);font-size:13px">Loading…</div>`;
@@ -444,8 +458,11 @@ function buildExpanded(
   const infoList: { l: string; v: string; warn?: boolean }[] = [
     { l: 'Join Date',    v: joinDate || '—' },
     { l: 'Account Age',  v: joinDate ? memberDur(joinDate) : '—' },
-    { l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' },
+    ...(stats.manual_entry
+      ? [{ l: 'Stats Source', v: 'Entered by hand' }]
+      : [{ l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' }]),
     { l: 'Last Scrape Update', v: (() => {
+        if (stats.manual_entry) return 'Never contacted';
         if (ss?.reason === 'opted_out') return 'Operator opted out';
         // Same unified label as the grid footer — cause doesn't matter here.
         if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
