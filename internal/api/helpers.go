@@ -1,15 +1,35 @@
 package api
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
+// jsonOK writes a successful JSON response.
+//
+// It marshals into a BUFFER first, because encoding straight to the
+// ResponseWriter makes a failure invisible: the 200 header goes out with the
+// first byte, so a value encoding/json refuses (±Inf and NaN are the ones that
+// happen in practice) leaves the client holding a 200 with an empty body, and
+// the discarded error means nothing is logged. That is precisely how issue #40
+// hid — an infinite ratio in a pathways response, showing up as nothing more
+// than "http 0" in the access log.
+//
+// Buffering means the status can still be changed when encoding fails, so the
+// caller gets a real 500 and the reason is written to the log.
 func jsonOK(w http.ResponseWriter, v any) {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(v); err != nil {
+		log.Printf("api: response encoding failed: %v", err)
+		jsonError(w, "encoding_error", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(buf.Bytes())
 }
 
 func jsonStatus(w http.ResponseWriter, status int, v any) {
