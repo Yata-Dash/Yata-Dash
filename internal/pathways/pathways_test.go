@@ -1,6 +1,8 @@
 package pathways
 
 import (
+	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
@@ -869,4 +871,81 @@ func TestInviteReqsAddedWhenAbsent(t *testing.T) {
 	if s.ETADays != 355 {
 		t.Errorf("expected 355 days of account age left, got %v", s.ETADays)
 	}
+}
+
+// TestFindPathsInfiniteRatioMarshals is the regression test for issue #40.
+//
+// An account with uploads and no downloads has a ratio Yata deliberately
+// records as the string "Infinity", and strconv parses that straight to +Inf.
+// encoding/json REFUSES ±Inf and NaN, so before the fix the whole pathways
+// response failed to marshal — and because it was being encoded directly to
+// the ResponseWriter, the client got 200 with an empty body and nothing was
+// logged. The symptom was "Could not load paths for <target>" for every
+// target, on a dashboard that was otherwise working perfectly.
+//
+// The response must marshal, the ratio must still SATISFY the requirement
+// (an infinite ratio beats any threshold), and it must still read as ∞.
+func TestFindPathsInfiniteRatioMarshals(t *testing.T) {
+	d := testData()
+	user := UserTracker{
+		TrackerID: "t1", PathwayName: "Home",
+		Stats: Stats{
+			AgeDays: 200, UploadedGiB: 2048, DownloadedGiB: 0,
+			Ratio:       math.Inf(1), // nothing downloaded
+			SeedSizeGiB: -1, AvgSeedSec: -1, Uploads: -1, BonusPoints: -1,
+		},
+		Rates: Rates{UploadGiB: 10},
+	}
+	res := FindPaths(d, []UserTracker{user}, "Target", testGroups, noInviteReqs)
+
+	if _, err := json.Marshal(res); err != nil {
+		t.Fatalf("the response must be serialisable with an infinite ratio: %v", err)
+	}
+
+	var checked bool
+	for _, p := range res.Paths {
+		for _, st := range p.Steps {
+			for _, q := range allReqs(st.Reqs) {
+				if q.Kind != "ratio" {
+					continue
+				}
+				checked = true
+				if !q.Met {
+					t.Errorf("an infinite ratio must satisfy %q", q.Label)
+				}
+				if math.IsInf(q.Have, 0) || math.IsNaN(q.Have) {
+					t.Errorf("Have leaked a non-finite value: %v", q.Have)
+				}
+				if q.HaveText != "∞" {
+					t.Errorf("HaveText = %q, want ∞", q.HaveText)
+				}
+			}
+		}
+	}
+	if !checked {
+		t.Fatal("fixture has no ratio requirement — the test proves nothing")
+	}
+}
+
+// allReqs flattens a step's requirements, including the ones nested inside
+// class evaluations and any_of alternatives, so a leak can't hide in a branch.
+func allReqs(reqs []ReqProgress) []ReqProgress {
+	var out []ReqProgress
+	var walk func([]ReqProgress)
+	walk = func(rs []ReqProgress) {
+		for _, q := range rs {
+			out = append(out, q)
+			for _, alt := range q.AnyOf {
+				walk(alt)
+			}
+			for _, c := range q.Classes {
+				walk(c.Reqs)
+				for _, alt := range c.AnyOf {
+					walk(alt)
+				}
+			}
+		}
+	}
+	walk(reqs)
+	return out
 }
