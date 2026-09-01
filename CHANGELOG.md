@@ -6,6 +6,82 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **Aither's newly-exposed stats are mapped**, and **uploads-per-month is a
+  tracked stat for the first time.** Aither now returns average seed time,
+  seeding size, total seed time, approved uploads and uploads-this-month — but
+  under its own field names, so none of them were reaching Yata. Seeding size
+  was the visible one: it arrived as a raw byte count rather than a size,
+  because the rename ran *after* the byte conversion that is keyed on canonical
+  names. Renaming now happens first, which fixes the whole class for any fork
+  that calls a stat something of its own.
+
+  `monthly_uploads` had been a requirement Yata could record but never follow —
+  six of Aither's classes gate on it. It is now a real stat: the target row
+  tracks progress, and it counts toward the ladder-coverage figure on trackers
+  that report it (still an untrackable row on those that don't).
+
+  While mapping it: Aither's `/api/user` reports **no join date**, though every
+  one of its 25 classes has a minimum age. Yata assumed the UNIT3D baseline and
+  so never asked for one, leaving every age requirement permanently unmeasured.
+  Aither now asks for it at setup, like MyAnonamouse does. Existing setups keep
+  whatever the last scrape found — a join date never changes.
+
+- **Aither is now fully API-capable and can be switched to API-only.** Two
+  mechanisms got it the rest of the way:
+
+  **Unread counts become flags.** Several UNIT3D forks report unread mail and
+  notifications as COUNTS (`"unread_pms": 0`, `"unread_notifications": 1`)
+  where Yata's fields are true/false flags, so the envelope and bell never lit.
+  `bool_fields` — which custom defs have always had — now works on the UNIT3D
+  path too, converting any truthy value and dropping the raw count so it
+  doesn't also appear as a stat of its own. (Gazelle-family defs already went
+  through the custom path, so ANT's count was being handled correctly.)
+
+  **Site events from their own endpoint.** A def can declare an `events` block
+  pointing at UNIT3D's `/api/events/global-free-leech`, which was the last
+  thing on Aither that only the profile scrape could see. The event renders
+  exactly as the scraped banner did, wording included. Opt-in per tracker —
+  not every install has the endpoint — and best-effort, so a promotion nobody
+  can read never fails a fetch that otherwise worked.
+
+  Its end time arrives as `"09/05/2026 1:00 AM EST"`, which needed care: Go's
+  time parser does not fail on a zone abbreviation it can't resolve, it invents
+  a zone with a **zero** offset. Read naively that timestamp is five hours out
+  and every countdown with it, silently. Named zones are now resolved to real
+  offsets, and the ambiguous ones (CST is both US Central and China Standard)
+  are left alone rather than guessed at.
+
+### Fixed
+
+- **A zero the API actually reported now shows as 0, not "—".** Yata treated
+  `0`, `0 B` and `0.00 B` as "no value" from every source alike. That is right
+  for a scraped profile page, where a stat the page doesn't render looks
+  exactly like a genuine nought — but wrong for an API that answered plainly.
+  Trackers reporting no approved uploads, or nothing seeding, showed those
+  stats as unknown, which reads as Yata failing over a number it was given.
+
+  Scrapes keep the cautious reading, and a scrape that finds a real number
+  still overrides a zero-ish API value — some APIs answer 0 for fields they
+  never populate, and a page that can read the figure is the better evidence.
+
+- **Pathways showed "Could not load paths" for every target when one of your
+  trackers had an infinite ratio** ([#40](https://github.com/Yata-Dash/Yata-Dash/issues/40)).
+  An account with uploads and nothing downloaded has a ratio Yata records as
+  `Infinity` — a real, deliberate value. Go parses that string to `+Inf`, and
+  JSON cannot represent `+Inf` at all, so the entire pathways response failed
+  to serialise. An infinite ratio now stays infinite where it matters — it
+  still satisfies any ratio requirement, and still reads as ∞ — without
+  breaking the response that carries it.
+
+  The failure was invisible, which is why it took a bug report to find. The
+  response was encoded straight to the connection, so the `200` header had
+  already gone out before the encoder gave up: the browser saw a successful,
+  empty reply, the error was discarded, and the access log's only trace was a
+  status of `0`. Responses are now built before the status is committed, so an
+  unencodable value returns a real `500` and says why in the log.
+
 ## [Beta-20260901]
 
 ### Added

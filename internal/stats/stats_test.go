@@ -367,3 +367,107 @@ func TestMergedStaleAPIKeepsManualLast(t *testing.T) {
 		t.Errorf("join_date = %v from %s, want the manual value", m["join_date"].Value, m["join_date"].Source)
 	}
 }
+
+// TestAPIZeroIsAnAnswer: a zero the tracker's API actually reported must reach
+// the UI as 0, not as "—".
+//
+// The merge used to drop "0", "0 B" and "0.00 B" from every layer alike, which
+// is right for a scraped page (a stat it doesn't render looks identical to a
+// genuine nought) but wrong for an API that said so plainly. Trackers reporting
+// no approved uploads, or nothing seeding, showed those stats as unknown — Yata
+// looking broken over a number it had been given.
+func TestAPIZeroIsAnAnswer(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "z.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+
+	if err := e.SaveAPI("t1", map[string]any{
+		"uploads_approved": "0",      // count as a string
+		"seed_size":        "0 B",    // size formatted from a zero byte count
+		"buffer":           "0.00 B", // the other zero-size spelling
+		"seeding":          0,        // numeric zero
+		"ratio":            "2.58",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := e.Merged("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for field, want := range map[string]any{
+		"uploads_approved": "0",
+		"seed_size":        "0 B",
+		"buffer":           "0.00 B",
+		"seeding":          float64(0),
+		"ratio":            "2.58",
+	} {
+		got, ok := m[field]
+		if !ok {
+			t.Errorf("%s was dropped — an API zero is an answer", field)
+			continue
+		}
+		if got.Value != want {
+			t.Errorf("%s = %#v, want %#v", field, got.Value, want)
+		}
+		if got.Source != models.SourceAPI {
+			t.Errorf("%s source = %s, want api", field, got.Source)
+		}
+	}
+}
+
+// TestScrapeCorrectsAZeroishAPIValue: accepting API zeros must not cost the
+// scrape its ability to correct one. Some APIs answer 0 for a field they never
+// populate, and a profile page that reads a real number is better evidence —
+// so a zero is shown when nothing else has the field, and overridden when
+// something does.
+func TestScrapeCorrectsAZeroishAPIValue(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "z3.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+
+	// fl_tokens: API says 0, the profile page says 6 → the page wins.
+	// invites:   API says 0 and nothing else has it → 0 is the answer.
+	_ = e.SaveAPI("t1", map[string]any{"fl_tokens": "0", "invites": "0"})
+	_ = e.SaveScrape("t1", map[string]any{"fl_tokens": "6"})
+
+	m, err := e.Merged("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m["fl_tokens"]; got.Value != "6" || got.Source != models.SourceScrape {
+		t.Errorf("fl_tokens = %v from %s, want the scrape's 6", got.Value, got.Source)
+	}
+	if got := m["invites"]; got.Value != "0" || got.Source != models.SourceAPI {
+		t.Errorf("invites = %v from %s, want the API's 0 to stand", got.Value, got.Source)
+	}
+}
+
+// TestScrapedZeroStillYields: the other half of the same rule. A profile page
+// renders a stat it hasn't got exactly like a real zero, so a scraped zero must
+// keep standing aside for a lower layer that does know the value.
+func TestScrapedZeroStillYields(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "z2.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	e := New(db)
+
+	_ = e.SaveScrape("t1", map[string]any{"seed_size": "0 B"})
+	_ = e.SaveManual("t1", map[string]any{"seed_size": "4.00 TiB"})
+
+	m, err := e.Merged("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m["seed_size"]; got.Value != "4.00 TiB" || got.Source != models.SourceManual {
+		t.Errorf("seed_size = %v from %s, want the manual value to fill the scrape's zero",
+			got.Value, got.Source)
+	}
+}

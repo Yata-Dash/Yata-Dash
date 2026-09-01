@@ -339,6 +339,16 @@ func (r *Registry) ExtendedStats(trackerURL, typeKey string) *ExtendedStatsSpec 
 	return nil
 }
 
+// Events returns the site-events endpoint spec for a tracker (nil = none).
+// Tracker-level only, like ExtendedStats: whether an install exposes the
+// endpoint is a fact about that install, not about its software.
+func (r *Registry) Events(trackerURL, typeKey string) *EventsSpec {
+	if td, ok := r.TrackerByURL(trackerURL); ok {
+		return td.Events
+	}
+	return nil
+}
+
 // TrackerByURL matches a tracker def by base URL (or alias), comparing
 // case-insensitively with trailing slashes stripped.
 func (r *Registry) TrackerByURL(rawURL string) (TrackerDef, bool) {

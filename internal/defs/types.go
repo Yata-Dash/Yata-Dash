@@ -199,6 +199,16 @@ type TrackerDef struct {
 	// while Yata still shows seed size, seed times, unread flags, etc.
 	ExtendedStats *ExtendedStatsSpec `json:"extended_stats,omitempty"`
 
+	// Events, when set on a unit3d tracker, adds a site-events endpoint —
+	// UNIT3D's /api/events/global-free-leech and its kin. It is what lets a
+	// tracker report a running promotion through the API instead of leaving
+	// the freeleech banner as the last reason to keep scraping it.
+	//
+	// Opt-in per tracker rather than declared on the type: not every UNIT3D
+	// install exposes it, and a 404 on every refresh is a request spent
+	// learning nothing.
+	Events *EventsSpec `json:"events,omitempty"`
+
 	// Groups lists user ranks in ascending order (lowest first).
 	Groups []GroupDef `json:"groups,omitempty"`
 
@@ -353,6 +363,44 @@ type ExtendedStatsSpec struct {
 	// ByteFields lists response fields returned as raw byte counts that must be
 	// formatted as human-readable sizes (e.g. seed_size, real_uploaded).
 	ByteFields []string `json:"byte_fields,omitempty"`
+}
+
+// EventsSpec declares an endpoint reporting one site-wide event — a flag
+// saying whether it is running and, usually, when it ends.
+//
+// Deliberately a single on/off event rather than UNIT3D's richer structured
+// list: the endpoint that exists in the wild answers exactly that
+// ({"is_global_free_leech": true, "global_free_leech_until": "…"}), and a
+// tracker with the richer list already reports it through /api/user, where
+// normalizeActiveEvents reads it.
+//
+// The event has no name in the response, so Label supplies one. It defaults to
+// the wording these banners have carried for years, which is also what the
+// profile scrape has been reading — so a tracker switching from scraping to
+// this endpoint shows the same sentence it always did.
+type EventsSpec struct {
+	// Path is appended to the tracker base URL.
+	Path string `json:"path"`
+	// ActiveField is the boolean (or truthy) response field saying whether the
+	// event is running right now.
+	ActiveField string `json:"active_field"`
+	// UntilField is the response field carrying the end time. Optional: an
+	// event with no end still shows, just without a countdown.
+	UntilField string `json:"until_field,omitempty"`
+	// Label overrides the displayed event name.
+	Label string `json:"label,omitempty"`
+}
+
+// DefaultEventLabel is the name shown for an EventsSpec event that declares no
+// Label — matching the banner text these trackers render themselves.
+const DefaultEventLabel = "Global freeleech mode activated"
+
+// EventLabel is the name to display for this event.
+func (e EventsSpec) EventLabel() string {
+	if l := strings.TrimSpace(e.Label); l != "" {
+		return l
+	}
+	return DefaultEventLabel
 }
 
 // Capabilities declares which stats a tracker can actually report, so the UI

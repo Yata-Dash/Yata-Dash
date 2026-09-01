@@ -23,9 +23,9 @@ export function groupRequirementsToTargets(req: GroupRequirements): Record<strin
     days:          ageDays != null ? String(ageDays) : '',
     avg_seed:      seedSec != null ? String(seedSec) : '',
     bonus_points:  req.min_bonus_points != null ? String(req.min_bonus_points) : '',
-    // No live stat backs this yet — renders as an untrackable ("Not
-    // available") target row via grid.ts's generic-key loop until Yata can
-    // estimate uploads/month from history.
+    // Tracked where the tracker reports monthly_uploads; still rendered as an
+    // untrackable ("Not available") row via grid.ts's generic-key loop on the
+    // trackers that don't.
     monthly_uploads: req.min_monthly_uploads != null ? String(req.min_monthly_uploads) : '',
   };
   const out: Record<string, string> = {};
