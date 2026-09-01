@@ -239,6 +239,12 @@
     // Map paths → canonical BOOLEAN fields, emitting "true"/"false" from any
     // truthy value. An unread-message COUNT becomes the unread_mail flag this
     // way — the flag is what the UI's envelope icon and alert rules read.
+    //
+    // Works on a UNIT3D def too, where "api" otherwise only carries
+    // required_fields and api_key_hint: several forks report unread mail and
+    // notifications as counts rather than flags. Keys are the API's OWN field
+    // names (applied before api_field_map renames anything), and the source
+    // field is dropped once converted.
     "bool_fields": {
       "notifs.pms": "unread_mail"
     },
@@ -246,6 +252,28 @@
     // Hint shown under the API key field in the tracker edit modal —
     // tell users where to find their token.
     "api_key_hint": "Preferences > Security > Create Session"
+  },
+
+  // [OPTIONAL, unit3d] A site-events endpoint — UNIT3D's global freeleech flag
+  // and its kin. This is usually the LAST reason a fully-API tracker still
+  // needs scraping, since the freeleech banner lived only on the profile page.
+  //
+  // Opt in per tracker, never on the type: not every install exposes it, and a
+  // 404 on every refresh is a request spent learning nothing. Fetched
+  // best-effort — a promotion nobody can read never fails the whole fetch.
+  //
+  // The response carries no name for the event, so "label" supplies one; it
+  // defaults to the wording these banners have always used (and that the
+  // profile scrape reads), so switching a tracker from scraping to this
+  // endpoint shows the same sentence it did before.
+  //
+  // End times are parsed from ISO forms and from the US "09/05/2026 1:00 AM
+  // EST" shape, with the named zone honoured.
+  "events": {
+    "path": "/api/events/global-free-leech",
+    "active_field": "is_global_free_leech",
+    "until_field": "global_free_leech_until",
+    "label": "Global freeleech mode activated"
   },
 
   // [OPTIONAL] Site-wide account rules (from the tracker's rules page).

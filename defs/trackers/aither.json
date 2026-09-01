@@ -5,7 +5,41 @@
   "abbr": "Ath",
   "url": "https://aither.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-14",
+  "api_field_map": {
+    "avg_seedtime": "avg_seed_time",
+    "seeding_size": "seed_size",
+    "torrent_uploads_month": "monthly_uploads",
+    "total_uploads": "uploads_approved"
+  },
+  "api": {
+    "required_fields": [
+      "join_date"
+    ],
+    "bool_fields": {
+      "unread_pms": "unread_mail",
+      "unread_notifications": "unread_notifications"
+    }
+  },
+  "events": {
+    "path": "/api/events/global-free-leech",
+    "active_field": "is_global_free_leech",
+    "until_field": "global_free_leech_until"
+  },
+  "capabilities": {
+    "api_stats_add": [
+      "active_events",
+      "active_hit_and_runs",
+      "avg_seed_time",
+      "is_donor",
+      "monthly_uploads",
+      "seed_size",
+      "total_seedtime",
+      "unread_mail",
+      "unread_notifications",
+      "uploads_approved"
+    ]
+  },
+  "last_updated": "2026-09-01",
   "approved_by": {
     "name": "Staff",
     "role": "Staff",

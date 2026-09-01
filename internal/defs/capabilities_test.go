@@ -204,15 +204,18 @@ func TestLadderStatsAndSummary(t *testing.T) {
 	}
 }
 
-// TestLadderStatsIgnoresMonthlyUploads: no live stat backs it anywhere in
-// Yata, so counting it would mark a tracker short for a gap on our side.
-func TestLadderStatsIgnoresMonthlyUploads(t *testing.T) {
+// TestLadderStatsCountsMonthlyUploads: uploads-per-month is a real stat now
+// (Aither reports it as torrent_uploads_month), so a ladder gated on it needs
+// it measured like any other requirement. It was excluded while nothing could
+// report it — counting it then would have marked every def using it short for
+// a gap on Yata's side rather than the tracker's.
+func TestLadderStatsCountsMonthlyUploads(t *testing.T) {
 	td := TrackerDef{Groups: []GroupDef{
 		{Name: "Uploader", Requirements: GroupRequirements{MinMonthlyUploads: 5, MinRatio: 1}},
 	}}
 	got := LadderStats(td)
-	if !reflect.DeepEqual(got, []string{"ratio"}) {
-		t.Errorf("ladder stats = %v, want just ratio", got)
+	if !reflect.DeepEqual(got, []string{"monthly_uploads", "ratio"}) {
+		t.Errorf("ladder stats = %v, want monthly_uploads and ratio", got)
 	}
 }
 

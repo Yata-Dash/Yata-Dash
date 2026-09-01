@@ -509,9 +509,9 @@ export interface GroupRequirements {
   min_bonus_points?: number;
   min_age?: string;
   /** Uploads required per rolling month (e.g. RocketHD/Aither uploader
-   *  classes). No live stat exists yet — mapped to the "monthly_uploads"
-   *  target key, which always renders as an untrackable ("Not available")
-   *  row until Yata can estimate it from upload history. */
+   *  classes). Mapped to the "monthly_uploads" target key, which tracks
+   *  progress on trackers reporting the stat (Aither) and renders as an
+   *  untrackable ("Not available") row on those that don't. */
   min_monthly_uploads?: number;
   description?: string;  // non-empty = text-only / special group
   note?: string;         // extra non-numeric conditions alongside targets

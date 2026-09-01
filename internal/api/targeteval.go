@@ -375,10 +375,11 @@ func groupRequirementsToTargets(req defs.GroupRequirements) map[string]string {
 	if req.MinBonusPoints != 0 {
 		out["bonus_points"] = strconv.Itoa(req.MinBonusPoints)
 	}
-	// No live stat backs monthly_uploads yet, so the row always evaluates
-	// unmet (customMet on a missing field) — which keeps an any_of alternative
-	// containing it from counting as met here while the dashboard's
-	// eligibility math (unavailable = assumed zero = unmet) says otherwise.
+	// monthly_uploads falls through baseTargetMet's default branch, which
+	// compares the merged stat of the same name — so it evaluates properly on
+	// a tracker that reports it, and stays unmet (customMet on a missing
+	// field) on one that doesn't, matching the dashboard's eligibility math
+	// where an unavailable stat is assumed zero.
 	if req.MinMonthlyUploads != 0 {
 		out["monthly_uploads"] = strconv.Itoa(req.MinMonthlyUploads)
 	}
