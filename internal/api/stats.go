@@ -56,6 +56,29 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	}
 	logOptOutTransition(d, t, false)
 
+	// Manual-entry trackers are never contacted, so there is nothing to
+	// refresh: the stats ARE the manual layer, written when the user saved
+	// them. Returning early rather than falling through the normal path
+	// matters for honesty, not just speed — that path would record a
+	// successful "connection" to a site no request was sent to, and stamp an
+	// API-updated time on a tracker with no API, so the card would claim
+	// contact that never happened.
+	//
+	// History still runs: each save is a real datapoint, and charting them is
+	// how a hand-maintained tracker builds a trend at all.
+	if d.Reg.APIKind(t.URL, t.Type) == "none" && t.Type == models.TypeManual {
+		if merged, err := d.Stats.Merged(t.ID); err == nil {
+			resp.Fields = merged
+			resp.OK = true
+			_ = d.Stats.RecordHistory(t.ID, merged)
+			if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
+				resp.Rates = r
+			}
+		}
+		resp.ManualEntry = true
+		return resp
+	}
+
 	// Min-age guard — coalesce non-forced callers. If we fetched this tracker's
 	// API successfully within the guard window, skip the network call and serve
 	// the last-stored merged stats instead. Manual (forced) refreshes bypass it.

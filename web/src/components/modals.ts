@@ -6,10 +6,11 @@ import type {
   AppSettings, DefInfo, DefsPayload, DetectAttempt, GroupDef, GroupRequirements, OptOutEntry, StatsMap,
   Tracker, TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, UpdateStatus,
 } from '../types';
-import { MASKED_KEY, UNKNOWN_TYPE } from '../types';
+import { MANUAL_TYPE, MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
 import { approvalIcon, approvalWarns } from '../utils/approval';
 import { capabilityRow } from './capabilities';
+import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
 import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
 import { parseAgeDays, parseSeedTime } from '../utils/parse';
@@ -175,6 +176,22 @@ function setupEditTypeSection(t: Tracker): void {
     ).join('');
     if (t.type) sel.value = t.type;
   });
+  // Switching a def-less tracker to (or from) manual entry reveals or hides
+  // the stats editor without a save-and-reopen round trip — and, because
+  // manual entry hides the credential fields, puts them back on the way out.
+  // Only this picker can make that transition, so the restore lives here
+  // rather than in applyManualCredentialsUI, which never shows anything.
+  sel.onchange = () => {
+    const chosen = sel.value;
+    setupManualSection(chosen, collectManualRows());
+    if (chosen === MANUAL_TYPE) return;
+    show('modal-key-group');
+    show('modal-session-cookie-group');
+    show('modal-test-btn');
+    resetStandardCredentialLabels(chosen);
+    applyRequiredFieldsUI(typeRequiredFields(chosen));
+    applySessionCookieLabel();
+  };
 }
 
 /** Probe each candidate type with the user's own key and adopt the first that
@@ -368,6 +385,7 @@ export function onAddTypeSelect() {
   show('modal-name-url-group');
   show('modal-add-divider');
   showFormForType(typeKey);
+  setupManualSection(typeKey, undefined);
   setEl('modal-save-btn', 'Add Tracker');
   setTimeout(() => (document.getElementById('modal-name') as HTMLInputElement)?.focus(), 50);
 }
@@ -428,6 +446,10 @@ function applyPredefinedDef(def: DefInfo) {
 
 function showFormForType(typeKey: string) {
   show('modal-credentials-section');
+  // Re-shown per type, because the manual branch below (via
+  // setupManualSection) hides it — without this, picking manual once would
+  // leave Test connection missing for every type chosen afterwards.
+  show('modal-test-btn');
   hide('modal-mock-group');
   hide('modal-scrape-section');
   // Add mode keeps to the basics — targets are set later from the dashboard
@@ -443,6 +465,14 @@ function showFormForType(typeKey: string) {
     hide('modal-session-cookie-group');
     show('modal-mock-group');
     populateScenarioSelect();
+  } else if (typeKey === MANUAL_TYPE) {
+    // Nothing is ever sent, so there is nothing to authenticate. Handled here
+    // as well as in setupManualSection so the fields never appear at all,
+    // rather than showing and then being taken away.
+    resetStandardCredentialLabels(typeKey);
+    show('modal-username-group');
+    hide('modal-key-group');
+    hide('modal-session-cookie-group');
   } else if (typeKey === 'gazelle_antneb') {
     // The Anthelion/Nebulance family needs the full set: API key + username
     // for the api.php call (the key authenticates, the username selects the
@@ -493,6 +523,7 @@ function applySessionCookieLabel() {
 function hideFormSections() {
   hide('modal-credentials-section');
   hide('modal-targets-section');
+  hide('modal-manual-section');
   hide('modal-mock-group');
   hide('modal-scrape-section');
 }
@@ -592,6 +623,147 @@ const CORE_TARGET_SPECS: TargetSpec[] = [
   // always offered; renders as an untrackable "Not available" target row.
   { key: 'monthly_uploads', label: 'Monthly Uploads', placeholder: 'e.g. 4', hint: 'No live stat yet — the requirement still shows, just without progress tracking' },
 ];
+
+// ── Manual stats (typed in by the user) ──────────────────────────────────────
+//
+// The same shape as the targets builder below, deliberately: rows of
+// field + value with an "add" picker, so a screen that already teaches you how
+// to enter a number doesn't teach it twice.
+
+/** Stats offerable for manual entry, in the order the profile panel shows
+ *  them. Derived from STAT_ROW_DEFS rather than restated, so a canonical stat
+ *  added there can be typed in here without a second edit — plus "group",
+ *  which that list renders in the header instead of as a row but which is
+ *  worth having on a tracker whose class Yata can't read for itself. */
+const MANUAL_STAT_SPECS: { key: string; label: string }[] = [
+  { key: 'group', label: 'Group / class' },
+  ...STAT_ROW_DEFS.map(d => ({ key: d.key, label: d.label })),
+];
+
+/** What a given stat is meant to look like. Sizes and durations are the two
+ *  shapes that aren't just a number, and are exactly where a user would
+ *  otherwise guess at the format. */
+const MANUAL_STAT_PLACEHOLDERS: Record<string, string> = {
+  uploaded: 'e.g. 5.5 TiB', downloaded: 'e.g. 1.2 TiB', buffer: 'e.g. 4.3 TiB',
+  seed_size: 'e.g. 800 GiB', real_uploaded: 'e.g. 5.5 TiB', real_downloaded: 'e.g. 1.2 TiB',
+  ratio: 'e.g. 4.58', real_ratio: 'e.g. 4.58', required_ratio: 'e.g. 1.0',
+  avg_seed_time: 'e.g. 3M 6D', total_seedtime: 'e.g. 2Y 4M',
+  group: 'e.g. Power User',
+};
+
+function manualPlaceholder(key: string): string {
+  return MANUAL_STAT_PLACEHOLDERS[key] ?? 'e.g. 100';
+}
+
+function manualStatLabel(key: string): string {
+  return MANUAL_STAT_SPECS.find(s => s.key === key)?.label ?? fieldLabel(key);
+}
+
+/** manual_stats as the modal opened — reseeded into the rows on open. */
+let _editManualStats: Record<string, string> = {};
+
+function manualRowHtml(key: string, value: string): string {
+  return `<div class="target-edit-row" data-manual-key="${esc(key)}">
+    <span class="target-edit-label">${esc(manualStatLabel(key))}</span>
+    <input class="form-input" type="text" data-manual-input placeholder="${esc(manualPlaceholder(key))}" value="${esc(value)}"/>
+    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove stat" onclick="modalRemoveManualRow('${jsId(key)}')">&times;</button>
+  </div>`;
+}
+
+/** (Re)build the rows from a manual_stats map, in the canonical display order
+ *  rather than whatever order the object arrived in. */
+function renderManualRows(stats: Record<string, string>) {
+  const wrap = document.getElementById('modal-manual-rows');
+  if (!wrap) return;
+  const order = new Map(MANUAL_STAT_SPECS.map((s, i) => [s.key, i]));
+  wrap.innerHTML = Object.entries(stats)
+    .filter(([, v]) => v !== '')
+    .sort(([a], [b]) => (order.get(a) ?? 999) - (order.get(b) ?? 999))
+    .map(([k, v]) => manualRowHtml(k, v))
+    .join('');
+  refreshManualAddSelect();
+}
+
+/** Rebuild the "+ Add stat" picker: every offerable stat minus those added. */
+function refreshManualAddSelect() {
+  const sel = document.getElementById('modal-manual-add-select') as HTMLSelectElement | null;
+  if (!sel) return;
+  const added = new Set(
+    [...document.querySelectorAll<HTMLElement>('#modal-manual-rows [data-manual-key]')]
+      .map(el => el.dataset['manualKey'] ?? ''));
+  sel.innerHTML = `<option value="">&#8212; choose a stat &#8212;</option>` +
+    MANUAL_STAT_SPECS.filter(s => !added.has(s.key))
+      .map(s => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join('');
+}
+
+export function modalAddManualRow(): void {
+  const sel = document.getElementById('modal-manual-add-select') as HTMLSelectElement | null;
+  const wrap = document.getElementById('modal-manual-rows');
+  if (!sel || !wrap || !sel.value) return;
+  wrap.insertAdjacentHTML('beforeend', manualRowHtml(sel.value, ''));
+  const key = sel.value;
+  refreshManualAddSelect();
+  wrap.querySelector<HTMLInputElement>(`[data-manual-key="${CSS.escape(key)}"] input`)?.focus();
+}
+
+export function modalRemoveManualRow(key: string): void {
+  document.querySelector(`#modal-manual-rows [data-manual-key="${CSS.escape(key)}"]`)?.remove();
+  refreshManualAddSelect();
+}
+
+/** Read the rows back into a manual_stats map. Empty inputs are dropped, so
+ *  clearing a value removes the stat — the same gesture as removing the row. */
+function collectManualRows(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of document.querySelectorAll<HTMLElement>('#modal-manual-rows [data-manual-key]')) {
+    const key = row.dataset['manualKey'] ?? '';
+    const raw = (row.querySelector<HTMLInputElement>('[data-manual-input]')?.value ?? '').trim();
+    if (key && raw) out[key] = raw;
+  }
+  return out;
+}
+
+/** Credentials for a tracker Yata never contacts: there aren't any.
+ *
+ *  An API key authenticates a request that is never sent, a session cookie
+ *  authenticates a scrape that never runs, and "Test connection" has nothing
+ *  to connect to — offering all three invites the user to hunt down tokens
+ *  that will sit in the config doing nothing. Username stays: it is a label,
+ *  used on the card and for the profile link, not a credential.
+ *
+ *  Only ever hides for manual trackers. Showing again is left to the callers
+ *  that own that decision for real trackers (def cookie requirements, custom
+ *  auth methods), so this can't overrule them. */
+function applyManualCredentialsUI(isManual: boolean): void {
+  if (!isManual) return;
+  hide('modal-key-group');
+  hide('modal-session-cookie-group');
+  hide('modal-test-btn');
+  const uHint = document.getElementById('modal-username-hint');
+  if (uHint) uHint.textContent = 'Your name on this tracker. Shown on its card — nothing is fetched with it.';
+}
+
+/** Show the section for a manual-entry tracker, and for any other tracker
+ *  that already has typed-in values — otherwise switching a tracker's type
+ *  away from manual would strand its numbers somewhere they can't be reached
+ *  or cleared. */
+function setupManualSection(typeKey: string, stats: Record<string, string> | undefined) {
+  _editManualStats = stats ?? {};
+  const isManual = typeKey === MANUAL_TYPE;
+  applyManualCredentialsUI(isManual);
+  const visible = isManual || Object.keys(_editManualStats).length > 0;
+  const section = document.getElementById('modal-manual-section');
+  if (section) section.style.display = visible ? '' : 'none';
+  if (!visible) return;
+
+  const hint = document.getElementById('modal-manual-hint');
+  if (hint) {
+    hint.textContent = typeKey === MANUAL_TYPE
+      ? 'Yata never contacts this tracker — these are the numbers it shows. Update them whenever you like; each save is recorded, so history and charts build up over time.'
+      : "Typed-in values for this tracker. They fill only the stats its API and profile page don't report — anything fetched wins over what you enter here.";
+  }
+  renderManualRows(_editManualStats);
+}
 
 /** Merged stat field that backs each core target key. */
 const TARGET_BACKING_FIELD: Record<string, string> = {
@@ -817,6 +989,7 @@ export function openEditModal(
   applyRequiredFieldsUI(t.required_fields ?? typeRequiredFields(t.type));
   applySessionCookieLabel();
   setupEditTypeSection(t);
+  setupManualSection(t.type, t.manual_stats);
 
   // API key — the mask sentinel means "unchanged"; clearing the field removes the key.
   setVal('modal-key', t.has_key ? (t.api_key_masked || MASKED_KEY) : '');
@@ -830,11 +1003,14 @@ export function openEditModal(
   // defs.needs_session_cookie is available — in BOTH directions, so a wrong
   // initial guess (a custom def whose API authenticates by cookie) gets
   // corrected instead of staying stuck hidden.
-  if (t.supports_html_scrape === false) hide('modal-session-cookie-group');
+  if (t.supports_html_scrape === false || t.type === MANUAL_TYPE) hide('modal-session-cookie-group');
   else show('modal-session-cookie-group');
 
   void ensureDefsLoaded().then(() => {
     checkTrackerOptOut();
+    // A manual tracker has no def to consult and nothing to send a cookie to,
+    // so this pass must not be allowed to hand it one back.
+    if (t.type === MANUAL_TYPE) return;
     if (t.supports_html_scrape === false) {
       const editDefInfo = _defsCache?.trackers.find(dd => dd.key === t.def_key);
       if (editDefInfo?.needs_session_cookie) show('modal-session-cookie-group');
@@ -926,6 +1102,11 @@ export function openEditModal(
     show('modal-key-group');
     show('modal-username-group');
   }
+
+  // Genuinely the last word on credentials: the blocks above re-show the key
+  // field and Test connection unconditionally, so a manual tracker has to be
+  // stripped of them after all of that, not before.
+  applyManualCredentialsUI(t.type === MANUAL_TYPE);
 
   openTrackerPanel();
   setTimeout(() => (document.getElementById('modal-name') as HTMLInputElement)?.focus(), 80);
@@ -1224,6 +1405,10 @@ export async function saveTracker(deps: ModalDeps) {
 
   // Block a too-low scrape interval (also red-flagged on the field).
   const scrapeVisible = document.getElementById('modal-scrape-section')?.style.display !== 'none';
+  // Only send manual stats when the editor is on screen. A hidden section has
+  // no rows, and sending an empty map would wipe stored values for every
+  // tracker that doesn't show it.
+  const manualVisible = document.getElementById('modal-manual-section')?.style.display !== 'none';
   if (scrapeVisible && !modalValidateInterval()) {
     deps.toast(`Scrape interval must be at least ${_scrapeFloor} min`, 'error');
     return;
@@ -1245,6 +1430,7 @@ export async function saveTracker(deps: ModalDeps) {
     ...(targetDeadlines !== undefined ? { target_deadlines: targetDeadlines } : {}),
     join_date: getVal('modal-joindate'),
     ...(trackerType ? { type: trackerType } : {}),
+    ...(manualVisible ? { manual_stats: collectManualRows() } : {}),
   };
 
   // Per-tracker scrape options (only when the section is shown — edit mode).
@@ -2571,6 +2757,12 @@ function clearModal() {
   if (rows) rows.innerHTML = '';
   renderGroupHint('', '');
   hide('modal-target-builder');
+  // Likewise the manual stats editor: one tracker's typed-in numbers must
+  // never be left on screen for the next one to save as its own.
+  _editManualStats = {};
+  const manualRows = document.getElementById('modal-manual-rows');
+  if (manualRows) manualRows.innerHTML = '';
+  hide('modal-manual-section');
   // The type picker belongs to one specific def-less tracker — it must never
   // survive into the next tracker's modal.
   _editTypeTrackerId = '';

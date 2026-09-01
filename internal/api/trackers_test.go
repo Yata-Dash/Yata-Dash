@@ -131,3 +131,67 @@ func TestToViewIncludesTrackerRuleNote(t *testing.T) {
 }
 
 func strp(s string) *string { return &s }
+
+// TestApplyPayloadSanitizesManualStats: typed-in stats are stored in the same
+// shapes a fetch produces, so nothing downstream can tell a typed number from
+// a fetched one. Sizes get two decimals (as the scrapers already normalise
+// their own readings), durations become the canonical seed-time form, blanks
+// are dropped rather than stored as an answer, and an unrecognised field is
+// kept as typed — the canonical set grows, and refusing a value merely because
+// this list hasn't caught up would lose the user's data.
+func TestApplyPayloadSanitizesManualStats(t *testing.T) {
+	stats := map[string]string{
+		"uploaded":        " 5.5 tb ",    // size → 2dp, trimmed, unit cased
+		"seed_size":       "800.129 gib", // size → 2dp, "gib" → "GiB"
+		"real_downloaded": "512 b",       // bare byte unit → "B"
+		"avg_seed_time":   "90000",       // raw seconds → canonical duration
+		"ratio":           "4.58",        // plain value, untouched
+		"leeching":        "",            // empty → dropped entirely
+		"future_stat":     "7",           // unknown field → kept as typed
+	}
+	tr := &models.Tracker{}
+	applyPayload(tr, trackerPayload{ManualStats: &stats})
+
+	want := map[string]string{
+		"uploaded":        "5.50 TB",
+		"seed_size":       "800.13 GiB",
+		"real_downloaded": "512.00 B",
+		"avg_seed_time":   "1D 1h",
+		"ratio":           "4.58",
+		"future_stat":     "7",
+	}
+	if len(tr.ManualStats) != len(want) {
+		t.Fatalf("manual stats = %#v, want %d entries", tr.ManualStats, len(want))
+	}
+	for k, w := range want {
+		if got := tr.ManualStats[k]; got != w {
+			t.Errorf("%s = %q, want %q", k, got, w)
+		}
+	}
+}
+
+// TestManualLayerJoinDateWins: join_date has its own dedicated input, so the
+// value from that field must beat one typed into the stats list. Otherwise two
+// controls would edit one value and the winner would depend on map ordering.
+func TestManualLayerJoinDateWins(t *testing.T) {
+	tr := models.Tracker{
+		JoinDate:    "2020-01-01",
+		ManualStats: map[string]string{"join_date": "1999-09-09", "ratio": "2.5"},
+	}
+	layer := tr.ManualLayer()
+	if layer["join_date"] != "2020-01-01" {
+		t.Errorf("join_date = %v, want the dedicated field's value", layer["join_date"])
+	}
+	if layer["ratio"] != "2.5" {
+		t.Errorf("ratio = %v, want it carried through", layer["ratio"])
+	}
+}
+
+// TestManualLayerEmptyClears: an empty layer is a real instruction — it is what
+// clears the stats after the last row is removed. Returning something non-empty
+// here (or nil-guarding at the call site) would leave deleted values standing.
+func TestManualLayerEmptyClears(t *testing.T) {
+	if layer := (models.Tracker{}).ManualLayer(); len(layer) != 0 {
+		t.Errorf("empty tracker layer = %#v, want empty", layer)
+	}
+}
