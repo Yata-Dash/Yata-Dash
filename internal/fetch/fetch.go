@@ -183,7 +183,31 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
+	// Counts → flags, before the rename: bool_fields keys are the API's OWN
+	// field names, exactly as they are for a custom def. UNIT3D forks report
+	// unread mail and notifications as COUNTS (Aither: "unread_pms": 0,
+	// "unread_notifications": 1) where Yata's canonical fields are true/false
+	// flags, so without this the envelope and bell never light.
+	if api := c.Registry.ResolveCustomAPI(t.URL, t.Type); api != nil && len(api.BoolFields) > 0 {
+		applyBoolFields(data, api.BoolFields)
+	}
+	// Rename fork field names to canonical ones FIRST. Everything below is
+	// keyed on canonical names — convertCoreBytes converts "seed_size", not
+	// whatever a fork happens to call it — so normalising afterwards (as
+	// Fetch does for every kind) left a renamed field unconverted: Aither's
+	// seeding_size reached the UI as the raw byte count 17001700882929
+	// instead of 15.46 TiB. Fetch's own pass then finds nothing left to do.
+	data = defs.NormalizeAPIFields(c.Registry.ResolveAPIFieldMap(t.URL, t.Type), data)
 	convertCoreBytes(data)
+	// Site events from their own endpoint (opt-in per def), before the
+	// normalisation below turns the list into the flat banner fields.
+	// Best-effort: a promotion nobody can read is not worth failing a fetch
+	// that otherwise succeeded.
+	if ev := c.Registry.Events(t.URL, t.Type); ev != nil && ev.Path != "" {
+		if evData, eErr := c.getUnit3D(base+ev.Path, t.APIKey, id); eErr == nil {
+			mergeEventEndpoint(data, evData, *ev)
+		}
+	}
 	normalizeActiveEvents(data)
 	// Supplementary extended-stats endpoint (opt-in per def). Newer UNIT3D
 	// trackers expose formerly scrape-only stats (seed size, seed times, unread
@@ -195,6 +219,51 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 		}
 	}
 	return data, nil
+}
+
+// applyBoolFields turns counts (or any truthy value) into the "true"/"false"
+// flag strings Yata's boolean stat fields carry, in place. Same rule and same
+// helper as a custom def's bool_fields — the mechanism existed only on that
+// path, which is why a UNIT3D fork reporting an unread COUNT had no way to
+// drive the flags.
+func applyBoolFields(data map[string]any, boolFields map[string]string) {
+	for jsonPath, canonical := range boolFields {
+		v := nested(data, jsonPath)
+		if v == nil {
+			continue
+		}
+		// Drop the source field once converted, the way a field-map rename
+		// does. Leaving it behind put a stray "Unread Pms: 0" row on the
+		// detail page next to the flag derived from it.
+		if jsonPath != canonical {
+			delete(data, jsonPath)
+		}
+		data[canonical] = strconv.FormatBool(anyTruthy(v))
+	}
+}
+
+// mergeEventEndpoint turns a site-events response into the structured
+// active_events entry normalizeActiveEvents already knows how to read, so an
+// event fetched from its own endpoint renders exactly like one reported inline
+// by /api/user — and like the banner the profile scrape used to supply.
+//
+// Nothing is written when the event isn't running: an absent field means "no
+// promotion", which is what the UI shows when it has never seen one. A stock
+// active_events list from /api/user always wins, being the richer source.
+func mergeEventEndpoint(data map[string]any, ev map[string]any, spec defs.EventsSpec) {
+	if _, already := data[activeEventsField]; already {
+		return
+	}
+	if !anyTruthy(nested(ev, spec.ActiveField)) {
+		return
+	}
+	event := map[string]any{"name": spec.EventLabel(), "status": "live"}
+	if spec.UntilField != "" {
+		if until := eventUnix(nested(ev, spec.UntilField)); until > 0 {
+			event["ends_at"] = until
+		}
+	}
+	data[activeEventsField] = []any{event}
 }
 
 // getUnit3D fetches a UNIT3D JSON endpoint using Bearer auth, which keeps the
@@ -465,6 +534,12 @@ func eventUnix(v any) int64 {
 	switch t := v.(type) {
 	case float64:
 		return int64(t)
+	// int64/int arrive from Go code rather than from decoded JSON — the events
+	// endpoint hands its already-parsed end time straight to this list.
+	case int64:
+		return t
+	case int:
+		return int64(t)
 	case string:
 		s := strings.TrimSpace(t)
 		if s == "" {
@@ -475,8 +550,53 @@ func eventUnix(v any) int64 {
 				return parsed.Unix()
 			}
 		}
+		// US-style with a named zone — what UNIT3D's events endpoint returns
+		// ("09/05/2026 1:00 AM EST").
+		for _, layout := range []string{"01/02/2006 3:04 PM MST", "01/02/2006 15:04 MST",
+			"01/02/2006 3:04 PM", "01/02/2006 15:04"} {
+			if parsed, err := time.Parse(layout, s); err == nil {
+				return applyNamedZone(parsed, s).Unix()
+			}
+		}
 	}
 	return 0
+}
+
+// namedZoneOffsets maps the zone abbreviations these responses actually use to
+// their UTC offset in hours.
+//
+// This exists because time.Parse does something surprising with an
+// abbreviation it can't resolve: rather than failing, it fabricates a zone with
+// that name and an offset of ZERO. "1:00 AM EST" therefore parses to 01:00 UTC
+// — five hours adrift — and every countdown built from it is wrong by exactly
+// the offset, with nothing to show for it in a log.
+//
+// Only unambiguous abbreviations are listed. CST is deliberately absent: it is
+// US Central and China Standard, six hours and thirteen zones apart, and
+// guessing wrong is worse than declining to guess.
+var namedZoneOffsets = map[string]int{
+	"UTC": 0, "GMT": 0, "Z": 0,
+	"EST": -5, "EDT": -4, "CDT": -5, "MST": -7, "MDT": -6, "PST": -8, "PDT": -7,
+	"AKST": -9, "AKDT": -8, "HST": -10,
+	"BST": 1, "CET": 1, "CEST": 2, "EET": 2, "EEST": 3,
+	"AEST": 10, "AEDT": 11, "NZST": 12, "NZDT": 13,
+}
+
+// applyNamedZone repairs a time whose zone abbreviation time.Parse could not
+// resolve, using the trailing abbreviation in the original string. A time that
+// already carries a real offset, or whose abbreviation isn't one we can place,
+// is returned untouched — reading it as UTC is the same assumption the rest of
+// this file makes for a bare timestamp.
+func applyNamedZone(parsed time.Time, raw string) time.Time {
+	name, offset := parsed.Zone()
+	if offset != 0 || name == "" || name == "UTC" {
+		return parsed
+	}
+	hours, ok := namedZoneOffsets[strings.ToUpper(name)]
+	if !ok {
+		return parsed
+	}
+	return parsed.Add(time.Duration(-hours) * time.Hour)
 }
 
 // apiErrorMessage interprets a custom API's top-level "error" field. It

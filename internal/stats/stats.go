@@ -107,11 +107,17 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 	priority = demoteStaleAPI(priority, layers, time.Now())
 	for _, src := range priority {
 		for field, fv := range layers[string(src)] {
-			if !meaningful(fv.Value) {
+			if !reported(src, fv.Value) {
 				continue
 			}
 			if existing, ok := out[field]; ok && meaningful(existing.Value) {
-				continue // a higher-priority layer already supplied this field
+				// A higher-priority layer already gave a substantive answer.
+				// A zero-ish one does NOT close the question: some APIs return
+				// 0 for fields they simply don't populate, and a scrape that
+				// can read a real number is the better evidence. The zero is
+				// still SHOWN when nothing else has the field — which is the
+				// whole point of accepting it above.
+				continue
 			}
 			out[field] = models.StatField{Value: fv.Value, Source: src, UpdatedAt: fv.UpdatedAt}
 		}
@@ -182,6 +188,31 @@ func layerStamp(layer map[string]store.FieldValue) int64 {
 
 // meaningful reports whether a stored value carries real data. Empty strings
 // and zero-ish placeholders don't beat a value from the other layer.
+// reported reports whether a layer actually ANSWERED for this field, which
+// decides both "may this value be used" and "has a higher layer already
+// spoken". The answer depends on where the value came from, because a zero
+// means different things from different sources.
+//
+// From an API (or a value the user typed, or one qui computed), a zero is the
+// tracker's own answer: nought uploads approved, nothing seeding. Dropping it
+// showed those stats as "—" — unknown — on trackers that had told us plainly
+// they were zero, which reads as Yata failing rather than as a real number.
+//
+// From a SCRAPE it stays an absence. A profile page renders a stat it doesn't
+// have as "0" or "0 B" just as readily as a genuine nought, and there is no
+// way to tell them apart from the page alone; treating those as answers would
+// let a page that has lost a stat mask a lower layer that still knows it
+// (see the qui seed-size test, where a scraped "0 B" must yield to qui).
+func reported(src models.Source, v any) bool {
+	if src == models.SourceScrape {
+		return meaningful(v)
+	}
+	return present(v)
+}
+
+// meaningful is the conservative reading, used for scraped values: a zero is
+// indistinguishable from a stat the page didn't render, so it counts as no
+// answer at all.
 func meaningful(v any) bool {
 	switch val := v.(type) {
 	case nil:
@@ -189,6 +220,20 @@ func meaningful(v any) bool {
 	case string:
 		s := strings.TrimSpace(val)
 		return s != "" && s != "0" && s != "0 B" && s != "0.00 B" && s != "—"
+	default:
+		return true
+	}
+}
+
+// present is the literal reading: only a missing, blank or dashed value is an
+// absence. Zero is a number like any other.
+func present(v any) bool {
+	switch val := v.(type) {
+	case nil:
+		return false
+	case string:
+		s := strings.TrimSpace(val)
+		return s != "" && s != "—"
 	default:
 		return true
 	}

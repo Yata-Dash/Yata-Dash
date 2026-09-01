@@ -43,11 +43,17 @@ func requirementStats(req GroupRequirements, set map[string]bool) {
 	if req.MinAge != "" {
 		set["join_date"] = true
 	}
-	// MinMonthlyUploads is deliberately absent: no live stat backs it yet
-	// anywhere in Yata, so counting it would mark every tracker that uses it
-	// permanently short for a reason the tracker can do nothing about. It is
-	// a gap in Yata, not in their API, and mixing the two would make the
-	// number mean less. The target row still shows as untrackable.
+	// Backed by the monthly_uploads stat, which trackers can now report
+	// (Aither's torrent_uploads_month was the first). Counting it is what
+	// makes the ladder figure honest for the uploader classes it gates: a
+	// tracker that reports it can be followed all the way, and one that
+	// doesn't is short by a stat its own requirements need — which is exactly
+	// what the number is there to say. Until a tracker reported it, counting
+	// it would have marked every def using it permanently short for a gap in
+	// Yata rather than in the tracker.
+	if req.MinMonthlyUploads != 0 {
+		set["monthly_uploads"] = true
+	}
 	for _, mc := range req.MinCounts {
 		if mc.Field != "" {
 			set[mc.Field] = true

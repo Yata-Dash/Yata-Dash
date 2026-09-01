@@ -619,9 +619,10 @@ const CORE_TARGET_SPECS: TargetSpec[] = [
   { key: 'bonus_points',  label: 'Bonus Points',  placeholder: 'e.g. 25000' },
   { key: 'snatched',      label: 'Snatched',      placeholder: 'e.g. 100' },
   { key: 'adoptions',     label: 'Adoptions',     placeholder: 'e.g. 10' },
-  // No backing stat exists yet (see GroupRequirements.min_monthly_uploads) —
-  // always offered; renders as an untrackable "Not available" target row.
-  { key: 'monthly_uploads', label: 'Monthly Uploads', placeholder: 'e.g. 4', hint: 'No live stat yet — the requirement still shows, just without progress tracking' },
+  // Backed by the monthly_uploads stat where a tracker reports it (Aither's
+  // torrent_uploads_month); still offered where none does, so the requirement
+  // can be recorded — it just renders as an untrackable row there.
+  { key: 'monthly_uploads', label: 'Monthly Uploads', placeholder: 'e.g. 4', hint: 'Uploads this month, where the tracker reports it' },
 ];
 
 // ── Manual stats (typed in by the user) ──────────────────────────────────────
@@ -770,7 +771,7 @@ const TARGET_BACKING_FIELD: Record<string, string> = {
   uploaded: 'uploaded', downloaded: 'downloaded', ratio: 'ratio',
   seed_size: 'seed_size', total_uploads: 'uploads_approved',
   avg_seed: 'avg_seed_time', days: 'join_date', bonus_points: 'bonus_points',
-  snatched: 'snatched', adoptions: 'adoptions',
+  snatched: 'snatched', adoptions: 'adoptions', monthly_uploads: 'monthly_uploads',
 };
 
 /** Fields that never make sense as numeric targets (identity/meta/duration
@@ -803,7 +804,8 @@ export function buildAvailableTargetSpecs(t: Tracker, resp: TrackerStatsResponse
 
   const out: TargetSpec[] = [];
   for (const spec of CORE_TARGET_SPECS) {
-    // monthly_uploads has no backing stat to gate on — always offered.
+    // monthly_uploads stays offered even where the tracker doesn't report it,
+    // so the requirement can still be recorded against a ladder that uses it.
     if (spec.key === 'monthly_uploads' || noStats || have(TARGET_BACKING_FIELD[spec.key])) out.push(spec);
   }
   const coreBacked = new Set(Object.values(TARGET_BACKING_FIELD));

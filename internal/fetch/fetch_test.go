@@ -2267,3 +2267,158 @@ func TestSeedTimeParsesHHDFormat(t *testing.T) {
 		t.Errorf("SeedTimeToSeconds = %v, want 102620 (avg_seed_time_raw)", got)
 	}
 }
+
+// ── UNIT3D: bool fields, events endpoint, named zones ────────────────────────
+
+// unit3dForkRegistry writes a UNIT3D tracker declaring the three fork
+// mechanisms Aither needed: renamed stat fields, unread COUNTS that must
+// become flags, and a site-events endpoint.
+func unit3dForkRegistry(t *testing.T, baseURL string) *defs.Registry {
+	t.Helper()
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON := `{"schema_version":1,"key":"unit3d","label":"UNIT3D",
+		"api":{"kind":"unit3d"},
+		"api_field_map":{"seedbonus":"bonus_points"}}`
+	trackerJSON := fmt.Sprintf(`{
+		"schema_version":1,"key":"fork","name":"Fork","abbr":"FK",
+		"url":%q,"type":"unit3d",
+		"api_field_map":{"seeding_size":"seed_size","avg_seedtime":"avg_seed_time",
+			"torrent_uploads_month":"monthly_uploads","total_uploads":"uploads_approved"},
+		"api":{"bool_fields":{"unread_pms":"unread_mail","unread_notifications":"unread_notifications"}},
+		"events":{"path":"/api/events/global-free-leech",
+			"active_field":"is_global_free_leech","until_field":"global_free_leech_until"}
+	}`, baseURL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "unit3d.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "fork.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	return reg
+}
+
+// TestFetchUnit3DForkMappings covers the whole Aither shape in one pass.
+//
+// The byte conversion is the subtle one: it is keyed on CANONICAL names, so a
+// fork calling seed size something of its own only gets converted if the
+// rename happens FIRST. It didn't, and seeding_size reached the UI as a raw
+// byte count.
+func TestFetchUnit3DForkMappings(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/user":
+			fmt.Fprint(w, `{
+				"username":"U","group":"Zeus","ratio":"2.58",
+				"uploaded":1349769579652,"downloaded":523582134782,"buffer":2850841814348,
+				"seeding_size":17001700882929,"avg_seedtime":5626042,
+				"total_uploads":0,"torrent_uploads_month":0,
+				"unread_pms":0,"unread_notifications":1,"seedbonus":"333304.60"}`)
+		case "/api/events/global-free-leech":
+			fmt.Fprint(w, `{"is_global_free_leech":true,"global_free_leech_until":"09/05/2026 1:00 AM EST"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dForkRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "k"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+
+	want := map[string]any{
+		"seed_size":            "15.46 TiB", // renamed THEN byte-converted
+		"avg_seed_time":        float64(5626042),
+		"uploads_approved":     float64(0),
+		"monthly_uploads":      float64(0),
+		"unread_mail":          "false", // count 0 → flag
+		"unread_notifications": "true",  // count 1 → flag
+		"bonus_points":         "333304.60",
+		"active_event":         "Global freeleech mode activated",
+	}
+	for k, w := range want {
+		if got, ok := data[k]; !ok {
+			t.Errorf("missing field %q", k)
+		} else if got != w {
+			t.Errorf("%s = %#v, want %#v", k, got, w)
+		}
+	}
+	// The converted count must not linger as a stray stat of its own.
+	if _, ok := data["unread_pms"]; ok {
+		t.Errorf("unread_pms survived conversion: %#v", data["unread_pms"])
+	}
+	// 1:00 AM EST is 06:00 UTC. Parsing it as a bare timestamp — which is what
+	// time.Parse does with an abbreviation it can't resolve — lands on 01:00
+	// and puts every countdown five hours out.
+	wantEnd := time.Date(2026, 9, 5, 6, 0, 0, 0, time.UTC).Unix()
+	if got := data["active_event_ends_at"]; got != wantEnd {
+		t.Errorf("active_event_ends_at = %v, want %v (%s)", got, wantEnd,
+			time.Unix(wantEnd, 0).UTC().Format(time.RFC3339))
+	}
+}
+
+// TestFetchUnit3DEventInactive: no event running means no event fields at all,
+// rather than a banner saying a promotion is on when it isn't.
+func TestFetchUnit3DEventInactive(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/events/global-free-leech" {
+			fmt.Fprint(w, `{"is_global_free_leech":false,"global_free_leech_until":"12/23/2017 3:00 PM EST"}`)
+			return
+		}
+		fmt.Fprint(w, `{"username":"U","ratio":"1.0"}`)
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dForkRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "k"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	for _, f := range []string{"active_event", "active_events", "active_event_ends_at"} {
+		if v, ok := data[f]; ok {
+			t.Errorf("%s = %#v, want nothing while no event is running", f, v)
+		}
+	}
+}
+
+// TestEventUnixNamedZones: time.Parse resolves an unknown zone abbreviation to
+// a ZERO offset rather than failing, so every one of these would otherwise be
+// silently wrong by its own offset.
+func TestEventUnixNamedZones(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Time
+	}{
+		{"09/05/2026 1:00 AM EST", time.Date(2026, 9, 5, 6, 0, 0, 0, time.UTC)},
+		{"09/05/2026 1:00 AM EDT", time.Date(2026, 9, 5, 5, 0, 0, 0, time.UTC)},
+		{"09/05/2026 1:00 PM PST", time.Date(2026, 9, 5, 21, 0, 0, 0, time.UTC)},
+		{"09/05/2026 1:00 AM UTC", time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)},
+		{"09/05/2026 11:00 AM AEST", time.Date(2026, 9, 5, 1, 0, 0, 0, time.UTC)},
+		// Still handled: the ISO forms every other caller uses.
+		{"2026-09-05T06:00:00Z", time.Date(2026, 9, 5, 6, 0, 0, 0, time.UTC)},
+	}
+	for _, tc := range cases {
+		if got := eventUnix(tc.in); got != tc.want.Unix() {
+			t.Errorf("eventUnix(%q) = %d (%s), want %d (%s)", tc.in,
+				got, time.Unix(got, 0).UTC().Format(time.RFC3339),
+				tc.want.Unix(), tc.want.Format(time.RFC3339))
+		}
+	}
+	// An abbreviation we can't place safely (CST is US Central AND China
+	// Standard) is left as parsed rather than guessed at.
+	if eventUnix("09/05/2026 1:00 AM CST") == 0 {
+		t.Error("an unplaceable zone should still yield a time, just an unadjusted one")
+	}
+}
