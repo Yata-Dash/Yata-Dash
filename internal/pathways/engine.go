@@ -503,9 +503,34 @@ func evalRouteReqs(r Route, u UserTracker, firstHop bool, d *Data,
 }
 
 // fmtStat formats a stat value for the progress bar labels.
+// finiteStat makes a stat safe to put in a JSON response.
+//
+// A ratio of "Infinity" is a real value Yata produces on purpose — it is what
+// an account with uploads and no downloads has, and strconv parses the string
+// straight to +Inf. encoding/json REFUSES to marshal ±Inf and NaN, and the
+// failure lands mid-response: the header has already gone out, so the client
+// gets 200 with an empty body and no error anywhere. That was issue #40 —
+// "Could not load paths", on the one tracker whose ratio was infinite.
+//
+// The value is clamped only where it is SERIALISED. Comparisons keep the real
+// +Inf, so an infinite ratio still satisfies every ratio requirement, and
+// HaveText still renders it as ∞.
+func finiteStat(v float64) float64 {
+	if math.IsInf(v, 1) {
+		return math.MaxFloat64
+	}
+	if math.IsInf(v, -1) || math.IsNaN(v) {
+		return -1 // the "unknown" sentinel used throughout this package
+	}
+	return v
+}
+
 func fmtStat(kind string, v float64) string {
 	if v < 0 {
 		return "?"
+	}
+	if math.IsInf(v, 1) {
+		return "∞" // matches how an infinite ratio reads everywhere else
 	}
 	switch kind {
 	case "uploaded", "downloaded", "total_transfer", "seed_size":
@@ -567,7 +592,7 @@ func statProgress(q Req, u UserTracker) ReqProgress {
 	}
 	p := ReqProgress{
 		Label: q.Raw,
-		Kind:  q.Kind, Have: have, Need: q.Value,
+		Kind:  q.Kind, Have: finiteStat(have), Need: finiteStat(q.Value),
 		HaveText: fmtStat(q.Kind, have), NeedText: fmtStat(q.Kind, q.Value),
 	}
 	if have < 0 {

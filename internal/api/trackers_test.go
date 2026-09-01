@@ -1,6 +1,11 @@
 package api
 
 import (
+	"encoding/json"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
@@ -193,5 +198,46 @@ func TestManualLayerJoinDateWins(t *testing.T) {
 func TestManualLayerEmptyClears(t *testing.T) {
 	if layer := (models.Tracker{}).ManualLayer(); len(layer) != 0 {
 		t.Errorf("empty tracker layer = %#v, want empty", layer)
+	}
+}
+
+// TestJSONOKFailsLoudly: a value encoding/json cannot marshal must produce a
+// real 500, not a 200 with an empty body.
+//
+// Encoding straight to the ResponseWriter sent the 200 header with the first
+// byte, so a mid-encode failure left the client with a successful-looking
+// empty response and the discarded error meant nothing reached the log. That
+// combination hid issue #40 for days: the access log's only trace was a
+// status of 0.
+func TestJSONOKFailsLoudly(t *testing.T) {
+	rec := httptest.NewRecorder()
+	jsonOK(rec, map[string]float64{"ratio": math.Inf(1)})
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "encoding_error") {
+		t.Errorf("body = %q, want an encoding_error payload", rec.Body.String())
+	}
+}
+
+// TestJSONOKWritesNormalValues guards the buffering rewrite: ordinary
+// responses must be unchanged.
+func TestJSONOKWritesNormalValues(t *testing.T) {
+	rec := httptest.NewRecorder()
+	jsonOK(rec, map[string]any{"ok": true, "n": 42})
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("content-type = %q", ct)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not valid JSON: %v (%q)", err, rec.Body.String())
+	}
+	if got["ok"] != true || got["n"] != float64(42) {
+		t.Errorf("body = %#v", got)
 	}
 }
