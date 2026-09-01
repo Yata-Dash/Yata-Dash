@@ -4,7 +4,7 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-08-30",
+    "fetched": "2026-09-01",
     "updated": "2026-08"
   },
   "abbr": {
@@ -127,7 +127,7 @@
     "ReelFliX": "RF",
     "RetroFlix": "RTF",
     "RocketHD": "RHD",
-    "SAMARITANO": "SAM",
+    "Samaritano": "SAM",
     "SceneHD": "SHD",
     "Secret Cinema": "SC",
     "SexTorrent": "SXT",
@@ -2855,6 +2855,14 @@
     },
     {
       "from": "Luminarr",
+      "to": "Samaritano",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Aug 2026"
+    },
+    {
+      "from": "Luminarr",
       "to": "Upload.cx",
       "days": 0,
       "reqs": "No requirement",
@@ -4270,7 +4278,7 @@
       "updated": "Jul 2026"
     },
     {
-      "from": "SAMARITANO",
+      "from": "Samaritano",
       "to": "CapybaraBR",
       "days": 0,
       "reqs": "Profile link and screenshots",
