@@ -6,6 +6,35 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260901]
+
+### Added
+
+- **Manual trackers — for the sites Yata can't reach.** A new **Manual entry**
+  tracker type that is never contacted: no API call, no scrape, no request of
+  any kind. You type the numbers in, and they stand until you change them. For
+  trackers with no usable stats API, or whose operators would rather Yata
+  stayed away — TorrentLeech being the case that prompted it.
+
+  Pick it from the type list when adding a tracker by hand, or when a Prowlarr
+  or Jackett import lands something Yata has no definition for. The edit form
+  then grows a **Manual Stats** section: add a row per stat, type the value,
+  save. Sizes and durations are tidied into the same shapes a fetch produces
+  ("12.5 tb" → "12.50 TB"), so a typed figure and a fetched one are
+  indistinguishable everywhere downstream — dashboard totals, sorting, targets,
+  group ladders, charts and alert rules all work exactly as they do on a
+  tracker Yata polls.
+
+  Each save is recorded as a real datapoint, so a hand-maintained tracker still
+  builds history and trend lines — just at whatever pace you update it. Nothing
+  claims a contact that never happened: the card footer reads **Entered**
+  rather than "API", the badge says **Manual**, and the detail panel reports
+  the source as entered by hand instead of a last-fetch time.
+
+  Typed values are also available on ANY tracker as a last resort, filling only
+  the stats its API and profile page both leave empty — the same slot the
+  hand-entered join date has always used.
+
 ## [Beta-20260830]
 
 ### Added

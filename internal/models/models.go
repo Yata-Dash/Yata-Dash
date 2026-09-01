@@ -3,10 +3,18 @@
 // definition files loaded by internal/defs.
 package models
 
+import "strings"
+
 // TypeUnknown is the type key for a tracker Yata has no definition for and
 // whose software the user hasn't identified yet. It fetches and scrapes
 // nothing — see defs/types/unknown.json.
 const TypeUnknown = "unknown"
+
+// TypeManual is the type key for a tracker Yata deliberately never contacts:
+// its stats are typed in by hand. Distinct from TypeUnknown, which also
+// fetches nothing but means "we don't know what this is yet" — a state to be
+// resolved, not a choice. See defs/types/manual.json.
+const TypeManual = "manual"
 
 // Tracker is a user-configured tracker account, stored in config.json.
 type Tracker struct {
@@ -57,6 +65,38 @@ type Tracker struct {
 	// API nor a profile scrape reports one (e.g. MyAnonamouse, which exposes
 	// no join date). Entered once at setup; a join date never changes.
 	JoinDate string `json:"join_date,omitempty"`
+
+	// ManualStats are stat values typed in by the user, keyed by canonical
+	// field name ({"uploaded": "5.50 TiB", "ratio": "1.05"}). They feed the
+	// lowest-priority "manual" stats layer, so on a tracker Yata can fetch
+	// they fill only what the API and a scrape both leave empty, and on a
+	// "manual" type — a tracker Yata never contacts at all — they are the
+	// stats. Stored as the human-readable strings the rest of the app already
+	// handles, so a typed figure and a fetched one are indistinguishable
+	// downstream. Kept on the tracker rather than only in the stats layer
+	// because that layer is rebuilt from scratch on every save.
+	ManualStats map[string]string `json:"manual_stats,omitempty"`
+}
+
+// ManualLayer is everything this tracker contributes to the lowest-priority
+// "manual" stats layer: the typed-in stat values, plus the join date from its
+// own dedicated input. An empty result is meaningful — it clears the layer.
+//
+// One function because the layer is REPLACED wholesale wherever it is written
+// (tracker save, startup, config import), so any caller building it from a
+// subset of these fields silently deletes the rest.
+func (t Tracker) ManualLayer() map[string]any {
+	out := make(map[string]any, len(t.ManualStats)+1)
+	for field, v := range t.ManualStats {
+		if field != "" && v != "" {
+			out[field] = v
+		}
+	}
+	// Last: the dedicated Join Date input owns join_date outright.
+	if jd := strings.TrimSpace(t.JoinDate); jd != "" {
+		out["join_date"] = jd
+	}
+	return out
 }
 
 // TrackerView is the safe public representation of a Tracker sent to the
@@ -77,6 +117,11 @@ type TrackerView struct {
 	TargetGroup     string            `json:"target_group"`
 	TargetDeadlines map[string]string `json:"target_deadlines"`
 	JoinDate        string            `json:"join_date"` // user-entered fallback (YYYY-MM-DD)
+	// ManualStats are the user's typed-in stat values (canonical field →
+	// human-readable value). No omitempty: an absent key and an empty object
+	// must look the same to the form, or clearing the last row would read as
+	// "unchanged" and the row would come back on reload.
+	ManualStats map[string]string `json:"manual_stats"`
 
 	MinScrapeIntervalMinutes int    `json:"min_scrape_interval_minutes"`
 	MaxScrapesPerDay         int    `json:"max_scrapes_per_day"`
@@ -464,6 +509,11 @@ type TrackerStatsResponse struct {
 	// still attempted every few minutes, so FetchedAt says "5 minutes ago"
 	// about data that is seven days old.
 	APIUpdatedAt int64 `json:"api_updated_at,omitempty"`
+	// ManualEntry marks a response from a tracker Yata never contacts — its
+	// numbers are the ones the user typed. The UI reads it to avoid labelling
+	// them as fetched: "API 5:10 PM" under a hand-entered figure claims a
+	// request that was never made.
+	ManualEntry bool `json:"manual_entry,omitempty"`
 	// Rates is per-day growth for projectable fields (uploaded/downloaded/
 	// seed_size in GiB; bonus_points raw), from the stable daily-rollup
 	// average. The frontend uses it for target/promotion ETAs. A field with

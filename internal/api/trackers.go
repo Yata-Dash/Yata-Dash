@@ -3,12 +3,14 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/parse"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 )
 
@@ -41,6 +43,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		TargetGroup:              t.TargetGroup,
 		TargetDeadlines:          t.TargetDeadlines,
 		JoinDate:                 t.JoinDate,
+		ManualStats:              t.ManualStats,
 		MinScrapeIntervalMinutes: t.MinScrapeIntervalMinutes,
 		MaxScrapesPerDay:         t.MaxScrapesPerDay,
 		AutoInterval:             t.AutoInterval,
@@ -52,6 +55,9 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 	}
 	if v.TargetDeadlines == nil {
 		v.TargetDeadlines = map[string]string{}
+	}
+	if v.ManualStats == nil {
+		v.ManualStats = map[string]string{}
 	}
 	if v.HasKey {
 		v.APIKeyMasked = maskedKey
@@ -182,6 +188,7 @@ type trackerPayload struct {
 	TargetDeadlines          *map[string]string `json:"target_deadlines"`
 	MockScenario             *string            `json:"mock_scenario"`
 	JoinDate                 *string            `json:"join_date"`
+	ManualStats              *map[string]string `json:"manual_stats"`
 }
 
 func createTracker(d *Deps) http.HandlerFunc {
@@ -331,7 +338,81 @@ func applyPayload(t *models.Tracker, p trackerPayload) {
 	if p.JoinDate != nil {
 		t.JoinDate = strings.TrimSpace(*p.JoinDate)
 	}
+	if p.ManualStats != nil {
+		t.ManualStats = sanitizeManualStats(*p.ManualStats)
+	}
 	sanitizeTargetDeadlines(t)
+}
+
+// manualStatsMaxFields caps how many values one tracker can carry. Well past
+// the ~30 canonical stats the form offers, and low enough that a malformed or
+// hostile POST can't turn the config file into a dumping ground.
+const manualStatsMaxFields = 100
+
+// sanitizeManualStats cleans user-typed stat values into the same shapes a
+// fetch produces, so a typed number and a fetched one are indistinguishable to
+// everything downstream — sorting, targets, charts, alert rules.
+//
+// Sizes are re-formatted to two decimals ("5.5 tb" → "5.50 tb"), which is what
+// the scrapers already do to their own readings, and seed times are normalised
+// to the canonical "1Y 2M 3D" form so the duration parser can read them back.
+// Anything unrecognised is passed through as typed rather than rejected: the
+// canonical field set grows, and refusing a value we merely don't recognise
+// would be worse than storing it.
+//
+// Empty values are dropped rather than stored, so clearing a row removes the
+// stat instead of leaving an empty string that reads as a real answer.
+func sanitizeManualStats(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	for field, raw := range in {
+		if len(out) >= manualStatsMaxFields {
+			break
+		}
+		field = strings.TrimSpace(field)
+		v := strings.TrimSpace(raw)
+		if field == "" || v == "" {
+			continue
+		}
+		switch {
+		case manualSizeFields[field]:
+			v = normalizeManualUnit(parse.NormalizeSeedSize(v))
+		case manualDurationFields[field]:
+			if secs := parse.SeedTimeToSeconds(v); secs != nil {
+				v = parse.FormatSeedTime(*secs)
+			}
+		}
+		out[field] = v
+	}
+	return out
+}
+
+// manualSizeFields and manualDurationFields are the canonical stats whose
+// values are a size or a duration rather than a plain count — the two shapes
+// that need normalising before they are stored.
+var manualSizeFields = map[string]bool{
+	"uploaded": true, "downloaded": true, "buffer": true, "seed_size": true,
+	"real_uploaded": true, "real_downloaded": true,
+}
+
+var manualDurationFields = map[string]bool{
+	"avg_seed_time": true, "total_seedtime": true,
+}
+
+// manualUnitRe matches the size unit at the end of a normalised size string.
+var manualUnitRe = regexp.MustCompile(`(?i)(B|[KMGTP]iB|[KMGTP]B)$`)
+
+// normalizeManualUnit fixes the CASE of a typed size unit ("12.50 tb" →
+// "12.50 TB", "800.00 gib" → "800.00 GiB"), which NormalizeSeedSize leaves
+// alone on purpose — a scraped value should keep whatever the tracker's own
+// page rendered. Typed input has no such source to be faithful to, and
+// "12.50 tb" sitting in a column beside "3.77 GiB" just reads as a bug.
+func normalizeManualUnit(v string) string {
+	return manualUnitRe.ReplaceAllStringFunc(strings.TrimRight(v, " \t"), func(u string) string {
+		if len(u) == 3 { // KiB/MiB/GiB/TiB/PiB — only the middle "i" stays lower
+			return strings.ToUpper(u[:1]) + "i" + strings.ToUpper(u[2:])
+		}
+		return strings.ToUpper(u)
+	})
 }
 
 // sanitizeTargetDeadlines drops a deadline whose target field has no value
@@ -368,11 +449,7 @@ func clampTrackerScrape(d *Deps, t *models.Tracker) {
 // the join date) into the lowest-priority "manual" stats layer, so they fill
 // gaps the API and scrape leave empty. Called after every create/update.
 func syncManualLayer(d *Deps, t models.Tracker) {
-	fields := map[string]any{}
-	if jd := strings.TrimSpace(t.JoinDate); jd != "" {
-		fields["join_date"] = jd
-	}
-	_ = d.Stats.SaveManual(t.ID, fields) // empty map clears the layer
+	_ = d.Stats.SaveManual(t.ID, t.ManualLayer()) // empty map clears the layer
 }
 
 func deleteTracker(d *Deps) http.HandlerFunc {

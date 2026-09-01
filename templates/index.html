@@ -978,6 +978,19 @@
                      Group selected → a read-only chip summary of the group's
                      requirements. "— manual —" → the dynamic target builder
                      (pick any stat this tracker reports, one row per target). -->
+                <!-- ══ Manual stats (typed in — no fetching) ═══════════ -->
+                <div id="modal-manual-section" style="display:none">
+                  <div class="modal-divider"><span class="modal-divider-label">Manual Stats</span><div class="modal-divider-line"></div></div>
+                  <span class="form-hint" id="modal-manual-hint" style="margin-top:-6px">Yata never contacts this tracker &mdash; these are the numbers it shows. Update them whenever you like; each save is recorded, so history and charts build up over time.</span>
+                  <div id="modal-manual-rows" style="margin-top:10px"></div>
+                  <div class="target-add-row">
+                    <select class="form-input" id="modal-manual-add-select" style="max-width:260px">
+                      <option value="">&#8212; choose a stat &#8212;</option>
+                    </select>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="modalAddManualRow()" style="white-space:nowrap">+ Add stat</button>
+                  </div>
+                </div>
+
                 <div id="modal-targets-section">
                   <div class="modal-divider"><span class="modal-divider-label">Targets <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></span><div class="modal-divider-line"></div></div>
                   <span class="form-hint" style="margin-top:-6px">Goals toward your next user group</span>

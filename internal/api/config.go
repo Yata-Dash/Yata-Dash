@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -75,11 +74,10 @@ func importConfig(d *Deps) http.HandlerFunc {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		// Re-sync derived state from the new config (manual join-date layers).
+		// Re-sync derived state from the new config (the manual stats layer:
+		// typed-in stats and join dates).
 		for _, t := range d.Cfg.Trackers() {
-			if jd := strings.TrimSpace(t.JoinDate); jd != "" {
-				_ = d.Stats.SaveManual(t.ID, map[string]any{"join_date": jd})
-			}
+			_ = d.Stats.SaveManual(t.ID, t.ManualLayer())
 		}
 		d.logInfof("config: imported (%d trackers) — previous config backed up", len(d.Cfg.Trackers()))
 		jsonOK(w, map[string]any{"ok": true})
