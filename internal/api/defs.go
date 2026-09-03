@@ -37,6 +37,10 @@ type defInfo struct {
 	// config fields (see requiredFieldsFor). No omitempty: an empty list
 	// must reach the UI as [] so it doesn't fall back to the type default.
 	RequiredFields []string `json:"required_fields"`
+	// Retired marks a tracker whose site has shut down. The picker hides
+	// these — the def is kept so existing users keep their history readable,
+	// not so new users can add a tracker that no longer exists.
+	Retired bool `json:"retired,omitempty"`
 	// Capabilities is what this tracker can actually report, so the picker can
 	// show it BEFORE the tracker is added — which is the whole point: a user
 	// choosing between two trackers can't consult stats they don't have yet.
@@ -157,6 +161,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 				MaxScrapesPerDay:   rs.MaxScrapesPerDay,
 				ApprovalStatus:     td.ApprovalStatus(),
 				ApprovalNote:       td.ApprovalNote(),
+				Retired:            td.Retired != nil,
 			}
 			// Resolve through the type so a tracker inheriting its family's
 			// endpoint reports the same hint and required fields it will

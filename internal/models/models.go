@@ -76,6 +76,19 @@ type Tracker struct {
 	// downstream. Kept on the tracker rather than only in the stats layer
 	// because that layer is rebuilt from scratch on every save.
 	ManualStats map[string]string `json:"manual_stats,omitempty"`
+
+	// LastLoginAt is the user's own record of when they last logged in to this
+	// tracker (RFC3339 UTC), set by the "I've logged in" action. It feeds the
+	// last_login stat, which is what the inactivity countdown reads.
+	//
+	// It exists because almost no tracker API reports a login time — of 22
+	// probed on 2026-09-02, one did. Without this the countdown would be a
+	// feature for a single tracker.
+	//
+	// Yata never observes a login and never could: this is only ever what the
+	// user told it, which is the standing position on issue #32 and the thing
+	// that makes the feature acceptable rather than surveillance.
+	LastLoginAt string `json:"last_login_at,omitempty"`
 }
 
 // ManualLayer is everything this tracker contributes to the lowest-priority
@@ -95,6 +108,14 @@ func (t Tracker) ManualLayer() map[string]any {
 	// Last: the dedicated Join Date input owns join_date outright.
 	if jd := strings.TrimSpace(t.JoinDate); jd != "" {
 		out["join_date"] = jd
+	}
+	// Same for the recorded login, and on exactly the same terms: the manual
+	// layer is the last resort, so a tracker that reports its own last_login
+	// always wins — the tracker's API is the source of truth about the
+	// tracker's account, stale or not. This value is what drives the countdown
+	// on the trackers that report nothing, which is nearly all of them.
+	if ll := strings.TrimSpace(t.LastLoginAt); ll != "" {
+		out["last_login"] = ll
 	}
 	return out
 }
@@ -117,6 +138,11 @@ type TrackerView struct {
 	TargetGroup     string            `json:"target_group"`
 	TargetDeadlines map[string]string `json:"target_deadlines"`
 	JoinDate        string            `json:"join_date"` // user-entered fallback (YYYY-MM-DD)
+	// LastLoginAt is the user's own recorded login time (RFC3339 UTC, "" =
+	// never recorded). Sent so the UI can show when it was set and offer to
+	// clear it — a mistaken tap would otherwise be uncorrectable until the
+	// deadline passed.
+	LastLoginAt string `json:"last_login_at"`
 	// ManualStats are the user's typed-in stat values (canonical field →
 	// human-readable value). No omitempty: an absent key and an empty object
 	// must look the same to the form, or clearing the last row would read as
@@ -165,6 +191,13 @@ type TrackerView struct {
 	// when a tracker distinguishes episode and season torrents.
 	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
 	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
+	// MaxLoginGapDays is how long the account may go without a login before
+	// the tracker disables or prunes it (0 = no policy known). Unlike the
+	// other rules here it is not purely display: it is also what
+	// login_days_remaining counts down to. Sent regardless of whether the
+	// tracker reports a login time, because the policy is worth reading on
+	// its own — it is the number that tells you how often to visit.
+	MaxLoginGapDays int `json:"max_login_gap_days,omitempty"`
 	// RuleNote is concise fine print supplied by the tracker definition.
 	RuleNote string `json:"rule_note,omitempty"`
 	// DefApproval is the def's staff-approval status (approved | informal |
@@ -179,6 +212,13 @@ type TrackerView struct {
 	// knows why it went quiet. OptOutNote carries the public note, if any.
 	OptedOut   bool   `json:"opted_out,omitempty"`
 	OptOutNote string `json:"opted_out_note,omitempty"`
+
+	// Retired is set when this tracker's def records that the site has shut
+	// down. Distinct from OptedOut: nobody asked Yata to stop, there is simply
+	// nothing left to ask. Stats already collected stay visible.
+	Retired     bool   `json:"retired,omitempty"`
+	RetiredDate string `json:"retired_date,omitempty"`
+	RetiredNote string `json:"retired_note,omitempty"`
 }
 
 // Settings holds application-level configuration.
@@ -223,6 +263,14 @@ type Settings struct {
 	// never clear (permanent record) — off shows a neutral colour instead so
 	// it doesn't read as an ongoing alarm.
 	HighlightHnR *bool `json:"highlight_hnr"`
+	// LoginResetOnLinkClick makes opening a tracker's link from Yata record a
+	// login for it, feeding the inactivity countdown. Default FALSE, and
+	// deliberately so: a click quietly meaning something is exactly what
+	// people object to, and the explicit "I've logged in" action works with
+	// this off. Opening the link is also only evidence that you went to the
+	// site, not that you signed in — which is fine for a countdown the user
+	// owns, and would not be if Yata claimed to know.
+	LoginResetOnLinkClick bool `json:"login_reset_on_link_click"`
 	// HideLoginWarning suppresses the persistent "Login protection is off"
 	// dashboard banner for users who deliberately run without login (trusted
 	// LAN, etc.). Default false — the warning shows, since login is the safer
@@ -386,6 +434,18 @@ type NotificationConfig struct {
 	// config.seedDefaultAlertRules) has already run for this install, so a
 	// user who deletes the starter rules never gets them re-injected.
 	SeededDefaultRules bool `json:"seeded_default_rules,omitempty"`
+	// SeedVersion is how many seeding batches have run for this install.
+	//
+	// SeededDefaultRules alone could only ever say "the first batch ran", so a
+	// rule added to the seeding later reached NEW installs and nobody else —
+	// which is backwards: the people who most need a rule for a newly added
+	// field are the ones who have been running Yata long enough to have an
+	// account at risk. The counter lets each later batch run exactly once for
+	// everyone, while deleting a seeded rule still sticks.
+	//
+	// Migrated from the bool on load: an install with SeededDefaultRules set
+	// and no version has had batch 1 and nothing else.
+	SeedVersion int `json:"seed_version,omitempty"`
 	// Digest schedules the weekly summary notification (internal/api/digest.go).
 	Digest DigestConfig `json:"digest"`
 }
@@ -514,6 +574,12 @@ type TrackerStatsResponse struct {
 	// them as fetched: "API 5:10 PM" under a hand-entered figure claims a
 	// request that was never made.
 	ManualEntry bool `json:"manual_entry,omitempty"`
+	// Retired marks a tracker that has shut down. Its stats are whatever was
+	// last stored and will never change again; the UI labels it rather than
+	// showing a stale-looking success or an error for a site that is gone.
+	Retired     bool   `json:"retired,omitempty"`
+	RetiredDate string `json:"retired_date,omitempty"`
+	RetiredNote string `json:"retired_note,omitempty"`
 	// Rates is per-day growth for projectable fields (uploaded/downloaded/
 	// seed_size in GiB; bonus_points raw), from the stable daily-rollup
 	// average. The frontend uses it for target/promotion ETAs. A field with

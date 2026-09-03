@@ -75,6 +75,20 @@ const FIELDS: FieldDef[] = [
   { value: 'buffer_zero_eta_days', label: 'Buffer runs out within (days)',        type: 'numeric' },
   { value: 'seed_size_drop_7d_pct', label: 'Seed size drop over 7d (%)',          type: 'numeric' },
   { value: 'seeding_drop_7d_pct',  label: 'Seeding count drop over 7d (%)',       type: 'numeric' },
+  // Account deadlines (internal/stats/account.go). Absent — and so silently
+  // false — on every tracker that reports no login time or key expiry.
+  //
+  // "Days left" rather than "days since" is the whole point of the pair:
+  // days_since_login > 21 is wrong on every tracker whose policy is not 30
+  // days, so someone with a 90-day tracker and a 30-day one could not express
+  // "warn me a week out" as one rule. login_days_remaining normalises that
+  // against each tracker's own declared policy, so one rule means the same
+  // thing everywhere. days_since_login is still offered, because it is the
+  // only one available on a tracker whose policy Yata does not know.
+  { value: 'login_days_remaining', label: 'Login deadline within (days)', type: 'numeric',
+    hint: 'Counts down to the tracker’s own inactivity deadline, so one rule fits trackers with different policies. Only trackers whose def declares a policy can report this.' },
+  { value: 'days_since_login',     label: 'Days since last login',        type: 'numeric' },
+  { value: 'api_key_expiry_days',  label: 'API key expires within (days)', type: 'numeric' },
   { value: 'freeleech_active', label: 'Active event (freeleech / announcement)', type: 'bool' },
   { value: 'unread_mail',          label: 'Unread mail (inbox)', type: 'bool' },
   { value: 'unread_notifications', label: 'Unread notifications (bell)', type: 'bool' },

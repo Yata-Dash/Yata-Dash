@@ -255,15 +255,15 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 <!-- BEGIN GENERATED TRACKER TABLE (go run ./tools/defsdoc) -->
 | Tracker | Platform | Approved | Stats | Limit | Notes |
 |---|---|---|---|---|---|
-| Aither | UNIT3D | Yes | 3/6 (4 scraped) | 180min | Monthly Uploads not currently retrievable |
+| Aither | UNIT3D | Yes | 7/7 | API only |  |
 | AnimeBytes | Custom API | No | 4/4 | API only | Uses the personal stats API; account age is entered manually |
 | Anthelion | Gazelle (ANT/NEB) | Yes | 6/6 | API only | Expanded API stats added 2026-07, shared with Nebulance |
-| Aura4K | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
 | Blutopia | UNIT3D | No | 3/5 | API only |  |
 | BroadcastTheNet | Custom API | No | 5/6 | API only | JSON-RPC userInfo; 150 API calls per hour |
 | DarkPeers | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
 | GazelleGames | GazelleGames | No | 1/1 | API only |  |
 | Hawke-uno | UNIT3D | No | 6/6 | API only | Not on this tracker can't seek approval |
+| HHD | UNIT3D | No | 6/6 | API only |  |
 | InfinityHD | UNIT3D | Yes | 3/6 (4 scraped) | Default |  |
 | LST | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
 | Luminarr | UNIT3D | Yes | 3/6 (4 scraped) | 120min |  |
@@ -273,8 +273,9 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | OldToonsWorld | UNIT3D | Yes | 5/5 | API only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | UNIT3D | Yes | 3/6 (4 scraped) | Once per day |  |
 | Orpheus | Gazelle (ajax.php) | No | 6/6 | API only | Required ratio is calculated dynamically |
+| PeerGarden | Traxary | No | 4/6 | API only | Pending - Awaiting user API to be turned on |
 | Redacted | Gazelle (ajax.php) | No | 6/6 | API only |  |
-| ReelFliX | UNIT3D | No | 5/5 | API only | Rolling monthly uploads not retrievable |
+| ReelFliX | UNIT3D | Yes | 6/6 | API only |  |
 | RetroFlix | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
 | RocketHD | UNIT3D | Yes | 3/6 | API only |  |
 | Seedpool | UNIT3D | Yes | 2/3 (3 scraped) | 180min |  |

@@ -63,6 +63,10 @@ export interface Tracker {
   min_seed_days_episode?: number;
   min_seed_days_season?: number;
   /** Fine print for variable seed-time formulas, grace periods, or H&R rules. */
+  /** Tracker's inactivity policy in days (0/absent = none known). */
+  max_login_gap_days?: number;
+  /** The user's own recorded login (RFC3339 UTC); "" = never recorded. */
+  last_login_at?: string;
   rule_note?: string;
   /** Def staff-approval status: approved | informal | pending | unknown.
    *  Manual trackers report "unknown"; the UI warns unless "approved". */
@@ -74,6 +78,12 @@ export interface Tracker {
    *  quiet. opted_out_note carries the public note, if any. */
   opted_out?: boolean;
   opted_out_note?: string;
+  /** The tracker has SHUT DOWN. Nothing is fetched or scraped, but everything
+   *  already collected stays visible — only new data has stopped. Distinct
+   *  from opted_out: nobody asked Yata to stop, there is nothing left to ask. */
+  retired?: boolean;
+  retired_date?: string;
+  retired_note?: string;
 }
 
 /** Sentinel value meaning "credential unchanged" in PUT/POST payloads. */
@@ -193,7 +203,7 @@ export interface TrackerTestOverrides {
 
 export interface ScrapeStatus {
   allowed: boolean;
-  reason?: 'opted_out' | 'api_only' | 'no_scrape_support' | 'scrape_disabled' | 'no_username' | 'no_cookie' | 'daily_limit' | 'cooldown';
+  reason?: 'opted_out' | 'retired' | 'api_only' | 'no_scrape_support' | 'scrape_disabled' | 'no_username' | 'no_cookie' | 'daily_limit' | 'cooldown';
   next_allowed_at?: number;          // unix sec, set for "cooldown"
   effective_interval_minutes: number;
   effective_max_per_day: number;     // 0 = unlimited
@@ -325,6 +335,9 @@ export interface AppSettings {
   show_unread_notifications?: boolean | null; // null = true — unread bell icons
   show_tracker_rules?: boolean | null;        // null = true — compact rules line on grid cards
   highlight_hnr?: boolean | null;             // null = true — red colouring for a nonzero H&R count
+  /** Opening a tracker's link records a login for it. Default FALSE — a click
+   *  quietly meaning something is the part people object to. */
+  login_reset_on_link_click?: boolean;
   show_goal_pacing?: boolean | null;          // null = true — full pacing line on Detail's Targets section
   show_goal_chips?: boolean | null;           // null = true — compact on-track/behind chip on cards/table
   hide_login_warning?: boolean;                // opt-out of the "login protection is off" banner (default false = warn)
@@ -563,6 +576,8 @@ export interface DefInfo {
   needs_session_cookie?: boolean;
   approval_status?: string; // approved | informal | pending | unknown
   approval_note?: string;
+  /** Site has shut down — hidden from the Add Tracker picker. */
+  retired?: boolean;
   /** Type's required config fields minus any the def's API provides. */
   required_fields?: string[];
   capabilities?: TrackerCapabilities;

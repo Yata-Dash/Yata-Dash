@@ -7,8 +7,8 @@ import (
 )
 
 // TestFreshInstallSeedsDefaultAlertRules: a brand-new config.json (no
-// destinations, no rules — nobody has touched Alerts yet) gets the two
-// starter rules on its very first load, and the flag stops it happening
+// destinations, no rules — nobody has touched Alerts yet) gets every seeding
+// batch on its very first load, and the version counter stops it happening
 // again on a later load.
 func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	dir := t.TempDir()
@@ -22,10 +22,13 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if !n.SeededDefaultRules {
 		t.Fatal("expected SeededDefaultRules to be set after a fresh-install load")
 	}
-	if len(n.Rules) != 3 {
-		t.Fatalf("expected 3 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
+	if n.SeedVersion != seedVersion {
+		t.Fatalf("expected SeedVersion %d after a fresh-install load, got %d", seedVersion, n.SeedVersion)
 	}
-	var haveEvents, haveTarget, haveGuard bool
+	if len(n.Rules) != 5 {
+		t.Fatalf("expected 5 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
+	}
+	var haveEvents, haveTarget, haveGuard, haveLogin, haveKey bool
 	for _, r := range n.Rules {
 		if !r.Enabled {
 			t.Errorf("seeded rule %q must be enabled", r.Name)
@@ -49,9 +52,23 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 				r.Conditions[0].Value != "14" || r.CooldownMins != 1440 {
 				t.Errorf("Ratio approaching minimum rule malformed: %+v", r)
 			}
+		case "Login required soon":
+			haveLogin = true
+			if r.Match != "all" || len(r.Conditions) != 1 ||
+				r.Conditions[0].Field != "login_days_remaining" || r.Conditions[0].Op != "lte" ||
+				r.Conditions[0].Value != "7" || r.CooldownMins != 1440 {
+				t.Errorf("Login required soon rule malformed: %+v", r)
+			}
+		case "API key expiring":
+			haveKey = true
+			if r.Match != "all" || len(r.Conditions) != 1 ||
+				r.Conditions[0].Field != "api_key_expiry_days" || r.Conditions[0].Op != "lte" ||
+				r.Conditions[0].Value != "14" || r.CooldownMins != 1440 {
+				t.Errorf("API key expiring rule malformed: %+v", r)
+			}
 		}
 	}
-	if !haveEvents || !haveTarget || !haveGuard {
+	if !haveEvents || !haveTarget || !haveGuard || !haveLogin || !haveKey {
 		t.Fatalf("missing an expected seeded rule: %+v", n.Rules)
 	}
 
@@ -60,16 +77,16 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 3 {
-		t.Fatalf("second load re-seeded: got %d rules, want 3", got)
+	if got := len(m2.Notifications().Rules); got != 5 {
+		t.Fatalf("second load re-seeded: got %d rules, want 5", got)
 	}
 }
 
-// TestExistingSetupIsNotSeeded: a config.json from before this feature
-// shipped, with a user-created rule already in place, must NOT get the
-// starter rules injected — only the flag gets set so it's never
-// re-evaluated.
-func TestExistingSetupIsNotSeeded(t *testing.T) {
+// TestExistingSetupIsNotSeededWithStarters: a config.json with a user-created
+// rule already in place must NOT get batch 1's starter rules injected — that
+// setup was deliberate. Batch 2 is a different case and is asserted below:
+// its rules guard fields that did not exist when the user built their setup.
+func TestExistingSetupIsNotSeededWithStarters(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 
@@ -95,22 +112,87 @@ func TestExistingSetupIsNotSeeded(t *testing.T) {
 	if !n.SeededDefaultRules {
 		t.Fatal("expected the flag to be set even when nothing was injected")
 	}
-	if len(n.Rules) != 1 || n.Rules[0].Name != "My rule" {
-		t.Fatalf("expected the user's existing rule to be untouched, got %+v", n.Rules)
+	if n.Rules[0].Name != "My rule" {
+		t.Fatalf("expected the user's existing rule to be kept first, got %+v", n.Rules)
+	}
+	for _, r := range n.Rules {
+		switch r.Name {
+		case "Promotions & demotions", "Target met", "Ratio approaching minimum":
+			t.Fatalf("batch 1 starter rule %q injected over an existing setup", r.Name)
+		}
+	}
+	// Batch 2 DOES apply here, deliberately: login_days_remaining and
+	// api_key_expiry_days did not exist when this user built their rules, so
+	// withholding the guards would leave exactly the long-standing accounts
+	// most at risk with no warning at all.
+	if len(n.Rules) != 3 {
+		t.Fatalf("expected the user's rule plus the two account-deadline rules, got %+v", n.Rules)
 	}
 
-	// A second load is a pure no-op (flag already set).
+	// A second load is a pure no-op (the counter has caught up).
 	m2, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 1 {
-		t.Fatalf("second load changed rule count: got %d, want 1", got)
+	if got := len(m2.Notifications().Rules); got != 3 {
+		t.Fatalf("second load changed rule count: got %d, want 3", got)
+	}
+}
+
+// TestAlreadySeededInstallGetsOnlyTheNewBatch: an install carrying the
+// pre-counter seeded_default_rules flag has had batch 1 and nothing else. It
+// must be migrated to version 1 and then given batch 2 exactly once —
+// including the starter rules it deleted staying deleted.
+func TestAlreadySeededInstallGetsOnlyTheNewBatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := `{
+		"server": {"host": "0.0.0.0", "port": 8420},
+		"trackers": [],
+		"settings": {},
+		"notifications": {
+			"destinations": [],
+			"rules": [],
+			"seeded_default_rules": true
+		}
+	}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := m.Notifications()
+	if n.SeedVersion != seedVersion {
+		t.Fatalf("expected SeedVersion %d, got %d", seedVersion, n.SeedVersion)
+	}
+	if len(n.Rules) != 2 {
+		t.Fatalf("expected only the two batch-2 rules, got %+v", n.Rules)
+	}
+	for _, r := range n.Rules {
+		if r.Name != "Login required soon" && r.Name != "API key expiring" {
+			t.Fatalf("unexpected rule seeded: %+v", r)
+		}
+	}
+
+	// Deleting a seeded rule must stick across a restart.
+	n.Rules = nil
+	if err := m.UpdateNotifications(n); err != nil {
+		t.Fatal(err)
+	}
+	m2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(m2.Notifications().Rules); got != 0 {
+		t.Fatalf("deleted seeded rules came back: %+v", m2.Notifications().Rules)
 	}
 }
 
 // TestExistingDestinationOnlyIsNotSeeded: a destination with no rules yet
-// (mid-setup) also counts as "touched" — no rules get injected.
+// (mid-setup) also counts as "touched" for batch 1 — no starter rules get
+// injected. Batch 2 still applies, as above.
 func TestExistingDestinationOnlyIsNotSeeded(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -134,8 +216,14 @@ func TestExistingDestinationOnlyIsNotSeeded(t *testing.T) {
 	if !n.SeededDefaultRules {
 		t.Fatal("expected the flag to be set")
 	}
-	if len(n.Rules) != 0 {
-		t.Fatalf("expected no rules injected when a destination already existed, got %+v", n.Rules)
+	for _, r := range n.Rules {
+		switch r.Name {
+		case "Promotions & demotions", "Target met", "Ratio approaching minimum":
+			t.Fatalf("batch 1 starter rule %q injected when a destination already existed", r.Name)
+		}
+	}
+	if len(n.Rules) != 2 {
+		t.Fatalf("expected only the two account-deadline rules, got %+v", n.Rules)
 	}
 }
 

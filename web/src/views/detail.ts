@@ -10,6 +10,7 @@ import * as api from '../api';
 import { renderChart } from '../components/chart';
 import type { ChartSeries } from '../components/chart';
 import { buildStatRows } from '../components/profile';
+import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, fmtLoginAgo, statDate } from '../utils/account';
 import { capabilityCard } from '../components/capabilities';
 import { appSettings, fieldOf, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
 import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
@@ -219,6 +220,12 @@ function render(): void {
   const unreadFlags = unreadFlagsHtml(
     t.name, fieldOf(stats, 'unread_mail'), fieldOf(stats, 'unread_notifications'), appSettings);
 
+  // Account deadlines. On Detail the badge sits with the identity line, where
+  // the dates it is derived from are also shown — and the page recomputes on
+  // render, so its countdown can't go stale the way an all-night dashboard
+  // could.
+  const deadlineBadges = accountWarningBadges(stats);
+
   const eventBanner = renderEventBanners(stats);
 
   const header = `<div class="detail-header">
@@ -228,18 +235,22 @@ function render(): void {
     <div class="detail-title-wrap">
       <div class="detail-title">${esc(fmtTrackerName(t.name, t.abbr ?? '', appSettings.tracker_name_mode))}
         ${liveGroup ? renderGroupBadge(gDef, liveGroup, appSettings, 'badge-group') : ''}
+        ${deadlineBadges}
         ${unreadFlags}
       </div>
       <div class="detail-sub">
         ${username ? renderUsername(username, gDef, appSettings, 'private-blur') : ''}
         ${joinDate ? `<span title="Joined ${esc(joinDate)}">member ${memberDur(joinDate)}</span>` : ''}
+        ${lastLoginChip(stats)}
+        ${keyExpiryChip(stats)}
         ${stats?.fetched_at ? `<span>updated ${esc(fmtDateTime(stats.fetched_at))}</span>` : ''}
       </div>
     </div>
     <div class="detail-actions">
+      ${loginActions(t, stats)}
       <button type="button" class="btn btn-ghost btn-sm" onclick="refreshSingle('${jsId(t.id)}')" title="Refresh stats now">
         <i class="fas fa-rotate"></i></button>
-      ${safeUrl(t.profile_url) ? `<a class="btn btn-ghost btn-sm" href="${esc(safeUrl(t.profile_url))}" target="_blank" rel="noopener noreferrer" title="Open your profile on the tracker">
+      ${safeUrl(t.profile_url) ? `<a class="btn btn-ghost btn-sm" href="${esc(safeUrl(t.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="trackerLinkOpened('${jsId(t.id)}')" title="Open your profile on the tracker">
         <i class="fas fa-arrow-up-right-from-square"></i></a>` : ''}
       <button type="button" class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(t.id)}')" title="Edit tracker">
         <i class="fas fa-pen"></i></button>
@@ -439,6 +450,80 @@ function statDeltaChip(t: Tracker, key: string): string {
   return `<span class="stat-delta-chip">(${esc(fmtSignedDelta(unit, dv))} /${esc(label)})</span> `;
 }
 
+/** Last login on the identity line, beside "member 8M 3W".
+ *
+ *  The Detail page has no Info column — its account facts live in this
+ *  subtitle — so this is where the date the countdown reads from belongs. The
+ *  tooltip names the source, because "the tracker told us" and "you told us"
+ *  are very different claims. */
+function lastLoginChip(stats: TrackerStatsResponse | undefined): string {
+  const raw = String(stats?.fields?.['last_login']?.value ?? '').trim();
+  if (!raw) return '';
+  const src = stats?.fields?.['last_login']?.source;
+  const tip = src === 'manual'
+    ? 'You recorded this login — Yata never observes one'
+    : src === 'scrape'
+      ? "Read from the tracker's profile page"
+      : "Reported by the tracker's API";
+  return `<span title="${esc(tip)}">last login ${esc(fmtLastLogin(raw))}</span>`;
+}
+
+/** API key expiry on the identity line. Detail has no Info column, so this is
+ *  the counterpart to the row the table's Info section carries. Only LST
+ *  issues expiring keys today, so it is absent almost everywhere; the exact
+ *  date is in the tooltip since the countdown is what you act on. */
+function keyExpiryChip(stats: TrackerStatsResponse | undefined): string {
+  const raw = String(stats?.fields?.['api_key_expires_at']?.value ?? '').trim();
+  if (!raw) return '';
+  const days = Number(stats?.fields?.['api_key_expiry_days']?.value);
+  const urgent = Number.isFinite(days) && days <= 30;
+  const style = urgent ? ' style="color:var(--amber)"' : '';
+  return `<span${style} title="API key expires on ${esc(statDate(raw))} — stats stop arriving when it does">key ${esc(fmtKeyExpiry(raw).split(' · ')[1] ?? fmtKeyExpiry(raw))}</span>`;
+}
+
+/**
+ * The "I've logged in" control, plus a clear button once something is
+ * recorded.
+ *
+ * Offered on any tracker Yata could count from — which is nearly all of them,
+ * deliberately. It was once gated on the tracker declaring an inactivity
+ * policy, and that got it exactly backwards: a manual-entry tracker has no def
+ * and therefore no policy, yet those are the sites Yata never contacts, so a
+ * recorded login is the ONLY thing that can produce a "last login 40 days ago"
+ * there. Without a policy there is no countdown, but the elapsed time alone is
+ * enough to prompt a visit.
+ *
+ * Hidden in two cases. When the tracker REPORTS its own login time the API
+ * wins the merge outright, so the button would appear to work and change
+ * nothing. And a retired tracker has nothing left to log in to. The clear
+ * button survives the first case, so a record made before the tracker started
+ * reporting can still be tidied away.
+ *
+ * Clearing matters more than it looks: this is a one-click action, so a
+ * mistaken tap is easy, and without a way back the wrong date would sit there
+ * driving the countdown until the deadline passed.
+ */
+function loginActions(t: Tracker, stats: TrackerStatsResponse | undefined): string {
+  if (t.retired) return '';
+  const recorded = (t.last_login_at ?? '').trim();
+  const src = stats?.fields?.['last_login']?.source;
+  const trackerReports = src === 'api' || src === 'scrape';
+
+  const clear = recorded
+    ? `<button type="button" class="btn btn-ghost btn-sm" onclick="recordTrackerLogin('${jsId(t.id)}', { clear: true })" title="Clear the login you recorded${trackerReports ? ' — this tracker reports its own, so the record is unused' : ' — the countdown falls back to whatever the tracker itself reports, if anything'}">
+        <i class="fas fa-xmark"></i></button>`
+    : '';
+  if (trackerReports) return clear;
+
+  const tip = recorded
+    ? `You recorded a login on ${esc(statDate(recorded))} — click to record one now`
+    : t.max_login_gap_days
+      ? `Record that you logged in just now (this tracker asks for one every ${t.max_login_gap_days} days)`
+      : 'Record that you logged in just now';
+  return `<button type="button" class="btn btn-ghost btn-sm" onclick="recordTrackerLogin('${jsId(t.id)}')" title="${tip}">
+      <i class="fas fa-right-to-bracket"></i></button>${clear}`;
+}
+
 function renderTargetsCol(t: Tracker): void {
   const el = document.getElementById('detail-targets');
   if (!el) return;
@@ -449,6 +534,24 @@ function renderTargetsCol(t: Tracker): void {
   if (t.min_seed_days_season && t.min_seed_days_season > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Season Seed Time</span><span class="exp-stat-value">${t.min_seed_days_season} day${t.min_seed_days_season === 1 ? '' : 's'}</span></div>`);
   if (t.min_seed_hours && t.min_seed_hours > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_hours} hours</span></div>`);
   if (!t.min_seed_hours && !t.min_seed_days_episode && !t.min_seed_days_season && t.min_seed_days && t.min_seed_days > 0) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Min Seed Time</span><span class="exp-stat-value">${t.min_seed_days} day${t.min_seed_days === 1 ? '' : 's'}</span></div>`);
+  // The inactivity policy is the one rule here that tells you to DO something
+  // rather than describing a threshold, so it is shown whether or not the
+  // tracker reports a login time — on the trackers that don't, this number is
+  // the entire answer to "how often do I need to visit?".
+  if (t.max_login_gap_days && t.max_login_gap_days > 0) {
+    rules.push(`<div class="exp-stat"><span class="exp-stat-label" title="Log in at least this often or the tracker disables or prunes the account">Login Required</span><span class="exp-stat-value">every ${t.max_login_gap_days} days</span></div>`);
+    // Where you actually stand against that policy, directly beneath it. Only
+    // the elapsed time is shown: next to "every 90 days", the exact calendar
+    // date answers a question nobody is asking. Muted and smaller because it
+    // is context for the rule above rather than another rule.
+    const lastLogin = String(statsCache[t.id]?.fields?.['last_login']?.value ?? '').trim();
+    if (lastLogin) {
+      rules.push(`<div class="exp-stat" style="margin-top:-4px">
+        <span class="exp-stat-label" style="font-size:11px;color:var(--text3)">last login</span>
+        <span class="exp-stat-value" style="font-size:11px;color:var(--text3);font-weight:500">${esc(fmtLoginAgo(lastLogin))}</span>
+      </div>`);
+    }
+  }
   if (t.rule_note) rules.push(`<div class="exp-stat"><span class="exp-stat-label">Details</span><span class="exp-stat-value">${esc(t.rule_note)}</span></div>`);
   el.innerHTML = (targetsHtml || '<div class="exp-section-title">Targets</div><div class="detail-empty">No targets set — add some from the edit screen.</div>')
     + (rules.length ? `<div style="margin-top:14px">

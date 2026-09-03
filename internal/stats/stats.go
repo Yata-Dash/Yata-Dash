@@ -28,6 +28,13 @@ type Engine struct {
 	// config and mode changes apply to the next Merged call immediately.
 	// Nil is treated as "off": the qui layer is ignored entirely.
 	QUISeedMode func() string
+	// AccountPolicy returns the def-declared account rules for a tracker —
+	// today just its inactivity deadline. A callback for the same reason
+	// QUISeedMode is one: the engine deliberately doesn't depend on the defs
+	// registry, and a def reload must apply to the next read without a
+	// restart. Nil means no policy is known for any tracker, which is a
+	// perfectly good state — the derived deadline is then simply omitted.
+	AccountPolicy func(trackerID string) AccountPolicy
 }
 
 // New creates an Engine.
@@ -122,6 +129,11 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 			out[field] = models.StatField{Value: fv.Value, Source: src, UpdatedAt: fv.UpdatedAt}
 		}
 	}
+	// Derived last: these read the MERGED timestamp, not one layer's, so a
+	// login time from any source — including the user's own "I've logged in" —
+	// drives them identically, and last_login needs no special case in the
+	// merge above.
+	e.deriveAccountFields(trackerID, out, time.Now().UTC())
 	return out, nil
 }
 

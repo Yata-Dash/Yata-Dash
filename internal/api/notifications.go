@@ -66,6 +66,10 @@ func putNotifications(d *Deps) http.HandlerFunc {
 		// starter rules silently reinjected on the next server restart.
 		existing := d.Cfg.Notifications()
 		n.SeededDefaultRules = existing.SeededDefaultRules
+		// Same for the batch counter, and for the same reason: a decode leaves
+		// it 0, and 0 means "no batch has run" — every seeded rule the user
+		// has since deleted would come back on the next restart.
+		n.SeedVersion = existing.SeedVersion
 		// Digest LastSentAt/LastReadyTargets are server-maintained (updated only
 		// by config.Manager.UpdateDigestState after a send) — the editor sends
 		// the schedule fields (enabled/weekday/hour/destinations) but never

@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +25,7 @@ func registerTrackers(r chi.Router, d *Deps) {
 	r.Delete("/trackers/{id}", deleteTracker(d))
 	r.Post("/trackers/{id}/test", testTracker(d))
 	r.Post("/trackers/{id}/detect", detectTrackerType(d))
+	r.Post("/trackers/{id}/logged-in", recordLogin(d))
 	r.Get("/trackers/test-status", testStatusAll(d))
 	r.Post("/trackers/test-adhoc", testAdhocTracker(d))
 }
@@ -43,6 +46,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		TargetGroup:              t.TargetGroup,
 		TargetDeadlines:          t.TargetDeadlines,
 		JoinDate:                 t.JoinDate,
+		LastLoginAt:              t.LastLoginAt,
 		ManualStats:              t.ManualStats,
 		MinScrapeIntervalMinutes: t.MinScrapeIntervalMinutes,
 		MaxScrapesPerDay:         t.MaxScrapesPerDay,
@@ -80,6 +84,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 			v.MinSeedHours = td.Rules.MinSeedHours
 			v.MinSeedDaysEpisode = td.Rules.MinSeedDaysEpisode
 			v.MinSeedDaysSeason = td.Rules.MinSeedDaysSeason
+			v.MaxLoginGapDays = td.Rules.MaxLoginGapDays
 			v.RuleNote = td.Rules.Note
 		}
 	}
@@ -105,6 +110,11 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 	if rs.OptedOut {
 		v.OptedOut = true
 		v.OptOutNote = rs.OptOut.Note
+	}
+	if spec, retired := d.Reg.Retired(t.URL); retired {
+		v.Retired = true
+		v.RetiredDate = spec.Date
+		v.RetiredNote = spec.Note
 	}
 	v.TrackerMinInterval = rs.MinIntervalMinutes
 	v.TrackerMaxPerDay = rs.MaxScrapesPerDay
@@ -275,6 +285,85 @@ func updateTracker(d *Deps) http.HandlerFunc {
 		// matches what was tested — otherwise it's discarded as stale.
 		promoteOrDiscardPendingTest(t)
 		d.logInfof("tracker: updated %s (%s)", t.Name, t.ID)
+		jsonOK(w, toView(d, t))
+	}
+}
+
+// loginPayload is the body of POST /trackers/{id}/logged-in. Both fields are
+// optional: an empty body records "now", which is the whole point of the
+// button.
+type loginPayload struct {
+	// At overrides the recorded time (RFC3339). An explicit empty string
+	// CLEARS the record — a mistaken tap would otherwise be uncorrectable
+	// until the deadline passed, which is a poor trade for a one-click action.
+	At *string `json:"at"`
+}
+
+// resolveLoginTime turns a login payload into the timestamp to store.
+// Returns the RFC3339 value, whether this is a CLEAR, and any input error.
+//
+//	no At          → now (the button's normal case)
+//	At: ""         → clear the record
+//	At: <RFC3339>  → that time, if it is not in the future
+//
+// The future check is the one that matters. A login dated ahead of now reads
+// as a deadline further away than it really is, so of the two ways to be wrong
+// it is the one that HIDES a warning — and this feature exists to not hide
+// them. A minute of slack absorbs ordinary clock skew between browser and
+// server without letting anything meaningful through.
+func resolveLoginTime(p loginPayload, now time.Time) (string, bool, error) {
+	if p.At == nil {
+		return now.UTC().Format(time.RFC3339), false, nil
+	}
+	raw := strings.TrimSpace(*p.At)
+	if raw == "" {
+		return "", true, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return "", false, errors.New("at must be an RFC3339 timestamp")
+	}
+	if parsed.After(now.Add(time.Minute)) {
+		return "", false, errors.New("at cannot be in the future")
+	}
+	return parsed.UTC().Format(time.RFC3339), false, nil
+}
+
+// POST /api/trackers/{id}/logged-in — record that the user logged in.
+//
+// Yata never observes a login and never should; this only ever stores what the
+// user said (see issue #32). The stored value feeds the last_login stat at the
+// manual layer's ordinary priority, so a tracker that reports its own login
+// time always wins and this fills in for the ones that don't.
+func recordLogin(d *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		var p loginPayload
+		// A body is optional — no body at all means "now".
+		if r.ContentLength > 0 {
+			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+				jsonError(w, "invalid JSON", http.StatusBadRequest)
+				return
+			}
+		}
+		at, cleared, err := resolveLoginTime(p, time.Now())
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := d.Cfg.UpdateTracker(id, func(t *models.Tracker) {
+			t.LastLoginAt = at
+		}); err != nil {
+			jsonError(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		t, _ := d.Cfg.Tracker(id)
+		syncManualLayer(d, t)
+		if cleared {
+			d.logInfof("tracker: cleared recorded login for %s (%s)", t.Name, t.ID)
+		} else {
+			d.logInfof("tracker: recorded login for %s (%s) at %s", t.Name, t.ID, at)
+		}
 		jsonOK(w, toView(d, t))
 	}
 }

@@ -209,6 +209,24 @@ type TrackerDef struct {
 	// learning nothing.
 	Events *EventsSpec `json:"events,omitempty"`
 
+	// Retired marks a tracker that has SHUT DOWN. Yata never contacts it again
+	// — no API call, no scrape — but everything already stored stays: the
+	// history, the charts, the group timeline.
+	//
+	// Deliberately not the opt-out list, which answers a different question.
+	// Opting out is a live operator's decision that Yata enforces on the user's
+	// behalf and must never let them override; a shutdown is just a fact, and
+	// if the site ever came back refusing to re-enable it would be Yata being
+	// wrong and stubborn. Opt-out also has to work with NO def at all (it
+	// matches a bare hostname, so an unknown URL can be refused at add time),
+	// where a retirement only ever applies to a tracker we already defined.
+	//
+	// A retired def keeps ONLY what identifies the tracker: the ladder, field
+	// maps, scrape config and rules all describe how to collect data that will
+	// never arrive again. Names still render from the stored history; badges
+	// fall back to the theme's default styling.
+	Retired *RetiredSpec `json:"retired,omitempty"`
+
 	// Groups lists user ranks in ascending order (lowest first).
 	Groups []GroupDef `json:"groups,omitempty"`
 
@@ -346,6 +364,31 @@ type TrackerRules struct {
 	// the UI when present.
 	MinSeedDaysEpisode int `json:"min_seed_days_episode,omitempty"`
 	MinSeedDaysSeason  int `json:"min_seed_days_season,omitempty"`
+	// MaxLoginGapDays is how long an account may go without a login before
+	// the tracker acts on it — disabling, parking or pruning. Unlike the seed
+	// minimums above this is NOT display-only: it is the denominator for
+	// login_days_remaining, so one alert rule ("warn me a week out") means the
+	// same thing on a 30-day tracker and a 90-day one.
+	//
+	// Where a tracker disables first and deletes later, record the FIRST
+	// consequence. That is the deadline the user can still act before; by the
+	// second one the account is already gone. Stock UNIT3D does exactly this
+	// at 90 days and 120, which is why so many defs read 90 — but forks
+	// change it (several here run 60), so it is recorded per def and NOT
+	// inherited from the type: a type-level default would turn "nobody has
+	// checked this tracker" into a confident 90 for every UNIT3D install,
+	// including any that has the behaviour switched off.
+	//
+	// Absent means Yata does not know of a policy — which is the common case
+	// and must stay silent. It does NOT mean the tracker has none, so nothing
+	// may present an absent value as "no deadline".
+	//
+	// Known limitation: several trackers (AnimeBytes, BTN, Redacted,
+	// GazelleGames, Anthelion) grant inactivity immunity as a RANK PERK, so a
+	// user high enough on the ladder is exempt from a policy this field states
+	// site-wide. Yata has no way to express that yet, so those defs are left
+	// unset rather than warning people who cannot be pruned.
+	MaxLoginGapDays int `json:"max_login_gap_days,omitempty"`
 	// Note carries concise fine print that cannot be represented by the fixed
 	// thresholds above, such as size-based seed-time formulas and H&R grace.
 	Note string `json:"note,omitempty"`
@@ -389,6 +432,15 @@ type EventsSpec struct {
 	UntilField string `json:"until_field,omitempty"`
 	// Label overrides the displayed event name.
 	Label string `json:"label,omitempty"`
+}
+
+// RetiredSpec records that a tracker has shut down, and when.
+type RetiredSpec struct {
+	// Date the tracker shut down (YYYY-MM-DD). Shown to the user, so an
+	// abandoned entry reads as a fact rather than as Yata having given up.
+	Date string `json:"date,omitempty"`
+	// Note is optional extra context ("merged into X", "domain expired").
+	Note string `json:"note,omitempty"`
 }
 
 // DefaultEventLabel is the name shown for an EventsSpec event that declares no
@@ -497,6 +549,17 @@ type CustomAPI struct {
 	// from a truthy value (non-zero number, JSON true, or a non-empty/non-"0"
 	// string). Turns e.g. an unread-message COUNT into the unread_mail flag.
 	BoolFields map[string]string `json:"bool_fields,omitempty"`
+
+	// EventList is the JSON path to a LIST of running site events, each an
+	// object with a name (or a "type" slug) and optionally an end time —
+	// site-wide freeleech, an upload contest, a themed week.
+	//
+	// A path rather than a field_map entry because field_map carries scalars
+	// only: an array reaching it is silently dropped, which is exactly what
+	// happened to the one API that reports events this way. The list is handed
+	// to the same normaliser the UNIT3D path uses, so a custom def's events
+	// render identically to every other tracker's.
+	EventList string `json:"event_list,omitempty"`
 
 	// ClassField is the JSON path to a numeric/string membership "class", and
 	// ClassMap translates that value → a group NAME (matched to the def's

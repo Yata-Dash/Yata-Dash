@@ -48,13 +48,14 @@
   },
   "rules": {
     "min_ratio": 0.4,
-    "min_seed_days": 5
+    "min_seed_days": 5,
+    "max_login_gap_days": 90
   },
   "invite_requirements": {
     "min_class": "Prometheus"
   },
   "scrape": {
-    "min_interval_minutes": 180
+    "disable_scraping": true
   },
   "groups": [
     {

@@ -539,6 +539,61 @@ async function refreshSingle(id: string) {
 }
 (window as any).refreshSingle = refreshSingle;
 
+/**
+ * Record (or clear) the user's own "I logged in" for a tracker.
+ *
+ * The stats have to be re-read afterwards, not just the tracker list: the
+ * countdown is DERIVED server-side from the merged last_login, so the new
+ * number only exists once /api/stats is asked again.
+ *
+ * `silent` is for the link-click path, where the user asked to open a tracker
+ * and a toast about bookkeeping would be noise.
+ */
+async function recordTrackerLogin(id: string, opts: { clear?: boolean; silent?: boolean } = {}) {
+  const t = state.trackers.find(x => x.id === id);
+  const res = await api.recordTrackerLogin(id, opts.clear ? '' : undefined);
+  if (!res.ok) {
+    if (!opts.silent) toast(`Could not record login for ${t?.name ?? 'tracker'}`, 'error');
+    return;
+  }
+  await loadTrackers();
+  const stats = await api.fetchSingleStats(id);
+  if (stats.ok && stats.data) mergeStatsEntry(id, stats.data);
+  const fresh = state.trackers.find(x => x.id === id);
+  if (fresh) renderCard(fresh, state.statsCache[id], state.appSettings, state.groupDefs);
+  renderTable();
+  void import('./views/detail').then(m => m.redrawDetail());
+  if (!opts.silent) {
+    toast(opts.clear
+      ? `Cleared the recorded login for ${t?.name ?? 'tracker'}`
+      : `Login recorded for ${t?.name ?? 'tracker'}`, 'success');
+  }
+}
+(window as any).recordTrackerLogin = recordTrackerLogin;
+
+/**
+ * Called from a tracker link's onclick. Records a login when the user has
+ * opted in; with the setting off, opening a link means nothing and stores
+ * nothing. Never blocks or delays the navigation: the link opens immediately
+ * and the bookkeeping follows.
+ *
+ * Deliberately NOT gated on the tracker declaring an inactivity policy. Doing
+ * that skipped every manual-entry tracker — the ones with no def, and so no
+ * policy — which are exactly the sites Yata never contacts and where a
+ * recorded login is the only possible source of a "last login N days ago".
+ */
+function trackerLinkOpened(id: string): void {
+  if (!state.appSettings.login_reset_on_link_click) return;
+  const t = state.trackers.find(x => x.id === id);
+  if (!t || t.retired) return;
+  // A tracker that reports its own login time answers from the API, which wins
+  // the merge outright — recording one here would write a value nothing reads.
+  const src = state.statsCache[id]?.fields?.['last_login']?.source;
+  if (src === 'api' || src === 'scrape') return;
+  void recordTrackerLogin(id, { silent: true });
+}
+(window as any).trackerLinkOpened = trackerLinkOpened;
+
 // ── Tracker Detail (drill-down page) ──────────────────────────────────────
 (window as any).openTrackerDetail = (id: string) => {
   void import('./views/detail').then(m => m.openTrackerDetail(id));

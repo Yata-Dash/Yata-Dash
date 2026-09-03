@@ -97,6 +97,9 @@ function populateAddSelect(defs: DefsPayload, filter = '') {
 
   const byType = new Map<string, DefInfo[]>();
   for (const td of defs.trackers) {
+    // A retired tracker's def exists so EXISTING users keep their history
+    // readable, not so a new one can add a site that has shut down.
+    if (td.retired) continue;
     if (!match(td)) continue;
     if (!byType.has(td.type)) byType.set(td.type, []);
     byType.get(td.type)!.push(td);
@@ -1116,8 +1119,12 @@ export function openEditModal(
 
 /** Configure the per-tracker scraping section for the tracker being edited. */
 function setupScrapeSection(t: Tracker) {
-  // Demo/test trackers never scrape — no section.
-  if (t.type === 'test') { hide('modal-scrape-section'); return; }
+  // Demo/test trackers never scrape — no section. Nor do manual-entry
+  // trackers, which Yata never contacts at all: showing them a greyed-out
+  // API-only toggle and two scrape-limit boxes implies there is traffic to
+  // limit. Hiding it also keeps saveTracker from sending api_only and the
+  // interval fields, which are meaningless on a tracker with no requests.
+  if (t.type === 'test' || t.type === MANUAL_TYPE) { hide('modal-scrape-section'); return; }
   show('modal-scrape-section');
 
   // Effective floor the user can't go below = max(60, operator request).
@@ -2376,6 +2383,9 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   if (unreadNotifTrack) unreadNotifTrack.className = `toggle-track ${settings.show_unread_notifications !== false ? 'on' : ''}`;
   const hnrHighlightTrack = document.getElementById('s-hnr-highlight-track');
   if (hnrHighlightTrack) hnrHighlightTrack.className = `toggle-track ${settings.highlight_hnr !== false ? 'on' : ''}`;
+  const loginClickTrack = document.getElementById('s-login-click-track');
+  // Off by default, so this reads truthiness rather than "!== false".
+  if (loginClickTrack) loginClickTrack.className = `toggle-track ${settings.login_reset_on_link_click ? 'on' : ''}`;
   const goalPacingTrack = document.getElementById('s-goal-pacing-track');
   if (goalPacingTrack) goalPacingTrack.className = `toggle-track ${settings.show_goal_pacing !== false ? 'on' : ''}`;
   const goalChipsTrack = document.getElementById('s-goal-chips-track');
@@ -2664,6 +2674,7 @@ export async function saveSettings(deps: SettingsDeps) {
     show_unread_notifications: isOn('s-unread-notif-track', true),
     show_tracker_rules:        isOn('s-tracker-rules-track', true),
     highlight_hnr:             isOn('s-hnr-highlight-track', true),
+    login_reset_on_link_click: isOn('s-login-click-track', false),
     show_goal_pacing:          isOn('s-goal-pacing-track', true),
     show_goal_chips:           isOn('s-goal-chips-track', true),
     update_check_auto:     (document.getElementById('s-update-auto') as HTMLInputElement | null)?.checked ?? false,

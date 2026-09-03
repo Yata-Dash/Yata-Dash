@@ -181,6 +181,15 @@ export const testTracker = (id: string, overrides?: TrackerTestOverrides) =>
     ...(overrides ? { body: JSON.stringify(overrides) } : {}),
   });
 
+/** Record that the user logged in to a tracker, feeding the inactivity
+ *  countdown. No body records "now"; passing at:'' clears a mistaken record.
+ *  Yata never observes a login — this only ever stores what the user says. */
+export const recordTrackerLogin = (id: string, at?: string) =>
+  call<Tracker>(`/api/trackers/${encodeURIComponent(id)}/logged-in`, {
+    method: 'POST',
+    ...(at !== undefined ? { body: JSON.stringify({ at }) } : {}),
+  });
+
 /** Probe candidate tracker types with the stored API key, adopting the first
  *  that returns stats. Only valid for trackers with no definition. */
 export const detectTrackerType = (id: string) =>

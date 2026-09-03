@@ -211,11 +211,14 @@ func TestBuildDigestEventsWithDirection(t *testing.T) {
 
 // fixturePathwaysData writes a minimal routes.json to a temp file and loads
 // it — a small controlled fixture instead of depending on the large, real
-// community dataset in defs/pathways/routes.json. "Aura4K" is a real def
-// (defs/trackers/aura4k.json) with NO invite_requirements of its own, so a
-// plain "None" route requirement isn't augmented by def-level extras the way
-// it would be for a def like Aither (which carries a real min_class) —
-// keeping this fixture's "always ready" route honest.
+// community dataset in defs/pathways/routes.json.
+//
+// "Aura4K" is deliberately a name with NO def behind it (the tracker shut down
+// and its def was removed). The owner tracker below resolves to it through the
+// host-label fallback in pathwayNameFor, so the route's plain "None"
+// requirement reaches the engine unaugmented — where a def like Aither would
+// have contributed its own invite_requirements on top and this fixture's
+// "always ready" route would stop being always ready.
 func fixturePathwaysData(t *testing.T) *pathways.Data {
 	t.Helper()
 	dir := t.TempDir()

@@ -66,6 +66,29 @@
     // "note": "Staff said 'fine by us' in Discord, no formal sign-off."
   },
 
+  // [OPTIONAL] The tracker has SHUT DOWN. Yata never contacts it again — no
+  // API call, no scrape — but everything already collected stays: history,
+  // charts, group timeline. Existing users see a "Retired" label instead of a
+  // permanent connection error, and it disappears from the Add Tracker picker.
+  //
+  // DELETE THE REST OF THE DEF when you set this. Field maps, the group
+  // ladder, scrape config and rules all describe how to collect data that will
+  // never arrive again — keep only schema_version, key, name, abbr, url, type
+  // and this block. Group names still render from the stored history; their
+  // badges fall back to the theme's default styling.
+  //
+  // Do NOT delete the file. api.kind lives on the TYPE, which is stored on the
+  // user's tracker, so removing a def does not stop the requests — it only
+  // strips the name and ladder that their history still refers to.
+  //
+  // This is NOT the opt-out list. That records a live operator asking not to
+  // be supported, which Yata enforces and the user may never override; a
+  // shutdown is just a fact, and it is fine to re-enable if the site returns.
+  "retired": {
+    "date": "2026-09-01",
+    "note": "Tracker shut down."
+  },
+
   // [OPTIONAL] Rename API response fields to Yata's canonical names.
   // Merged ON TOP of the type-level map; tracker entries win on collision.
   // Canonical names: username, group, uploaded, downloaded, ratio, real_ratio,
@@ -248,6 +271,17 @@
     "bool_fields": {
       "notifs.pms": "unread_mail"
     },
+
+    // [OPTIONAL] Path to a LIST of running site events — sitewide freeleech,
+    // an upload contest, a themed week. Each entry needs a name (or a "type"
+    // slug, which is prettified: "global_freeleech" → "Global Freeleech", and
+    // a "title" is preferred over either) and optionally an end time, which
+    // may be null for an event with no announced finish.
+    //
+    // A path of its own because field_map handles single values only: an array
+    // arriving there is dropped. The list feeds the same event banner and
+    // countdown every other tracker's events use.
+    "event_list": "events.global",
 
     // Hint shown under the API key field in the tracker edit modal —
     // tell users where to find their token.

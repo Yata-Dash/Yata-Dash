@@ -307,3 +307,59 @@ func TestManualStatsClearedWhenRemoved(t *testing.T) {
 		t.Errorf("ratio survived removal: %#v", merged["ratio"])
 	}
 }
+
+// TestRetiredTrackerIsNeverContacted covers the whole retirement path.
+//
+// The trap it guards is why the flag exists at all: api.kind lives on the
+// TYPE, which is stored on the USER'S tracker — so deleting a shut-down
+// tracker's def does NOT stop the requests. It only strips the name and the
+// group ladder that the stored history still refers to, leaving the user worse
+// off AND still hammering a dead host. Keeping the def and marking it retired
+// is what actually stops the traffic.
+func TestRetiredTrackerIsNeverContacted(t *testing.T) {
+	d := testDeps(t)
+
+	const url = "https://aura4k.net"
+	if kind := d.Reg.APIKind(url, "unit3d"); kind != "none" {
+		t.Errorf("APIKind = %q, want none — a retired tracker must never be fetched", kind)
+	}
+	rs := d.Reg.ResolveScrape(url, "unit3d")
+	if !rs.Retired || !rs.DisableScraping {
+		t.Errorf("ResolveScrape: retired=%v disableScraping=%v, want both true", rs.Retired, rs.DisableScraping)
+	}
+	spec, retired := d.Reg.Retired(url)
+	if !retired || spec.Date == "" {
+		t.Fatalf("Retired() = %+v, %v — want the shutdown recorded with a date", spec, retired)
+	}
+
+	// Stored stats survive and are served back; the response says why.
+	tr := models.Tracker{ID: "a4k", Name: "Aura4K", URL: url, Type: "unit3d", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveAPI(tr.ID, map[string]any{"uploaded": "12.00 TiB", "ratio": 2.5}); err != nil {
+		t.Fatal(err)
+	}
+	resp := refreshTracker(d, tr, true) // forced: even this must not reach out
+	if !resp.Retired {
+		t.Error("response should be flagged retired")
+	}
+	if resp.ErrorKind != "" {
+		t.Errorf("error kind = %q — a shut-down site is not an outage", resp.ErrorKind)
+	}
+	if got := resp.Fields["uploaded"]; got.Value != "12.00 TiB" {
+		t.Errorf("stored history must survive, got %#v", got.Value)
+	}
+	if resp.RetiredDate == "" {
+		t.Error("the shutdown date should reach the UI")
+	}
+}
+
+// TestRetiredTrackerStatus: the summary must say "retired", not "error" — a
+// tracker that is gone has not failed.
+func TestRetiredTrackerStatus(t *testing.T) {
+	d := testDeps(t)
+	if status, _ := trackerStatus(d, "x", true, "https://aura4k.net"); status != "retired" {
+		t.Errorf("status = %q, want retired", status)
+	}
+}

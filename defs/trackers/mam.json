@@ -20,7 +20,9 @@
   },
     "rules": {
     "min_ratio": 1.0,
-    "min_seed_days": 3
+    "min_seed_days": 3,
+    "max_login_gap_days": 90,
+    "note": "FAQ states you must log in on a regular basis but doesn't specify a time frame."
   },
   "api": {
     "path": "/jsonLoad.php?snatch_summary&notif=true",
