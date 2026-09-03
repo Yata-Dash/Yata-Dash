@@ -144,3 +144,51 @@ func TestHHDDefResolves(t *testing.T) {
 		}
 	}
 }
+
+// TestShippedDefsAccountWarningWiring: the account-deadline inputs must
+// survive in the SHIPPED defs, not just in the schema. Both halves are easy to
+// break silently — a field map that stops mapping, or a rules block edited
+// without the gap — and the symptom either way is a warning that never fires.
+func TestShippedDefsAccountWarningWiring(t *testing.T) {
+	r, err := Load("../../defs")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// Anthelion's LastAccess is the only non-UNIT3D login time Yata reads, and
+	// it lives on the shared ANT/NEB type rather than in either tracker's def.
+	tt, ok := r.Type("gazelle_antneb")
+	if !ok || tt.CustomAPI == nil {
+		t.Fatal("gazelle_antneb type or its custom_api missing")
+	}
+	if got := tt.CustomAPI.FieldMap["response.LastAccess"]; got != "last_login" {
+		t.Errorf("gazelle_antneb LastAccess maps to %q, want last_login", got)
+	}
+
+	// DarkPeers runs the stock UNIT3D policy (disabled at 90 days, deleted at
+	// 120) and is the tracker the countdown was first built against. Pinned as
+	// one concrete example that a def's rules block reaches the resolver — not
+	// as a claim about this tracker in particular.
+	if got := r.MaxLoginGapDays("https://darkpeers.org/"); got != 90 {
+		t.Errorf("darkpeers max_login_gap_days = %d, want 90", got)
+	}
+	// A tracker with no declared policy must report 0, not a default — the
+	// derived countdown is omitted entirely on that answer.
+	if got := r.MaxLoginGapDays("https://seedpool.org"); got != 0 {
+		t.Errorf("seedpool max_login_gap_days = %d, want 0 (no policy known)", got)
+	}
+	if got := r.MaxLoginGapDays("https://not-a-tracker.invalid"); got != 0 {
+		t.Errorf("unknown tracker max_login_gap_days = %d, want 0", got)
+	}
+
+	// LST is the one tracker issuing expiring API tokens; the capability is
+	// declared so the fetched field doesn't read as undeclared drift.
+	caps := r.ResolveCapabilities("https://lst.gg", "unit3d")
+	found := false
+	for _, f := range caps.APIStats {
+		found = found || f == "api_key_expires_at"
+	}
+	if !found {
+		t.Errorf("LST api_key_expires_at capability missing; have %v", caps.APIStats)
+	}
+}

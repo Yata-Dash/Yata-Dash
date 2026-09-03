@@ -2,7 +2,7 @@
   "schema_version": 1,
   "key": "unit3d",
   "label": "UNIT3D",
-  "last_updated": "2026-07-28",
+  "last_updated": "2026-09-02",
   "description": "Standard UNIT3D private tracker. Provides /api/user stats and scrapes the /users/{username} profile page for extended stats.",
   "api": {
     "kind": "unit3d",
@@ -48,5 +48,5 @@
       "hit_and_runs"
     ]
   },
-  "notes": "capabilities.api_stats is the STOCK UNIT3D /api/user response. Forks vary: one returning more should say so with api_stats_add in its own def (see zenith), one returning less with api_stats_omit. join_date is listed here because the forks that omit it already declare api.required_fields: [\"join_date\"], which is subtracted automatically. NEEDS CONFIRMATION against a live stock instance — assembled from the test fixture and field map rather than from UNIT3D's own documentation."
+  "notes": "capabilities.api_stats is the STOCK UNIT3D /api/user response. Forks vary: one returning more should say so with api_stats_add in its own def (see zenith), one returning less with api_stats_omit. join_date is listed here because the forks that omit it already declare api.required_fields: [\"join_date\"], which is subtracted automatically. NEEDS CONFIRMATION against a live stock instance — assembled from the test fixture and field map rather than from UNIT3D's own documentation. Inactivity: stock UNIT3D disables an account after 90 days without a login and deletes it after 120, which is why so many tracker defs here carry rules.max_login_gap_days 90 (the first consequence — the last point a login still saves the account). It is recorded per TRACKER and deliberately NOT set here as a type default: operators change the numbers (several run 60) or switch the behaviour off, and an inherited 90 would turn \"nobody has checked this install\" into a confident claim on every UNIT3D tracker. Absent means unknown, and the countdown stays silent on unknown."
 }

@@ -6,7 +6,181 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260903]
+
+### Fixed
+
+- **Manual-entry trackers can record a login again.** The "I've logged in"
+  button and the opt-in link-click were both gated on the tracker declaring an
+  inactivity policy, which got it exactly backwards: a manual tracker has no
+  def and so no policy, yet those are the sites Yata never contacts, where a
+  recorded login is the *only* possible source of a "last login 40 days ago".
+  Both now work on any tracker that doesn't report its own login time. Without
+  a policy there is still no countdown, but the elapsed days alone are enough
+  to prompt a visit — which is what they're for.
+
+- **Manual trackers no longer claim an API update that never happened.** The
+  Last API Update column showed the time of the last dashboard poll, and the
+  grid card and Detail header dated the numbers to the same moment — so
+  hand-entered figures from weeks ago read as minutes old. A tracker Yata never
+  contacts now reports no fetch time at all: the column shows "—" with an
+  explanation, the Detail header drops its "updated" chip, and the card footer
+  says "Entered by hand" instead of pairing a label with a meaningless clock.
+
+  Not the manual layer's own write time either, which was the obvious fix: that
+  layer is rewritten on every startup, so it means "last restart" as often as
+  "last save" — a subtler version of the same lie.
+
+- **The Scraping section is hidden when editing a manual tracker.** A greyed-out
+  API-only toggle above two scrape-limit boxes implied there was traffic to
+  limit on a tracker that is never contacted.
+
+- **ReelFLiX is now fully covered — 6/6.** It added a `recent_uploads` counter,
+  which is the figure its Min. Uploads rungs are measured against; mapping it
+  to `monthly_uploads` closes the last gap in its ladder. The README table's
+  hand-written "Rolling monthly uploads not retrievable" note is gone, as is
+  Aither's equivalent — both had gone stale the same way the group notes below
+  did.
+
+- **ReelFLiX no longer claims stats it is showing you.** Its group targets
+  carried a note saying seed-size and average-seedtime progress was
+  unavailable in API-only mode — printed directly beneath the working progress
+  bars for both. A reprobe confirmed its API now reports `seed_size` and
+  `avg_seed_time`, so the notes were simply out of date and are gone.
+
+  They were also redundant: Yata already marks a requirement it cannot track
+  with an icon and a tooltip, derived from what the tracker actually returns.
+  A hand-written note saying the same thing can only ever go stale, which is
+  exactly what happened. ReelFLiX's one genuine gap — rolling monthly uploads
+  — now shows through that mechanism instead.
+
+## [Beta-20260902]
+
 ### Added
+
+- **Record your own logins, so the inactivity countdown works everywhere.**
+  The deadline warnings above only counted down where a tracker's API reported
+  a login time — and across 22 configured trackers, exactly one does. Yata can
+  now take your word for it instead.
+
+  A **sign-in button** on the Tracker Detail page records that you logged in
+  just now. That feeds the same `last_login` stat the API half writes, so the
+  badge, the alert rule and the Last Login row all work identically whether the
+  tracker told Yata or you did. An ✕ beside it clears a mistaken tap — without
+  that, one stray click would drive the countdown until the deadline passed.
+
+  Optionally, **opening a tracker's link from Yata can count as a login**
+  (Settings → Display). Off by default and deliberately so: a click quietly
+  meaning something is the part people object to, and the explicit button works
+  with it off. The setting covers every way Yata sends you to a tracker — the
+  URL and the Open Profile link on cards, expanded table rows and Detail.
+
+  Yata still never observes a login and could not: every value here is either
+  what a tracker reported or what you told it. That is the standing position on
+  issue [#32](https://github.com/Yata-Dash/Yata-Dash/issues/32) and what makes
+  this a countdown you own rather than tracking.
+
+  **The tracker's own answer always wins.** `last_login` takes no special case
+  in the merge: where a tracker reports a login time its API is the source of
+  truth about its own account, stale or not, and your record fills in only
+  where the API says nothing — which is nearly everywhere. On the two trackers
+  that do report one, the sign-in button is hidden and the link-click setting
+  does nothing, rather than appearing to work and changing nothing.
+
+- **Account deadline warnings — inactivity pruning and API key expiry.** Two
+  ways a private-tracker account fails silently: you stop logging in and the
+  site prunes you, or an expiring API token lapses and the stats simply stop
+  arriving. Neither announces itself, both are trivial to avoid before the
+  date and impossible to undo after it.
+
+  Yata now derives three fields wherever a tracker supplies the input —
+  `days_since_login`, `login_days_remaining` and `api_key_expiry_days` — and
+  shows an amber badge on the card, table row and Detail page as a deadline
+  nears, red once it has passed.
+
+  **Last Login** and **API Key Expires** are rendered as account information
+  rather than stats: in the expanded row's Info column (last login beneath the
+  profile link, the key expiry directly under Last API Update, since a lapsed
+  key is what will silently end it) and on the Detail page's identity line.
+  Both say how long is left instead of printing the raw
+  `2027-01-01T00:00:00+00:00` the tracker sent, which was readable and useless
+  for judging whether you needed to act. Detail also repeats the elapsed time
+  under **Login Required**, where the gap so far sits against the gap allowed.
+
+  `login_days_remaining` counts down to *each tracker's own* policy, taken
+  from a new `max_login_gap_days` def rule. That is the difference between one
+  alert rule and one per tracker: `days_since_login > 21` is wrong on every
+  site whose policy is not 30 days, so a 90-day tracker and a 30-day tracker
+  could not share a rule. Both raw numbers stay available for the trackers
+  whose policy Yata does not know.
+
+  Every one of these fields is **omitted** when its input is missing, never
+  emitted as a zero — an absent field cannot match an alert condition, so the
+  trackers that report no login time stay silent automatically. A
+  `days_since_login` of 0 would have meant "logged in today" on all of them.
+
+  Two alert rules are seeded — **Login required soon** (7 days out) and **API
+  key expiring** (14 days) — and, unlike the original starter rules, they are
+  added to existing installs too. Alerts seeding now tracks which batches have
+  run rather than a single "seeded" flag, because a rule added later otherwise
+  reached new installs and nobody else: exactly backwards, since long-standing
+  accounts are the ones with something to lose. Deleting a seeded rule still
+  sticks.
+
+  The policy itself is shown in the **Rules** panel (Detail, expanded table row
+  and the grid card's rules line) as "Login Required — every N days", whether
+  or not the tracker reports a login time. On the trackers that don't report
+  one, that number is the entire answer to "how often do I need to visit?".
+
+  Def work in this release: **sixteen trackers** now declare
+  `max_login_gap_days`. Stock UNIT3D disables an account after 90 days without
+  a login and deletes it after 120, so most read 90 — the *first* consequence,
+  being the last point a login still saves the account — while forks that
+  changed it read 60. It is recorded per tracker and deliberately not
+  inherited from the UNIT3D type, because an inherited default would turn
+  "nobody has checked this install" into a confident claim.
+  **Anthelion/Nebulance** now map `LastAccess` to `last_login` (it arrives
+  without a timezone and is read as UTC — up to 14 hours out, which cannot
+  move a warning measured in days). **LST** declares the API-key expiry it is
+  alone in reporting.
+
+  Known limitation, worth stating rather than discovering: some policies carry
+  **exemptions this field cannot express** — a rank perk (AnimeBytes, BTN,
+  Redacted, GazelleGames, Anthelion all grant inactivity immunity high enough
+  up the ladder) or a condition that varies per user (OldToonsWorld exempts
+  anyone seeding at least one torrent). Where the exemption is the whole
+  story the def is left unset; where the number still holds for most people
+  it is recorded with a `rules.note` saying so, and that note renders beneath
+  the policy in the Rules panel.
+
+- **Trackers that shut down are now retired rather than deleted.** When a site
+  closes, its definition stays — trimmed to just the name and URL — and is
+  marked `retired`. Yata never contacts it again, and everything already
+  collected stays exactly where it is: history, charts, group timeline. The
+  tracker shows a **Retired** label with the shutdown date instead of a
+  permanent connection error, and it disappears from the Add Tracker picker.
+
+  Deleting the definition, which is the obvious move, quietly does the wrong
+  thing twice over: it does not stop the requests — the API kind comes from the
+  tracker TYPE, which is stored against your tracker, so Yata keeps calling a
+  dead host forever — and it removes the name and group ladder that the stored
+  history still refers to. The user keeping a tracker for its history was the
+  one being punished for it.
+
+  This is deliberately not the opt-out list, which records a live operator
+  asking not to be supported: that is a decision Yata enforces on your behalf
+  and you may never override, where a shutdown is simply a fact and fine to
+  reverse if a site comes back. **Aura4K** is retired under the new flag.
+
+- **Custom-API trackers can report site events.** A def can point `event_list`
+  at an array of running events — sitewide freeleech, an upload contest, a
+  themed week — and they render as the same banner and countdown every other
+  tracker's events use. Until now the field map handled single values only, so
+  an API reporting events as a list had them silently dropped: a custom-API
+  tracker could not show a freeleech banner at all, however plainly its API
+  said one was running. An event that gives only a `type` slug is titled from
+  it ("global_freeleech" → "Global Freeleech"), and one with no announced end
+  shows without a countdown rather than not at all.
 
 - **Aither's newly-exposed stats are mapped**, and **uploads-per-month is a
   tracked stat for the first time.** Aither now returns average seed time,
@@ -53,34 +227,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   offsets, and the ambiguous ones (CST is both US Central and China Standard)
   are left alone rather than guessed at.
 
-### Fixed
-
-- **A zero the API actually reported now shows as 0, not "—".** Yata treated
-  `0`, `0 B` and `0.00 B` as "no value" from every source alike. That is right
-  for a scraped profile page, where a stat the page doesn't render looks
-  exactly like a genuine nought — but wrong for an API that answered plainly.
-  Trackers reporting no approved uploads, or nothing seeding, showed those
-  stats as unknown, which reads as Yata failing over a number it was given.
-
-  Scrapes keep the cautious reading, and a scrape that finds a real number
-  still overrides a zero-ish API value — some APIs answer 0 for fields they
-  never populate, and a page that can read the figure is the better evidence.
-
-- **Pathways showed "Could not load paths" for every target when one of your
-  trackers had an infinite ratio** ([#40](https://github.com/Yata-Dash/Yata-Dash/issues/40)).
-  An account with uploads and nothing downloaded has a ratio Yata records as
-  `Infinity` — a real, deliberate value. Go parses that string to `+Inf`, and
-  JSON cannot represent `+Inf` at all, so the entire pathways response failed
-  to serialise. An infinite ratio now stays infinite where it matters — it
-  still satisfies any ratio requirement, and still reads as ∞ — without
-  breaking the response that carries it.
-
-  The failure was invisible, which is why it took a bug report to find. The
-  response was encoded straight to the connection, so the `200` header had
-  already gone out before the encoder gave up: the browser saw a successful,
-  empty reply, the error was discarded, and the access log's only trace was a
-  status of `0`. Responses are now built before the status is committed, so an
-  unencodable value returns a real `500` and says why in the log.
 
 ## [Beta-20260901]
 
@@ -110,6 +256,35 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   Typed values are also available on ANY tracker as a last resort, filling only
   the stats its API and profile page both leave empty — the same slot the
   hand-entered join date has always used.
+  
+  ### Fixed
+
+- **A zero the API actually reported now shows as 0, not "—".** Yata treated
+  `0`, `0 B` and `0.00 B` as "no value" from every source alike. That is right
+  for a scraped profile page, where a stat the page doesn't render looks
+  exactly like a genuine nought — but wrong for an API that answered plainly.
+  Trackers reporting no approved uploads, or nothing seeding, showed those
+  stats as unknown, which reads as Yata failing over a number it was given.
+
+  Scrapes keep the cautious reading, and a scrape that finds a real number
+  still overrides a zero-ish API value — some APIs answer 0 for fields they
+  never populate, and a page that can read the figure is the better evidence.
+
+- **Pathways showed "Could not load paths" for every target when one of your
+  trackers had an infinite ratio** ([#40](https://github.com/Yata-Dash/Yata-Dash/issues/40)).
+  An account with uploads and nothing downloaded has a ratio Yata records as
+  `Infinity` — a real, deliberate value. Go parses that string to `+Inf`, and
+  JSON cannot represent `+Inf` at all, so the entire pathways response failed
+  to serialise. An infinite ratio now stays infinite where it matters — it
+  still satisfies any ratio requirement, and still reads as ∞ — without
+  breaking the response that carries it.
+
+  The failure was invisible, which is why it took a bug report to find. The
+  response was encoded straight to the connection, so the `200` header had
+  already gone out before the encoder gave up: the browser saw a successful,
+  empty reply, the error was discarded, and the access log's only trace was a
+  status of `0`. Responses are now built before the status is committed, so an
+  unencodable value returns a real `500` and says why in the log.
 
 ## [Beta-20260830]
 

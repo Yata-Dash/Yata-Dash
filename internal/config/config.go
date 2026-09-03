@@ -48,10 +48,10 @@ func Open(path string) (*Manager, error) {
 		}
 		m.applyDefaults()
 		migrated := migrateTrackerTypes(m.cfg.Trackers)
-		// Runs once per install: seedDefaultAlertRules is a no-op after the
-		// flag is set, so this costs an extra write only on the very first
-		// load of a pre-existing config.json that predates event alerts.
-		if !m.cfg.Notifications.SeededDefaultRules {
+		// Runs once per install per BATCH: seedDefaultAlertRules is a no-op
+		// once the version counter has caught up, so this costs an extra write
+		// only on the first load after a batch is added.
+		if m.cfg.Notifications.SeedVersion < seedVersion {
 			seedDefaultAlertRules(&m.cfg.Notifications)
 			migrated = true
 		}
@@ -92,51 +92,96 @@ func migrateTrackerTypes(trackers []models.Tracker) bool {
 	return changed
 }
 
-// seedDefaultAlertRules gives a brand-new install (no destinations AND no
-// rules — nobody has touched Alerts yet) three starter rules so promotion/
-// demotion/target-met/standing-guard notifications aren't invisible until
-// someone discovers the Alerts tab: "Promotions & demotions" (promoted OR
-// demoted), "Target met", and "Ratio approaching minimum" (the
-// ratio_min_eta_days standing guard). All three are enabled, unscoped (all
-// trackers), destination-less (all enabled destinations). The ratio guard
-// gets a day-long cooldown — its ETA jitters with rate noise, so a shorter
-// cooldown would flap; the other two have none. A user who already has ANY
-// destination or rule is left alone — that setup was deliberate — only the
-// flag is set so this never runs again. Idempotent: called on every load, a
-// no-op once SeededDefaultRules is true.
+// seedVersion is how many seeding batches exist. Bump it when adding one.
+//
+//	1 — promotions/demotions, target met, ratio approaching minimum
+//	2 — login required soon, API key expiring
+const seedVersion = 2
+
+// seedDefaultAlertRules brings an install's seeded rules up to seedVersion,
+// running only the batches it has not had. Idempotent: called on every load, a
+// no-op once the counter has caught up. Deleting a seeded rule sticks, because
+// the counter advances whether or not the batch actually added anything.
+//
+// The two batches deliberately have DIFFERENT guards, for reasons worth
+// keeping:
+//
+// Batch 1 is the welcome mat — it only fires on an install with no
+// destinations and no rules, because a user who has already built a setup made
+// it deliberately and does not need starter rules injected into it.
+//
+// Batch 2 fires regardless. It guards two irreversible outcomes (an account
+// pruned for inactivity, an API key silently expiring) whose underlying fields
+// did not exist when batch 1 ran, so nobody — however carefully they configured
+// Alerts — could have written these rules earlier. Withholding them from
+// exactly the long-standing users most likely to have an at-risk account would
+// invert the point. Both are silent on every tracker that supplies neither
+// field, since an absent field never matches a condition.
 func seedDefaultAlertRules(n *models.NotificationConfig) {
-	if n.SeededDefaultRules {
-		return
+	// Migrate the pre-counter flag: batch 1 has run, nothing after it.
+	if n.SeedVersion == 0 && n.SeededDefaultRules {
+		n.SeedVersion = 1
 	}
-	if len(n.Destinations) == 0 && len(n.Rules) == 0 {
+	if n.SeedVersion < 1 {
+		if len(n.Destinations) == 0 && len(n.Rules) == 0 {
+			n.Rules = append(n.Rules,
+				models.AlertRule{
+					ID:      newRuleID(),
+					Name:    "Promotions & demotions",
+					Enabled: true,
+					Match:   "any",
+					Conditions: []models.Condition{
+						{Field: "promoted", Op: "is_true"},
+						{Field: "demoted", Op: "is_true"},
+					},
+				},
+				models.AlertRule{
+					ID:         newRuleID(),
+					Name:       "Target met",
+					Enabled:    true,
+					Match:      "all",
+					Conditions: []models.Condition{{Field: "target_met", Op: "is_true"}},
+				},
+				models.AlertRule{
+					ID:           newRuleID(),
+					Name:         "Ratio approaching minimum",
+					Enabled:      true,
+					Match:        "all",
+					Conditions:   []models.Condition{{Field: "ratio_min_eta_days", Op: "lte", Value: "14"}},
+					CooldownMins: 1440,
+				},
+			)
+		}
+		n.SeedVersion = 1
+	}
+	if n.SeedVersion < 2 {
+		// Seven days for the login warning, because a notification the day
+		// before is useless to someone away from home; fourteen for a key,
+		// because replacing one needs a visit to the tracker rather than just
+		// a login. Both get the day-long cooldown the ratio guard has: these
+		// stay true for days, and the point is a reminder, not a stream.
 		n.Rules = append(n.Rules,
 			models.AlertRule{
-				ID:      newRuleID(),
-				Name:    "Promotions & demotions",
-				Enabled: true,
-				Match:   "any",
-				Conditions: []models.Condition{
-					{Field: "promoted", Op: "is_true"},
-					{Field: "demoted", Op: "is_true"},
-				},
-			},
-			models.AlertRule{
-				ID:         newRuleID(),
-				Name:       "Target met",
-				Enabled:    true,
-				Match:      "all",
-				Conditions: []models.Condition{{Field: "target_met", Op: "is_true"}},
+				ID:           newRuleID(),
+				Name:         "Login required soon",
+				Enabled:      true,
+				Match:        "all",
+				Conditions:   []models.Condition{{Field: "login_days_remaining", Op: "lte", Value: "7"}},
+				CooldownMins: 1440,
 			},
 			models.AlertRule{
 				ID:           newRuleID(),
-				Name:         "Ratio approaching minimum",
+				Name:         "API key expiring",
 				Enabled:      true,
 				Match:        "all",
-				Conditions:   []models.Condition{{Field: "ratio_min_eta_days", Op: "lte", Value: "14"}},
+				Conditions:   []models.Condition{{Field: "api_key_expiry_days", Op: "lte", Value: "14"}},
 				CooldownMins: 1440,
 			},
 		)
+		n.SeedVersion = 2
 	}
+	// Kept in step so an older Yata reading this config still sees batch 1 as
+	// done and does not re-inject it.
 	n.SeededDefaultRules = true
 }
 
@@ -326,6 +371,7 @@ func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 		Destinations:       make([]models.NotifyDestination, len(n.Destinations)),
 		Rules:              make([]models.AlertRule, len(n.Rules)),
 		SeededDefaultRules: n.SeededDefaultRules,
+		SeedVersion:        n.SeedVersion,
 		Digest:             n.Digest,
 	}
 	copy(out.Destinations, n.Destinations)

@@ -16,7 +16,8 @@
   },
     "rules": {
     "min_ratio": 0.25,
-    "min_seed_days": 2
+    "min_seed_days": 2,
+    "max_login_gap_days": 90
   },
   "groups": [
     {

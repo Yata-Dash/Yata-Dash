@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
@@ -239,5 +240,68 @@ func TestJSONOKWritesNormalValues(t *testing.T) {
 	}
 	if got["ok"] != true || got["n"] != float64(42) {
 		t.Errorf("body = %#v", got)
+	}
+}
+
+// TestResolveLoginTime pins the three shapes of the "I've logged in" payload,
+// and the future-rejection that keeps a mis-set clock from HIDING a warning.
+func TestResolveLoginTime(t *testing.T) {
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	str := func(s string) *string { return &s }
+
+	// No body: the button's normal case records now.
+	at, cleared, err := resolveLoginTime(loginPayload{}, now)
+	if err != nil || cleared || at != "2026-09-02T12:00:00Z" {
+		t.Errorf("empty payload = (%q, %v, %v), want now and no clear", at, cleared, err)
+	}
+
+	// Explicit empty string clears — the way back from a mistaken tap.
+	at, cleared, err = resolveLoginTime(loginPayload{At: str("")}, now)
+	if err != nil || !cleared || at != "" {
+		t.Errorf("empty at = (%q, %v, %v), want a clear", at, cleared, err)
+	}
+
+	// A past timestamp is kept, normalised to UTC.
+	at, _, err = resolveLoginTime(loginPayload{At: str("2026-08-30T01:12:50+02:00")}, now)
+	if err != nil || at != "2026-08-29T23:12:50Z" {
+		t.Errorf("past at = (%q, %v), want the UTC equivalent", at, err)
+	}
+
+	// Junk is rejected rather than silently becoming "now".
+	if _, _, err = resolveLoginTime(loginPayload{At: str("yesterday")}, now); err == nil {
+		t.Error("expected an error for an unparseable timestamp")
+	}
+
+	// The future is rejected: a login dated ahead pushes the deadline out and
+	// suppresses the very warning this feature exists to give.
+	if _, _, err = resolveLoginTime(loginPayload{At: str("2026-09-09T12:00:00Z")}, now); err == nil {
+		t.Error("expected an error for a future timestamp")
+	}
+	// …but ordinary clock skew between browser and server passes.
+	if _, _, err = resolveLoginTime(loginPayload{At: str("2026-09-02T12:00:30Z")}, now); err != nil {
+		t.Errorf("30s of clock skew rejected: %v", err)
+	}
+}
+
+// TestManualLayerCarriesRecordedLogin: the recorded login has to reach the
+// manual stat layer, or the countdown it exists to drive never sees it.
+func TestManualLayerCarriesRecordedLogin(t *testing.T) {
+	tr := models.Tracker{
+		LastLoginAt: "2026-08-30T00:00:00Z",
+		JoinDate:    "2026-01-01",
+		ManualStats: map[string]string{"ratio": "1.50"},
+	}
+	layer := tr.ManualLayer()
+	if layer["last_login"] != "2026-08-30T00:00:00Z" {
+		t.Errorf("last_login = %v, want the recorded login", layer["last_login"])
+	}
+	// The other manual sources must be untouched by the addition.
+	if layer["join_date"] != "2026-01-01" || layer["ratio"] != "1.50" {
+		t.Errorf("manual layer lost a field: %#v", layer)
+	}
+	// Never recorded = absent, not empty. An empty string would parse as no
+	// timestamp anyway, but storing one puts a meaningless row in the layer.
+	if _, ok := (models.Tracker{}).ManualLayer()["last_login"]; ok {
+		t.Error("last_login present when nothing was ever recorded")
 	}
 }

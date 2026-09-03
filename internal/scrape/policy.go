@@ -95,6 +95,11 @@ func Evaluate(set models.Settings, t models.Tracker, rs defs.ResolvedScrape, db 
 		// other reason. Enforced here so an existing tracker that lands on the
 		// opt-out list stops being scraped immediately, not just at add-time.
 		p.Reason = "opted_out"
+	case rs.Retired:
+		// The site has shut down. Above the generic disabled/API-only reasons
+		// so the UI can say what actually happened rather than implying the
+		// operator switched something off or the user configured it that way.
+		p.Reason = "retired"
 	case set.APIOnlyMode || t.APIOnly:
 		p.Reason = "api_only"
 	case rs.SkipHTMLScrape:

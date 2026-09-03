@@ -174,6 +174,9 @@ func trackerStatus(d *Deps, trackerID string, enabled bool, url string) (status,
 	if _, opted := d.Reg.OptOut(url); opted {
 		return "opted_out", ""
 	}
+	if _, retired := d.Reg.Retired(url); retired {
+		return "retired", ""
+	}
 	v, seen := lastFetchState.Load(trackerID)
 	if !seen {
 		return "unknown", ""

@@ -36,3 +36,13 @@ func TestTrackerRulesSupportFinePrint(t *testing.T) {
 		t.Errorf("rule note = %q", rules.Note)
 	}
 }
+
+func TestTrackerRulesCarryLoginGap(t *testing.T) {
+	var rules TrackerRules
+	if err := json.Unmarshal([]byte(`{"max_login_gap_days": 90}`), &rules); err != nil {
+		t.Fatal(err)
+	}
+	if rules.MaxLoginGapDays != 90 {
+		t.Errorf("max login gap = %d, want 90", rules.MaxLoginGapDays)
+	}
+}

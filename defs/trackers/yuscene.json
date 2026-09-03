@@ -20,7 +20,8 @@
   },
     "rules": {
     "min_ratio": 0.7,
-    "min_seed_days": 5
+    "min_seed_days": 5,
+    "max_login_gap_days": 90
   },
   "invite_requirements": {
     "min_class": "SuperUser"

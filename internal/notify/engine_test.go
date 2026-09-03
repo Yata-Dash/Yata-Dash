@@ -494,3 +494,53 @@ func TestGoalBehindPaceDescription(t *testing.T) {
 		}
 	}
 }
+
+// TestAccountDeadlineConditions: the account-warning fields go through the
+// generic numeric path — no engine case of their own. What this pins is the
+// half that is easy to get wrong: a tracker that reports NO login time or key
+// expiry must never match, because the field is absent rather than zero. A
+// days-remaining of 0 would mean "due today" on every silent tracker, which is
+// the opposite of the truth.
+func TestAccountDeadlineConditions(t *testing.T) {
+	warned := merged(map[string]any{
+		"login_days_remaining": 5,
+		"days_since_login":     85,
+		"api_key_expiry_days":  120,
+	})
+	// A tracker whose API reports neither timestamp: the derived fields are
+	// simply not there.
+	silent := merged(map[string]any{"ratio": "1.20"})
+	// Past the deadline, where the count goes negative.
+	overdue := merged(map[string]any{"login_days_remaining": -12})
+
+	cases := []struct {
+		name string
+		m    models.MergedStats
+		c    models.Condition
+		want bool
+	}{
+		{"login due within a week", warned,
+			models.Condition{Field: "login_days_remaining", Op: "lte", Value: "7"}, true},
+		{"login not yet due", warned,
+			models.Condition{Field: "login_days_remaining", Op: "lte", Value: "3"}, false},
+		{"days since login", warned,
+			models.Condition{Field: "days_since_login", Op: "gt", Value: "30"}, true},
+		{"key not expiring soon", warned,
+			models.Condition{Field: "api_key_expiry_days", Op: "lte", Value: "14"}, false},
+		{"overdue still matches", overdue,
+			models.Condition{Field: "login_days_remaining", Op: "lte", Value: "7"}, true},
+		// The three that matter most: silence, not a false alarm.
+		{"silent tracker: login", silent,
+			models.Condition{Field: "login_days_remaining", Op: "lte", Value: "7"}, false},
+		{"silent tracker: days since", silent,
+			models.Condition{Field: "days_since_login", Op: "gt", Value: "0"}, false},
+		{"silent tracker: key", silent,
+			models.Condition{Field: "api_key_expiry_days", Op: "lte", Value: "14"}, false},
+	}
+	for _, tc := range cases {
+		got := evalCondition(tc.c, tc.m, rawValues(tc.m), map[string]string{}, true, TrendContext{})
+		if got != tc.want {
+			t.Errorf("%s: got %v want %v", tc.name, got, tc.want)
+		}
+	}
+}

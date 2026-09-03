@@ -579,6 +579,15 @@
             </div>
             <div class="form-group" style="margin-bottom:10px">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <div class="toggle-track" id="s-login-click-track" onclick="toggleSettingsLoginClick()"><div class="toggle-thumb"></div></div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text)">Opening a tracker counts as a login</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Clicking a tracker's link from Yata records a login for it, feeding the inactivity countdown. Off by default — with it off you can still record one explicitly from the tracker's Detail page. Yata never sees you log in; this only ever stores what you tell it.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
                 <div class="toggle-track" id="s-goal-pacing-track" onclick="toggleSettingsGoalPacing()"><div class="toggle-thumb"></div></div>
                 <div>
                   <div style="font-size:13px;font-weight:600;color:var(--text)">Goal pacing on Detail</div>
@@ -1283,6 +1292,7 @@ function toggleSettingsTrackerRules() { _settingsToggle('s-tracker-rules-track')
 function toggleSettingsUnreadMail() { _settingsToggle('s-unread-mail-track'); }
 function toggleSettingsUnreadNotif() { _settingsToggle('s-unread-notif-track'); }
 function toggleSettingsHnrHighlight() { _settingsToggle('s-hnr-highlight-track'); }
+function toggleSettingsLoginClick() { _settingsToggle('s-login-click-track'); }
 function toggleSettingsGoalPacing() { _settingsToggle('s-goal-pacing-track'); }
 function toggleSettingsGoalChips() { _settingsToggle('s-goal-chips-track'); }
 function toggleSettingsBackup() { _settingsToggle('s-backup-track'); _applyBackupLock(); }

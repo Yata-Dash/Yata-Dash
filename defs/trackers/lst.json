@@ -5,7 +5,7 @@
   "abbr": "LST",
   "url": "https://lst.gg",
   "type": "unit3d",
-  "last_updated": "2026-07-16",
+  "last_updated": "2026-09-02",
   "approved_by": {
     "name": "kolt343",
     "role": "Owner",
@@ -17,11 +17,16 @@
   },
   "rules": {
     "min_ratio": 0.4,
-    "min_seed_days": 3
+    "min_seed_days": 3,
+    "max_login_gap_days": 90
   },
   "invite_requirements": {
     "note": "Sailboat OR Whale for invite-forum access. Many invite threads additionally require further requirements."
   },
+  "capabilities": {
+    "api_stats_add": ["api_key_expires_at"]
+  },
+  "notes": "LST issues EXPIRING API tokens (the only tracker Yata has seen do so) and reports the expiry as api_key.expires_at alongside the stats. getUnit3D promotes it to a top-level api_key_expires_at and drops the rest of the api_key object, which is a deliberate boundary rather than tidiness: whatever survives is persisted to the stat layer, and a future field in there could otherwise put the token itself into stored stats. Declared here rather than on the unit3d type because no other configured install returns it — probably a UNIT3D feature the others have not enabled, so a type-level claim would be wrong for fifteen trackers. It drives api_key_expiry_days and the \"API key expiring\" alert; a key that quietly lapses stops the stats and simply looks like a broken tracker.",
   "groups": [
     {
       "name": "Leech",

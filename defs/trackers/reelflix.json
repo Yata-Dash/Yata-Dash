@@ -5,7 +5,7 @@
   "abbr": "RFX",
   "url": "https://reelflix.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-30",
+  "last_updated": "2026-09-02",
   "approved_by": {
     "name": "Slikk",
     "role": "SysOp",
@@ -15,7 +15,9 @@
     "disable_scraping": true
   },
   "rules": {
-    "min_ratio": 0.8
+    "min_ratio": 0.8,
+    "min_seed_days": 3,
+    "max_login_gap_days": 60
   },
   "invite_requirements": {
     "min_class": "Elite"
@@ -70,8 +72,7 @@
         "min_uploaded": "100 GiB",
         "min_ratio": 0.9,
         "min_age": "5D",
-        "min_seedtime": "1D",
-        "note": "Average-seedtime progress is unavailable in API-only mode."
+        "min_seedtime": "1D"
       },
       "perks": [
         {
@@ -94,8 +95,7 @@
         "min_uploaded": "500 GiB",
         "min_ratio": 1.0,
         "min_age": "2W",
-        "min_seedtime": "5D",
-        "note": "Average-seedtime progress is unavailable in API-only mode."
+        "min_seedtime": "5D"
       },
       "perks": [
         {
@@ -122,8 +122,7 @@
         "min_uploaded": "1 TiB",
         "min_ratio": 1.1,
         "min_age": "1M",
-        "min_seedtime": "15D",
-        "note": "Average-seedtime progress is unavailable in API-only mode."
+        "min_seedtime": "15D"
       },
       "perks": [
         {
@@ -154,8 +153,7 @@
         "min_uploaded": "2.5 TiB",
         "min_ratio": 1.2,
         "min_age": "3M",
-        "min_seedtime": "1M",
-        "note": "Average-seedtime progress is unavailable in API-only mode."
+        "min_seedtime": "1M"
       },
       "perks": [
         {
@@ -195,8 +193,7 @@
         "min_ratio": 1.25,
         "min_age": "6M",
         "min_seedtime": "45D",
-        "min_seed_size": "1 TiB",
-        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+        "min_seed_size": "1 TiB"
       },
       "perks": [
         {
@@ -240,8 +237,7 @@
         "min_ratio": 1.5,
         "min_age": "1Y",
         "min_seedtime": "3M",
-        "min_seed_size": "2.5 TiB",
-        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+        "min_seed_size": "2.5 TiB"
       },
       "perks": [
         {
@@ -285,8 +281,7 @@
         "min_ratio": 1.75,
         "min_age": "2Y",
         "min_seedtime": "6M",
-        "min_seed_size": "5 TiB",
-        "note": "Seed-size and average-seedtime progress is unavailable in API-only mode."
+        "min_seed_size": "5 TiB"
       },
       "perks": [
         {
@@ -330,8 +325,7 @@
         "min_ratio": 1.0,
         "min_age": "2W",
         "min_seedtime": "5D",
-        "min_monthly_uploads": 25,
-        "note": "Average-seedtime and rolling 30-day upload progress is unavailable through the API."
+        "min_monthly_uploads": 25
       },
       "perks": [
         {
@@ -466,10 +460,15 @@
       ]
     }
   ],
+  "api_field_map": {
+    "recent_uploads": "monthly_uploads"
+  },
+  "notes": "recent_uploads is ReelFLiX's own rolling upload counter, added 2026-09-02, and is what its Min. Uploads rungs are measured against — mapping it to monthly_uploads completes the ladder at 6/6, the last stat Yata could not reach here. Its API also reports every extended stat (seed_size, avg_seed_time, total_seedtime, real_ratio, unread flags), which is why the group requirement notes about API-only mode were removed the same day: they had gone stale.",
   "capabilities": {
     "api_stats_add": [
       "active_events",
       "avg_seed_time",
+      "monthly_uploads",
       "fl_tokens",
       "invites",
       "real_ratio",

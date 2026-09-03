@@ -20,6 +20,11 @@ type ResolvedScrape struct {
 	// enforced at runtime — not just at add-time.
 	OptedOut        bool
 	OptOut          OptOutEntry
+	// Retired is true when the tracker's def records that the site has SHUT
+	// DOWN. It also forces DisableScraping, so a caller that doesn't know
+	// about retirement still refuses to fetch the page; this flag exists so
+	// the ones that do can say why, instead of blaming the operator.
+	Retired bool
 	ProfilePath     string
 	Labels          map[string]string
 	EventTitleClass string
@@ -62,6 +67,14 @@ func (r *Registry) ResolveScrape(trackerURL, typeKey string) ResolvedScrape {
 	if entry, opted := r.OptOut(trackerURL); opted {
 		out.OptedOut = true
 		out.OptOut = entry
+	}
+	// A retired tracker is not scraped either — same reason, different fact.
+	// DisableScraping rather than a flag of its own: every caller already
+	// treats it as "this page is not to be fetched", and the UI reads the
+	// retirement itself for the wording.
+	if hasDef && td.Retired != nil {
+		out.Retired = true
+		out.DisableScraping = true
 	}
 	return out
 }
@@ -414,6 +427,14 @@ func NormalizeAPIFields(fieldMap map[string]string, data map[string]any) map[str
 func (r *Registry) APIKind(trackerURL, typeKey string) string {
 	td, hasDef := r.TrackerByURL(trackerURL)
 	if hasDef {
+		// A shut-down tracker is never contacted again. Checked HERE rather
+		// than left to the caller because the api.kind lives on the TYPE,
+		// which is stored on the user's tracker — so simply deleting a dead
+		// tracker's def does not stop the requests, it only strips the name
+		// and ladder its stored history still refers to.
+		if td.Retired != nil {
+			return "none"
+		}
 		// A def that declares its own full API block (path + mappings) always
 		// fetches through the custom fetcher, whatever its base type. The type
 		// keeps driving everything else (display, credential fields, scrape

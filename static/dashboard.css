@@ -234,6 +234,12 @@ html{overflow-x:clip}
 .card-tracker-url:hover{color:var(--accent);text-decoration:underline}
 .card-header-actions{display:flex;gap:4px;flex-shrink:0}
 .badge-membership{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);font-family:'Geist Mono',monospace;letter-spacing:.3px}
+/* Account deadline badges — inactivity pruning and API key expiry. Amber
+   while the deadline can still be met, red once it has passed. Only rendered
+   when a deadline is actually near, so most cards never show one. */
+.account-warn{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;border:1px solid;font-family:'Geist Mono',monospace;letter-spacing:.3px;white-space:nowrap;cursor:help}
+.account-warn--amber{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)}
+.account-warn--red{background:var(--error-bg);color:var(--red);border-color:var(--error-border)}
 .badge-group{font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--accent-bg-md);color:var(--accent);border:1px solid var(--accent-border-sm);letter-spacing:.3px}
 .badge-group-styled{font-size:11px;font-weight:600;letter-spacing:.3px;padding:2px 8px;border-radius:20px;border:1px solid;display:inline-flex;align-items:center;gap:5px;border-color:color-mix(in srgb,currentColor 35%,transparent);background:color-mix(in srgb,currentColor 12%,transparent)}
 .badge-group-styled i{font-size:11px}

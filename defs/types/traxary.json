@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "key": "traxary",
+  "label": "Traxary",
+  "last_updated": "2026-09-03",
+  "description": "The tracker platform Traxary runs on. Its operators run more than one site on the same codebase, so the endpoint, auth and field map live here rather than in each tracker def — a change reaching all of them is then a single edit.",
+  "notes": "BETA/TESTING TYPE — not part of a release, and must be held back together with the tracker defs on this platform (traxary, peergarden). Shipping it alone would put a Traxary option in every user's type picker for a platform that is not live yet.\n\nThe key is FINAL: Traxary is the platform's own name, confirmed 2026-09-03. This is not the situation renamedTrackerTypes exists for — \"gazelle\" was adopted as a generic base for forks that each went their own way, whereas here we work directly with the platform's developer, who is willing to add endpoints where Yata needs them. One codebase, one set of field names, one type.\n\nPlatform facts that belong here rather than in a tracker def: /api/user is Bearer-authenticated and reports no join date, so api.required_fields demands one at setup; the response nests everything under stats/events/*group objects; and group REQUIREMENTS are never exposed — the API only ever states the current group, so every ladder has to be written by hand in the tracker def.\n\nThree concurrent memberships are reported (autogroup, uploadgroup, internalgroup) where Yata models one ladder. autogroup drives the group badge and progression; the other two are carried as display-only fields. Deliberately unresolved: it is the only platform we have seen do it, and it is pre-launch, so the group model is left alone until it is worth changing.\n\nThe field map is what Traxary's beta instance actually served. PeerGarden's /api namespace answers but has no user route yet (see its def), so this type is written to the shape we KNOW works — when the endpoint lands there the tracker def should simply start reporting, with no further change on either side. If a site on this platform ever genuinely diverges, that is what a tracker-level api block is for.\n\nscrape.disable_scraping is NOT set here. It records an operator's request about a particular site, so it stays in each tracker def even when the same people run both.",
+  "api": {
+    "kind": "custom",
+    "api_key_hint": "Profile → Settings → API",
+    "required_fields": [
+      "join_date"
+    ]
+  },
+  "custom_api": {
+    "path": "/api/user",
+    "auth_method": "api_key_header",
+    "field_map": {
+      "autogroup.title": "group",
+      "events.tickets": "open_tickets",
+      "internalgroup.title": "internal_group",
+      "last_seen": "last_login",
+      "premium.type": "premium",
+      "stats.avg_seedtime": "avg_seed_time",
+      "stats.hit_and_runs": "hit_and_runs",
+      "stats.leeching": "leeching",
+      "stats.ratio": "ratio",
+      "stats.seedbonus": "bonus_points",
+      "stats.seeding": "seeding",
+      "stats.total_seedtime": "total_seedtime",
+      "stats.total_uploads": "uploads_approved",
+      "uploadgroup.title": "upload_group",
+      "username": "username"
+    },
+    "byte_fields": {
+      "stats.buffer": "buffer",
+      "stats.downloaded": "downloaded",
+      "stats.seeding_size": "seed_size",
+      "stats.uploaded": "uploaded"
+    },
+    "sum_fields": {
+      "warnings": [
+        "stats.warnings.hnr",
+        "stats.warnings.manual"
+      ]
+    },
+    "bool_fields": {
+      "events.dm": "unread_mail",
+      "events.notifications": "unread_notifications"
+    },
+    "event_list": "events.global"
+  }
+}
