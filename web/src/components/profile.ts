@@ -55,6 +55,12 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'forum_posts',     label: 'Forum Posts',     color: 'text2'  },
 ];
 
+// last_login and api_key_expires_at deliberately aren't stat rows. Neither is
+// a number about the account's standing — one is when you were last here, the
+// other is credential metadata — so both live in the Info column beside Join
+// Date and Last API Update (see views/table.ts), and on the Detail page beside
+// the facts they belong with.
+
 /** Fields never shown as stat rows (rendered elsewhere: header, info, beacon).
  *  unread_* render as card icons + expanded-Info rows, not raw true/false. */
 const NON_ROW_FIELDS = new Set([
@@ -63,6 +69,12 @@ const NON_ROW_FIELDS = new Set([
   // generic stat row it stringified to "[object Object],[object Object]".
   'active_events',
   'user_id', 'unread_mail', 'unread_notifications',
+  // Derived day counts (internal/stats/account.go). They exist so alert rules
+  // can compare one number across trackers with different policies; as rows
+  // they would just restate the two dated rows above as bare integers.
+  'days_since_login', 'login_days_remaining', 'api_key_expiry_days',
+  // Account information, rendered in the Info column instead (see above).
+  'last_login', 'api_key_expires_at',
 ]);
 
 export interface StatRow {
@@ -149,6 +161,7 @@ export function buildScrapeRefreshBtn(tracker: Tracker): string {
     let tip: string;
     switch (ss.reason) {
       case 'opted_out':         tip = 'Operator opted out — Yata no longer contacts this tracker'; break;
+      case 'retired':           tip = 'Tracker has shut down — your history is kept'; break;
       case 'api_only':          tip = 'API only mode — scraping disabled'; break;
       case 'scrape_disabled':   tip = 'Scrape disabled by tracker operator'; break;
       case 'daily_limit':       tip = 'Daily scrape limit reached'; break;

@@ -339,6 +339,29 @@ func (r *Registry) ExtendedStats(trackerURL, typeKey string) *ExtendedStatsSpec 
 	return nil
 }
 
+// Retired reports whether a tracker has shut down, and the details if so.
+// Matched by URL through the def, so it needs no separate host list: a tracker
+// can only be retired if Yata defined it in the first place.
+func (r *Registry) Retired(trackerURL string) (RetiredSpec, bool) {
+	td, ok := r.TrackerByURL(trackerURL)
+	if !ok || td.Retired == nil {
+		return RetiredSpec{}, false
+	}
+	return *td.Retired, true
+}
+
+// MaxLoginGapDays returns the tracker's inactivity policy in days, or 0 when
+// no def declares one. Rules live on the tracker def rather than the type: an
+// inactivity policy is a decision by the people running a site, not a property
+// of the software they run.
+func (r *Registry) MaxLoginGapDays(trackerURL string) int {
+	td, ok := r.TrackerByURL(trackerURL)
+	if !ok || td.Rules == nil {
+		return 0
+	}
+	return td.Rules.MaxLoginGapDays
+}
+
 // Events returns the site-events endpoint spec for a tracker (nil = none).
 // Tracker-level only, like ExtendedStats: whether an install exposes the
 // endpoint is a fact about that install, not about its software.

@@ -2,9 +2,9 @@
   "schema_version": 1,
   "key": "gazelle_antneb",
   "label": "Gazelle (ANT/NEB)",
-  "last_updated": "2026-07-27",
+  "last_updated": "2026-09-02",
   "description": "The Gazelle fork shared by Anthelion and Nebulance — same developers, same api.php grammar (?action=user&method=getuserinfo), same field names. Needs an API key and a username: the key authenticates, the username selects the account. Because the two sites track each other's API changes, the endpoint and field map live here on the type rather than in each tracker def, so a new field reaching both is a single edit. Fields a given site doesn't return are simply absent.",
-  "notes": "Deliberately NOT mapped, and must stay that way: IRCKey is a live credential, and Email, Inviter and paranoia are personal data about the user or a third party. Yata stores every mapped field in its stats database and renders it on the profile panel, so mapping any of them would put a secret on screen and in a file users are told to share when reporting bugs. LastAccess and SubClasses are unmapped only because no canonical field exists yet.",
+  "notes": "Deliberately NOT mapped, and must stay that way: IRCKey is a live credential, and Email, Inviter and paranoia are personal data about the user or a third party. Yata stores every mapped field in its stats database and renders it on the profile panel, so mapping any of them would put a secret on screen and in a file users are told to share when reporting bugs. SubClasses is unmapped only because no canonical field exists yet. LastAccess IS mapped, to last_login: it is the account holder's own last access time, the same category as JoinDate, and it is what the inactivity warnings count from. It arrives as \"2026-09-02 03:42:44\" with NO timezone and is read as UTC, so it can be up to 14 hours out — which cannot flip a warning measured in days.",
   "api": {
     "kind": "custom"
   },
@@ -19,6 +19,7 @@
       "response.Username": "username",
       "response.Class": "group",
       "response.JoinDate": "join_date",
+      "response.LastAccess": "last_login",
       "response.SeedCount": "seeding",
       "response.HnR": "hit_and_runs",
       "response.Invites": "invites",

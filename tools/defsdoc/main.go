@@ -148,6 +148,12 @@ func buildTable(reg *defs.Registry, notes map[string]string) string {
 		if td.Type == "test" {
 			continue // the credential-free demo isn't a real tracker
 		}
+		if td.Retired != nil {
+			// The def is kept so existing users keep their history readable,
+			// but the table answers "which trackers does Yata support?" — and
+			// a site that has shut down is not an answer to that.
+			continue
+		}
 		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
 			td.Name,
 			typeLabel(reg, td.Type),

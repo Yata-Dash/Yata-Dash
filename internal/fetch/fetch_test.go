@@ -2422,3 +2422,105 @@ func TestEventUnixNamedZones(t *testing.T) {
 		t.Error("an unplaceable zone should still yield a time, just an unadjusted one")
 	}
 }
+
+// ── Custom: structured event list (event_list) ───────────────────────────────
+
+// TestFetchCustomEventList: a custom def can surface site events.
+//
+// The field map carries scalars only, so an API reporting events as an ARRAY
+// had them silently dropped — a custom-API tracker could not show a freeleech
+// banner at all, however plainly its API said one was running. The list now
+// goes through the same normaliser the UNIT3D path uses, so these render
+// identically to every other tracker's events.
+func TestFetchCustomEventList(t *testing.T) {
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"username":"U","stats":{"ratio":1.35},
+			"events":{"global":[
+				{"type":"global_freeleech","ends_at":null},
+				{"type":"movie_club","title":"The movie running","ends_at":"2026-09-04T12:00:00.000000Z"}]}}`)
+	}))
+	defer ts.Close()
+
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API","api":{"kind":"custom"}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"t","name":"T","abbr":"T","url":%q,"type":"custom",
+		"api":{"path":"/api/user","auth_method":"api_key_header",
+			"field_map":{"username":"username","stats.ratio":"ratio"},
+			"event_list":"events.global"}}`, ts.URL)
+	if err := os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "t.json"), []byte(trackerJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+
+	data, ferr := NewClient(reg, "").Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "k"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	// A slug with no name is prettified; an explicit title wins over the slug.
+	if got := data["active_event"]; got != "Global Freeleech · The movie running" {
+		t.Errorf("active_event = %#v", got)
+	}
+	// The countdown follows the soonest REAL end — the null one contributes
+	// nothing rather than reading as "ends at the epoch".
+	wantEnd := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC).Unix()
+	if got := data["active_event_ends_at"]; got != wantEnd {
+		t.Errorf("active_event_ends_at = %v, want %v", got, wantEnd)
+	}
+	list, ok := data["active_events"].([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("active_events = %#v, want both events", data["active_events"])
+	}
+	if _, hasNull := list[0].(map[string]any)["ends_at"]; hasNull {
+		t.Error("a null ends_at should be dropped, not carried as a value")
+	}
+}
+
+// TestFetchCustomNoEventList: a def that declares none, or an API reporting an
+// empty list, must leave the event fields unset — an absent banner rather than
+// an empty one.
+func TestFetchCustomNoEventList(t *testing.T) {
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"username":"U","events":{"global":[]}}`)
+	}))
+	defer ts.Close()
+
+	typeJSON := `{"schema_version":1,"key":"custom","label":"Custom API","api":{"kind":"custom"}}`
+	trackerJSON := fmt.Sprintf(`{"schema_version":1,"key":"t","name":"T","abbr":"T","url":%q,"type":"custom",
+		"api":{"path":"/api/user","auth_method":"api_key_header",
+			"field_map":{"username":"username"},"event_list":"events.global"}}`, ts.URL)
+	_ = os.WriteFile(filepath.Join(dir, "types", "custom.json"), []byte(typeJSON), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "trackers", "t.json"), []byte(trackerJSON), 0o644)
+	reg, err := defs.Load(dir)
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+
+	data, ferr := NewClient(reg, "").Fetch(models.Tracker{URL: ts.URL, Type: "custom", APIKey: "k"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	for _, f := range []string{"active_event", "active_events", "active_event_ends_at"} {
+		if v, ok := data[f]; ok {
+			t.Errorf("%s = %#v, want nothing", f, v)
+		}
+	}
+}

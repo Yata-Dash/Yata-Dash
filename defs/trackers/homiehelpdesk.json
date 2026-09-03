@@ -29,7 +29,8 @@
   },
   "rules": {
     "min_ratio": 0.4,
-    "min_seed_days": 7
+    "min_seed_days": 7,
+    "max_login_gap_days": 90
   },
   "invite_requirements": {
     "note": "Specialist or above for invite-forum access."

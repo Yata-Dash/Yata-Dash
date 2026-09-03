@@ -75,7 +75,7 @@ func importConfig(d *Deps) http.HandlerFunc {
 			return
 		}
 		// Re-sync derived state from the new config (the manual stats layer:
-		// typed-in stats and join dates).
+		// typed-in stats, join dates and recorded logins).
 		for _, t := range d.Cfg.Trackers() {
 			_ = d.Stats.SaveManual(t.ID, t.ManualLayer())
 		}

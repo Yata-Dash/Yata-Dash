@@ -68,7 +68,9 @@
     "min_class": "Movie Lover"
   },
     "rules": {
-    "min_ratio": 0.4
+    "min_ratio": 0.4,
+    "min_seed_days": 3,
+    "max_login_gap_days": 90
   },
   "groups": [
     {

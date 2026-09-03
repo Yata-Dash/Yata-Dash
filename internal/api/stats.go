@@ -56,6 +56,22 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	}
 	logOptOutTransition(d, t, false)
 
+	// A shut-down tracker: nothing is contacted, so there is nothing to
+	// refresh. Its stored stats are returned unchanged and no failure is
+	// recorded — a dead site is not an outage, and reporting one would leave
+	// Connection Health permanently red over a tracker that is simply gone.
+	// The history stays exactly where it is; only new data has stopped.
+	if spec, retired := d.Reg.Retired(t.URL); retired {
+		if merged, err := d.Stats.Merged(t.ID); err == nil {
+			resp.Fields = merged
+		}
+		resp.OK = true
+		resp.Retired = true
+		resp.RetiredDate = spec.Date
+		resp.RetiredNote = spec.Note
+		return resp
+	}
+
 	// Manual-entry trackers are never contacted, so there is nothing to
 	// refresh: the stats ARE the manual layer, written when the user saved
 	// them. Returning early rather than falling through the normal path
@@ -67,6 +83,18 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	// History still runs: each save is a real datapoint, and charting them is
 	// how a hand-maintained tracker builds a trend at all.
 	if d.Reg.APIKind(t.URL, t.Type) == "none" && t.Type == models.TypeManual {
+		// FetchedAt defaults to "now" because for every other tracker it means
+		// "when this refresh ran". Nothing ran here, so leaving it stamped a
+		// fresh time on a tracker Yata never contacted — the Last API Update
+		// column read 09:52 for numbers typed in weeks ago, and the Detail
+		// header claimed it had just updated.
+		//
+		// Zero, not the manual layer's write time: that layer is rewritten on
+		// every startup (see cmd/yata/main.go), so it means "last restart or
+		// save" rather than "when you typed these in" — a subtler version of
+		// the same lie. A tracker that is never contacted has no fetch time,
+		// and 0 is exactly how the UI already renders "never".
+		resp.FetchedAt = 0
 		if merged, err := d.Stats.Merged(t.ID); err == nil {
 			resp.Fields = merged
 			resp.OK = true

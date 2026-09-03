@@ -5,7 +5,7 @@
   "abbr": "DP",
   "url": "https://darkpeers.org/",
   "type": "unit3d",
-  "last_updated": "2026-07-20",
+  "last_updated": "2026-09-02",
   "approved_by": {
     "name": "haXXy",
     "role": "Owner",
@@ -19,7 +19,8 @@
   },
     "rules": {
     "min_ratio": 0.8,
-    "min_seed_days": 6
+    "min_seed_days": 6,
+    "max_login_gap_days": 90
   },
   "groups": [
   {

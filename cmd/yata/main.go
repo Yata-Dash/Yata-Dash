@@ -159,6 +159,16 @@ func main() {
 	// Read the qui seedsize mode live so a settings change re-slots the qui
 	// layer in the merge without a restart.
 	statsEngine.QUISeedMode = func() string { return cfg.Settings().QUISeedsizeMode }
+	// Resolve each tracker's inactivity policy from its def at read time, so a
+	// def edit followed by a reload takes effect without a restart — and so a
+	// tracker with no def (or no declared policy) simply reports none.
+	statsEngine.AccountPolicy = func(trackerID string) stats.AccountPolicy {
+		t, ok := cfg.Tracker(trackerID)
+		if !ok {
+			return stats.AccountPolicy{}
+		}
+		return stats.AccountPolicy{MaxLoginGapDays: reg.MaxLoginGapDays(t.URL)}
+	}
 	deps := &api.Deps{
 		Cfg:     cfg,
 		DB:      db,

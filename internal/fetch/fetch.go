@@ -514,6 +514,12 @@ func eventName(ev map[string]any) string {
 	if s, _ := ev["name"].(string); strings.TrimSpace(s) != "" {
 		return strings.TrimSpace(s)
 	}
+	// "title" is the other spelling in the wild, and it carries the specific
+	// name of a themed event ("The movie running") where "type" only has the
+	// generic slug — so preferring it loses nothing and says more.
+	if s, _ := ev["title"].(string); strings.TrimSpace(s) != "" {
+		return strings.TrimSpace(s)
+	}
 	slug, _ := ev["type"].(string)
 	if slug = strings.TrimSpace(slug); slug == "" {
 		return ""
@@ -1173,6 +1179,17 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	for jsonPath, canonical := range api.BoolFields {
 		if v := nested(raw, jsonPath); v != nil {
 			out[canonical] = strconv.FormatBool(anyTruthy(v))
+		}
+	}
+
+	// Structured event list → the canonical active_events, and from there the
+	// flat banner + countdown fields, through the same normaliser the UNIT3D
+	// path uses. A custom def could not surface events at all before this: the
+	// field map handles scalars, so an array of events reached it and vanished.
+	if api.EventList != "" {
+		if list, ok := nested(raw, api.EventList).([]any); ok && len(list) > 0 {
+			out[activeEventsField] = list
+			normalizeActiveEvents(out)
 		}
 	}
 

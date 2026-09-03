@@ -31,7 +31,9 @@
   },
   "rules": {
     "min_ratio": 0.4,
-    "min_seed_days": 2
+    "min_seed_days": 2,
+    "max_login_gap_days": 60,
+    "note": "Inactivity is measured as 60 days ~OR~ seed 1+ torrent"
   },
   "groups": [
     {

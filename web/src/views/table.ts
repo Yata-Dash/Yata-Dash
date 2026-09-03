@@ -9,6 +9,7 @@ import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { buildStatsPanel } from '../components/profile';
 import { buildTargets, fmtDateTime, makeSdot } from './grid';
 import { eventGlobeSvg } from '../utils/icons';
+import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin } from '../utils/account';
 
 interface TableCallbacks {
   onSort: (col: string) => void;
@@ -217,7 +218,8 @@ function buildCell(
       <div class="td-tracker-wrap">
         ${settings.show_favicons && t.url ? `<img class="tracker-favicon" src="${getFaviconUrl(t.url)}" alt="" onerror="this.style.display='none'">` : ''}
         <span class="td-tracker-name"><span class="td-name-text tracker-name-link" title="Open tracker detail" onclick="event.stopPropagation();openTrackerDetail('${jsId(t.id)}')">${esc(fmtTrackerName(t.name, t.abbr, settings.tracker_name_mode))}</span>${t.type === 'test' ? '<span class="mock-badge">TEST</span>' : ''}${activeEvent ? `<span class="event-beacon event-beacon-tip">${eventGlobeSvg()}<span class="event-tip">${esc(activeEvent)}</span></span>` : ''}${unreadFlags}</span>
-        <a class="td-tracker-url" href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(t.url)}</a>
+        <a class="td-tracker-url" href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener" onclick="event.stopPropagation();trackerLinkOpened('${jsId(t.id)}')">${esc(t.url)}</a>
+        ${accountWarningBadges(s)}
       </div></td>`;
     }
     case 'username': {
@@ -373,13 +375,13 @@ function buildCell(
     // isn't lost, it moves to the hover text, and the value turns amber while
     // the API is currently failing so the staleness is visible without it.
     case 'last_api_update': {
-      // Nothing was ever fetched for a manual tracker, so there is no API
-      // freshness to report — only when the user last typed the numbers in.
+      // Nothing is ever fetched for a manual tracker, so there is no API
+      // freshness to report. This used to print a time and call it the moment
+      // the numbers were entered; it was neither — see the note in
+      // internal/api/stats.go. The expanded row says "Stats Source: Entered by
+      // hand", which is the real answer to what this column is asking.
       if (s?.manual_entry) {
-        const entered = s.fetched_at ?? 0;
-        return entered
-          ? `<td class="td-mono td-center" title="Entered by hand — Yata never contacts this tracker" style="color:var(--text3)">${esc(fmtDateTime(entered))}</td>`
-          : `<td class="td-center">${dash}</td>`;
+        return `<td class="td-center" title="Entered by hand — Yata never contacts this tracker, so there is no API update to report">${dash}</td>`;
       }
       const ok = s?.api_updated_at ?? 0;
       const tried = s?.fetched_at ?? 0;
@@ -397,6 +399,8 @@ function buildCell(
       const ss = scrapeStatus[t.id];
       // A tracker Yata never scrapes has no "last scrape" to be stale — say
       // why in one word rather than showing a bare dash that reads as a fault.
+      if (ss?.reason === 'retired')
+        return `<td class="td-center" title="This tracker has shut down — Yata no longer contacts it. Your history is kept." style="color:var(--text3);font-size:12px">Retired</td>`;
       if (ss?.reason === 'opted_out')
         return `<td class="td-center" title="Operator opted out — Yata no longer contacts this tracker" style="color:var(--text3);font-size:12px">Opted out</td>`;
       if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
@@ -454,6 +458,11 @@ function buildExpanded(
     : '';
 
   const joinDate = strOf(stats, 'join_date');
+  const keyExpiry = strOf(stats, 'api_key_expires_at');
+  // Amber inside 30 days or already past — the same threshold the header badge
+  // uses, so a row and a badge never disagree about urgency.
+  const keyExpiryDays = numOf(stats, 'api_key_expiry_days');
+  const keyExpiryWarn = keyExpiryDays !== null && keyExpiryDays <= 30;
   const ss = scrapeStatus[tracker.id];
   const infoList: { l: string; v: string; warn?: boolean }[] = [
     { l: 'Join Date',    v: joinDate || '—' },
@@ -461,8 +470,15 @@ function buildExpanded(
     ...(stats.manual_entry
       ? [{ l: 'Stats Source', v: 'Entered by hand' }]
       : [{ l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' }]),
+    // Directly under the API's own freshness, because it is the thing that
+    // will silently END it: a lapsed key stops the stats and just looks like a
+    // broken tracker. Only LST issues expiring keys, so this is normally absent.
+    ...(keyExpiry
+      ? [{ l: 'API Key Expires', v: fmtKeyExpiry(keyExpiry), warn: keyExpiryWarn }]
+      : []),
     { l: 'Last Scrape Update', v: (() => {
         if (stats.manual_entry) return 'Never contacted';
+        if (ss?.reason === 'retired') return 'Tracker shut down';
         if (ss?.reason === 'opted_out') return 'Operator opted out';
         // Same unified label as the grid footer — cause doesn't matter here.
         if (ss?.reason === 'api_only' || ss?.reason === 'scrape_disabled' || ss?.reason === 'no_scrape_support')
@@ -519,8 +535,28 @@ function buildExpanded(
   const profileLinkRow = tracker.profile_url
     ? `<div class="exp-stat">
         <span class="exp-stat-label">Profile</span>
-        <span class="exp-stat-value"><a class="exp-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a></span>
+        <span class="exp-stat-value"><a class="exp-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();trackerLinkOpened('${jsId(tracker.id)}')">Open profile&nbsp;&#8599;</a></span>
       </div>`
+    : '';
+
+  // Last login — account information rather than a stat, so it sits with Join
+  // Date and the profile link rather than among the numbers. The tooltip names
+  // the source, since "the tracker told us" and "you told us" are very
+  // different claims and this section carries no provenance dots.
+  const lastLoginRaw = strOf(stats, 'last_login');
+  const lastLoginRow = lastLoginRaw
+    ? (() => {
+        const src = stats.fields?.['last_login']?.source;
+        const tip = src === 'manual'
+          ? 'You recorded this login — Yata never observes one'
+          : src === 'scrape'
+            ? "Read from the tracker's profile page"
+            : "Reported by the tracker's API";
+        return `<div class="exp-stat">
+        <span class="exp-stat-label" title="${esc(tip)}">Last Login</span>
+        <span class="exp-stat-value">${esc(fmtLastLogin(lastLoginRaw))}</span>
+      </div>`;
+      })()
     : '';
 
   // Missing-credential scrape hints — setup states, muted (not errors)
@@ -581,6 +617,8 @@ function buildExpanded(
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_hours} hours`]);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`]);
+  if (tracker.max_login_gap_days && tracker.max_login_gap_days > 0)
+    rulesRows.push(['Login Required', `every ${tracker.max_login_gap_days} days`]);
   if (tracker.rule_note) rulesRows.push(['Details', tracker.rule_note]);
   const rulesHtml = rulesRows.length ? `<div style="margin-top:10px">
       <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>
@@ -600,7 +638,7 @@ function buildExpanded(
       <div class="exp-stat-list">${infoList.map(r => `<div class="exp-stat">
         <span class="exp-stat-label">${esc(r.l)}</span>
         <span class="exp-stat-value"${r.warn ? ' style="color:var(--amber)"' : ''}>${esc(r.v)}</span>
-      </div>`).join('')}${unreadRows}${profileLinkRow}</div>
+      </div>`).join('')}${unreadRows}${profileLinkRow}${lastLoginRow}</div>
       ${scrapeSetupHint}
       ${rulesHtml}
       ${perksHtml}

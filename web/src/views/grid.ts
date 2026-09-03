@@ -9,6 +9,7 @@ import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, f
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
+import { accountWarningBadges } from '../utils/account';
 import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
 
@@ -272,6 +273,11 @@ export function renderCard(
     ? `<span class="badge-membership" title="Since ${esc(joinDate)}">${memberDur(joinDate)}</span>`
     : '';
 
+  // Account deadlines (inactivity pruning, API key expiry). Absent unless one
+  // is actually near, so the header stays as it is for every tracker that
+  // reports no such date — which is most of them.
+  const deadlineBadges = accountWarningBadges(stats);
+
   const activeEvent = strOf(stats, 'active_event');
   const eventBeacon = activeEvent
     ? `<span class="event-beacon" title="${esc(activeEvent)}">
@@ -308,10 +314,11 @@ export function renderCard(
       </div>
       <div class="card-header-meta">
         <a class="card-tracker-url" href="${esc(safeUrl(tracker.url))}" target="_blank" rel="noopener"
-          onclick="event.stopPropagation()">${esc(tracker.url)}</a>
+          onclick="event.stopPropagation();trackerLinkOpened('${jsId(tracker.id)}')">${esc(tracker.url)}</a>
         ${memberBadge}
+        ${deadlineBadges}
         ${tracker.profile_url
-          ? `<a class="card-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open profile&nbsp;&#8599;</a>`
+          ? `<a class="card-profile-link" href="${esc(safeUrl(tracker.profile_url))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();trackerLinkOpened('${jsId(tracker.id)}')">Open profile&nbsp;&#8599;</a>`
           : ''}
       </div>
     </div>
@@ -419,7 +426,11 @@ export function renderCard(
       ${buildRulesLine(tracker, settings)}
     </div>
     <div class="card-footer">
-      <span class="card-last-updated">${stats?.manual_entry ? 'Entered' : 'API'} ${updated}</span>
+      <span class="card-last-updated"${stats?.manual_entry ? ' title="Yata never contacts this tracker — these are the numbers you typed in"' : ''}>${
+        // A manual tracker has no fetch time to report (see internal/api/stats.go),
+        // so it says what the numbers ARE rather than pairing "Entered" with a
+        // dash — or, as it did before, with whenever the page last polled.
+        stats?.manual_entry ? 'Entered by hand' : `API ${updated}`}</span>
       ${(() => {
         // A manual tracker is never scraped BECAUSE it is never contacted at
         // all. "API only" would be doubly wrong there — there is no API either.
@@ -438,7 +449,8 @@ export function renderCard(
         if (ss.allowed) return '';
         let tip: string;
         let setup = false; // setup states (missing credentials) — muted, not amber
-        if (ss.reason === 'opted_out')              tip = 'Operator opted out';
+        if (ss.reason === 'retired')                tip = 'Retired';
+        else if (ss.reason === 'opted_out')         tip = 'Operator opted out';
         // api_only / no_scrape_support / scrape_disabled differ only in CAUSE
         // (user toggle vs type can't scrape vs operator forbids) — to the user
         // they all mean the same thing here: stats come from the API alone.
@@ -513,6 +525,8 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
     parts.push(`Seed ≥ ${tracker.min_seed_hours} hours`);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
+  if (tracker.max_login_gap_days && tracker.max_login_gap_days > 0)
+    parts.push(`Login every ${tracker.max_login_gap_days} days`);
   if (tracker.rule_note) parts.push(tracker.rule_note);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
