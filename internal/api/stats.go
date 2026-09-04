@@ -69,6 +69,13 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.Retired = true
 		resp.RetiredDate = spec.Date
 		resp.RetiredNote = spec.Note
+		// Same rule as the manual branch below and the opt-out branch above:
+		// nothing was contacted, so there is no fetch time to report and the
+		// default "now" would date dead data to this second. APIUpdatedAt is
+		// carried through instead, which on a shut-down tracker is the more
+		// useful number of the two — it says how old the last real data is.
+		resp.FetchedAt = 0
+		resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
 		return resp
 	}
 

@@ -273,13 +273,14 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | OldToonsWorld | UNIT3D | Yes | 5/5 | API only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | UNIT3D | Yes | 3/6 (4 scraped) | Once per day |  |
 | Orpheus | Gazelle (ajax.php) | No | 6/6 | API only | Required ratio is calculated dynamically |
-| PeerGarden | Traxary | No | 4/6 | API only | Pending - Awaiting user API to be turned on |
+| PeerGarden | traxary | No | 4/6 | API only | Comments and forum posts not yet in the API |
 | Redacted | Gazelle (ajax.php) | No | 6/6 | API only |  |
 | ReelFliX | UNIT3D | Yes | 6/6 | API only |  |
 | RetroFlix | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
 | RocketHD | UNIT3D | Yes | 3/6 | API only |  |
 | Seedpool | UNIT3D | Yes | 2/3 (3 scraped) | 180min |  |
 | SpeedApp | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
+| Traxary | traxary | No | 23 stats | API only |  |
 | Unwalled | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
 | Upload.cx | UNIT3D | No | 3/6 | API only |  |
 | YUSCENE | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |

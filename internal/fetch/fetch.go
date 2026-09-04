@@ -478,6 +478,15 @@ func normalizeActiveEvents(data map[string]any) {
 		if startsAt := eventUnix(clean["starts_at"]); startsAt > 0 {
 			clean["starts_at"] = startsAt
 		}
+		// The display label, derived once here rather than re-derived by every
+		// consumer. The flat active_event banner already used eventName; the
+		// Detail page renders the STRUCTURED list instead and was reading
+		// name-or-type directly, so PeerGarden's {type:"movie_club",
+		// title:"Dark City"} showed as the raw slug "movie_club" — it never
+		// looked at "title" at all. One field means one naming rule.
+		if label := eventName(clean); label != "" {
+			clean["label"] = label
+		}
 		events = append(events, clean)
 
 		status, _ := clean["status"].(string)
@@ -511,15 +520,30 @@ func normalizeActiveEvents(data map[string]any) {
 // eventName is an event's display name, falling back to a prettified type slug
 // ("upload_contest" → "Upload Contest") when the tracker leaves name null.
 func eventName(ev map[string]any) string {
-	if s, _ := ev["name"].(string); strings.TrimSpace(s) != "" {
-		return strings.TrimSpace(s)
+	kind := prettyEventType(ev)
+	// "name", then "title" — the other spelling in the wild. Both carry the
+	// specific name of a themed event where "type" only has the generic slug.
+	own, _ := ev["name"].(string)
+	if strings.TrimSpace(own) == "" {
+		own, _ = ev["title"].(string)
 	}
-	// "title" is the other spelling in the wild, and it carries the specific
-	// name of a themed event ("The movie running") where "type" only has the
-	// generic slug — so preferring it loses nothing and says more.
-	if s, _ := ev["title"].(string); strings.TrimSpace(s) != "" {
-		return strings.TrimSpace(s)
+	own = strings.TrimSpace(own)
+	if own == "" {
+		return kind // nothing specific to say; the type IS the name
 	}
+	if kind == "" || eventTypeIsRedundant(kind, own) {
+		return own
+	}
+	// The type adds information the name doesn't carry. PeerGarden's movie
+	// club is the case that forced this: its events arrive as
+	// {"type":"movie_club","title":"Dark City"}, so the banner read simply
+	// "Dark City" — a film title with a countdown and no hint of what it was.
+	return kind + " — " + own
+}
+
+// prettyEventType turns an event's slug into words: "movie_club" → "Movie
+// Club". Empty when the event carries no type.
+func prettyEventType(ev map[string]any) string {
 	slug, _ := ev["type"].(string)
 	if slug = strings.TrimSpace(slug); slug == "" {
 		return ""
@@ -531,6 +555,28 @@ func eventName(ev map[string]any) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// eventTypeIsRedundant reports whether an event's own name already says what
+// its type says, so prefixing would only repeat it.
+//
+// Compared with separators stripped, because the two spell the same thing
+// differently: a "global-free-leech" event titled "Global Freeleech Weekend!"
+// is the same words, and a naive substring test would miss that and render
+// "Global Free Leech — Global Freeleech Weekend!". Punctuation goes too, so a
+// trailing "!" can't defeat the check.
+func eventTypeIsRedundant(kind, own string) bool {
+	squash := func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+	k, o := squash(kind), squash(own)
+	return k == "" || strings.Contains(o, k)
 }
 
 // eventUnix reads an event timestamp as unix seconds. Accepts the RFC3339 the

@@ -6,8 +6,8 @@
   "url": "https://peergarden.org",
   "type": "traxary",
   "last_updated": "2026-09-03",
-  "notes": "BETA/TESTING DEF — not part of a release. Second site on the Traxary platform, and the reason the platform became its own type: everything about the API lives in defs/types/traxary.json and this def carries only PeerGarden's own identity, rules and ladder.\n\nUSER API NOT LIVE HERE YET, AND THAT IS EXPECTED. PeerGarden's own docs mark the user endpoint \"coming soon\" (confirmed with the platform developer 2026-09-03), which matches what probing showed: the /api namespace answers — an unknown path returns a proper JSON 404, \"The route api/user could not be found.\" — but /api/user, /api/v1/user, /api/me, /api/profile, /api/account and /api/u/{username} are all unregistered, where Traxary's beta instance serves /api/user with Bearer auth. This def is therefore written AHEAD of the endpoint, to the shape the platform is known to serve: when it is switched on here it should simply start reporting, with nothing to change on either side. If it does not, the difference is a genuine per-site divergence and belongs in a tracker-level api block.\n\n\"TRUE UPLOAD\": ASSUME uploaded FOR NOW. The ladder is stated in true (pre-freeleech) upload and Yata's min_uploaded compares against the plain uploaded stat, because the schema has no real-uploaded threshold. Decided 2026-09-03 to leave it that way until the live API shows what actually arrives — guessing at a second upload figure we have never seen would be inventing def data. Revisit the moment the endpoint is on: if true upload comes through as its own field, every rung below needs re-pointing at it, or someone carrying freeleech volume is shown as meeting a bar they have not met.\n\nSeed Vault is a SEEDING rank, not the top of the upload ladder: it wants avg seedtime and seed size after 90 days, where Garden Elder wants 100 TiB and two years. It is kept in the tracker's own page order (last) because that is how PeerGarden presents it, but it is reachable long before the rung above it.\n\nUPLOAD GROUPS are deliberately NOT in groups[] below. PeerGarden runs them as a second concurrent track, and Yata models one ladder — mixing them in would put \"Trainee Uploader, 10 uploads\" between the upload rungs and make every next-group estimate nonsense. The current one arrives from the API as the upload_group field and renders as a plain stat row. Recorded here so the research is not lost if the styled-badge stopgap is built later; every one of them is #00c957 / fas fa-upload, with perks \"Send invites\" (fas fa-user-plus) and \"Skip the moderation queue\" (fas fa-shield-halved): Trainee Uploader 10 uploads, Uploader 30, Great Uploader 100, Ultra Uploader 200, Master Uploader 400, Legendary Uploader 700, L33T Uploader 1337.\n\nCOMMENTS AND FORUM POSTS are the 2 of 6 ladder requirements Yata cannot see: Flowering and Garden Elder gate on both, and the API reports neither (forum_posts is canonical in Yata and simply unmapped on this platform; comments has no canonical field anywhere yet). The developer was asked to add them on 2026-09-03. Coverage stays 4/6 until they land, which is the honest figure — the shortfall is in the tracker's API, not in Yata.\n\nRank colours and icons are PeerGarden's own, read from its Groups & Roles page. Icons are already FontAwesome (fa-solid), so unlike HHD's Phosphor set they carry across verbatim.",
-  "rules": {
+  "notes": "TESTING",
+    "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 2,
     "max_login_gap_days": 90
@@ -233,8 +233,7 @@
       "requirements": {
         "min_seedtime": "60D",
         "min_seed_size": "10 TiB",
-        "min_age": "90D",
-        "note": "A seeding rank rather than a continuation of the upload ladder — reachable long before Garden Elder."
+        "min_age": "90D"
       },
       "perks": [
         {

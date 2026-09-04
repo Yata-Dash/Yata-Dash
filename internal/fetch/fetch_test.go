@@ -1829,7 +1829,7 @@ func TestFetchGazelleANTNEBType(t *testing.T) {
 		"join_date": "2026-03-05", // datetime trimmed to the date
 		"uploaded":  "3.00 GiB", "downloaded": "1.00 GiB", "buffer": "2.00 GiB",
 		"ratio": 3.0, "seed_size": "2.00 TiB",
-		"bonus_points": 742190.0, // points keep their precision
+		"bonus_points":     742190.0, // points keep their precision
 		"uploads_approved": 0, "adoptions": 1, "seeding": 320,
 		"grabbed": 367, "snatched": 21, "forum_posts": 2, "invites": 0,
 		"unread_mail": "false",
@@ -2468,8 +2468,15 @@ func TestFetchCustomEventList(t *testing.T) {
 	if ferr != nil {
 		t.Fatalf("Fetch: %v", ferr)
 	}
-	// A slug with no name is prettified; an explicit title wins over the slug.
-	if got := data["active_event"]; got != "Global Freeleech · The movie running" {
+	// TWO events running at once, which is the case worth pinning: they are
+	// both shown, joined with " · ", rather than one winning a priority
+	// contest. A tier where global freeleech suppressed everything else would
+	// hide the very thing a themed event exists to announce.
+	//
+	// A slug with no name of its own is prettified ("Global Freeleech"); one
+	// with a title gets the title, prefixed by its type where that adds
+	// meaning — "The movie running" alone says nothing about being a club pick.
+	if got := data["active_event"]; got != "Global Freeleech · Movie Club — The movie running" {
 		t.Errorf("active_event = %#v", got)
 	}
 	// The countdown follows the soonest REAL end — the null one contributes
@@ -2481,6 +2488,16 @@ func TestFetchCustomEventList(t *testing.T) {
 	list, ok := data["active_events"].([]any)
 	if !ok || len(list) != 2 {
 		t.Fatalf("active_events = %#v, want both events", data["active_events"])
+	}
+	// Each structured entry carries its display label, so the Detail page —
+	// which renders this list rather than the flat banner string — shows the
+	// same wording without re-deriving it. Reading name-or-type directly is
+	// what made a movie-club pick render as the raw slug "movie_club".
+	wantLabels := []string{"Global Freeleech", "Movie Club — The movie running"}
+	for i, want := range wantLabels {
+		if got := list[i].(map[string]any)["label"]; got != want {
+			t.Errorf("active_events[%d].label = %#v, want %q", i, got, want)
+		}
 	}
 	if _, hasNull := list[0].(map[string]any)["ends_at"]; hasNull {
 		t.Error("a null ends_at should be dropped, not carried as a value")
@@ -2521,6 +2538,144 @@ func TestFetchCustomNoEventList(t *testing.T) {
 	for _, f := range []string{"active_event", "active_events", "active_event_ends_at"} {
 		if v, ok := data[f]; ok {
 			t.Errorf("%s = %#v, want nothing", f, v)
+		}
+	}
+}
+
+// TestFetchTraxaryResponseShape pins the Traxary platform mapping against the
+// shape PeerGarden's /api/user actually returned on the day it went live.
+//
+// Two things here are easy to break and silent when broken. Every stat is
+// NESTED (stats.*, events.*, *group.title), so a single wrong path yields a
+// tracker reporting nothing with no error anywhere. And the platform sends
+// RFC3339 with six fractional digits — "2026-09-03T06:29:05.000000Z" — which
+// drives both the login countdown and the event countdown.
+func TestFetchTraxaryResponseShape(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			t.Errorf("path = %q, want /api/user", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sekrit" {
+			t.Errorf("Authorization = %q, want Bearer API key", got)
+		}
+		// Null uploadgroup/internalgroup/premium are the normal case: an
+		// account holds the concurrent memberships it has earned, and a new
+		// one has none. They must simply be absent, never an empty string.
+		fmt.Fprint(w, `{
+			"username":"testuser",
+			"autogroup":{"id":8,"title":"Seed","color":"#a8e6a3","icon":"fa-solid fa-seedling"},
+			"uploadgroup":null,
+			"internalgroup":null,
+			"premium":{"type":null,"expires_at":null},
+			"stats":{
+				"uploaded":1073741824,"downloaded":536870912,"ratio":2,
+				"buffer":536870912,"seeding":33,"leeching":1,"seedbonus":0,
+				"hit_and_runs":0,"warnings":{"hnr":2,"manual":1},
+				"seeding_size":2147483648,"avg_seedtime":12370.5152,
+				"total_seedtime":6804,"total_uploads":0
+			},
+			"events":{"dm":3,"notifications":0,"tickets":1,
+				"global":[{"type":"movie_club","title":"Dark City","ends_at":"2026-09-04T10:00:00.000000Z"}]},
+			"last_seen":"2026-09-03T06:29:05.000000Z"
+		}`)
+	}))
+	defer ts.Close()
+
+	reg, err := defs.Load("../../defs")
+	if err != nil {
+		t.Fatalf("defs.Load: %v", err)
+	}
+	c := NewClient(reg, "")
+	// No tracker def matches a localhost URL, so this exercises the TYPE's
+	// mapping alone — which is the part every site on the platform shares.
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "traxary", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+
+	want := map[string]any{
+		"username":   "testuser",
+		"group":      "Seed",
+		"uploaded":   "1.00 GiB",
+		"downloaded": "512.00 MiB",
+		"buffer":     "512.00 MiB",
+		"seed_size":  "2.00 GiB",
+		"ratio":      2.0,
+		// Whole numbers arrive as int from the custom fetcher (ratio stays a
+		// float, being genuinely fractional) — everything downstream reads
+		// these as strings, so what matters is the value, not the width.
+		"seeding":  33,
+		"leeching": 1,
+		// Two warning kinds summed into the one canonical count.
+		"warnings": 3,
+		// Counts → flags: a nonzero inbox is "true", an empty bell is "false".
+		"unread_mail":          "true",
+		"unread_notifications": "false",
+		"open_tickets":         1,
+		"last_login":           "2026-09-03T06:29:05.000000Z",
+	}
+	for key, expected := range want {
+		if got := data[key]; got != expected {
+			t.Errorf("%s = %#v (%T), want %#v (%T)", key, got, got, expected, expected)
+		}
+	}
+
+	// Absent, not empty: a member of no upload/internal group has no such
+	// field at all, so nothing downstream can read a blank as a real value.
+	for _, key := range []string{"upload_group", "internal_group", "premium"} {
+		if v, ok := data[key]; ok {
+			t.Errorf("%s present as %#v for an account holding none", key, v)
+		}
+	}
+
+	// The global events list becomes the banner fields, and the fractional
+	// seconds must survive into a real countdown rather than a zero.
+	// Prefixed with its type, because "Dark City" alone is a film title with a
+	// countdown and no hint of what it is (see eventName).
+	if got := data["active_event"]; got != "Movie Club — Dark City" {
+		t.Errorf("active_event = %#v, want the type-prefixed title", got)
+	}
+	wantEnds := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC).Unix()
+	if got := data["active_event_ends_at"]; got != wantEnds {
+		t.Errorf("active_event_ends_at = %#v, want %d", got, wantEnds)
+	}
+}
+
+// TestEventNamePrefixesTypeWhenItAddsMeaning: an event's type is prefixed to
+// its own name only when the name doesn't already say the same thing.
+//
+// Both halves matter. PeerGarden's movie club sends
+// {"type":"movie_club","title":"Dark City"} — a film title that, alone, reads
+// as a countdown to nothing identifiable. But a UNIT3D freeleech sends a type
+// and a title that are the SAME words spelled differently, where prefixing
+// would produce "Global Free Leech — Global Freeleech Weekend!".
+func TestEventNamePrefixesTypeWhenItAddsMeaning(t *testing.T) {
+	cases := []struct {
+		name string
+		ev   map[string]any
+		want string
+	}{
+		{"type adds meaning", map[string]any{"type": "movie_club", "title": "Dark City"},
+			"Movie Club — Dark City"},
+		{"name spelling too", map[string]any{"type": "movie_club", "name": "Dark City"},
+			"Movie Club — Dark City"},
+		// Same words, different separators and a trailing "!" — still redundant.
+		{"type restated in title", map[string]any{"type": "global-free-leech", "title": "Global Freeleech Weekend!"},
+			"Global Freeleech Weekend!"},
+		{"type restated exactly", map[string]any{"type": "double_upload", "name": "Double Upload"},
+			"Double Upload"},
+		// Nothing specific to say: the type IS the name.
+		{"type only", map[string]any{"type": "global-free-leech"}, "Global Free Leech"},
+		// No type to prefix with.
+		{"name only", map[string]any{"name": "Anniversary"}, "Anniversary"},
+		{"nothing usable", map[string]any{"status": "live"}, ""},
+		// "name" still wins over "title" when both are present.
+		{"name beats title", map[string]any{"type": "movie_club", "name": "Feature", "title": "Other"},
+			"Movie Club — Feature"},
+	}
+	for _, tc := range cases {
+		if got := eventName(tc.ev); got != tc.want {
+			t.Errorf("%s: eventName = %q, want %q", tc.name, got, tc.want)
 		}
 	}
 }
