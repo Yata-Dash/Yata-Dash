@@ -364,6 +364,14 @@ func canonicalFieldsOf(api *CustomAPI) []string {
 	if api.ClassField != "" {
 		set["group"] = true
 	}
+	// event_list names the path to a site-events array, so a def declaring one
+	// DOES report events — but it is a path rather than a field mapping, so
+	// deriving only from the maps above missed it and every custom def with an
+	// event list read "events: not reported" in the picker while its freeleech
+	// banner sat on the dashboard.
+	if api.EventList != "" {
+		set["active_events"] = true
+	}
 	// Derived values: computed from the byte fields rather than mapped, so
 	// they appear in no map but do reach the user.
 	if api.BufferFromBytes {

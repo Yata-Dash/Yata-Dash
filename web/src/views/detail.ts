@@ -355,7 +355,10 @@ function eventCountdown(ev: ActiveEvent, live: boolean): string {
 }
 
 function eventBanner(ev: ActiveEvent): string {
-  const name = ev.name || ev.type || 'Event';
+  // label is derived server-side and is the only field that has seen every
+  // spelling — name, title, and the type prefix. The raw fields are a fallback
+  // for stats stored before it existed.
+  const name = ev.label || ev.name || ev.type || 'Event';
   // The tracker's own Font Awesome class when it sent one — the icon is part of
   // how the event is presented on the tracker, so borrowing it keeps the two
   // recognisably the same thing. Falls back to Yata's globe.
