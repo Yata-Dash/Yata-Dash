@@ -6,6 +6,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260904]
+
 ### Added
 
 - **Trackers can now serve their own group ladder.** On the **traxary** type,
