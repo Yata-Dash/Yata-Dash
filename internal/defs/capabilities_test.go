@@ -267,3 +267,26 @@ func TestJoinDateNeverCountsAsMissing(t *testing.T) {
 		t.Errorf("missing = %v, want just bonus_points", sum.Missing)
 	}
 }
+
+// TestEventListDerivesEventsCapability: a custom def declares its event source
+// as a PATH (event_list) rather than a field mapping, so deriving capabilities
+// only from the field maps missed it entirely — the tracker read "events: not
+// reported" in the picker while its freeleech banner sat on the dashboard.
+func TestEventListDerivesEventsCapability(t *testing.T) {
+	api := &CustomAPI{
+		Path:      "/api/user",
+		FieldMap:  map[string]string{"username": "username"},
+		EventList: "events.global",
+	}
+	got := canonicalFieldsOf(api)
+	if !sortedContains(got, "active_events") {
+		t.Errorf("active_events missing from derived capabilities: %v", got)
+	}
+
+	// Without an event list it must stay absent — a def that reports no events
+	// has to keep saying so.
+	api.EventList = ""
+	if got := canonicalFieldsOf(api); sortedContains(got, "active_events") {
+		t.Errorf("active_events derived with no event_list: %v", got)
+	}
+}

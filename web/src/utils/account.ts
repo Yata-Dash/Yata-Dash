@@ -103,41 +103,55 @@ export function accountWarningBadges(resp: TrackerStatsResponse | undefined): st
     .join('');
 }
 
-/** Whole days from now until `raw`; negative once it has passed. null if the
- *  timestamp can't be read. Mirrors the backend's truncation toward zero. */
-function daysUntil(raw: string): number | null {
+/**
+ * Whole CALENDAR days from today until `raw`'s day; negative once past. null if
+ * the timestamp can't be read.
+ *
+ * Calendar days, not elapsed hours, because every caller below pairs this with
+ * a word — "today", "yesterday", "expired" — and those are claims about the
+ * date, not about a duration. Truncating elapsed time got both ends wrong: a
+ * login at 23:00 yesterday is -0.4 days, and Math.trunc(-0.4) is -0, so the row
+ * read "2026-09-02 · today" on the 3rd. Worse for a key, where -0 < 0 is false
+ * in JS, so one that expired six hours ago still announced "expires today".
+ *
+ * UTC to match statDate, which formats the date sitting next to it.
+ */
+function calendarDaysUntil(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
   const d = new Date(s.includes('T') || !s.includes(' ') ? s : s.replace(' ', 'T') + 'Z');
   if (isNaN(d.getTime())) return null;
-  return Math.trunc((d.getTime() - Date.now()) / 86400000);
+  const midnight = (t: Date) => Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
+  return Math.round((midnight(d) - midnight(new Date())) / 86400000);
 }
 
-/** "2026-08-30 · 3 days ago" — the Last Login stat row. */
+/** "2026-08-30 · 3 days ago" — the Last Login row. */
 export function fmtLastLogin(raw: string): string {
-  const date = statDate(raw);
-  const ago = daysUntil(raw);
+  const ago = calendarDaysUntil(raw);
   if (ago === null) return raw;
-  const rel = ago >= 0 ? 'today' : ago === -1 ? 'yesterday' : `${-ago} days ago`;
-  return `${date} · ${rel}`;
+  return `${statDate(raw)} · ${fmtAgoWords(ago)}`;
 }
 
-/** "2027-01-01 · in 121 days" — the API Key Expires stat row. */
+/** "2027-01-01 · in 121 days" — the API Key Expires row. */
 export function fmtKeyExpiry(raw: string): string {
-  const date = statDate(raw);
-  const left = daysUntil(raw);
+  const left = calendarDaysUntil(raw);
   if (left === null) return raw;
-  const rel = left < 0 ? `expired ${-left} days ago` : left === 0 ? 'expires today' : `in ${left} days`;
-  return `${date} · ${rel}`;
+  const rel = left < 0 ? `expired ${-left} day${left === -1 ? '' : 's'} ago`
+    : left === 0 ? 'expires today'
+    : `in ${left} day${left === 1 ? '' : 's'}`;
+  return `${statDate(raw)} · ${rel}`;
 }
 
 /** Just the relative half — "today", "yesterday", "4 days ago". Used where the
  *  exact date adds nothing: under a tracker's login policy, the only question
  *  is how the gap so far compares to the gap allowed. */
 export function fmtLoginAgo(raw: string): string {
-  const ago = daysUntil(raw);
-  if (ago === null) return raw;
-  if (ago >= 0) return 'today';
-  if (ago === -1) return 'yesterday';
-  return `${-ago} days ago`;
+  const ago = calendarDaysUntil(raw);
+  return ago === null ? raw : fmtAgoWords(ago);
+}
+
+function fmtAgoWords(days: number): string {
+  if (days >= 0) return 'today';
+  if (days === -1) return 'yesterday';
+  return `${-days} days ago`;
 }

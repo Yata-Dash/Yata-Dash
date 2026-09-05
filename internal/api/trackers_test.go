@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -303,5 +305,52 @@ func TestManualLayerCarriesRecordedLogin(t *testing.T) {
 	// timestamp anyway, but storing one puts a meaningless row in the layer.
 	if _, ok := (models.Tracker{}).ManualLayer()["last_login"]; ok {
 		t.Error("last_login present when nothing was ever recorded")
+	}
+}
+
+// TestRecordLoginDecodesUnknownLengthBody: the body has to be read by DECODING
+// it, never by trusting Content-Length. A chunked request reports -1, and the
+// length check that preceded this read that as "no body" — so a clear
+// ({"at":""}) silently recorded a login instead of removing one, the exact
+// opposite of the request. An absent body must still mean "now".
+func TestRecordLoginDecodesUnknownLengthBody(t *testing.T) {
+	decode := func(body string, chunked bool) (loginPayload, error) {
+		var p loginPayload
+		r := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body))
+		if chunked {
+			r.ContentLength = -1 // what a chunked request actually looks like
+		}
+		err := json.NewDecoder(r.Body).Decode(&p)
+		if err != nil && errors.Is(err, io.EOF) {
+			err = nil // empty body — the "record now" case
+		}
+		return p, err
+	}
+
+	// Chunked body carrying a clear must survive as a clear.
+	p, err := decode(`{"at":""}`, true)
+	if err != nil {
+		t.Fatalf("chunked clear rejected: %v", err)
+	}
+	if p.At == nil || *p.At != "" {
+		t.Fatalf("chunked clear decoded as %+v, want an empty At", p.At)
+	}
+	at, cleared, err := resolveLoginTime(p, time.Now())
+	if err != nil || !cleared || at != "" {
+		t.Errorf("chunked clear resolved to (%q, %v, %v), want a clear", at, cleared, err)
+	}
+
+	// No body at all still means "now", not an error.
+	p, err = decode("", false)
+	if err != nil {
+		t.Fatalf("empty body rejected: %v", err)
+	}
+	if p.At != nil {
+		t.Errorf("empty body decoded At = %v, want nil", *p.At)
+	}
+
+	// Malformed JSON is still rejected rather than silently becoming "now".
+	if _, err = decode("{oops", false); err == nil {
+		t.Error("expected malformed JSON to be rejected")
 	}
 }

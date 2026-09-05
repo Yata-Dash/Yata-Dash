@@ -109,7 +109,10 @@ function populateAddSelect(defs: DefsPayload, filter = '') {
     (typeLabels.get(a) ?? a).localeCompare(typeLabels.get(b) ?? b)
   );
 
-  const matched = defs.trackers.filter(match).length;
+  // Retired defs are excluded from the list above, so they must not be counted
+  // here either — searching a shut-down tracker otherwise reported a match and
+  // then showed nothing to select.
+  const matched = defs.trackers.filter(td => !td.retired && match(td)).length;
   let html = `<option value="">${q ? `— ${matched} match${matched === 1 ? '' : 'es'} —` : '— Choose a tracker —'}</option>`;
   html += `<optgroup label="Manual"><option value="__manual__">Add Manually…</option></optgroup>`;
   for (const typeKey of sortedTypes) {

@@ -69,6 +69,13 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		resp.Retired = true
 		resp.RetiredDate = spec.Date
 		resp.RetiredNote = spec.Note
+		// Same rule as the manual branch below and the opt-out branch above:
+		// nothing was contacted, so there is no fetch time to report and the
+		// default "now" would date dead data to this second. APIUpdatedAt is
+		// carried through instead, which on a shut-down tracker is the more
+		// useful number of the two — it says how old the last real data is.
+		resp.FetchedAt = 0
+		resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
 		return resp
 	}
 
@@ -142,6 +149,14 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		// Keeps hand-written capability declarations honest — reports only,
 		// never alters what was stored.
 		checkCapabilityDrift(d, t, data)
+
+		// The tracker's own group ladder, where the platform serves one — the
+		// ranks and thresholds Yata measures against then come from the site
+		// instead of from a copy frozen into a def at build time. Cheap no-op
+		// for every type that doesn't, and best-effort: see
+		// maybeRefreshGroupLadder.
+		group, _ := data["group"].(string)
+		maybeRefreshGroupLadder(d, t, group)
 
 		// Auto-save username/join date the first time the API reveals them.
 		if u, ok := data["username"].(string); ok && u != "" && t.Username == "" {
@@ -239,7 +254,8 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 	if !ok {
 		return
 	}
-	oldIdx, newIdx := defs.LadderIndex(td.Groups, oldGroup), defs.LadderIndex(td.Groups, newGroup)
+	ladder := groupsFor(d, td, t.ID)
+	oldIdx, newIdx := defs.LadderIndex(ladder, oldGroup), defs.LadderIndex(ladder, newGroup)
 	if oldIdx < 0 || newIdx < 0 || oldIdx == newIdx {
 		// Unranked (not in this def's ladder) or same rung either way — the
 		// neutral "group changed" rule still catches this via polling.
@@ -263,7 +279,7 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 	}
 	var groups []defs.GroupDef
 	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-		groups = td.Groups
+		groups = groupsFor(d, td, t.ID)
 	}
 	rows, met, total := evaluateTargetRows(t, merged, groups)
 	if len(rows) == 0 {

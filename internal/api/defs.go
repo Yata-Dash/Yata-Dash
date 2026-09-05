@@ -74,7 +74,14 @@ type capabilityView struct {
 }
 
 // buildCapabilityView resolves one def's capabilities into the UI shape.
-func buildCapabilityView(d *Deps, td defs.TrackerDef) *capabilityView {
+//
+// ladder is the group ladder to measure coverage against — a live one where
+// the tracker serves its own, the def's otherwise. It is passed in rather than
+// read from td because the "N of M requirements trackable" figure has to
+// follow the ladder actually in force; measured against a def that ships none,
+// M is 0 and the chip silently disappears.
+func buildCapabilityView(d *Deps, td defs.TrackerDef, ladder []defs.GroupDef) *capabilityView {
+	td.Groups = ladder // td is a value copy; Summarise reads Groups
 	caps := d.Reg.ResolveCapabilities(td.URL, td.Type)
 	sum := caps.Summarise(td)
 	return &capabilityView{
@@ -155,7 +162,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 				Abbr:               td.Abbr,
 				URL:                td.URL,
 				Type:               td.Type,
-				HasGroups:          len(td.Groups) > 0,
+				HasGroups:          len(groupsForDef(d, td)) > 0,
 				ScrapeDisabled:     rs.DisableScraping || rs.SkipHTMLScrape,
 				MinIntervalMinutes: rs.MinIntervalMinutes,
 				MaxScrapesPerDay:   rs.MaxScrapesPerDay,
@@ -180,7 +187,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 			// whenever the API itself needs it — a custom def with auth_method
 			// "session_cookie" resolves "session_cookie" into RequiredFields.
 			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
-			info.Capabilities = buildCapabilityView(d, td)
+			info.Capabilities = buildCapabilityView(d, td, groupsForDef(d, td))
 			tout = append(tout, info)
 		}
 		types := d.Reg.Types()
@@ -229,8 +236,8 @@ func trackerGroups(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		out := map[string][]defs.GroupDef{}
 		for _, td := range d.Reg.Trackers() {
-			if len(td.Groups) > 0 {
-				out[td.Key] = td.Groups
+			if groups := groupsForDef(d, td); len(groups) > 0 {
+				out[td.Key] = groups
 			}
 		}
 		jsonOK(w, out)

@@ -355,7 +355,12 @@ function eventCountdown(ev: ActiveEvent, live: boolean): string {
 }
 
 function eventBanner(ev: ActiveEvent): string {
-  const name = ev.name || ev.type || 'Event';
+  // label is derived server-side and is the only field that has seen every
+  // spelling — name, title, and the type prefix. The rest are the fallback for
+  // events stored before it existed, and "title" has to be in that chain: it is
+  // the spelling PeerGarden uses, so skipping it fell through to the raw slug
+  // and showed "movie_club" for a stored event until the next fetch.
+  const name = ev.label || ev.name || ev.title || ev.type || 'Event';
   // The tracker's own Font Awesome class when it sent one — the icon is part of
   // how the event is presented on the tracker, so borrowing it keeps the two
   // recognisably the same thing. Falls back to Yata's globe.

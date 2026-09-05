@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -102,7 +103,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		v.APIKeyHint = customAPI.APIKeyHint // …overridden per tracker
 	}
 	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-		v.Capabilities = buildCapabilityView(d, td)
+		v.Capabilities = buildCapabilityView(d, td, groupsFor(d, td, t.ID))
 	}
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	v.SupportsHTMLScrape = !rs.SkipHTMLScrape && !rs.DisableScraping
@@ -339,12 +340,15 @@ func recordLogin(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var p loginPayload
-		// A body is optional — no body at all means "now".
-		if r.ContentLength > 0 {
-			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-				jsonError(w, "invalid JSON", http.StatusBadRequest)
-				return
-			}
+		// A body is optional — no body at all means "now" — but "optional" has
+		// to be decided by DECODING, not by Content-Length. A chunked request
+		// reports -1, which the old length check read as "no body": a clear
+		// ({"at":""}) would then have silently recorded a login instead of
+		// removing one, which is the exact opposite of what was asked. io.EOF
+		// is the empty body; anything else is malformed and says so.
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil && !errors.Is(err, io.EOF) {
+			jsonError(w, "invalid JSON", http.StatusBadRequest)
+			return
 		}
 		at, cleared, err := resolveLoginTime(p, time.Now())
 		if err != nil {

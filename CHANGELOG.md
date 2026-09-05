@@ -6,9 +6,44 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260904]
+
+### Added
+
+- **Trackers can now serve their own group ladder.** On the **traxary** type,
+  the ranks and their thresholds come from the tracker's `/api/user/groups`
+  endpoint instead of from a `groups` array written into a def at build time.
+  PeerGarden is the first tracker on it and now ships no ladder of its own.
+
+  A def's ladder is Yata's interpretation, frozen at release, of a page on
+  someone else's website — it goes stale silently, and the only fix is a new
+  release. Reading it from the tracker means a site can change its own
+  requirements and have Yata follow, a traxary site nobody has written a def
+  for gets a working ladder on day one, and — because the endpoint is
+  authenticated — a tracker can support Yata *without* publishing its
+  progression mechanics to non-members, which a def file in a public repo can
+  never offer.
+
+  The fallback is the last ladder the tracker itself served, never a shipped
+  copy: when the endpoint is unreachable Yata shows what that tracker last
+  said, rather than what Yata's authors believed at release time. Each ladder
+  is stored as a revision, so a site changing its requirements is recorded
+  rather than silently overwritten. Refreshed daily, and immediately whenever
+  the rank you hold is one the cached ladder has never heard of.
+
+  Colours, icons and perks are not on the endpoint yet; they are read the
+  moment traxary starts serving them, with no Yata release needed.
+
 ## [Beta-20260903]
 
 ### Fixed
+
+- **A custom def declaring an event list now counts as reporting events.**
+  Capabilities for a def that describes its own API are derived from the def
+  rather than declared by hand — but the derivation walked only the field
+  mappings, and `event_list` is a PATH to an events array, not a mapping. So
+  any tracker sourcing events that way read "Site events: not reported" in the
+  picker and on Detail while its freeleech banner sat on the dashboard.
 
 - **Manual-entry trackers can record a login again.** The "I've logged in"
   button and the opt-in link-click were both gated on the tracker declaring an
@@ -57,6 +92,43 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 ## [Beta-20260902]
 
 ### Added
+
+- **PeerGarden**, on the new **traxary** tracker type. The platform's operators
+  run more than one site on one codebase, so the endpoint, auth and field map
+  live on the type and each site's def carries only its own identity, rules and
+  ladder — the same arrangement Anthelion and Nebulance share.
+
+  Its ten-rank garden ladder (Weed → Seed Vault) is in, with each rank's own
+  colour and icon. Coverage is **4 of 6**: comments and forum-post counts gate
+  two ranks and the API doesn't report them yet. Seed Vault is kept last in the
+  tracker's own page order even though it is a seeding rank reachable well
+  before the rung above it, and the concurrent upload-group track is
+  deliberately left out of the ladder — mixing it in would put "Trainee
+  Uploader, 10 uploads" between the upload rungs and make every next-group
+  estimate nonsense. The current upload group shows as a plain stat instead.
+
+  The def was written and committed **before** the user endpoint existed, to
+  the shape the platform was known to serve. When it was switched on it started
+  reporting with no change on either side, which is the argument for describing
+  an API once on the type rather than once per site.
+
+- **Themed events say what they are.** An event is now labelled with its type
+  when its own name doesn't already say the same thing, so a movie-club pick
+  reads "Movie Club — Dark City" rather than a film title with a countdown and
+  no hint of what it is. A freeleech titled "Global Freeleech Weekend!" is left
+  alone — its type is the same words spelled differently, and the comparison
+  ignores spacing and punctuation to catch that.
+
+  Each event now carries that label as a field, derived once server-side. The
+  Detail page renders the structured event list rather than the flat banner and
+  was reading name-or-type directly — it never looked at "title" at all, so a
+  movie-club pick appeared there as the raw slug "movie_club" while the cards
+  and table read correctly. One field, one naming rule, no second copy to drift.
+
+  Concurrent events were already handled and stay that way: both are shown,
+  joined, with the countdown following whichever ends first. No priority tier —
+  letting global freeleech suppress the rest would hide exactly what a themed
+  event exists to announce.
 
 - **Record your own logins, so the inactivity countdown works everywhere.**
   The deadline warnings above only counted down where a tracker's API reported
