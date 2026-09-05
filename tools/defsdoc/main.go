@@ -192,6 +192,13 @@ func approval(td defs.TrackerDef) string {
 func statsCell(reg *defs.Registry, td defs.TrackerDef) string {
 	caps := reg.ResolveCapabilities(td.URL, td.Type)
 	sum := caps.Summarise(td)
+	// A tracker that serves its own ladder has one — this tool just cannot see
+	// it, because the endpoint is authenticated and there is no account here.
+	// Saying so beats falling through to the raw stat count below, which reads
+	// as "no ladder published" and means the opposite of what is true.
+	if len(td.Groups) == 0 && reg.GroupAPI(td.URL, td.Type) != nil {
+		return "Tracker-served"
+	}
 	if len(sum.Required) == 0 {
 		// No published ladder to measure against — say how many stats arrive
 		// instead of printing a meaningless "0 of 0".

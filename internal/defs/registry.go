@@ -362,6 +362,21 @@ func (r *Registry) MaxLoginGapDays(trackerURL string) int {
 	return td.Rules.MaxLoginGapDays
 }
 
+// GroupAPI returns the group-ladder endpoint spec for a tracker (nil = none).
+// TYPE-level, unlike ExtendedStats and Events: serving the ladder is a
+// property of the platform, so a tracker on a supported platform gets one
+// without needing a def of its own. Resolved through the def when there is one
+// so an explicit type always beats the caller's guess.
+func (r *Registry) GroupAPI(trackerURL, typeKey string) *GroupAPISpec {
+	if td, ok := r.TrackerByURL(trackerURL); ok && td.Type != "" {
+		typeKey = td.Type
+	}
+	if tt, ok := r.Type(typeKey); ok {
+		return tt.GroupAPI
+	}
+	return nil
+}
+
 // Events returns the site-events endpoint spec for a tracker (nil = none).
 // Tracker-level only, like ExtendedStats: whether an install exposes the
 // endpoint is a fact about that install, not about its software.

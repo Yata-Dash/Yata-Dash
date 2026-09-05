@@ -69,7 +69,11 @@ type targetEntry struct {
 func defLookups(d *Deps) (func(string) []defs.GroupDef, func(string) *defs.InviteReqs) {
 	groupsFor := func(name string) []defs.GroupDef {
 		if td, ok := matchDef(d.Reg, d.Paths, name); ok {
-			return td.Groups
+			// groupsForDef, not td.Groups: the ladders the pathway engine asks
+			// for are always the user's OWN trackers (the class you hold on the
+			// site you are coming from), so a platform-served ladder is
+			// available for exactly the cases this is called with.
+			return groupsForDef(d, td)
 		}
 		return nil
 	}

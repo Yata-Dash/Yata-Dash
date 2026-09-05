@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "key": "traxary",
+  "name": "Traxary",
+  "abbr": "TRX",
+  "url": "https://beta.traxary.com",
+  "type": "traxary",
+  "last_updated": "2026-09-03",
+  "notes": "BETA/TESTING DEF — not part of a release, and must be held back together with defs/types/traxary.json. Built against the beta instance while the site is pre-launch: the URL points at beta.traxary.com and must change to the production host before this is shipped.\n\nEverything about the PLATFORM — the endpoint, auth, field map, byte/sum/bool fields, the event list, and the missing join date — lives in the type, because its operators run more than one site on the same codebase. This def holds only what is true of Traxary itself. PeerGarden is the second site on the platform and is exactly that: a tracker def with the same type, restating nothing but its own identity, ladder, rules and scraping policy.\n\nThe group ladder is still to be written by hand: the API states the current group but never the requirements for any of them. Traxary's own Groups page has not been captured yet, so groups[] is absent here while PeerGarden's is complete — the type is proven by PeerGarden either way.\n\ndisable_scraping is recorded here rather than on the type. It is an operator's request about THIS site, and it stays a per-site statement even when the same people run the next one.",
+  "scrape": {
+    "disable_scraping": true
+  }
+}

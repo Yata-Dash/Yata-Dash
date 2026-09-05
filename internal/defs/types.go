@@ -53,8 +53,48 @@ type TypeDef struct {
 	// applied to every response before storage (e.g. "seedbonus" → "bonus_points").
 	APIFieldMap map[string]string `json:"api_field_map,omitempty"`
 
+	// GroupAPI declares an endpoint serving the tracker's OWN group ladder,
+	// replacing the hand-written `groups` array in its def. See GroupAPISpec.
+	GroupAPI *GroupAPISpec `json:"group_api,omitempty"`
+
 	// Scrape holds type-level scrape behaviour and defaults.
 	Scrape ScrapeSpec `json:"scrape"`
+}
+
+// GroupAPISpec declares an endpoint that serves a tracker's group ladder, so
+// the ranks and their thresholds come from the tracker instead of from a
+// hand-written `groups` array in its def.
+//
+// TYPE-level only, unlike ExtendedStats and Events. Those two are per-tracker
+// because whether one UNIT3D install exposes an endpoint says nothing about
+// the next; serving this one is a property of the PLATFORM, which is the whole
+// point — a traxary site nobody has written a def for still gets a working
+// ladder, and one that would rather not publish its mechanics to non-members
+// can support Yata anyway, because the endpoint is authenticated and a def
+// file in a public repo is not.
+//
+// A def with both this and its own `groups` keeps the def ladder only until
+// the first successful fetch; see the plan for why no def on this platform
+// should carry one at all.
+type GroupAPISpec struct {
+	// Path is appended to the tracker base URL, e.g. "/api/user/groups".
+	Path string `json:"path"`
+
+	// Ladder names the response key holding the ranks Yata measures progress
+	// against. traxary reports four (auto/upload/internal/premium) where Yata
+	// models one, so the choice has to be stated rather than guessed.
+	Ladder string `json:"ladder"`
+
+	// Requirements maps the API's requirement `type` strings onto Yata field
+	// names. A name matching a GroupRequirements field (min_uploaded, min_age,
+	// …) sets that field, converted to the unit the field is written in;
+	// anything else becomes a min_counts entry against that canonical stat,
+	// which is how a tracker's own counters (comments, forum posts) reach the
+	// ladder without Yata growing a field per tracker.
+	//
+	// An unmapped type is DROPPED, and deliberately: a requirement Yata cannot
+	// measure would otherwise become a rung nobody can ever satisfy.
+	Requirements map[string]string `json:"requirements,omitempty"`
 }
 
 // TypeAPI selects the built-in fetcher used for a tracker type.

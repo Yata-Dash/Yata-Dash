@@ -75,6 +75,11 @@ const NON_ROW_FIELDS = new Set([
   'days_since_login', 'login_days_remaining', 'api_key_expiry_days',
   // Account information, rendered in the Info column instead (see above).
   'last_login', 'api_key_expires_at',
+  // The current group's own styling, reported alongside the rank by platforms
+  // whose ladder endpoint doesn't carry colours yet. It drives the badge, the
+  // styled username and the perk icons; as rows it would print a hex code and
+  // a Font Awesome class.
+  'group_color', 'group_icon',
 ]);
 
 export interface StatRow {
