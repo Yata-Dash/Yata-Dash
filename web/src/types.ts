@@ -283,6 +283,8 @@ export interface HistorySeries {
 export interface ActiveEvent {
   type?: string;
   name?: string;
+  /** The other spelling of `name` in the wild (PeerGarden/traxary use it). */
+  title?: string;
   /** Display label derived server-side (internal/fetch's eventName): the
    *  event's own name, prefixed by its type where that adds meaning. Prefer it
    *  over name/type, which are the raw fields it was built from. */

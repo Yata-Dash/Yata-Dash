@@ -1,6 +1,5 @@
 # Binaries & build output
 /yata
-yata.exe
 yata.exe~
 *.exe
 static/dashboard.js
@@ -20,7 +19,6 @@ config.json
 data/
 
 # Rolling log files (may contain paths/usernames — never commit)
-yata.log
 yata.log.*
 *.log
 
@@ -33,15 +31,13 @@ web/node_modules/
 # Dev-only saved tracker pages (large, contain personal profile data)
 reference/
 
-# Local-only compose override (build-from-source instead of pulling ghcr.io)
-docker-compose.override.yml
-
 # Dev tools
 internal/scrape/profile_test.go
 tools/scrapetest/
 tools/apiprobe/
 tools/genversions/
 tools/seedtest/
+tools/ladderprobe/
 
 # Self-hosted Font Awesome (e.g. Pro) — licensed assets, must NOT ship in the public repo
 static/fontawesome/

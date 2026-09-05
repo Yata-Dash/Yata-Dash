@@ -103,7 +103,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 		v.APIKeyHint = customAPI.APIKeyHint // …overridden per tracker
 	}
 	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-		v.Capabilities = buildCapabilityView(d, td)
+		v.Capabilities = buildCapabilityView(d, td, groupsFor(d, td, t.ID))
 	}
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	v.SupportsHTMLScrape = !rs.SkipHTMLScrape && !rs.DisableScraping

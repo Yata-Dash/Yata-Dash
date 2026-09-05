@@ -2669,6 +2669,18 @@ func TestEventNamePrefixesTypeWhenItAddsMeaning(t *testing.T) {
 		// No type to prefix with.
 		{"name only", map[string]any{"name": "Anniversary"}, "Anniversary"},
 		{"nothing usable", map[string]any{"status": "live"}, ""},
+		// A short type that merely OPENS a longer word is not restated by it:
+		// a contest whose winner is "Contestant of the Month" is a different
+		// thing from the word it happens to begin, so the prefix stays.
+		{"type opens a longer word", map[string]any{"type": "contest", "title": "Contestant of the Month"},
+			"Contest — Contestant of the Month"},
+		// …but a type that IS a whole word inside the name is restated, even
+		// mid-compound: "Freeleech" says "leech".
+		{"type ends a compound word", map[string]any{"type": "leech", "title": "Global Freeleech Weekend"},
+			"Global Freeleech Weekend"},
+		// Multi-word type spanning a word boundary in the name.
+		{"type spans words", map[string]any{"type": "free_leech", "title": "Free Leech Friday"},
+			"Free Leech Friday"},
 		// "name" still wins over "title" when both are present.
 		{"name beats title", map[string]any{"type": "movie_club", "name": "Feature", "title": "Other"},
 			"Movie Club — Feature"},

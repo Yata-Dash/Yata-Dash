@@ -318,7 +318,7 @@ func digestTargetFragment(d *Deps, t models.Tracker, merged models.MergedStats) 
 	}
 	var groups []defs.GroupDef
 	if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-		groups = td.Groups
+		groups = groupsFor(d, td, t.ID)
 	}
 	rows, met, total := evaluateTargetRows(t, merged, groups)
 	if len(rows) == 0 || total == 0 {
@@ -390,7 +390,7 @@ func digestEventLines(d *Deps, trackersByID map[string]models.Tracker, since tim
 		}
 		var groups []defs.GroupDef
 		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-			groups = td.Groups
+			groups = groupsFor(d, td, t.ID)
 		}
 		oldIdx, newIdx := defs.LadderIndex(groups, oldGroup), defs.LadderIndex(groups, newGroup)
 		symbol, verb := "•", "changed"

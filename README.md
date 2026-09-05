@@ -280,7 +280,6 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | RocketHD | UNIT3D | Yes | 3/6 | API only |  |
 | Seedpool | UNIT3D | Yes | 2/3 (3 scraped) | 180min |  |
 | SpeedApp | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
-| Traxary | traxary | No | 23 stats | API only |  |
 | Unwalled | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
 | Upload.cx | UNIT3D | No | 3/6 | API only |  |
 | YUSCENE | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |

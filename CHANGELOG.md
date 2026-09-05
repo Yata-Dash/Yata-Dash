@@ -6,6 +6,34 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260904]
+
+### Added
+
+- **Trackers can now serve their own group ladder.** On the **traxary** type,
+  the ranks and their thresholds come from the tracker's `/api/user/groups`
+  endpoint instead of from a `groups` array written into a def at build time.
+  PeerGarden is the first tracker on it and now ships no ladder of its own.
+
+  A def's ladder is Yata's interpretation, frozen at release, of a page on
+  someone else's website — it goes stale silently, and the only fix is a new
+  release. Reading it from the tracker means a site can change its own
+  requirements and have Yata follow, a traxary site nobody has written a def
+  for gets a working ladder on day one, and — because the endpoint is
+  authenticated — a tracker can support Yata *without* publishing its
+  progression mechanics to non-members, which a def file in a public repo can
+  never offer.
+
+  The fallback is the last ladder the tracker itself served, never a shipped
+  copy: when the endpoint is unreachable Yata shows what that tracker last
+  said, rather than what Yata's authors believed at release time. Each ladder
+  is stored as a revision, so a site changing its requirements is recorded
+  rather than silently overwritten. Refreshed daily, and immediately whenever
+  the rank you hold is one the cached ladder has never heard of.
+
+  Colours, icons and perks are not on the endpoint yet; they are read the
+  moment traxary starts serving them, with no Yata release needed.
+
 ## [Beta-20260903]
 
 ### Fixed

@@ -560,23 +560,51 @@ func prettyEventType(ev map[string]any) string {
 // eventTypeIsRedundant reports whether an event's own name already says what
 // its type says, so prefixing would only repeat it.
 //
-// Compared with separators stripped, because the two spell the same thing
-// differently: a "global-free-leech" event titled "Global Freeleech Weekend!"
-// is the same words, and a naive substring test would miss that and render
-// "Global Free Leech — Global Freeleech Weekend!". Punctuation goes too, so a
-// trailing "!" can't defeat the check.
+// Separators are stripped before comparing, because the two spell the same
+// thing differently: a "global-free-leech" event titled "Global Freeleech
+// Weekend!" is the same words, and a naive substring test would miss that and
+// render "Global Free Leech — Global Freeleech Weekend!". Punctuation goes too,
+// so a trailing "!" can't defeat the check.
+//
+// But stripping alone matches too eagerly, because a short type can be the
+// opening of a longer word: "contest" sits inside "Contestant of the Month",
+// which is a different thing entirely and does deserve its prefix. So the match
+// must also END where a word ended in the original text. Only the end is
+// checked, not the start — a type appearing as the tail of a compound ("leech"
+// within "Freeleech") genuinely is restated by the name.
 func eventTypeIsRedundant(kind, own string) bool {
-	squash := func(s string) string {
-		var b strings.Builder
-		for _, r := range strings.ToLower(s) {
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				b.WriteRune(r)
-			}
-		}
-		return b.String()
+	k, _ := squashWords(kind)
+	if k == "" {
+		return true // nothing to prefix with
 	}
-	k, o := squash(kind), squash(own)
-	return k == "" || strings.Contains(o, k)
+	o, wordEnds := squashWords(own)
+	for i := 0; i+len(k) <= len(o); i++ {
+		if o[i:i+len(k)] == k && wordEnds[i+len(k)-1] {
+			return true
+		}
+	}
+	return false
+}
+
+// squashWords reduces a label to its letters and digits, and reports for each
+// surviving character whether a word ended there in the original.
+func squashWords(s string) (string, []bool) {
+	var b strings.Builder
+	var wordEnds []bool
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			wordEnds = append(wordEnds, false)
+			continue
+		}
+		if n := len(wordEnds); n > 0 {
+			wordEnds[n-1] = true // a separator closes the word before it
+		}
+	}
+	if n := len(wordEnds); n > 0 {
+		wordEnds[n-1] = true // so does the end of the string
+	}
+	return b.String(), wordEnds
 }
 
 // eventUnix reads an event timestamp as unix seconds. Accepts the RFC3339 the
@@ -1077,30 +1105,8 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	}
 	ident.Apply(req, c.identify(t))
 
-	switch api.AuthMethod {
-	case "session_cookie":
-		if strings.TrimSpace(t.SessionCookie) == "" {
-			return nil, errf("no_key", nil)
-		}
-		req.Header.Set("Cookie", api.CookieName+"="+strings.TrimSpace(t.SessionCookie))
-	case "api_key_query":
-		if strings.TrimSpace(t.APIKey) == "" {
-			return nil, errf("no_key", nil)
-		}
-		q := req.URL.Query()
-		param := api.APIKeyParam
-		if param == "" {
-			param = "api_token"
-		}
-		q.Set(param, t.APIKey)
-		req.URL.RawQuery = q.Encode()
-	case "api_key_header":
-		if strings.TrimSpace(t.APIKey) == "" {
-			return nil, errf("no_key", nil)
-		}
-		req.Header.Set("Authorization", "Bearer "+t.APIKey)
-	case "api_key_json_rpc":
-		// The key is already embedded as the first positional request param.
+	if aErr := applyCustomAuth(req, api, t); aErr != nil {
+		return nil, aErr
 	}
 
 	resp, err := client.Do(req)

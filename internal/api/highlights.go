@@ -95,7 +95,7 @@ func highlightTargets(d *Deps) []highlightTarget {
 		var groups []defs.GroupDef
 		name, abbr := t.Name, ""
 		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
-			groups, abbr = td.Groups, td.Abbr
+			groups, abbr = groupsFor(d, td, t.ID), td.Abbr
 			if name == "" {
 				name = td.Name
 			}

@@ -148,6 +148,25 @@ func (d *DB) migrate() error {
 			api_fail_count INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (tracker_id, day)
 		)`,
+		// Group ladders served by the tracker's OWN API (see GROUP_API_PLAN.md)
+		// — one row per REVISION of a site's rules, not per fetch. A ladder
+		// changes a couple of times in a week and then sits still for a year,
+		// so a revision log is nearly free and turns "when did this tracker
+		// change its requirements?" into a query.
+		//
+		// first_seen and checked_at answer different questions: without the
+		// second, a ladder that correctly never changes looks ever staler and
+		// gets refetched forever.
+		`CREATE TABLE IF NOT EXISTS group_ladders (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			tracker_id TEXT    NOT NULL,
+			first_seen INTEGER NOT NULL,          -- when this revision appeared
+			checked_at INTEGER NOT NULL,          -- last confirmed still current
+			hash       TEXT    NOT NULL,          -- over payload
+			payload    TEXT    NOT NULL           -- the API's own JSON, per-user
+			                                      -- progress stripped
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_group_ladders_tracker ON group_ladders (tracker_id, id DESC)`,
 		// Read-only integration tokens (Settings → Integrations → API Tokens).
 		// Only the SHA-256 hash is stored; the plaintext token is shown once.
 		`CREATE TABLE IF NOT EXISTS api_tokens (
@@ -374,6 +393,7 @@ func (d *DB) DeleteTracker(trackerID string) error {
 		`DELETE FROM scrape_log WHERE tracker_id = ?`,
 		`DELETE FROM tracker_events WHERE tracker_id = ?`,
 		`DELETE FROM connection_daily WHERE tracker_id = ?`,
+		`DELETE FROM group_ladders WHERE tracker_id = ?`,
 	} {
 		if _, err := d.sql.Exec(q, trackerID); err != nil {
 			return err
