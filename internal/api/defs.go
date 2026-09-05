@@ -156,13 +156,16 @@ func listDefs(d *Deps) http.HandlerFunc {
 		tout := make([]defInfo, 0, len(trackers))
 		for _, td := range trackers {
 			rs := d.Reg.ResolveScrape(td.URL, td.Type)
+			// Resolved once: for a tracker whose platform serves its own
+			// ladder this reads the store, and both fields below want it.
+			ladder := groupsForDef(d, td)
 			info := defInfo{
 				Key:                td.Key,
 				Name:               td.Name,
 				Abbr:               td.Abbr,
 				URL:                td.URL,
 				Type:               td.Type,
-				HasGroups:          len(groupsForDef(d, td)) > 0,
+				HasGroups:          len(ladder) > 0,
 				ScrapeDisabled:     rs.DisableScraping || rs.SkipHTMLScrape,
 				MinIntervalMinutes: rs.MinIntervalMinutes,
 				MaxScrapesPerDay:   rs.MaxScrapesPerDay,
@@ -187,7 +190,7 @@ func listDefs(d *Deps) http.HandlerFunc {
 			// whenever the API itself needs it — a custom def with auth_method
 			// "session_cookie" resolves "session_cookie" into RequiredFields.
 			info.NeedsSessionCookie = slices.Contains(info.RequiredFields, "session_cookie")
-			info.Capabilities = buildCapabilityView(d, td, groupsForDef(d, td))
+			info.Capabilities = buildCapabilityView(d, td, ladder)
 			tout = append(tout, info)
 		}
 		types := d.Reg.Types()

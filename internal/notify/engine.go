@@ -24,6 +24,14 @@ type ConfigSource interface {
 	Notifications() models.NotificationConfig
 }
 
+// Recorder receives every alert the engine raises, whether or not any
+// destination is configured. It is what makes the app itself a destination —
+// see ALERTS_PANEL_PLAN.md. Nil is allowed: the engine then behaves as it did
+// before, webhooks only.
+type Recorder interface {
+	RecordAlert(ruleID, ruleName, trackerID, trackerName, title, body string)
+}
+
 // numericFields are stat fields exposed to conditions as numbers, with the unit
 // used for comparison. Sizes compare in GiB, durations in days.
 var numericFields = map[string]string{
@@ -47,6 +55,7 @@ var numericFields = map[string]string{
 type Engine struct {
 	cfg ConfigSource
 	log Logger
+	rec Recorder
 
 	mu        sync.Mutex
 	firing    map[string]bool              // "ruleID|trackerID" → currently matched
@@ -58,6 +67,15 @@ type Engine struct {
 	// because target rows are per-tracker structural data (rows can appear/
 	// disappear as the user edits targets), not a single field snapshot.
 	targetState map[string]map[string]bool
+}
+
+// SetRecorder attaches the in-app alert store. Separate from New so the
+// engine can be built before the store, and so tests that only care about
+// webhook behaviour need not supply one.
+func (e *Engine) SetRecorder(r Recorder) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.rec = r
 }
 
 // New creates an alert engine.
@@ -116,8 +134,20 @@ func (e *Engine) Evaluate(t models.Tracker, merged models.MergedStats, reachable
 		}
 		matched := evalRule(rule, merged, cur, prev, reachable, trends)
 		key := rule.ID + "|" + t.ID
-		if primed && matched && !e.firing[key] {
+		switch {
+		case primed && matched && !e.firing[key]:
 			e.fire(cfg, rule, t, merged, cur, prev, reachable, trends, key)
+		case !primed && matched && standingRule(rule):
+			// Already true when Yata started. Webhooks stay silent — priming
+			// exists so a restart does not re-blast them, and a webhook says
+			// "this just changed", which this did not.
+			//
+			// The panel is the other thing: a standing worklist. A login
+			// deadline that is already close is exactly what belongs on it, and
+			// without this it would never appear at all — the condition only
+			// fires on a false→true edge, so it would wait until the user fixed
+			// it and let it lapse again.
+			e.recordOnly(rule, t, describeMatch(rule, merged, cur, prev, reachable, trends))
 		}
 		e.firing[key] = matched
 	}
@@ -303,6 +333,48 @@ func (e *Engine) fire(cfg models.NotificationConfig, rule models.AlertRule, t mo
 	e.send(cfg, rule, t, key, describeMatch(rule, merged, cur, prev, reachable, trends))
 }
 
+// thresholdOps are the comparisons that describe a MEASUREMENT against a line.
+var thresholdOps = map[string]bool{"lt": true, "lte": true, "gt": true, "gte": true}
+
+// standingRule reports whether a rule describes a condition that stays true for
+// as long as the problem lasts — the only kind worth listing in the panel
+// merely for being true when Yata started.
+//
+// The test is the operator, not the field. A threshold ("login_days_remaining
+// ≤ 7") is a measurement: still true at startup means the problem is
+// outstanding right now, and the user should see it. A state or event predicate
+// ("reachable is true", "promoted") describes a TRANSITION, and its value at
+// startup says nothing about whether one was missed — "reachable is true"
+// matches every healthy tracker, so recording those would open the panel with a
+// row per tracker saying nothing is wrong.
+//
+// Erring towards silence: a standing state predicate ("reachable is false")
+// is missed until it next changes. Better than a panel nobody reads.
+func standingRule(rule models.AlertRule) bool {
+	for _, c := range rule.Conditions {
+		if !thresholdOps[c.Op] {
+			return false
+		}
+	}
+	return len(rule.Conditions) > 0
+}
+
+// recordOnly puts a matched condition into the in-app panel without notifying
+// anywhere. Used for conditions already true at startup, which are worth
+// listing but are not news.
+//
+// Deliberately not a flag on send(): send is the one place every alert
+// converges, and a "don't actually send" branch there is one edit away from
+// silently swallowing real webhooks.
+func (e *Engine) recordOnly(rule models.AlertRule, t models.Tracker, detail string) {
+	if e.rec == nil {
+		return
+	}
+	e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name,
+		fmt.Sprintf("Yata alert: %s", rule.Name),
+		fmt.Sprintf("%s — %s", t.Name, detail))
+}
+
 // send delivers a rule's message to its destinations, respecting cooldown.
 // Shared by fire() (level-triggered rules from Evaluate/Announce) and the
 // one-shot event path (EvaluateEvent/EvaluateTargets) — everything past
@@ -315,11 +387,25 @@ func (e *Engine) send(cfg models.NotificationConfig, rule models.AlertRule, t mo
 	}
 	title := fmt.Sprintf("Yata alert: %s", rule.Name)
 	msg := fmt.Sprintf("%s — %s", t.Name, detail)
+
+	// Stamped BEFORE the destination check below, not after. Cooldown was only
+	// ever tracked for users who had somewhere to send to, so a destination-less
+	// user had none at all — which did not show while the alert was being
+	// dropped anyway, and would show immediately as one panel row per poll.
+	e.lastFired[key] = time.Now()
+
+	// Recorded BEFORE the destination check too, and this is the whole point:
+	// with no destination configured every alert used to be evaluated, matched
+	// and thrown away. Recording after the check would inherit the bug the
+	// panel exists to fix.
+	if e.rec != nil {
+		e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name, title, msg)
+	}
+
 	dests := resolveDestinations(cfg, rule)
 	if len(dests) == 0 {
 		return
 	}
-	e.lastFired[key] = time.Now()
 	for _, d := range dests {
 		go func(dest models.NotifyDestination) {
 			if err := Send(dest, title, msg); err != nil {

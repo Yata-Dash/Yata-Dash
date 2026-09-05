@@ -93,6 +93,10 @@
          class="btn btn-ghost btn-icon btn-sm" title="View on GitHub" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">
         <i class="fa-brands fa-github" style="font-size:15px"></i>
       </a>
+      <button class="btn btn-ghost btn-icon btn-sm alerts-flag" id="alerts-btn" title="Alerts" aria-haspopup="dialog" aria-expanded="false">
+        <i class="fas fa-flag" style="font-size:14px"></i>
+        <span id="alerts-count" class="alerts-count" hidden></span>
+      </button>
       <button class="btn btn-ghost btn-icon btn-sm" id="privacy-btn" title="Blur usernames (privacy mode)">
         <svg id="privacy-eye" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -116,6 +120,17 @@
       </button>
     </div>
   </header>
+
+  <!-- Alerts panel — the app's own alert destination. Rendered by JS. -->
+  <div id="alerts-panel" class="alerts-panel" hidden role="dialog" aria-label="Alerts">
+    <div class="alerts-panel-head">
+      <input type="search" id="alerts-search" class="alerts-search" placeholder="Search alerts" autocomplete="off">
+      <select id="alerts-filter" class="alerts-filter" aria-label="Filter by source"></select>
+      <button type="button" class="btn btn-ghost btn-sm" id="alerts-read-all">Mark all read</button>
+    </div>
+    <div id="alerts-list" class="alerts-list"></div>
+    <div id="alerts-more" class="alerts-more" hidden></div>
+  </div>
 
   <!-- Scrape alert bar — hidden by default, shown by JS when limits are hit -->
   <div id="scrape-alert-bar" style="display:none;align-items:center;gap:10px;padding:6px 20px;background:var(--surface);border-bottom:1px solid var(--border);min-height:32px;flex-wrap:wrap"></div>

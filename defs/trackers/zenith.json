@@ -14,7 +14,8 @@
   },
   "rules": {
     "min_seed_days": 3,
-    "note": "Ratioless"
+    "note": "Ratioless",
+    "max_login_gap_days": 1
   },
   "api": {
     "required_fields": [

@@ -2,6 +2,7 @@ package defs
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
@@ -15,23 +16,27 @@ import (
 // because it is a def-shape transformation with no HTTP in it — which is also
 // what makes it testable against a saved payload.
 
-// apiGroup is one rank as the tracker reports it. Fields the platform does not
-// serve yet (style, perks) are read when present and simply absent otherwise,
-// so adding them upstream needs no change here and no def edit.
+// apiGroup is one rank as the tracker reports it, and — because CanonicalLadder
+// re-encodes through these structs — it is also the exact set of fields that
+// ever reaches the store. Fields the platform does not serve yet (style, perks)
+// are read when present and simply absent otherwise, so adding them upstream
+// needs no change here and no def edit.
 type apiGroup struct {
+	ID          int         `json:"id,omitempty"`
 	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Color       string      `json:"color"`
-	Icon        string      `json:"icon"`
-	Perks       []apiPerk   `json:"perks"`
-	Reqs        []apiGroupR `json:"requirements"`
+	Description string      `json:"description,omitempty"`
+	Color       string      `json:"color,omitempty"`
+	Icon        string      `json:"icon,omitempty"`
+	Perks       []apiPerk   `json:"perks,omitempty"`
+	Reqs        []apiGroupR `json:"requirements,omitempty"`
 }
 
 // apiPerk tolerates both shapes a perk can arrive in: an object with an icon,
-// and the bare string traxary's `premium` ladder uses today.
+// and the bare string traxary's `premium` ladder uses today. It re-encodes as
+// the object form — one shape in the store, and UnmarshalJSON reads it back.
 type apiPerk struct {
-	Icon  string
-	Label string
+	Icon  string `json:"icon,omitempty"`
+	Label string `json:"label"`
 }
 
 func (p *apiPerk) UnmarshalJSON(b []byte) error {
@@ -51,9 +56,9 @@ func (p *apiPerk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// apiGroupR is one threshold. Satisfied is read but never stored: it is the
-// tracker's verdict on THIS user, so it belongs to the account, not to the
-// ladder — see StripGroupProgress.
+// apiGroupR is one threshold. It has no field for the tracker's per-user
+// verdict ("satisfied"), which is how that verdict is kept out of the store —
+// see CanonicalLadder.
 type apiGroupR struct {
 	Type  string  `json:"type"`
 	Value float64 `json:"value"`
@@ -91,11 +96,7 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 	if spec.Ladder == "" {
 		return nil
 	}
-	var payload map[string][]apiGroup
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil
-	}
-	raw, ok := payload[spec.Ladder]
+	raw, ok := decodeLadders(body)[spec.Ladder]
 	if !ok || len(raw) == 0 {
 		return nil
 	}
@@ -152,48 +153,53 @@ func requirementsFromAPI(reqs []apiGroupR, mapping map[string]string) GroupRequi
 	return out
 }
 
-// StripGroupProgress removes the per-user verdict the tracker attaches to each
-// threshold ("satisfied"), returning canonical JSON of what is left.
+// CanonicalLadder projects a group-ladder response down to the ladder fields
+// Yata models, and returns that as JSON. It is what gets hashed and stored.
 //
-// This is what makes a stored ladder a record of the SITE's rules. The flag
-// flips as the user climbs, so hashing the response as it arrived would file a
-// fresh "this tracker changed its requirements" revision every time they
-// crossed a threshold — recording the user's progress in the one table that is
-// supposed to be about everything except that.
+// An allowlist by construction: the response is decoded into the structs above
+// and re-encoded, so a field none of them declares cannot reach the store. That
+// matters for two different reasons.
 //
-// Re-marshalling also settles key order, so two identical ladders hash the
-// same however the platform happened to serialise them.
-func StripGroupProgress(body []byte) ([]byte, error) {
-	var v any
-	if err := json.Unmarshal(body, &v); err != nil {
-		return nil, err
+// The response comes from a USER endpoint, and the store is a record of the
+// SITE's rules. traxary annotates each threshold with "satisfied" — its verdict
+// on this account — and any future per-user field would arrive the same way.
+// Hashing one would file a fresh "this tracker changed its requirements"
+// revision every time the user crossed a threshold, recording their progress in
+// the table meant to be about everything except that. A denylist would only
+// have caught the field names we thought of.
+//
+// Re-encoding also settles key order and perk shape, so two identical ladders
+// hash the same however the platform serialised them.
+func CanonicalLadder(body []byte) ([]byte, error) {
+	ladders := decodeLadders(body)
+	if len(ladders) == 0 {
+		return nil, fmt.Errorf("no group ladders in response")
 	}
-	return json.Marshal(stripProgress(v))
+	return json.Marshal(ladders)
 }
 
-// progressKeys are per-user annotations on a requirement, never site facts.
-var progressKeys = map[string]bool{"satisfied": true, "met": true, "current": true, "progress": true}
-
-func stripProgress(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for k, val := range t {
-			if progressKeys[strings.ToLower(k)] {
-				continue
-			}
-			out[k] = stripProgress(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(t))
-		for i, val := range t {
-			out[i] = stripProgress(val)
-		}
-		return out
-	default:
-		return v
+// decodeLadders reads the ladders out of a response, keyed as the tracker keys
+// them, and ignores everything else at the top level.
+//
+// Per key rather than one decode of the whole object, because this is a USER
+// endpoint: a scalar like "viewer_id": 4021 sitting beside the ladders is an
+// entirely reasonable thing for it to grow, and decoding the object in one go
+// would fail on it and take the whole feature down. Skipping what does not
+// parse as a ladder drops such a field AND survives it.
+func decodeLadders(body []byte) map[string][]apiGroup {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(body, &top); err != nil {
+		return nil
 	}
+	out := make(map[string][]apiGroup, len(top))
+	for key, raw := range top {
+		var groups []apiGroup
+		if err := json.Unmarshal(raw, &groups); err != nil {
+			continue
+		}
+		out[key] = groups
+	}
+	return out
 }
 
 // LadderHasGroup reports whether name is one of the ladder's ranks. Used to

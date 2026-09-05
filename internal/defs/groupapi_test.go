@@ -2,6 +2,8 @@ package defs
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -161,8 +163,8 @@ func TestLadderFromAPIReadsStyleWhenServed(t *testing.T) {
 // The per-user verdict must not reach storage: it flips as the user climbs, so
 // hashing it would file a fresh "the tracker changed its rules" revision every
 // time they crossed a threshold.
-func TestStripGroupProgress(t *testing.T) {
-	stripped, err := StripGroupProgress([]byte(pgLadder))
+func TestCanonicalLadder(t *testing.T) {
+	stripped, err := CanonicalLadder([]byte(pgLadder))
 	if err != nil {
 		t.Fatalf("strip: %v", err)
 	}
@@ -174,23 +176,23 @@ func TestStripGroupProgress(t *testing.T) {
 		reqs, _ := g["requirements"].([]any)
 		for _, r := range reqs {
 			if _, present := r.(map[string]any)["satisfied"]; present {
-				t.Fatalf("satisfied survived stripping in %v", g["title"])
+				t.Fatalf("satisfied survived the projection in %v", g["title"])
 			}
 			if _, present := r.(map[string]any)["type"]; !present {
-				t.Fatalf("stripping removed the requirement type in %v", g["title"])
+				t.Fatalf("the projection dropped the requirement type in %v", g["title"])
 			}
 		}
 	}
 	// The thresholds themselves must survive, or the stored revision is useless.
 	if len(LadderFromAPI(stripped, traxarySpec())) != 5 {
-		t.Fatal("stripped payload no longer maps to a ladder")
+		t.Fatal("projected payload no longer maps to a ladder")
 	}
 }
 
 // Two responses differing only in the user's progress must hash the same, which
 // is what makes a revision mean "the tracker changed its requirements".
-func TestStripGroupProgressIsStableAcrossUserProgress(t *testing.T) {
-	before, err := StripGroupProgress([]byte(pgLadder))
+func TestCanonicalLadderIsStableAcrossUserProgress(t *testing.T) {
+	before, err := CanonicalLadder([]byte(pgLadder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +218,7 @@ func TestStripGroupProgressIsStableAcrossUserProgress(t *testing.T) {
 	  "internal":[],
 	  "premium":[{"id":1,"title":"1337","perks":["15% Global freeleech","15% more upload"]}]
 	}`)
-	after, err := StripGroupProgress(promoted)
+	after, err := CanonicalLadder(promoted)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,9 +228,9 @@ func TestStripGroupProgressIsStableAcrossUserProgress(t *testing.T) {
 }
 
 // A genuine change to the rules must still be visible after stripping.
-func TestStripGroupProgressKeepsRealChanges(t *testing.T) {
-	before, _ := StripGroupProgress([]byte(pgLadder))
-	raised, _ := StripGroupProgress([]byte(
+func TestCanonicalLadderKeepsRealChanges(t *testing.T) {
+	before, _ := CanonicalLadder([]byte(pgLadder))
+	raised, _ := CanonicalLadder([]byte(
 		`{"auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":107374182400,"satisfied":false}]}]}`))
 	if string(before) == string(raised) {
 		t.Error("a raised threshold hashed the same as the old ladder")
@@ -242,5 +244,87 @@ func TestLadderHasGroup(t *testing.T) {
 	}
 	if LadderHasGroup(ladder, "Sapling") {
 		t.Error("a rank absent from this ladder reported as present")
+	}
+}
+
+// The projection is an allowlist by construction: only fields the structs above
+// declare survive. A denylist would have kept whatever a /api/user route grows
+// next — and hashed it, so a user field would look like the tracker rewriting
+// its requirements.
+func TestCanonicalLadderDropsUnknownFields(t *testing.T) {
+	const withUserState = `{
+	  "viewer_id": 4021,
+	  "auto": [{
+	    "id": 9, "title": "Seedling",
+	    "joined_at": "2026-09-03T06:29:05Z",
+	    "is_current": true,
+	    "requirements": [
+	      {"type":"upload","value":53687091200,"satisfied":true,"remaining":12345}
+	    ]
+	  }]
+	}`
+	out, err := CanonicalLadder([]byte(withUserState))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"viewer_id", "joined_at", "is_current", "satisfied", "remaining"} {
+		if strings.Contains(string(out), leaked) {
+			t.Errorf("%q reached the store: %s", leaked, out)
+		}
+	}
+	// The ladder itself must still be intact and still map.
+	got := LadderFromAPI(out, traxarySpec())
+	if len(got) != 1 || got[0].Name != "Seedling" || got[0].Requirements.MinUploaded != "50.00 GiB" {
+		t.Errorf("projection damaged the ladder: %+v", got)
+	}
+}
+
+// Two responses differing only in a per-user field must hash the same, which is
+// what makes a stored revision mean "the tracker changed its requirements".
+func TestCanonicalLadderIgnoresUnknownUserFields(t *testing.T) {
+	base := `{"auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":53687091200%s}]}]}`
+	before, err := CanonicalLadder([]byte(fmt.Sprintf(base, "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := CanonicalLadder([]byte(fmt.Sprintf(base, `,"satisfied":true,"remaining":0`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("per-user fields changed the canonical form: %s vs %s", before, after)
+	}
+}
+
+// A user endpoint growing a scalar beside its ladders must not take the feature
+// down: decoding the whole object in one go fails on it, so ladders are decoded
+// one key at a time.
+func TestLadderSurvivesUnknownTopLevelShapes(t *testing.T) {
+	const noisy = `{
+	  "viewer_id": 4021,
+	  "meta": {"generated_at": "2026-09-05T02:00:00Z"},
+	  "flags": ["beta"],
+	  "auto": [{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":53687091200}]}]
+	}`
+	got := LadderFromAPI([]byte(noisy), traxarySpec())
+	if len(got) != 1 || got[0].Name != "Seedling" {
+		t.Fatalf("ladder = %+v, want Seedling alongside the noise", got)
+	}
+	out, err := CanonicalLadder([]byte(noisy))
+	if err != nil {
+		t.Fatalf("canonical: %v", err)
+	}
+	for _, leaked := range []string{"viewer_id", "meta", "generated_at", "flags"} {
+		if strings.Contains(string(out), leaked) {
+			t.Errorf("%q reached the store: %s", leaked, out)
+		}
+	}
+}
+
+// A response with no ladder at all is an error, not an empty ladder — storing
+// one would read downstream as a tracker that abolished its ranks.
+func TestCanonicalLadderRejectsResponseWithNoLadders(t *testing.T) {
+	if _, err := CanonicalLadder([]byte(`{"error":"unauthorised"}`)); err == nil {
+		t.Error("a response carrying no ladder was accepted")
 	}
 }

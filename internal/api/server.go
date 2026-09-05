@@ -98,6 +98,7 @@ func NewRouter(d *Deps) http.Handler {
 			registerLogs(pr, d)
 			registerConfigIO(pr, d)
 			registerNotifications(pr, d)
+			registerAlerts(pr, d)
 			registerUpdates(pr, d)
 		})
 	})

@@ -6,6 +6,34 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **In-app alerts panel.** A flag in the header with an unread count, opening a
+  searchable list of what the alert rules have fired.
+
+  Alerts previously went only to webhooks, and `Engine.send` returned early
+  when a rule had no destination — so with nothing configured every alert was
+  evaluated, matched and discarded, the seeded account-deadline rules included.
+  Yata is now a destination itself, recording before that check, so alerts work
+  with no setup. Webhooks are unchanged and receive the same words.
+
+  Kept for 90 days or 500 alerts, whichever comes first; unread ones survive
+  the age cut. Closes [#23](https://github.com/Yata-Dash/Yata-Dash/issues/23).
+
+### Fixed
+
+- **Conditions already true when Yata starts now appear in the panel.** The
+  engine primes silently on the first pass so a restart doesn't re-blast
+  webhooks — which meant a standing problem like a login deadline already close
+  was recorded nowhere, and wouldn't surface until you fixed it and let it
+  lapse again. Webhooks still stay silent; the panel is a worklist, so it lists
+  it.
+
+- **Alert cooldown now applies with no webhook configured.** The last-fired
+  time was only stamped once a destination existed, so a user with none had no
+  cooldown — harmless while alerts were being discarded, one panel row per poll
+  once they are not.
+
 ## [Beta-20260904]
 
 ### Added

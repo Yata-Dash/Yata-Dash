@@ -1,7 +1,7 @@
 // api.ts — all HTTP calls to the Go backend (v2 unified-stats API)
 // To add a new endpoint: add a typed function here. Nothing else needs changing.
 import type {
-  AlertRule, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult,
+  AlertRule, AlertsResponse, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult,
   DetectTypeResponse, DryRunResult,
   HistorySeriesResponse,
   LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse,
@@ -277,6 +277,29 @@ export const reloadDefs = () =>
 
 export const fetchTrackerGroups = () =>
   call<TrackerGroupMap>('/api/tracker-groups');
+
+// ── In-app alerts ─────────────────────────────────────────────────────────
+
+export const fetchAlerts = (q: { q?: string; tracker?: string; limit?: number; offset?: number } = {}) => {
+  const p = new URLSearchParams();
+  if (q.q) p.set('q', q.q);
+  if (q.tracker) p.set('tracker', q.tracker);
+  if (q.limit) p.set('limit', String(q.limit));
+  if (q.offset) p.set('offset', String(q.offset));
+  const qs = p.toString();
+  return call<AlertsResponse>('/api/alerts' + (qs ? '?' + qs : ''));
+};
+
+/** No ids = mark every unread alert read. */
+export const markAlertsRead = (ids?: number[]) =>
+  call<{ unread: number }>('/api/alerts/read', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids ?? [] }),
+  });
+
+export const deleteAlert = (id: number) =>
+  call<{ unread: number }>(`/api/alerts/${id}`, { method: 'DELETE' });
 
 // ── Pathways ──────────────────────────────────────────────────────────────
 

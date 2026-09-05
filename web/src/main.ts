@@ -13,6 +13,7 @@ import { startIconFallback } from './utils/icons';
 import { renderGrid, renderCard, setGridRerender } from './views/grid';
 import { renderAggCards } from './views/aggCards';
 import { renderQuiBars, refreshQuiStats, renderQUIInstanceChecklist } from './components/qui';
+import { initAlertsPanel, refreshAlertCount } from './components/alertsPanel';
 import { toast } from './components/toast';
 import { openColCustomizer, toggleColVisible } from './components/cols';
 import { initTargetsPopover, openTargetsPopover, closeTargetsPopover } from './components/targetsPopover';
@@ -59,9 +60,13 @@ async function boot() {
   await loadSettings();
   maybeShowAuthNudge(); // after settings so the persistent opt-out is honoured
   await loadTrackers();
+  initAlertsPanel(); // after trackers: the source filter names them
   initHistoryFeature();       // flag-gated tab; no-op while FEATURES.history is off
   void initPathwaysFeature(); // independent of stats — don't block the refresh
   await refreshAllStats();
+  // Stats refreshes are when rules are evaluated, so the bubble is only ever
+  // stale between polls if it isn't re-read here.
+  void refreshAlertCount();
   await loadScrapeStatus();
   await Promise.all([loadHistory(), loadTrackerGroups()]);
   // Tracker groups drive the History view's target reference lines; if the app

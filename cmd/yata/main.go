@@ -183,6 +183,11 @@ func main() {
 		AllowedHosts: splitHosts(*allowedHosts),
 	}
 
+	// The app itself is a destination: every alert the engine raises is recorded
+	// for the in-app panel, whether or not a webhook is configured. Without this
+	// a user with no destination has every alert evaluated, matched and dropped.
+	deps.Alerts.SetRecorder(api.NewAlertRecorder(deps))
+
 	// Seed the manual stats layer from config (typed-in stats and join dates)
 	// so a manual-entry tracker has its numbers, and account-age works, on
 	// first load — before any fetch, and without one for trackers that have no
@@ -218,6 +223,10 @@ func main() {
 			_ = db.PruneEvents(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
 			_ = db.PruneConnectionDaily(time.Now().UTC().Add(-time.Duration(dailyDays) * 24 * time.Hour))
 			_ = db.PruneScrapeLog(time.Now().UTC().Add(-30 * 24 * time.Hour))
+			// Alerts keep their own retention (newest 500 / 90 days), not the
+			// history window: that one is chosen for charts, and a worklist
+			// should not vanish on a schedule picked for sparklines.
+			_ = db.PruneAlerts(time.Now().UTC())
 			_ = db.PruneSessions(time.Now())
 			time.Sleep(6 * time.Hour)
 		}
