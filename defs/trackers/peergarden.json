@@ -6,7 +6,7 @@
   "url": "https://peergarden.org",
   "type": "traxary",
   "last_updated": "2026-09-04",
-  "notes": "TESTING\n\nNo \"groups\" array, deliberately: traxary serves its own ladder from /api/user/groups (see the type def and GROUP_API_PLAN.md), so the ranks and their thresholds come from PeerGarden itself and cannot go stale between releases. The 10 autogroups this def used to carry were verified against that endpoint before removal — every threshold matched, which is the point: the def was right, it just had no way to stay right.",
+  "notes": "TESTING: traxary serves its own ladder from /api/user/groups",
   "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 2,
