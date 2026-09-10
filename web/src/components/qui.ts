@@ -90,7 +90,7 @@ export function renderQuiBars(settings: AppSettings, meta: QUIInstanceMeta[]): v
     el.style.display = '';
     const enabled = settings.qui_enabled_instances ?? [];
     el.innerHTML = enabled.length === 0
-      ? `<div class="qui-bar" style="margin-bottom:16px"><span style="font-size:12px;color:var(--text3);font-style:italic">QUI not configured — open ⚙ Settings to add instances</span></div>`
+      ? `<div class="qui-bar" style="margin-bottom:16px"><span style="font-size:12px;color:var(--text3);font-style:italic">qui not configured — Settings → Integrations</span></div>`
       : enabled.map(id => {
           const m = meta.find(x => x.id === id);
           return buildQuiBarHTML(id, m?.name ?? `Instance ${id}`);
@@ -162,6 +162,13 @@ export async function refreshQuiStats(settings: AppSettings): Promise<void> {
   }));
 }
 
+/** Same origin, tolerating the half-typed URLs this runs against on every
+ *  keystroke — an unparseable value is not the stored one. */
+function sameOrigin(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  try { return new URL(a).origin === new URL(b).origin; } catch { return a === b; }
+}
+
 /**
  * Render the QUI instance checklist in the settings page.
  * `override` passes the url/key currently TYPED in the form (unsaved) so the
@@ -178,18 +185,38 @@ export async function renderQUIInstanceChecklist(
   const listEl = document.getElementById('s-qui-instance-list');
   if (!listEl) return { ok: false, error: 'no list element' };
 
-  listEl.innerHTML = '<span style="font-size:12px;color:var(--text3);font-style:italic">Loading…</span>';
+  // Nothing to reach yet is not a failure. Before this the blank-address case
+  // rendered the same red "could not reach" as a wrong key, so a fresh install
+  // opened the tab already looking broken.
+  const storedUrl = (settings.qui_url ?? '').trim();
+  const typedUrl = (override?.url ?? '').trim() || storedUrl;
+  // The stored key only counts for the stored address. The backend refuses to
+  // send it anywhere else — testing an unsaved URL would otherwise double as a
+  // way to POST the saved key to a host of the caller's choosing — so treating
+  // it as "configured" here produced a red "could not reach qui" when the real
+  // answer is that a new address needs its own key.
+  const storedKeyApplies = sameOrigin(typedUrl, storedUrl);
+  const typedKey = (override?.key ?? '').trim()
+    || (storedKeyApplies ? (settings.qui_api_key ?? '').trim() : '');
+  if (!typedUrl || !typedKey) {
+    listEl.innerHTML = typedUrl && !storedKeyApplies
+      ? '<span class="qui-inst-note">Enter the API key for this address to list its instances.</span>'
+      : '<span class="qui-inst-note">Add an address and API key to list instances.</span>';
+    return { ok: true };
+  }
+
+  listEl.innerHTML = '<span class="qui-inst-note">Loading…</span>';
   const { ok, data } = await api.fetchQUIInstances(override?.url, override?.key);
 
   if (!ok || !Array.isArray(data)) {
     const err = (data as unknown as { error?: string })?.error ?? 'connection_error';
-    listEl.innerHTML = '<span style="font-size:12px;color:var(--red)">Could not reach QUI — check URL and API key</span>';
+    listEl.innerHTML = '<span style="font-size:12px;color:var(--red)">Could not reach qui — check the address and API key</span>';
     return { ok: false, error: err };
   }
 
   const enabled = settings.qui_enabled_instances ?? [];
   if (!data.length) {
-    listEl.innerHTML = '<span style="font-size:12px;color:var(--text3)">No instances found at this URL</span>';
+    listEl.innerHTML = '<span class="qui-inst-note">Connected, but qui has no instances configured.</span>';
     return { ok: true };
   }
 

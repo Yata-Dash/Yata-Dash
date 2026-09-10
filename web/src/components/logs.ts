@@ -14,6 +14,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let paused = false;
 let toastFn: ((msg: string, type?: ToastType) => void) | null = null;
 let lastEntries: LogEntry[] = [];
+let query = '';
 
 // Which levels to DISPLAY (default: hide the noisy trace/debug). Everything is
 // still captured server-side regardless of this choice.
@@ -36,6 +37,22 @@ function fmtTime(ms: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/** Escape a user's search text for use in a RegExp, so typing "(" or "." looks
+ *  for that character instead of throwing or matching everything. */
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Wrap matches in the ALREADY-ESCAPED message. Escaping first and searching
+ *  second keeps the markup safe: the needle is escaped the same way, so a
+ *  search for "<" matches the "&lt;" the message became. */
+function highlight(escaped: string, q: string): string {
+  if (!q) return escaped;
+  const needle = esc(q);
+  if (!needle) return escaped;
+  return escaped.replace(new RegExp(reEscape(needle), 'gi'), m => `<mark class="log-hit">${m}</mark>`);
+}
+
 function renderChips(): void {
   const box = document.getElementById('s-log-levels');
   if (!box) return;
@@ -47,16 +64,27 @@ function renderChips(): void {
 function renderEntries(): void {
   const view = document.getElementById('s-log-view');
   if (!view) return;
-  const entries = lastEntries.filter(e => shown.has(String(e.level).toLowerCase()));
+  const q = query.trim().toLowerCase();
+  const entries = lastEntries
+    .filter(e => shown.has(String(e.level).toLowerCase()))
+    .filter(e => !q || String(e.msg).toLowerCase().includes(q));
+  updateCount(entries.length, lastEntries.length);
   if (!entries.length) {
-    view.innerHTML = `<div class="log-empty">No log entries to display${lastEntries.length ? ' at the selected levels' : ' yet'}.</div>`;
+    // Three different nothings, and they call for different next steps.
+    const why = !lastEntries.length ? ' yet'
+      : q ? ' matching that search'
+      : ' at the selected levels';
+    view.innerHTML = `<div class="log-empty">No log entries to display${why}.</div>`;
     return;
   }
   const autoScroll = (document.getElementById('s-log-autoscroll') as HTMLInputElement | null)?.checked ?? true;
   const atBottom = view.scrollHeight - view.scrollTop - view.clientHeight < 40;
   view.innerHTML = entries.map(e => {
     const lvl = String(e.level).toLowerCase();
-    return `<div class="log-line log-${esc(lvl)}"><span class="log-time">${fmtTime(e.time)}</span><span class="log-lvl">${esc(lvl.slice(0, 3).toUpperCase())}</span><span class="log-msg">${esc(e.msg)}</span></div>`;
+    // Full date on hover: the line shows only a time, which is ambiguous on a
+    // log that rolls over days.
+    const stamp = new Date(e.time).toLocaleString();
+    return `<div class="log-line log-${esc(lvl)}"><span class="log-time" title="${esc(stamp)}">${fmtTime(e.time)}</span><span class="log-lvl">${esc(lvl.slice(0, 3).toUpperCase())}</span><span class="log-msg">${highlight(esc(e.msg), query.trim())}</span></div>`;
   }).join('');
   if (autoScroll && atBottom) view.scrollTop = view.scrollHeight;
 }
@@ -87,6 +115,19 @@ export function stopLogsAuto(): void {
 }
 
 /** Toggle a level on/off in the display filter (does not affect logging). */
+function updateCount(shownN: number, total: number): void {
+  const el = document.getElementById('s-log-count');
+  if (!el) return;
+  el.textContent = total === 0 ? '' : shownN === total ? `${total} lines` : `${shownN} of ${total}`;
+}
+
+/** Search box handler — filters the lines already fetched, so it costs no
+ *  request and works while paused. */
+export function filterLogs(): void {
+  query = (document.getElementById('s-log-search') as HTMLInputElement | null)?.value ?? '';
+  renderEntries();
+}
+
 export function toggleLogLevel(level: string): void {
   if (shown.has(level)) shown.delete(level); else shown.add(level);
   saveShown();

@@ -164,6 +164,15 @@ func testNotification(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		// Testing the notification centre writes a real row rather than posting
+		// anywhere — the point of a test is to prove delivery works, and for
+		// this destination delivery IS the row.
+		if dest.IsInApp() {
+			NewAlertRecorder(d).RecordAlert("test", "Test notification", "", "",
+				"Yata test notification", "If you can read this, the notification centre is working. 🎉")
+			jsonOK(w, map[string]any{"ok": true})
+			return
+		}
 		auditPrivateDestination(d, "notification", dest.URL)
 		if err := notify.Send(dest, "Yata test notification",
 			"If you can read this, your destination is working. 🎉"); err != nil {

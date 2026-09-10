@@ -64,7 +64,7 @@ export let appSettings: AppSettings = {
   show_tracker_rules: true, highlight_hnr: true, login_reset_on_link_click: false,
   update_check_auto: false, trust_proxy_headers: false, duration_format: 'ym',
   pathway_favorites: [], pathway_not_interested: [], pathways_include_disabled: false,
-  profile_auto_sync: true, api_only_mode: false,
+  api_only_mode: false,
   scrape_interval_minutes: 120, max_scrapes_per_day: 0, auto_interval: false,
   refresh_interval_minutes: 30, qui_refresh_seconds: 10,
   qui_url: 'http://localhost:7476', qui_api_key: '',

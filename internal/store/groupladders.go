@@ -17,8 +17,8 @@ const groupLadderRevisions = 20
 // GroupLadder is one stored revision of a tracker's group ladder, as the
 // tracker's own API reported it.
 type GroupLadder struct {
-	// Payload is the API's response with per-user progress stripped
-	// (defs.StripGroupProgress), so it records the SITE's rules and nothing
+	// Payload is the API's response projected onto the ladder fields Yata
+	// models (defs.CanonicalLadder), so it records the SITE's rules and nothing
 	// about the account that fetched them.
 	Payload []byte
 	// FirstSeen is when this revision first appeared — i.e. when the tracker
@@ -31,8 +31,8 @@ type GroupLadder struct {
 // SaveGroupLadder records a freshly fetched ladder.
 //
 // An unchanged ladder bumps checked_at on the existing revision; a changed one
-// opens a new revision. The caller must pass a payload with per-user progress
-// already stripped — hashing the raw response would file a new revision every
+// opens a new revision. The caller must pass a payload already through
+// defs.CanonicalLadder — hashing a raw response would file a new revision every
 // time the user crossed a threshold, recording their progress in the one table
 // that is meant to be about everything except that.
 func (d *DB) SaveGroupLadder(trackerID string, payload []byte, now time.Time) error {

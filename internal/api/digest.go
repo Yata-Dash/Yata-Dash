@@ -82,7 +82,12 @@ func RunDigestIfDue(d *Deps) {
 func deliverDigest(d *Deps, now time.Time) (sentTo int, err error) {
 	cfg := d.Cfg.Notifications()
 	text, readyNow := buildDigest(d, now)
-	dests := notify.ResolveDestinations(cfg, cfg.Digest.Destinations)
+	// The digest is webhook-only for now. It resolves through the same
+	// destination list as a rule, and an unset list means "everywhere" — which
+	// since the notification centre became a destination would hand it a
+	// chunked wall of text with nowhere to POST it. Whether a weekly digest
+	// belongs in the centre at all is a question for the panel's next pass.
+	_, dests := notify.SplitDestinations(notify.ResolveDestinations(cfg, cfg.Digest.Destinations))
 	if len(dests) == 0 {
 		return 0, nil
 	}

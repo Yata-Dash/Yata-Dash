@@ -93,6 +93,10 @@ const FIELDS: FieldDef[] = [
   { value: 'unread_mail',          label: 'Unread mail (inbox)', type: 'bool' },
   { value: 'unread_notifications', label: 'Unread notifications (bell)', type: 'bool' },
   { value: 'reachable',        label: 'Tracker reachable',  type: 'bool' },
+  { value: 'scrape_limited',   label: 'Daily scrape limit reached', type: 'bool',
+    hint: 'The tracker has hit its cap on profile scrapes for today. Often the operator’s own limit rather than yours.' },
+  { value: 'cookie_expired',   label: 'Session cookie expired', type: 'bool',
+    hint: 'Profile scrapes are being refused. Re-copy the cookie in Settings → Trackers.' },
   { value: 'goal_behind_pace', label: 'Behind goal pace',   type: 'bool' },
   { value: 'group', label: 'Group / class', type: 'string', ops: GROUP_OPS,
     hint: '"changed" is checked on every refresh; promotions and demotions fire once, at the moment they are detected.' },
@@ -130,7 +134,17 @@ function genId(): string { return Math.random().toString(16).slice(2, 10) + Date
 function opt(value: string, label: string, sel: string): string {
   return `<option value="${esc(value)}"${value === sel ? ' selected' : ''}>${esc(label)}</option>`;
 }
-const DEST_TYPE_LABEL: Record<string, string> = { discord: 'Discord', telegram: 'Telegram', gotify: 'Gotify', generic: 'Generic JSON' };
+const DEST_TYPE_LABEL: Record<string, string> = { in_app: 'In-app', discord: 'Discord', telegram: 'Telegram', gotify: 'Gotify', generic: 'Generic JSON' };
+
+/** The notification centre is a destination like any webhook — that is what
+ *  lets a rule go in-app only, or to Discord only, or both. It differs in that
+ *  it is built in: always present, nothing to configure, and it cannot be
+ *  deleted (the server re-creates it). It can be disabled, which turns the
+ *  centre off. */
+const IN_APP_DEST_ID = 'in-app';
+export function isInAppDest(d: { id?: string; type?: string }): boolean {
+  return d.id === IN_APP_DEST_ID || d.type === 'in_app';
+}
 
 // ── Reusable searchable multi-select (chips + dropdown) ─────────────────────
 // 'digest-dest' reuses the exact same component as a rule's 'dest' select,
@@ -142,7 +156,9 @@ interface MsOption { id: string; label: string; }
 function msOptions(kind: MsKind): MsOption[] {
   return kind === 'tracker'
     ? trackers.map(t => ({ id: t.id, label: t.name }))
-    : destinations.map(d => ({ id: d.id, label: d.name || DEST_TYPE_LABEL[d.type] || d.type }));
+    : destinations
+        .filter(d => kind !== 'digest-dest' || !isInAppDest(d))
+        .map(d => ({ id: d.id, label: d.name || DEST_TYPE_LABEL[d.type] || d.type }));
 }
 function msArr(kind: MsKind, ri: number): string[] {
   if (kind === 'tracker') return rules[ri].tracker_ids;
@@ -266,21 +282,40 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
+//
+// Three sections, in the order the job is done: where alerts go, what raises
+// them, and the standing weekly summary. They stay on one page deliberately —
+// an alert always has a destination and a destination is useless without a
+// rule, so splitting them would mean switching tabs mid-task.
 function render(): void {
   const root = document.getElementById('alerts-content');
   if (!root) return;
+  const webhookCount = destinations.filter(d => !isInAppDest(d)).length;
   root.innerHTML = `
-    <div class="alerts-subhead">Destinations</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Where alerts are sent. Webhook URLs can contain secrets, so they're hidden until you Edit.</div>
-    ${destinations.map((d, i) => i === editingDest ? renderDestEdit(d, i) : renderDestRow(d, i)).join('') || '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:6px">No destinations yet.</div>'}
-    <button type="button" class="btn btn-ghost btn-sm" data-action="add-dest">+ Add destination</button>
+  <div class="set-grid">
+    <div class="set-section">
+      <div class="set-section-head">
+        <h2 class="set-section-title">Where alerts go</h2>
+        <p class="set-section-note">The notification centre is built in, so alerts work with no setup. Add a webhook to also send them somewhere else. Webhook URLs can hold secrets, so they stay hidden until you Edit.</p>
+      </div>
+      ${destinations.map((d, i) => i === editingDest ? renderDestEdit(d, i) : renderDestRow(d, i)).join('')}
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" data-action="add-dest">+ Add destination</button>
+    </div>
 
     ${renderDigestCard()}
+  </div>
 
-    <div class="alerts-subhead" style="margin-top:20px">Rules</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Each rule fires when its conditions become true for a tracker (it won't re-fire until the condition clears). A newly-added rule that's already true notifies immediately.</div>
-    ${rules.map((r, ri) => ri === editingRule ? renderRule(r, ri) : renderRuleRow(r, ri)).join('') || '<div style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:6px">No rules yet.</div>'}
-    <button type="button" class="btn btn-ghost btn-sm" data-action="add-rule">+ Add rule</button>`;
+  <div class="set-section">
+      <div class="set-section-head">
+        <h2 class="set-section-title">Rules</h2>
+        <p class="set-section-note">A rule fires when its conditions become true for a tracker, and won${'’'}t fire again until they clear. ${webhookCount === 0
+          ? 'With no webhook set up, every rule goes to the notification centre.'
+          : `A rule that names no destination goes to all ${webhookCount + 1} enabled destinations.`} Adding a rule that is already true notifies straight away.</p>
+      </div>
+      ${rules.map((r, ri) => ri === editingRule ? renderRule(r, ri) : renderRuleRow(r, ri)).join('')
+        || `<div class="set-empty">No rules yet. Without one, nothing is watched — add a rule to start.</div>`}
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" data-action="add-rule">+ Add rule</button>
+  </div>`;
 }
 
 // ── Weekly digest card ───────────────────────────────────────────────────────
@@ -289,24 +324,52 @@ const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
 function renderDigestCard(): string {
   const dayOpts = WEEKDAY_LABELS.map((label, i) => opt(String(i), label, String(digest.weekday))).join('');
   const hourOpts = Array.from({ length: 24 }, (_, h) => opt(String(h), `${String(h).padStart(2, '0')}:00`, String(digest.hour))).join('');
-  return `<div class="alerts-subhead" style="margin-top:20px">Weekly digest</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">A weekly summary of per-tracker deltas, target/goal progress, promotions/demotions, and newly requirements-met pathway targets. A quiet week still sends a short heartbeat so silence never means "it broke".</div>
-    <div class="alerts-card">
-      <div class="alerts-row" style="align-items:center;gap:12px">
-        <label class="alerts-inline"><input type="checkbox" id="digest-enabled" ${digest.enabled ? 'checked' : ''}/> Enabled</label>
-        <select class="form-input" id="digest-weekday" style="width:auto">${dayOpts}</select>
-        <select class="form-input" id="digest-hour" style="width:auto">${hourOpts}</select>
+  return `<div class="set-section">
+    <div class="set-section-head">
+      <h2 class="set-section-title">Weekly digest</h2>
+      <p class="set-section-note">One summary a week: per-tracker deltas, goal progress, promotions, and pathway targets you now qualify for. A quiet week still sends a short heartbeat, so silence never means it broke. Webhooks only for now.</p>
+    </div>
+    <div class="set-card">
+      <div class="set-field">
+        <span class="set-field-label">Send digest</span>
+        <div class="set-field-control">
+          <label class="alerts-inline"><input type="checkbox" id="digest-enabled" ${digest.enabled ? 'checked' : ''}/> Enabled</label>
+        </div>
       </div>
-      <div class="alerts-row" style="margin-top:8px;align-items:center;gap:8px">
-        <span style="font-size:11px;color:var(--text3);width:60px">Send to</span>
-        ${msHtml('digest-dest', -1, 'All enabled destinations')}
+      <div class="set-field">
+        <span class="set-field-label">When</span>
+        <div class="set-field-control">
+          <select class="form-input" id="digest-weekday" style="width:auto">${dayOpts}</select>
+          <select class="form-input" id="digest-hour" style="width:auto">${hourOpts}</select>
+        </div>
       </div>
-      <div class="alerts-row" style="margin-top:8px;justify-content:flex-end;gap:6px;align-items:center">
+      <div class="set-field">
+        <span class="set-field-label">Send to</span>
+        <div class="set-field-control">${msHtml('digest-dest', -1, 'All enabled webhooks')}</div>
+      </div>
+      <div class="set-card-actions" style="margin-top:10px">
         <button type="button" class="btn btn-ghost btn-sm" data-action="digest-preview">Preview</button>
         <button type="button" class="btn btn-primary btn-sm" data-action="digest-send">Send now</button>
       </div>
     </div>
-    ${digestPreviewText !== null ? `<div class="alerts-dryrun"><pre style="white-space:pre-wrap;margin:0;font:inherit">${esc(digestPreviewText)}</pre></div>` : ''}`;
+    ${digestPreviewText !== null ? resultPanel('digest-preview-panel', 'Digest preview',
+        `<pre style="white-space:pre-wrap;margin:0;font:inherit">${esc(digestPreviewText)}</pre>`) : ''}
+  </div>`;
+}
+
+/** A transient answer to something the user asked for: collapsible, capped,
+ *  and dismissible. The dry-run used to render a row per tracker with no lid
+ *  and no way to close it, so on 22 trackers it buried the page. */
+function resultPanel(id: string, summary: string, body: string, open = true): string {
+  return `<div class="set-result" id="${id}" data-open="${open ? 1 : 0}">
+    <div class="set-result-head">
+      <button type="button" class="set-result-summary" data-action="result-toggle" data-result="${id}">
+        <i class="fas fa-chevron-right set-result-caret"></i>${summary}
+      </button>
+      <button type="button" class="set-result-x" data-action="result-dismiss" data-result="${id}" aria-label="Dismiss">&times;</button>
+    </div>
+    <div class="set-result-body">${body}</div>
+  </div>`;
 }
 
 // ── Rule scope callouts (collapsed rows) ─────────────────────────────────────
@@ -323,7 +386,21 @@ function destSummary(r: AlertRule): string {
     const d = destinations.find(x => x.id === id);
     return d ? (d.name || DEST_TYPE_LABEL[d.type] || d.type) : id;
   });
-  if (!names.length) return 'all destinations';
+  // "all destinations" was accurate but told you nothing — every seeded rule
+  // said it. Naming the count makes it clear that adding a webhook silently
+  // widens every rule that picked nothing, which is the surprising part.
+  if (!names.length) {
+    // Name the one that is on, rather than assuming a single enabled
+    // destination must be the centre: with the centre switched off and one
+    // webhook enabled, "notification centre" was the one place the alert would
+    // not go.
+    const on = destinations.filter(d => d.enabled);
+    if (on.length === 1) {
+      const d = on[0]!;
+      return isInAppDest(d) ? 'notification centre' : (d.name || DEST_TYPE_LABEL[d.type] || d.type);
+    }
+    return on.length === 0 ? 'nowhere — every destination is off' : `all ${on.length} destinations`;
+  }
   return names.length <= 2 ? names.join(', ') : `${names.length} destinations`;
 }
 
@@ -334,13 +411,16 @@ function renderRuleRow(r: AlertRule, ri: number): string {
     : `<button type="button" class="btn btn-ghost btn-sm" data-action="dryrun-rule" data-rule="${ri}" title="Evaluate against current stats without sending anything">Dry run</button>
       <button type="button" class="btn btn-ghost btn-sm" data-action="edit-rule" data-rule="${ri}">Edit</button>
       <button type="button" class="btn btn-danger btn-sm" data-action="ask-remove-rule" data-rule="${ri}">Delete</button>`;
-  return `<div class="alerts-dest-row alerts-rule-row${r.enabled ? '' : ' rule-row-disabled'}" data-rule="${ri}">
-    <div class="toggle-track ${r.enabled ? 'on' : ''}" data-action="rule-toggle" data-rule="${ri}" title="Enabled"><div class="toggle-thumb"></div></div>
-    <span class="dest-row-name">${esc(r.name || '(unnamed rule)')}</span>
-    <span class="dest-row-type">${n} condition${n === 1 ? '' : 's'}</span>
-    <span class="rule-row-scope" title="Trackers → destinations">${esc(scopeSummary(r))} <span class="rule-row-arrow">→</span> ${esc(destSummary(r))}</span>
-    <div style="margin-left:auto;display:flex;gap:6px;flex-shrink:0;align-items:center">${actions}</div>
-  </div>${dryRunFor === r.id ? renderDryRunBox(r) : ''}`;
+  return `<div class="set-card${r.enabled ? '' : ' is-off'}" data-rule-card="${ri}" data-rule="${ri}">
+    <div class="set-card-head">
+      <div class="toggle-track ${r.enabled ? 'on' : ''}" data-action="rule-toggle" data-rule="${ri}" title="Enabled"><div class="toggle-thumb"></div></div>
+      <span class="set-card-name">${esc(r.name || '(unnamed rule)')}</span>
+      <span class="set-card-meta">${n} condition${n === 1 ? '' : 's'}</span>
+      <span class="set-card-meta rule-row-scope" title="Trackers → destinations">${esc(scopeSummary(r))} <span class="rule-row-arrow">→</span> ${esc(destSummary(r))}</span>
+      <div class="set-card-actions">${actions}</div>
+    </div>
+    ${dryRunFor === r.id ? renderDryRunBox(r) : ''}
+  </div>`;
 }
 
 function renderDryRunBox(r: AlertRule): string {
@@ -351,30 +431,43 @@ function renderDryRunBox(r: AlertRule): string {
   if (!dryRunResults) return `<div class="alerts-dryrun">Evaluating…</div>`;
   if (!dryRunResults.length) return `<div class="alerts-dryrun">${disabledNote}No enabled trackers are in this rule's scope.</div>`;
   const fired = dryRunResults.filter(x => x.matched);
-  const head = fired.length
-    ? `Would fire now for <strong>${esc(fired.map(f => f.tracker_name).join(', '))}</strong>. Nothing was sent.`
-    : `Would not fire for any tracker right now. Nothing was sent.`;
+  // The count IS the answer; the per-tracker rows are the evidence, and on 22
+  // trackers they buried the page. Summary in the header, rows behind the
+  // disclosure, and the whole thing dismissible.
+  const summary = fired.length
+    ? `Would fire for <strong>${fired.length}</strong> of ${dryRunResults.length} tracker${dryRunResults.length === 1 ? '' : 's'} — nothing was sent`
+    : `Would not fire for any of ${dryRunResults.length} tracker${dryRunResults.length === 1 ? '' : 's'} — nothing was sent`;
   const rows = dryRunResults.map(x =>
     `<div class="dryrun-row${x.matched ? ' hit' : ''}"><span class="dryrun-mark">${x.matched ? '✓' : '–'}</span><span class="dryrun-name">${esc(x.tracker_name)}</span><span class="dryrun-detail">${esc(x.detail)}</span></div>`).join('');
-  return `<div class="alerts-dryrun">${disabledNote}${head}${rows}</div>`;
+  // Collapsed when nothing fired: "no" is the whole answer, and the rows are
+  // only worth opening when you want to know why.
+  return resultPanel('dryrun-panel', summary, `${disabledNote}${rows}`, fired.length > 0);
 }
 
 function renderDestRow(d: NotifyDestination, i: number): string {
-  const actions = pendingDelete === d.id
-    ? confirmDeleteHtml('dest', i, d.name || '(unnamed)')
-    : `<button type="button" class="btn btn-ghost btn-sm" data-action="test-dest" data-dest="${i}">Test</button>
+  // The centre has nothing to configure and cannot be removed — there is no
+  // URL, no token, and the server re-creates it. Its toggle is the whole
+  // control: off means alerts stop being recorded and the flag disappears.
+  const actions = isInAppDest(d)
+    ? `<span class="dest-row-builtin">Built in — no setup needed</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="test-dest" data-dest="${i}">Test</button>`
+    : pendingDelete === d.id
+      ? confirmDeleteHtml('dest', i, d.name || '(unnamed)')
+      : `<button type="button" class="btn btn-ghost btn-sm" data-action="test-dest" data-dest="${i}">Test</button>
       <button type="button" class="btn btn-ghost btn-sm" data-action="edit-dest" data-dest="${i}">Edit</button>
       <button type="button" class="btn btn-danger btn-sm" data-action="ask-remove-dest" data-dest="${i}">Delete</button>`;
-  return `<div class="alerts-dest-row" data-dest="${i}">
-    <div class="toggle-track ${d.enabled ? 'on' : ''}" data-action="dest-toggle" data-dest="${i}" title="Enabled"><div class="toggle-thumb"></div></div>
-    <span class="dest-row-name">${esc(d.name || '(unnamed)')}</span>
-    <span class="dest-row-type">${esc(DEST_TYPE_LABEL[d.type] || d.type)}</span>
-    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">${actions}</div>
+  return `<div class="set-card${d.enabled ? '' : ' is-off'}" data-dest-card="${i}" data-dest="${i}">
+    <div class="set-card-head">
+      <div class="toggle-track ${d.enabled ? 'on' : ''}" data-action="dest-toggle" data-dest="${i}" title="Enabled"><div class="toggle-thumb"></div></div>
+      <span class="set-card-name">${esc(d.name || '(unnamed)')}</span>
+      <span class="set-card-meta">${esc(DEST_TYPE_LABEL[d.type] || d.type)}</span>
+      <div class="set-card-actions">${actions}</div>
+    </div>
   </div>`;
 }
 
 function renderDestEdit(d: NotifyDestination, i: number): string {
-  return `<div class="alerts-card" data-dest="${i}">
+  return `<div class="set-card" data-dest-card="${i}" data-dest="${i}">
     <div class="alerts-row">
       <input class="form-input dest-name" placeholder="Name (e.g. My Discord)" value="${esc(d.name)}" style="flex:2"/>
       <select class="form-input dest-type" data-action="dest-type" data-dest="${i}" style="flex:1">
@@ -402,7 +495,7 @@ function renderRule(r: AlertRule, ri: number): string {
   const scopeHint = mode === 'exclude'
     ? 'All trackers except those selected.'
     : (r.tracker_ids.length === 0 ? 'No trackers selected = all trackers.' : 'Only the selected trackers.');
-  return `<div class="alerts-card" data-rule="${ri}">
+  return `<div class="set-card" data-rule-card="${ri}" data-rule="${ri}">
     <div class="alerts-row">
       <input class="form-input rule-name" placeholder="Rule name (e.g. Low ratio)" value="${esc(r.name)}" style="flex:2"/>
       <label class="alerts-inline"><input type="checkbox" class="rule-enabled" ${r.enabled ? 'checked' : ''}/> Enabled</label>
@@ -460,8 +553,13 @@ function collectFromDOM(): void {
   const root = document.getElementById('alerts-content');
   if (!root) return;
   // Destinations: read fields only from the edit form; keep model for rows.
-  destinations = [...root.querySelectorAll<HTMLElement>('[data-dest]')]
-    .filter(el => el.classList.contains('alerts-dest-row') || el.classList.contains('alerts-card'))
+  //
+  // Selected by data-dest-card, NOT by class. This used to filter on
+  // .alerts-dest-row/.alerts-card, so renaming those classes for the new card
+  // styling matched nothing and silently emptied the array — a purely visual
+  // rename destroyed unsaved destinations AND rules. Behaviour keys on data
+  // attributes; classes are for styling only.
+  destinations = [...root.querySelectorAll<HTMLElement>('[data-dest-card]')]
     .map((el, i) => {
       const nameInput = el.querySelector<HTMLInputElement>('.dest-name');
       if (!nameInput) return destinations[i]; // collapsed row — model is current
@@ -477,7 +575,7 @@ function collectFromDOM(): void {
     });
 
   // Rules: read fields only from the edit card; collapsed rows keep the model.
-  rules = [...root.querySelectorAll<HTMLElement>('.alerts-rule-row[data-rule], .alerts-card[data-rule]')].map((el, i) => {
+  rules = [...root.querySelectorAll<HTMLElement>('[data-rule-card]')].map((el, i) => {
     const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s);
     if (!q<HTMLInputElement>('.rule-name')) return rules[i]; // collapsed row — model is current
     const conds: AlertCondition[] = [...el.querySelectorAll<HTMLElement>('.cond-row')].map(cr => {
@@ -556,26 +654,43 @@ function wire(): void {
       }
       // ── tracker include/exclude segment (in place) ──
       case 'rule-mode':
-        el.closest('.alerts-card')?.querySelectorAll<HTMLElement>('[data-action="rule-mode"]')
+        el.closest('[data-rule-card]')?.querySelectorAll<HTMLElement>('[data-action="rule-mode"]')
           .forEach(b => b.classList.toggle('active', b === el));
         return;
       // ── destinations ──
       case 'dest-toggle':
-        if (destinations[di]) { destinations[di].enabled = !destinations[di].enabled; el.classList.toggle('on', destinations[di].enabled); }
+        if (destinations[di]) {
+          destinations[di].enabled = !destinations[di].enabled;
+          el.classList.toggle('on', destinations[di].enabled);
+          el.closest('[data-dest-card]')?.classList.toggle('is-off', !destinations[di].enabled);
+        }
         return;
-      case 'edit-dest': collectFromDOM(); editingDest = di; render(); break;
+      case 'result-toggle': {
+        const panel = document.getElementById(el.dataset['result'] ?? '');
+        if (panel) panel.dataset['open'] = panel.dataset['open'] === '1' ? '0' : '1';
+        break;
+      }
+      case 'result-dismiss': {
+        // Clearing the STATE, not just the element: a re-render would otherwise
+        // bring it straight back.
+        if (el.dataset['result'] === 'dryrun-panel') { dryRunFor = null; dryRunResults = null; }
+        else digestPreviewText = null;
+        collectFromDOM(); render();
+        break;
+      }
+      case 'edit-dest': if (isInAppDest(destinations[di] ?? {})) break; collectFromDOM(); editingDest = di; render(); break;
       case 'done-dest': collectFromDOM(); editingDest = -1; render(); break;
       case 'add-dest': collectFromDOM(); destinations.push({ id: genId(), name: '', type: 'discord', url: '', token: '', chat_id: '', enabled: true }); editingDest = destinations.length - 1; render(); break;
-      case 'ask-remove-dest': collectFromDOM(); pendingDelete = destinations[di]?.id ?? null; render(); break;
+      case 'ask-remove-dest': if (isInAppDest(destinations[di] ?? {})) break; collectFromDOM(); pendingDelete = destinations[di]?.id ?? null; render(); break;
       case 'cancel-remove': pendingDelete = null; render(); break;
-      case 'remove-dest': collectFromDOM(); pendingDelete = null; destinations.splice(di, 1); if (editingDest === di) editingDest = -1; else if (editingDest > di) editingDest--; render(); break;
+      case 'remove-dest': if (isInAppDest(destinations[di] ?? {})) break; collectFromDOM(); pendingDelete = null; destinations.splice(di, 1); if (editingDest === di) editingDest = -1; else if (editingDest > di) editingDest--; render(); break;
       case 'test-dest': void testDest(di); break;
       // ── rules / conditions ──
       case 'rule-toggle':
         if (rules[ri]) {
           rules[ri].enabled = !rules[ri].enabled;
           el.classList.toggle('on', rules[ri].enabled);
-          el.closest('.alerts-rule-row')?.classList.toggle('rule-row-disabled', !rules[ri].enabled);
+          el.closest('[data-rule-card]')?.classList.toggle('is-off', !rules[ri].enabled);
         }
         return;
       case 'edit-rule': collectFromDOM(); editingRule = ri; render(); break;

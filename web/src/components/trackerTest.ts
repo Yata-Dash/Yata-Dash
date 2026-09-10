@@ -48,8 +48,13 @@ function pillMeta(c: CheckResult): PillMeta {
   switch (c.status) {
     case 'ok':             return { cls: 'ok',   icon: 'fa-circle-check',  word: 'Working' };
     case 'fail':           return { cls: 'fail', icon: 'fa-circle-xmark',  word: 'Failed' };
-    case 'not_configured': return { cls: 'cfg',  icon: 'fa-circle-minus',  word: 'Not set up' };
-    case 'blocked':        return { cls: 'cfg',  icon: 'fa-clock',         word: 'Rate-limited' };
+    // Two different amber pills reading "Not set up" and "Rate-limited" were
+    // indistinguishable at a glance, which matters because they call for
+    // opposite responses: one needs a credential, the other needs patience.
+    // Amber keeps the one that wants action; yellow takes the one that only
+    // wants time, and the hourglass is not another circle.
+    case 'not_configured': return { cls: 'cfg',  icon: 'fa-circle-minus',    word: 'Not set up' };
+    case 'blocked':        return { cls: 'wait', icon: 'fa-hourglass-half',  word: 'Rate-limited' };
     default:               return { cls: 'na',   icon: 'fa-minus',         word: 'N/A' };
   }
 }
