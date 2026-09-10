@@ -46,8 +46,12 @@ func (d *DB) AddAlert(a Alert) error {
 		a.RuleID, a.TrackerID).Scan(&n); err == nil && n > 0 {
 		return nil
 	}
+	// OR IGNORE against the partial unique index: the COUNT above is a fast
+	// path, not the guarantee. Two passes can both read zero and both insert,
+	// and a duplicate row in a worklist is exactly what the guard exists to
+	// prevent — so the second insert is dropped rather than raced for.
 	_, err := d.sql.Exec(
-		`INSERT INTO alerts (at, rule_id, rule_name, tracker_id, tracker_name, title, body, read_at)
+		`INSERT OR IGNORE INTO alerts (at, rule_id, rule_name, tracker_id, tracker_name, title, body, read_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
 		a.At, a.RuleID, a.RuleName, a.TrackerID, a.TrackerName, a.Title, a.Body)
 	return err

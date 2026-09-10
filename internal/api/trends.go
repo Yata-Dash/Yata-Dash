@@ -62,7 +62,16 @@ func addScrapeSignals(d *Deps, t models.Tracker, tc *notify.TrendContext) {
 	// Only meaningful where scraping is possible at all — a tracker that is
 	// never scraped can neither hit a cap nor have a cookie go stale, and
 	// reporting either would be a warning about something Yata does not do.
-	if rs.SkipHTMLScrape || rs.DisableScraping {
+	//
+	// The def's own two flags are not the whole list. An opted-out tracker, a
+	// global API-only mode and a per-tracker API-only override each stop
+	// scraping just as completely. ScrapeLimited was already safe by accident
+	// — scrape.Evaluate returns a different reason for those — but the cookie
+	// check reads stored health directly, so a record left over from before
+	// scraping was turned off would raise "cookie expired" about scrapes that
+	// no longer happen.
+	if rs.SkipHTMLScrape || rs.DisableScraping || rs.OptedOut ||
+		d.Cfg.Settings().APIOnlyMode || t.APIOnly {
 		return
 	}
 	if pol := scrape.Evaluate(d.Cfg.Settings(), t, rs, d.DB, time.Now()); !pol.Allowed && pol.Reason == "daily_limit" {

@@ -188,6 +188,23 @@ func (d *DB) migrate() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_alerts_at ON alerts (at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alerts_unread ON alerts (read_at, rule_id, tracker_id)`,
+		// Clear any duplicate the old check-then-insert let through, BEFORE the
+		// unique index below. A CREATE UNIQUE INDEX over existing duplicates
+		// fails, and a failed migration aborts Open — so shipping the index
+		// without this would refuse to start exactly the installs that hit the
+		// bug it fixes.
+		//
+		// The oldest survives: the guard's premise is that you have not read the
+		// first one yet, so the later copies are the ones saying nothing new.
+		`DELETE FROM alerts WHERE read_at = 0 AND id NOT IN (
+		   SELECT MIN(id) FROM alerts WHERE read_at = 0 GROUP BY rule_id, tracker_id
+		 )`,
+		// The "one unread alert per rule per tracker" rule, as a constraint
+		// rather than a SELECT the writer hopes nothing races. AddAlert still
+		// checks first so the common case does no wasted insert; this is what
+		// makes it true.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_unread_one
+		   ON alerts (rule_id, tracker_id) WHERE read_at = 0`,
 		// Read-only integration tokens (Settings → Integrations → API Tokens).
 		// Only the SHA-256 hash is stored; the plaintext token is shown once.
 		`CREATE TABLE IF NOT EXISTS api_tokens (

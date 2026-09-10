@@ -104,7 +104,7 @@ func (c *Client) FetchGroups(t models.Tracker) ([]byte, *Error) {
 	// Never the raw body: CanonicalLadder projects it down to the ladder fields
 	// Yata models, so nothing account-specific the endpoint carries — it is a
 	// /api/user route — can reach the caller or the store.
-	canonical, err := defs.CanonicalLadder(body)
+	canonical, err := defs.CanonicalLadder(body, *spec)
 	if err != nil {
 		return nil, errf("parse_error", err)
 	}

@@ -363,11 +363,24 @@ var thresholdOps = map[string]bool{"lt": true, "lte": true, "gt": true, "gte": t
 //
 // Erring towards silence: a standing state predicate ("reachable is false")
 // is missed until it next changes. Better than a panel nobody reads.
+// standingProblems are the boolean fields that describe an ongoing fault
+// rather than a state of health. The operator test alone excluded them, which
+// is why the seeded scrape-limit and expired-cookie rules never appeared on a
+// restart: they are is_true predicates, and both are exactly the kind of
+// outstanding problem the panel exists to list. "reachable is_true" stays out
+// for the opposite reason — it is true of every healthy tracker, so priming on
+// it filled the panel with good news.
+var standingProblems = map[string]bool{"scrape_limited": true, "cookie_expired": true}
+
 func standingRule(rule models.AlertRule) bool {
 	for _, c := range rule.Conditions {
-		if !thresholdOps[c.Op] {
-			return false
+		if thresholdOps[c.Op] {
+			continue
 		}
+		if standingProblems[c.Field] {
+			continue
+		}
+		return false
 	}
 	return len(rule.Conditions) > 0
 }

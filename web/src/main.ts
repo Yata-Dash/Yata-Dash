@@ -903,6 +903,11 @@ function updateSummary() { /* summary pills removed — agg cards cover totals *
 // ── Refresh scheduling ────────────────────────────────────────────────────
 async function fullRefreshCycle(force = false) {
   await refreshAllStats(force);
+  // A refresh is when rules are evaluated, so it is also when the bubble can
+  // become wrong. Reading it only at boot meant an alert raised while the app
+  // sat open showed no count until the next reload — on the one control whose
+  // whole job is to say that something happened.
+  void refreshAlertCount();
   await loadHistory();
   await loadScrapeStatus();
   scrapeWhatIsAllowed();
