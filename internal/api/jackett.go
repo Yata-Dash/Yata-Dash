@@ -106,10 +106,7 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 			return
 		}
 
-		existing := map[string]bool{}
-		for _, t := range d.Cfg.Trackers() {
-			existing[normHost(t.URL)] = true
-		}
+		existing := d.indexExisting()
 
 		out := make([]prowlarrIndexer, 0, len(list))
 		for _, ix := range list {
@@ -147,7 +144,7 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 				entry.DefKey = td.Key
 				entry.DefApproval = td.ApprovalStatus()
 			}
-			entry.AlreadyAdded = existing[normHost(entry.BaseURL)]
+			entry.AlreadyAdded = existing.has(entry.BaseURL, entry.DefKey)
 			out = append(out, entry)
 		}
 

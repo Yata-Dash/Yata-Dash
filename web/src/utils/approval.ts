@@ -17,7 +17,11 @@ export function approvalTitle(status?: string, note?: string): string {
   if (status === 'pending') {
     return 'Approval has been requested from this tracker’s staff — awaiting a reply. Use at your own risk.';
   }
-  return 'Scraping this tracker has not been officially approved by its staff — use at your own risk.';
+  // Deliberately says nothing about scraping. Most defs are API-only, and an
+  // API-only tracker reading "scraping has not been approved" looks like a
+  // fault in Yata — worst on a tracker whose every endpoint works. The claim
+  // that matters is the same either way: no staff has signed this off.
+  return 'Not officially approved by staff — use at your own risk.';
 }
 
 /** Small inline warning icon (FA triangle) with the tooltip. */

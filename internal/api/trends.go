@@ -11,6 +11,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
+	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 )
 
 // buildTrendContext computes tracker t's standing-guard signals from its
@@ -31,12 +32,44 @@ func buildTrendContext(d *Deps, t models.Tracker, merged models.MergedStats, rat
 		minRatio = td.Rules.MinRatio
 	}
 
-	return notify.TrendContext{
+	tc := notify.TrendContext{
 		RatioMinEtaDays:   ratioEtaDays(mergedFieldString(merged, "ratio"), minRatio, signals.RatioPerDay),
 		BufferZeroEtaDays: bufferZeroEtaDays(mergedFieldString(merged, "buffer"), signals.BufferPerDay),
 		SeedSizeDropPct:   signals.SeedSizeDrop7dPct,
 		SeedingDropPct:    signals.SeedingDrop7dPct,
 		GoalsBehind:       goalsBehindLabels(t, merged, rates, time.Now()),
+	}
+	addScrapeSignals(d, t, &tc)
+	return tc
+}
+
+// buildTrendContextFor is buildTrendContext without the stats/rates arguments,
+// for callers (and tests) that only need the scrape signals.
+func buildTrendContextFor(d *Deps, t models.Tracker) notify.TrendContext {
+	var tc notify.TrendContext
+	addScrapeSignals(d, t, &tc)
+	return tc
+}
+
+// addScrapeSignals fills the two conditions that were header banners: at the
+// daily scrape limit, and session cookie expired.
+//
+// Read here rather than from /api/scrape-status because that endpoint answers
+// the browser; the engine needs the same facts on the server, for the same
+// tracker, in the same pass that evaluates its rules.
+func addScrapeSignals(d *Deps, t models.Tracker, tc *notify.TrendContext) {
+	rs := d.Reg.ResolveScrape(t.URL, t.Type)
+	// Only meaningful where scraping is possible at all — a tracker that is
+	// never scraped can neither hit a cap nor have a cookie go stale, and
+	// reporting either would be a warning about something Yata does not do.
+	if rs.SkipHTMLScrape || rs.DisableScraping {
+		return
+	}
+	if pol := scrape.Evaluate(d.Cfg.Settings(), t, rs, d.DB, time.Now()); !pol.Allowed && pol.Reason == "daily_limit" {
+		tc.ScrapeLimited = true
+	}
+	if h, err := d.DB.GetScrapeHealth(t.ID); err == nil && !h.LastOK && cookieExpired(h) {
+		tc.CookieExpiredKind = h.LastKind
 	}
 }
 

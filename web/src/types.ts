@@ -330,7 +330,6 @@ export interface AppSettings {
   show_target_etas: boolean | null; // dashboard target time estimates; null = true
   show_rate_hovers: boolean | null; // per-day trend tooltips on stat hover; null = true
   duration_format: 'ym' | 'days' | string; // "" = "ym" (1Y 9M style)
-  profile_auto_sync: boolean;
   api_only_mode: boolean;           // disable all HTML scraping globally
   scrape_interval_minutes: number;  // min 60 — backend enforces
   max_scrapes_per_day: number;      // 0 = unlimited

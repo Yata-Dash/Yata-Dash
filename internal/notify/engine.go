@@ -103,7 +103,20 @@ type TrendContext struct {
 	// per dated target row (see internal/api/pacing.go) currently behind or
 	// overdue on its deadline. Empty/nil = on pace for every dated goal.
 	GoalsBehind []string
+
+	// ScrapeLimited and CookieExpired were header banners dismissed to
+	// sessionStorage, so they came back every session and were re-dismissed
+	// forever. As conditions they get a rule's cooldown, a per-tracker name,
+	// and a place in the notification centre — and they can be webhooked, which
+	// a banner never could.
+	ScrapeLimited bool
+	// CookieExpiredKind is the failure kind behind CookieExpired, for the
+	// message ("http_403" reads very differently from "login_page").
+	CookieExpiredKind string
 }
+
+// CookieExpired reports whether the session cookie has stopped working.
+func (t TrendContext) CookieExpired() bool { return t.CookieExpiredKind != "" }
 
 // Evaluate runs every rule for one tracker against its merged stats. reachable
 // reports whether the latest fetch succeeded (drives the `reachable` field).
@@ -147,7 +160,7 @@ func (e *Engine) Evaluate(t models.Tracker, merged models.MergedStats, reachable
 			// without this it would never appear at all — the condition only
 			// fires on a false→true edge, so it would wait until the user fixed
 			// it and let it lapse again.
-			e.recordOnly(rule, t, describeMatch(rule, merged, cur, prev, reachable, trends))
+			e.recordOnly(cfg, rule, t, describeMatch(rule, merged, cur, prev, reachable, trends))
 		}
 		e.firing[key] = matched
 	}
@@ -366,8 +379,14 @@ func standingRule(rule models.AlertRule) bool {
 // Deliberately not a flag on send(): send is the one place every alert
 // converges, and a "don't actually send" branch there is one edit away from
 // silently swallowing real webhooks.
-func (e *Engine) recordOnly(rule models.AlertRule, t models.Tracker, detail string) {
+func (e *Engine) recordOnly(cfg models.NotificationConfig, rule models.AlertRule, t models.Tracker, detail string) {
 	if e.rec == nil {
+		return
+	}
+	// Routing applies here too. Without this a rule addressed to a webhook only
+	// would still appear in the centre, purely because it happened to be true
+	// at startup — the one path where "record" and "deliver" could disagree.
+	if inApp, _ := SplitDestinations(resolveDestinations(cfg, rule)); !inApp {
 		return
 	}
 	e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name,
@@ -388,25 +407,20 @@ func (e *Engine) send(cfg models.NotificationConfig, rule models.AlertRule, t mo
 	title := fmt.Sprintf("Yata alert: %s", rule.Name)
 	msg := fmt.Sprintf("%s — %s", t.Name, detail)
 
-	// Stamped BEFORE the destination check below, not after. Cooldown was only
-	// ever tracked for users who had somewhere to send to, so a destination-less
-	// user had none at all — which did not show while the alert was being
-	// dropped anyway, and would show immediately as one panel row per poll.
+	// Stamped before anything is delivered. Cooldown was only ever tracked for
+	// users who had somewhere to send to, so a destination-less user had none at
+	// all — invisible while the alert was being dropped, one row per poll now.
 	e.lastFired[key] = time.Now()
 
-	// Recorded BEFORE the destination check too, and this is the whole point:
-	// with no destination configured every alert used to be evaluated, matched
-	// and thrown away. Recording after the check would inherit the bug the
-	// panel exists to fix.
-	if e.rec != nil {
+	// The notification centre is a destination like any other, which is what
+	// lets one rule go in-app only and the next to Discord only. A rule that
+	// picks nothing gets both, so an install with no webhook still works — the
+	// whole point of the panel.
+	inApp, webhooks := SplitDestinations(resolveDestinations(cfg, rule))
+	if inApp && e.rec != nil {
 		e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name, title, msg)
 	}
-
-	dests := resolveDestinations(cfg, rule)
-	if len(dests) == 0 {
-		return
-	}
-	for _, d := range dests {
+	for _, d := range webhooks {
 		go func(dest models.NotifyDestination) {
 			if err := Send(dest, title, msg); err != nil {
 				if e.log != nil {
@@ -425,6 +439,22 @@ func (e *Engine) send(cfg models.NotificationConfig, rule models.AlertRule, t mo
 // rule.Destinations = all enabled destinations).
 func resolveDestinations(cfg models.NotificationConfig, rule models.AlertRule) []models.NotifyDestination {
 	return ResolveDestinations(cfg, rule.Destinations)
+}
+
+// SplitDestinations separates the notification centre from the webhooks.
+//
+// A partition rather than a filter so a caller cannot accidentally hand the
+// centre to Send(), which has no URL to POST to. Send() refuses it as well —
+// two guards, because the failure would otherwise be silent.
+func SplitDestinations(dests []models.NotifyDestination) (inApp bool, webhooks []models.NotifyDestination) {
+	for _, d := range dests {
+		if d.IsInApp() {
+			inApp = true
+			continue
+		}
+		webhooks = append(webhooks, d)
+	}
+	return inApp, webhooks
 }
 
 // ResolveDestinations returns the enabled destinations matching ids (empty =
@@ -493,6 +523,10 @@ func evalCondition(c models.Condition, merged models.MergedStats, cur, prev map[
 		return trendMatch(c, trends.SeedingDropPct)
 	case "goal_behind_pace":
 		return boolMatch(c.Op, len(trends.GoalsBehind) > 0)
+	case "scrape_limited":
+		return boolMatch(c.Op, trends.ScrapeLimited)
+	case "cookie_expired":
+		return boolMatch(c.Op, trends.CookieExpired())
 	}
 	if c.Op == "changed" {
 		p, hadPrev := prev[c.Field]
@@ -688,6 +722,16 @@ func describeCondition(c models.Condition, merged models.MergedStats, cur, prev 
 			return "seeding count not dropping"
 		}
 		return fmt.Sprintf("seeding count down %s%% over 7d (%s %s%%)", formatPct(*trends.SeedingDropPct), opSymbol(c.Op), c.Value)
+	case "scrape_limited":
+		if !trends.ScrapeLimited {
+			return "not at the daily scrape limit"
+		}
+		return "hit the daily scrape limit"
+	case "cookie_expired":
+		if !trends.CookieExpired() {
+			return "session cookie working"
+		}
+		return "session cookie expired (" + trends.CookieExpiredKind + ") — re-copy it in Settings → Trackers"
 	case "goal_behind_pace":
 		if c.Op == "is_false" {
 			return "on pace for all goals"

@@ -134,10 +134,7 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 			return
 		}
 
-		existing := map[string]bool{}
-		for _, t := range d.Cfg.Trackers() {
-			existing[normHost(t.URL)] = true
-		}
+		existing := d.indexExisting()
 
 		out := make([]prowlarrIndexer, 0, len(raw))
 		for _, ix := range raw {
@@ -172,7 +169,7 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 				entry.DefKey = td.Key
 				entry.DefApproval = td.ApprovalStatus()
 			}
-			entry.AlreadyAdded = existing[normHost(entry.BaseURL)]
+			entry.AlreadyAdded = existing.has(entry.BaseURL, entry.DefKey)
 			out = append(out, entry)
 		}
 
@@ -187,6 +184,42 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 		}
 		jsonOK(w, out)
 	}
+}
+
+// existingTrackers indexes the configured trackers so an indexer coming back
+// from Prowlarr or Jackett is recognised however its URL is spelled.
+//
+// Matching on the host alone was not enough. A tracker with more than one
+// domain is one tracker: RetroFlix is retroflix.net, Prowlarr's stock
+// definition ships retroflix.club, and the def already lists the second as an
+// alias of the first. Comparing hosts made every import offer to add a
+// duplicate of a tracker that was already there — and pre-ticked it, because
+// "already added" is also what disables the checkbox.
+type existingTrackers struct {
+	hosts map[string]bool
+	defs  map[string]bool
+}
+
+func (d *Deps) indexExisting() existingTrackers {
+	e := existingTrackers{hosts: map[string]bool{}, defs: map[string]bool{}}
+	for _, t := range d.Cfg.Trackers() {
+		e.hosts[normHost(t.URL)] = true
+		// The stored tracker carries no def key — that is resolved per request
+		// — so resolve it the same way the incoming indexer is resolved, which
+		// also means both sides honour the def's aliases.
+		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
+			e.defs[td.Key] = true
+		}
+	}
+	return e
+}
+
+// has reports whether a tracker is already configured, by URL or by def.
+func (e existingTrackers) has(rawURL, defKey string) bool {
+	if e.hosts[normHost(rawURL)] {
+		return true
+	}
+	return defKey != "" && e.defs[defKey]
 }
 
 // normHost lowercases and strips scheme/trailing slash for URL comparison.

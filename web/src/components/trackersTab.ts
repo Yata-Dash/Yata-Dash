@@ -9,6 +9,7 @@ import * as api from '../api';
 import { appSettings } from '../state';
 import { approvalIcon, approvalTitle, approvalWarns } from '../utils/approval';
 import { jsId, esc, safeUrl } from '../utils/format';
+import { getFaviconUrl } from '../utils/parse';
 import { findOptOut } from '../utils/optout';
 import { renderTestPills } from './trackerTest';
 import { capabilityRow } from './capabilities';
@@ -31,8 +32,10 @@ let _testing = new Set<string>(); // tracker ids with a test in flight
 // Column sorting
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Sortable columns. "Actions" isn't one — there's nothing to order by. */
-type SortKey = 'enabled' | 'name' | 'url' | 'type' | 'def' | 'test';
+/** Sortable columns. "Actions" isn't one — there's nothing to order by, and
+ *  neither is the URL any more: it now sits under the name, where sorting by
+ *  it would reorder the rows by a string most people never read. */
+type SortKey = 'enabled' | 'name' | 'type' | 'caps' | 'def' | 'test';
 
 let _sortKey: SortKey | null = null; // null = the order trackers were added in
 let _sortAsc = true;
@@ -55,11 +58,21 @@ function testRank(res: TrackerTestResult | undefined): number {
   return Math.min(rank(res.api), rank(res.scrape));
 }
 
+/** Ladder coverage as a fraction, for the Capabilities column. Ascending puts
+ *  the least-covered trackers first, which is the only reason to sort this
+ *  column — "what can Yata actually not track here?". A tracker with no ladder
+ *  data sorts after both, since "nothing known" is not "nothing covered". */
+function capsRank(t: Tracker): number {
+  const c = t.capabilities;
+  if (!c || !c.known || c.ladder_total <= 0) return 2;
+  return c.met_api / c.ladder_total;
+}
+
 function sortValue(t: Tracker, key: SortKey): string | number {
   switch (key) {
     case 'enabled': return t.enabled === false ? 1 : 0; // enabled first
     case 'name':    return t.name.toLowerCase();
-    case 'url':     return t.url.toLowerCase();
+    case 'caps':    return capsRank(t);
     // Sort by what's on screen (the type's label), not the raw key.
     case 'type':    return typeLabel(t.type).toLowerCase();
     // Def-backed trackers alphabetically, then the manual ones as a block —
@@ -113,6 +126,33 @@ function paintSortHeaders(): void {
 // Configured trackers table
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** The tracker's own favicon, when the display setting asks for them.
+ *
+ *  Drawn for every tracker with a URL — manual and disabled included. A
+ *  favicon is a public file served to anyone who loads the site, so fetching
+ *  one is not the kind of contact that needs a tracker's approval, and a row
+ *  that loses its icon for being switched off just breaks the column's
+ *  alignment.
+ *
+ *  A failed load swaps in a placeholder rather than hiding the image: hiding
+ *  it shifts that row's name left and the column stops lining up, which is
+ *  worse than a generic mark. */
+function favicon(t: Tracker): string {
+  if (!appSettings.show_favicons || !t.url) return '';
+  const src = getFaviconUrl(t.url);
+  if (!src) return '<span class="trk-fav trk-fav-ph"></span>';
+  return `<img class="trk-fav" src="${esc(src)}" alt="" loading="lazy" onerror="trkFavFailed(this)">`;
+}
+
+/** Replace a favicon that did not load with a themed placeholder mark. Global
+ *  because it is an inline onerror on markup built as a string. */
+export function trkFavFailed(img: HTMLImageElement): void {
+  const ph = document.createElement('span');
+  ph.className = 'trk-fav trk-fav-ph';
+  ph.title = 'No favicon';
+  img.replaceWith(ph);
+}
+
 /** Tooltip for the opt-out badge: explains Yata has stopped contacting it. */
 function optedOutTitle(t: Tracker): string {
   const note = t.opted_out_note ? ` ${t.opted_out_note}` : '';
@@ -145,32 +185,39 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
     const typeBadge = needsType
       ? ` <span class="trk-def-badge needs-type" title="Yata has no definition for this tracker and no type is set, so nothing is being collected. Open Edit to pick a type or run Detect.">needs type</span>`
       : '';
+    // Capabilities moved out of this cell into a column of their own: def keys
+    // are all different lengths, so icons trailing them never lined up down
+    // the table and could not be compared at a glance, which is the only
+    // thing that column is for.
     const defBadge = (t.def_key
-      ? `<span class="trk-def-badge">def: ${esc(t.def_key)}</span>`
+      ? `<span class="trk-def-badge" title="Definition file: ${esc(t.def_key)}.json">${esc(t.def_key)}</span>`
       : `<span class="trk-def-badge manual">manual</span>`)
       + typeBadge
       + approvalIcon(t.def_approval, t.def_approval_note)
-      + optOutBadge
-      + capabilityRow(t.capabilities);
+      + optOutBadge;
     const testCell = _testing.has(t.id)
       ? `<span class="trk-test-untested"><i class="fas fa-spinner fa-spin"></i> Testing…</span>`
       : renderTestPills(_testStatus[t.id]);
     const confirming = _pendingRowDelete === t.id;
+    // Icons only, with the action name on hover: three labelled buttons a row
+    // times twenty-odd rows was most of the table's width and all of its
+    // noise. Delete is separated and red, so the destructive one is neither
+    // adjacent to Edit nor the same colour as it.
     const actions = confirming
       ? `<span class="trk-del-confirm">Delete <strong>${esc(t.name)}</strong>?</span>
          <button class="btn btn-danger btn-sm" onclick="trkConfirmDelete('${jsId(t.id)}')">Delete</button>
          <button class="btn btn-ghost btn-sm" onclick="trkCancelDelete()">Cancel</button>`
-      : `<button class="btn btn-ghost btn-sm" onclick="trkTest('${jsId(t.id)}')" ${_testing.has(t.id) ? 'disabled' : ''} title="Test API & scrape connectivity">
-           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-           Test
+      : `<button class="trk-act" onclick="trkTest('${jsId(t.id)}')" ${_testing.has(t.id) ? 'disabled' : ''}
+           title="Test — check the API and scrape connection" aria-label="Test ${esc(t.name)}">
+           <i class="fas fa-vial"></i>
          </button>
-         <button class="btn btn-ghost btn-sm" onclick="openEditModal('${jsId(t.id)}')">
-           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-           Edit
+         <button class="trk-act" onclick="openEditModal('${jsId(t.id)}')"
+           title="Edit — name, URL, credentials and overrides" aria-label="Edit ${esc(t.name)}">
+           <i class="fas fa-pen-to-square"></i>
          </button>
-         <button class="btn btn-ghost btn-sm trk-del-btn" onclick="trkAskDelete('${jsId(t.id)}')">
-           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-           Delete
+         <button class="trk-act trk-act-danger" onclick="trkAskDelete('${jsId(t.id)}')"
+           title="Delete — remove this tracker and its history" aria-label="Delete ${esc(t.name)}">
+           <i class="fas fa-trash"></i>
          </button>`;
     return `<tr class="trk-row${t.enabled === false ? ' trk-row-disabled' : ''}" id="trk-row-${esc(t.id)}">
       <td class="trk-td-toggle">
@@ -178,9 +225,14 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
           title="${t.enabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable'}"
           onclick="trkToggleEnabled('${jsId(t.id)}')"><div class="toggle-thumb"></div></div>
       </td>
-      <td class="trk-td-name"><span class="trk-name">${esc(t.name)}</span>${abbr}</td>
-      <td class="trk-td-url"><a href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener noreferrer">${esc(t.url)}</a></td>
+      <td class="trk-td-name">
+        <div class="trk-id">${favicon(t)}<div class="trk-id-text">
+          <div class="trk-id-top"><span class="trk-name">${esc(t.name)}</span>${abbr}</div>
+          <a class="trk-id-url" href="${esc(safeUrl(t.url))}" target="_blank" rel="noopener noreferrer">${esc(t.url)}</a>
+        </div></div>
+      </td>
       <td class="trk-td-type" title="Type key: ${esc(t.type)}">${esc(typeLabel(t.type))}</td>
+      <td class="trk-td-caps">${capabilityRow(t.capabilities, { userApiOnly: t.api_only })}</td>
       <td class="trk-td-def">${defBadge}</td>
       <td class="trk-td-test">${testCell}</td>
       <td class="trk-td-actions">${actions}</td>
@@ -366,7 +418,42 @@ export function prefillImportCreds(): void {
     const secIn = document.getElementById(`${key}-key`) as HTMLInputElement | null;
     if (urlIn && !urlIn.value && saved.url) urlIn.value = saved.url;
     if (secIn && !secIn.value && saved.secret) secIn.value = saved.secret;
+    renderImportConn(key);
   }
+}
+
+/** The collapsed connection line: what is saved, without showing the fields.
+ *  Never the secret — only whether one is held. With nothing saved the fields
+ *  open themselves, since there is nothing to collapse and filling them in is
+ *  the whole job. */
+function renderImportConn(key: ImportKey): void {
+  const saved = IMPORT_SOURCES[key].saved();
+  const summary = document.getElementById(`${key}-conn-summary`);
+  const fields = document.getElementById(`${key}-conn`);
+  if (summary) {
+    summary.textContent = saved.url
+      ? `${saved.url}${saved.secret ? ' · key saved' : ''}`
+      : 'Not set up';
+    summary.classList.toggle('is-unset', !saved.url);
+  }
+  if (fields && !saved.url) setImportConnOpen(key, true);
+}
+
+function setImportConnOpen(key: ImportKey, open: boolean): void {
+  const fields = document.getElementById(`${key}-conn`);
+  const btn = document.getElementById(`${key}-conn-btn`);
+  if (!fields) return;
+  fields.hidden = !open;
+  btn?.setAttribute('aria-expanded', String(open));
+  if (btn) btn.textContent = open ? 'Done' : 'Edit';
+}
+
+export function toggleImportConn(key: ImportKey): void {
+  const fields = document.getElementById(`${key}-conn`);
+  if (!fields) return;
+  const open = fields.hidden;
+  setImportConnOpen(key, open);
+  if (!open) renderImportConn(key); // collapsing — refresh what the line says
 }
 
 export function toggleImportSection(key: ImportKey): void {
@@ -428,6 +515,7 @@ export async function fetchImportIndexers(key: ImportKey): Promise<void> {
   src.save(url);
   const secIn = document.getElementById(`${key}-key`) as HTMLInputElement | null;
   if (secIn && secIn.value && secIn.value !== MASKED_KEY) secIn.value = MASKED_KEY;
+  renderImportConn(key);
 
   _importLists[key] = data;
   if (!data.length) {
@@ -449,8 +537,10 @@ function renderImportResults(key: ImportKey, results: HTMLElement): void {
       badges.push(`<span class="prowlarr-badge approval" title="${esc(approvalTitle(ix.def_approval))}">⚠ not approved</span>`);
     if (ix.has_api_key)    badges.push(`<span class="prowlarr-badge key">has API key</span>`);
     if (ix.session_cookie) badges.push(`<span class="prowlarr-badge key">has cookie</span>`);
-    if (ix.privacy)        badges.push(`<span class="prowlarr-badge privacy">${esc(ix.privacy)}</span>`);
-    if (ix.already_added)  badges.push(`<span class="prowlarr-badge added">already added</span>`);
+    // Public and private are the difference between a tracker worth watching
+    // and one anybody can reach, so they should not look identical.
+    if (ix.privacy)        badges.push(`<span class="prowlarr-badge privacy privacy-${esc(ix.privacy)}">${esc(ix.privacy)}</span>`);
+    if (ix.already_added)  badges.push(`<span class="prowlarr-badge added">✓ added</span>`);
     if (optedOut)          badges.push(`<span class="prowlarr-badge optout">opted out</span>`);
     return `<label class="prowlarr-row${disabled ? ' disabled' : ''}">
       <input type="checkbox" class="prowlarr-check" value="${i}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}

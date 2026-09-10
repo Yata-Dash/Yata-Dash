@@ -230,7 +230,6 @@ type Settings struct {
 	PrivateMode     bool   `json:"private_mode"`      // blur usernames
 	ShowFavicons    bool   `json:"show_favicons"`
 	ShowStatSources bool   `json:"show_stat_sources"` // per-stat api/scrape origin dot
-	ProfileAutoSync bool   `json:"profile_auto_sync"` // auto-scrape on refresh when allowed
 
 	// ShowPathwayEtas toggles "estimated time to reach" chips in the
 	// Pathways view (path/class headers + exact account-age countdowns).
@@ -386,7 +385,6 @@ func DefaultSettings() Settings {
 		TrackerNameMode: "name",
 		GroupNameStyle:  "styled",
 		UsernameStyle:   "plain",
-		ProfileAutoSync: true,
 		// New-install default: a conservative 120 min. The HARD FLOOR is still
 		// 60 (see scrape.HardFloorMinutes + the < 60 clamps) — users may lower
 		// it to 60 but not below; unchanged, it stays at 120.
@@ -468,15 +466,30 @@ type DigestConfig struct {
 }
 
 // NotifyDestination is one webhook target. Type selects the payload format.
+// InAppDestinationID is the fixed id of the notification centre, which is a
+// DESTINATION like any webhook — that is what lets one rule go in-app only,
+// another to Discord only, and the default (no destination picked) to both.
+//
+// A literal rather than a generated id so it is stable across configs, and one
+// that cannot collide: every other destination id is 16 hex characters.
+const InAppDestinationID = "in-app"
+
+// InAppDestinationType marks the notification centre. Send() refuses it — it
+// has no URL and nothing to POST to; the engine records it instead.
+const InAppDestinationType = "in_app"
+
 type NotifyDestination struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
-	Type    string `json:"type"`    // discord | telegram | gotify | generic
+	Type    string `json:"type"`    // in_app | discord | telegram | gotify | generic
 	URL     string `json:"url"`     // webhook URL (discord/generic) or base URL (gotify)
 	Token   string `json:"token"`   // telegram bot token / gotify app token
 	ChatID  string `json:"chat_id"` // telegram chat id
 	Enabled bool   `json:"enabled"`
 }
+
+// IsInApp reports whether this destination is the notification centre.
+func (d NotifyDestination) IsInApp() bool { return d.Type == InAppDestinationType }
 
 // AlertRule fires a notification when its conditions become true for a tracker.
 type AlertRule struct {

@@ -8,7 +8,7 @@
   --border:#252b3b;--border2:#2e3548;
   --accent:#6d56eb;--accent-h:#5a44d4;--accent-glow:rgba(109,86,235,.25);
   --green:#22c55e;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
-  --teal:#2dd4bf;--purple:#a855f7;--orange:#f97316;--pink:#ec4899;
+  --teal:#2dd4bf;--purple:#a855f7;--orange:#f97316;--pink:#ec4899;--yellow:#facc15;
   --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
   --radius:10px;--radius-sm:6px;--shadow:0 4px 24px rgba(0,0,0,.4);
   --topbar-bg:rgba(13,15,20,.95);--table-hover:rgba(255,255,255,.025);
@@ -278,6 +278,7 @@ html{overflow-x:clip}
 .goal-date-btn--set{color:var(--accent)}
 .goal-date-btn--set:hover{color:var(--accent)}
 .goal-date-pop{position:absolute;top:calc(100% + 4px);right:0;z-index:40;display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 6px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+[hidden]{display:none!important}
 .goal-date-pop[hidden]{display:none}
 .goal-date-input{font-size:11px;width:132px}
 .goal-date-ok{color:var(--green)}
@@ -1070,7 +1071,10 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 /* Settings is a form, not a dashboard — capped so an ultrawide doesn't put a
    toggle a third of a metre from the label it belongs to. The tracker table
    inside it scrolls within this width as it always did. */
-.settings-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start;max-width:var(--reading-max)}
+/* 132px, not 190px: the widest label ("Integrations") is 73px, plus 28px of
+   button padding — so 190px left nearly half the rail empty and took the width
+   from the content beside it. */
+.settings-layout{display:grid;grid-template-columns:132px minmax(0,1fr);gap:20px;align-items:start;max-width:var(--reading-max)}
 .settings-tabs{display:flex;flex-direction:column;gap:4px;position:sticky;top:78px}
 .settings-tab{
   text-align:left;padding:9px 14px;border-radius:var(--radius-sm);
@@ -1117,8 +1121,28 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .trk-sort.active{color:var(--accent)}
 .trk-sort-ind{font-size:8px;line-height:1}
 .trk-table tbody td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;white-space:nowrap}
+/* ── Tracker identity cell ────────────────────────────────────────────────
+   The URL moved under the name: it is long, it is the widest column when it
+   has its own, and sorting by it was never worth the header it cost. */
+.trk-id{display:flex;align-items:center;gap:9px;min-width:0}
+.trk-id-text{min-width:0;display:flex;flex-direction:column;gap:1px}
+.trk-id-top{display:flex;align-items:center;gap:6px;min-width:0}
+.trk-id-url{
+  font-size:11px;color:var(--text3);font-family:'Geist Mono',monospace;text-decoration:none;
+  max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.trk-id-url:hover{color:var(--accent);text-decoration:underline}
+/* Fixed box whether the icon loads or not — a missing favicon that collapses
+   to nothing drags that one row's name out of line with every other. */
+.trk-fav{width:16px;height:16px;flex-shrink:0;border-radius:3px;object-fit:contain}
+.trk-fav-ph{
+  display:inline-block;background-color:currentColor;color:var(--text3);opacity:.4;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227.1%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3Cellipse%20cx%3D%228%22%20cy%3D%228%22%20rx%3D%223.2%22%20ry%3D%227.1%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3Cpath%20d%3D%22M1.2%208h13.6%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;
+          mask:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227.1%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3Cellipse%20cx%3D%228%22%20cy%3D%228%22%20rx%3D%223.2%22%20ry%3D%227.1%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3Cpath%20d%3D%22M1.2%208h13.6%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.4%22%2F%3E%3C%2Fsvg%3E") center/contain no-repeat;
+}
+.trk-td-caps{white-space:nowrap}
 .trk-table tbody tr:last-child td{border-bottom:none}
-.trk-row-disabled .trk-td-name,.trk-row-disabled .trk-td-url,.trk-row-disabled .trk-td-type,.trk-row-disabled .trk-td-def{opacity:.45}
+.trk-row-disabled .trk-td-name,.trk-row-disabled .trk-td-type,.trk-row-disabled .trk-td-caps,.trk-row-disabled .trk-td-def{opacity:.45}
 .trk-toggle{cursor:pointer}
 .trk-name{font-weight:600}
 .trk-abbr-badge{
@@ -1178,6 +1202,23 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 
 .trk-td-actions{text-align:right}
 .trk-td-actions .btn{margin-left:6px}
+/* ── Row actions ──────────────────────────────────────────────────────────
+   Icon-only, name on hover. Three labelled buttons per row was the widest
+   thing in the table and the same three words twenty times over. */
+.trk-act{
+  width:28px;height:28px;padding:0;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--surface2);color:var(--text3);
+  cursor:pointer;transition:color .15s,border-color .15s,background .15s;
+  display:inline-flex;align-items:center;justify-content:center;font-size:12px;
+}
+.trk-act + .trk-act{margin-left:5px}
+.trk-act:hover{color:var(--text);border-color:var(--accent);background:var(--surface3)}
+.trk-act:disabled{opacity:.4;cursor:default}
+.trk-act:disabled:hover{color:var(--text3);border-color:var(--border);background:var(--surface2)}
+/* Delete keeps its distance and its colour: next to Edit and identical to it
+   is how the wrong one gets clicked. */
+.trk-act-danger{margin-left:14px!important;color:var(--red);border-color:var(--error-border-md)}
+.trk-act-danger:hover{color:var(--red);border-color:var(--red);background:var(--error-bg)}
 .trk-del-btn:hover{color:var(--red);border-color:var(--error-border-md)}
 .trk-del-confirm{font-size:12px;color:var(--red);margin-right:4px}
 .trk-empty{padding:28px 16px!important;text-align:center;color:var(--text3);font-size:13px;white-space:normal!important}
@@ -1193,6 +1234,11 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .trk-test-pill.ok  {color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent);border-color:color-mix(in srgb,var(--green) 35%,transparent)}
 .trk-test-pill.fail{color:var(--red);  background:color-mix(in srgb,var(--red) 12%,transparent);  border-color:color-mix(in srgb,var(--red) 35%,transparent)}
 .trk-test-pill.cfg {color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent);border-color:color-mix(in srgb,var(--amber) 35%,transparent)}
+/* --yellow is new. :root in this file defines it, so every existing theme —
+   including one a user wrote before it existed — inherits a working value; the
+   var(..., var(--amber)) fallback is belt-and-braces for a theme that somehow
+   sees neither. */
+.trk-test-pill.wait{color:var(--yellow,var(--amber));background:color-mix(in srgb,var(--yellow,var(--amber)) 12%,transparent);border-color:color-mix(in srgb,var(--yellow,var(--amber)) 35%,transparent)}
 .trk-test-pill.na  {color:var(--text3);background:var(--surface3);border-color:var(--border2)}
 
 /* Edit-panel detailed result block */
@@ -1205,12 +1251,14 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .trk-test-row.ok   i{color:var(--green)}
 .trk-test-row.fail i{color:var(--red)}
 .trk-test-row.cfg  i{color:var(--amber)}
+.trk-test-row.wait i{color:var(--yellow,var(--amber))}
 .trk-test-row.na   i{color:var(--text3)}
 .trk-test-label{font-weight:600;color:var(--text);min-width:96px}
 .trk-test-word{font-weight:600}
 .trk-test-row.ok   .trk-test-word{color:var(--green)}
 .trk-test-row.fail .trk-test-word{color:var(--red)}
 .trk-test-row.cfg  .trk-test-word{color:var(--amber)}
+.trk-test-row.wait .trk-test-word{color:var(--yellow,var(--amber))}
 .trk-test-fields{color:var(--text3);font-size:11.5px}
 .trk-test-reason{color:var(--text3);font-size:11.5px}
 
@@ -1954,3 +2002,431 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .alerts-empty { padding: 26px 16px; text-align: center; font-size: 12px; color: var(--text3); }
 .alerts-empty-sub { font-size: 11px; opacity: .8; }
 .alerts-more { padding: 8px; border-top: 1px solid var(--border); text-align: center; }
+
+/* The notification centre in the destinations list: built in, so it shows what
+   it is instead of Edit/Delete controls that have nothing to act on. */
+.dest-row-builtin { font-size: 11px; color: var(--text3); font-style: italic; }
+@container (max-width: 420px) { .dest-row-builtin { display: none; } }
+
+/* ══ SETTINGS DESIGN LANGUAGE ══════════════════════════════════════════════
+   Six primitives every settings page is built from. See SETTINGS_DESIGN_PLAN.md.
+
+   Colour comes only from existing tokens — no new custom properties, so all
+   twelve themes (which are pure token blocks with no element selectors) keep
+   working untouched. Spacing uses literals deliberately: a theme should decide
+   colour, not layout. */
+
+/* ── Page header ──────────────────────────────────────────────────────────
+   The title had no weight and read as chrome, because the sidebar was the
+   thing telling you where you were. */
+.set-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; }
+.set-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase;
+  color: var(--text3); margin-bottom: 2px;
+}
+.set-head-text { min-width: 0; }
+.set-title {
+  font-size: 24px; font-weight: 650; letter-spacing: -.4px;
+  color: var(--text); margin: 0 0 4px;
+}
+.set-lede {
+  font-size: 13px; line-height: 1.5; color: var(--text2);
+  margin: 0; max-width: 68ch;
+}
+
+/* ── Section ──────────────────────────────────────────────────────────────
+   The unit of layout: sections flow into columns, never their contents. */
+/* A container, so field rows inside can respond to the width of their COLUMN
+   rather than of the viewport. With auto-fit columns the two are unrelated: a
+   section can be 340px wide on a 2560px screen, and a viewport media query
+   would happily keep a 190px label column in it. */
+.set-section { min-width: 0; container-type: inline-size; }
+.set-section + .set-section { margin-top: 26px; }
+.set-section-head { margin-bottom: 12px; }
+.set-section-title {
+  font-size: 13px; font-weight: 650; letter-spacing: .3px; text-transform: uppercase;
+  color: var(--text); margin: 0;
+}
+.set-section-note {
+  font-size: 12px; line-height: 1.5; color: var(--text3);
+  margin: 3px 0 0; max-width: 62ch;
+}
+
+/* ── Column flow ──────────────────────────────────────────────────────────
+   auto-fit decides the count from available width: one column on a phone,
+   several on an ultrawide, with no breakpoint list to keep in step. A section
+   that cannot survive being narrow opts out with .set-span. */
+.set-grid {
+  display: grid;
+  /* min(320px, 100%), not a bare 320px: on a narrow screen the minimum wins
+     and the track overflows its container, pushing the card past the viewport
+     edge. Capping the minimum at the available width makes the last step down
+     graceful instead. */
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 22px 26px; align-items: start;
+}
+.set-grid > .set-section + .set-section { margin-top: 0; }
+/* A section that spans every column. Use sparingly: a spanning item forces the
+   tracks to exist, so auto-fit can no longer collapse an empty one — two
+   sections in a grid that could fit three then sit in two-thirds of the width
+   with dead space beside them. A full-width block is usually better placed
+   AFTER the grid than inside it. */
+.set-span { grid-column: 1 / -1; }
+/* One grid cell holding several stacked sections — for pairing a short group
+   with another so a column is not left half empty beside a tall neighbour. */
+.set-stack { min-width: 0; }
+.set-grid + .set-section { margin-top: 26px; }
+
+/* ── Field row ────────────────────────────────────────────────────────────
+   A fixed label column so labels align down a page. Below 520px it stacks —
+   the label and its control stay together either way, which is the one thing
+   the column flow must never break. */
+.set-field {
+  display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr);
+  gap: 6px 14px; align-items: center; padding: 7px 0;
+}
+.set-field + .set-field { border-top: 1px solid var(--border); }
+.set-field-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.set-field-hint {
+  grid-column: 2; font-size: 11px; line-height: 1.45; color: var(--text3); margin-top: -2px;
+}
+.set-field-control { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+/* Full-width controls (a select, a text input) should fill their column
+   rather than sitting at some arbitrary intrinsic width. */
+.set-field-control > .form-input:only-child { flex: 1 1 auto; min-width: 0; }
+/* Narrow COLUMN: stack the label above its control. */
+@container (max-width: 420px) {
+  .set-field { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .set-field-hint { grid-column: 1; }
+}
+/* Narrow VIEWPORT: same, for anything not inside a .set-section container. */
+@media (max-width: 520px) {
+  .set-field { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .set-field-hint { grid-column: 1; }
+}
+
+/* ── Split layout ─────────────────────────────────────────────────────────
+   Settings on the left, a pinned aside on the right. Built for Display, where
+   the preview card exists to answer "what does this toggle do?" — which it can
+   only do while it is still on screen once you have scrolled to the toggle.
+   Below 1080px it stacks, aside first, and stops sticking: a pinned panel on a
+   short screen takes more than it gives. */
+.set-split { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 26px; align-items: start; }
+.set-split-main { min-width: 0; }
+/* The ASIDE stretches to the row height and the first thing in it pins, rather
+   than pinning the aside itself. Pinning the whole aside only works while its
+   content is shorter than the viewport — preview plus twelve swatches is not,
+   so it drifted off the top instead of holding. Stretching gives the sticky
+   child the full scroll range of the settings beside it. */
+.set-split-side { min-width: 0; align-self: stretch; }
+.set-split-side > .set-section:first-child { position: sticky; top: 78px; z-index: 1; }
+/* The preview sits on a surface of its own so the swatches cannot show through
+   as they scroll underneath it. */
+.set-split-side > .set-section:first-child { background: var(--surface); }
+@media (max-width: 1080px) {
+  .set-split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .set-split-side { align-self: auto; order: -1; }
+  .set-split-side > .set-section:first-child { position: static; }
+}
+
+/* ── Toggle row ───────────────────────────────────────────────────────────
+   A switch, a short label, and an info affordance carrying the detail.
+   The Display page had 15 of these each with a 77-258 character paragraph
+   under it, which is most of why it scrolled forever — and for the settings
+   the preview now demonstrates, the paragraph was explaining something the
+   user could simply be shown. */
+.set-toggle {
+  /* 5px gap plus 5px on the switch: the switch stays visually separate at
+     10px, while the info marker sits 5px from the label it belongs to. */
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 0; cursor: pointer; min-width: 0;
+}
+.set-toggle > .toggle-track { margin-right: 5px; }
+.set-toggle + .set-toggle { border-top: 1px solid var(--border); }
+/* A radio group following a run of toggles needs air, or its bold heading
+   butts straight against the last switch. */
+.set-toggle + .form-group { margin-top: 14px; }
+.set-toggle-label { font-size: 13px; color: var(--text); min-width: 0; }
+/* Sits against its label, NOT pushed to the trailing edge with margin-left:
+   auto — in a 435px column that parked it a long way from the words it
+   explains, reading as a stray control rather than a footnote.
+
+   Drawn as a masked SVG rather than a bordered box with an "i" in it. A letter
+   cannot optically centre in a 13px circle: it carries asymmetric side
+   bearings and the font's descender space, so it sat low and left at 100%
+   however correct it looked zoomed in. The mask paints with currentColor, so
+   it still follows the theme. */
+.set-info {
+  flex-shrink: 0; width: 14px; height: 14px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227.15%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%224.5%22%20r%3D%221.05%22%2F%3E%3Crect%20x%3D%227.05%22%20y%3D%226.6%22%20width%3D%221.9%22%20height%3D%225.3%22%20rx%3D%22.95%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Ccircle%20cx%3D%228%22%20cy%3D%228%22%20r%3D%227.15%22%20fill%3D%22none%22%20stroke%3D%22%23000%22%20stroke-width%3D%221.5%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%224.5%22%20r%3D%221.05%22%2F%3E%3Crect%20x%3D%227.05%22%20y%3D%226.6%22%20width%3D%221.9%22%20height%3D%225.3%22%20rx%3D%22.95%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+  color: var(--text3); cursor: help;
+  opacity: .7; transition: opacity .15s, color .15s;
+  /* Inline-block so it also works inside a plain label or paragraph:
+     an inline box ignores width/height and the mask collapses to
+     nothing. A flex container blockifies its children, so every
+     existing flex use is unchanged. */
+  display: inline-block; vertical-align: -2px;
+}
+.set-toggle:hover .set-info { opacity: .95; }
+.set-info:hover { color: var(--text); opacity: 1; }
+
+/* ── Card ─────────────────────────────────────────────────────────────────
+   A repeating item with its own actions: a destination, a rule. One toggle
+   position, one action position. */
+.set-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.set-card + .set-card { margin-top: 8px; }
+.set-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.set-card-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.set-card-meta { font-size: 11px; color: var(--text3); white-space: nowrap; }
+/* The scope line is the first thing to give up room when a card gets narrow —
+   the name and the actions both matter more. */
+.set-card-head { flex-wrap: wrap; row-gap: 4px; }
+.set-card-head > .rule-row-scope { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@container (max-width: 560px) { .set-card-head > .rule-row-scope { display: none; } }
+.set-card-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.set-card-body { margin-top: 10px; }
+.set-card.is-off { opacity: .62; }
+
+/* Two-up inside a card body. Used to put the connection fields beside the
+   instance list they produce, so cause and effect are read together rather
+   than one scrolled past the other. Same auto-fit rule as .set-grid, so the
+   pair stacks on its own once the card is narrow. */
+.set-card-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 14px 22px; align-items: start;
+}
+/* A heading inside a card body. Quieter than a section title, because the card
+   head already says what this belongs to. */
+.set-subhead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; min-height: 24px; }
+.set-subhead-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .6px; color: var(--text3);
+}
+.set-subhead > .btn-autofill { margin-left: auto; }
+/* Small controls that belong together, packed rather than spread. .set-card-cols
+   puts each item at a column edge, which is right for two blocks of equal
+   weight and wrong for two short fields — it leaves one looking stranded on
+   the far side of a gap. */
+.set-card-row { display: flex; flex-wrap: wrap; gap: 14px 34px; align-items: flex-start; margin-top: 16px; }
+.set-card-row > .form-group { min-width: 0; }
+/* A card is already --surface2, so anything sitting on it needs the next step
+   in or the two read as one flat block. */
+.set-card .qui-inst-row,
+.set-card .btn-autofill { background: var(--surface3); }
+
+/* ── Page actions ─────────────────────────────────────────────────────────
+   Save and the secondary actions, separated from the content above so a long
+   page ends deliberately rather than just stopping. */
+.set-actions {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────
+   Says what would be here and why, rather than only that there is nothing. */
+.set-empty {
+  border: 1px dashed var(--border2); border-radius: var(--radius-sm);
+  padding: 16px; text-align: center; font-size: 12px; color: var(--text3);
+}
+
+/* ── Result panel ─────────────────────────────────────────────────────────
+   A transient answer to a question the user asked — so it is capped, scrolls
+   inside itself, and can be dismissed. It used to render a row per tracker
+   with no lid and no way to close it. */
+.set-result {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface3); margin-top: 10px; overflow: hidden;
+}
+.set-result-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; font-size: 12px; color: var(--text2);
+}
+.set-result-summary {
+  background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+  font: inherit; color: var(--text); text-align: left; display: flex;
+  align-items: center; gap: 7px; flex: 1; min-width: 0;
+}
+.set-result-caret { transition: transform .15s; color: var(--text3); font-size: 10px; }
+.set-result[data-open="1"] .set-result-caret { transform: rotate(90deg); }
+.set-result-body {
+  max-height: 260px; overflow-y: auto;
+  border-top: 1px solid var(--border); padding: 6px 10px 10px;
+}
+.set-result[data-open="0"] .set-result-body { display: none; }
+.set-result-x {
+  background: none; border: 0; cursor: pointer; color: var(--text3);
+  font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.set-result-x:hover { color: var(--text); }
+
+/* ── Logs tab additions ───────────────────────────────────────────────────
+   Search filters the lines already fetched, so it costs no request and keeps
+   working while the view is paused. */
+.log-search { flex: 0 1 220px; min-width: 120px; font-size: 12px; padding: 4px 8px; }
+.log-count { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.log-hit { background: var(--accent-glow); color: var(--text); border-radius: 2px; padding: 0 1px; }
+.log-path-line { font-size: 11px; color: var(--text3); margin: 6px 0 0; }
+.log-path-line code { color: var(--text2); }
+
+/* ── Integrations tab ─────────────────────────────────────────────────────
+   Layout that used to live in inline styles on the markup. */
+.qui-inst-list { display: flex; flex-direction: column; gap: 6px; min-height: 32px; }
+.qui-inst-note { font-size: 12px; color: var(--text3); font-style: italic; }
+.token-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; min-height: 20px; }
+.token-create { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── Capability colour key ────────────────────────────────────────────────
+   Sits under the table it explains. The icons are the real ones at the real
+   size, so the key matches what is on screen rather than describing it. */
+.cap-legend{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;
+  margin-top:10px;padding:8px 12px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);
+}
+.cap-legend-title{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);
+}
+.cap-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3)}
+.cap-legend-item .cap-icon i{font-size:7px}
+.cap-legend-sep{width:1px;align-self:stretch;background:var(--border)}
+
+/* ── Import connection ────────────────────────────────────────────────────
+   Set once, then left alone — so it collapses to a line saying what is saved
+   rather than holding an address and a password field open forever. */
+.imp-conn{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.imp-conn-label{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);
+}
+.imp-conn-value{
+  font-size:12px;color:var(--text2);font-family:'Geist Mono',monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;
+}
+.imp-conn-value.is-unset{font-family:inherit;font-style:italic;color:var(--text3)}
+.imp-conn-fields{margin-top:10px}
+
+/* ── Import badges ────────────────────────────────────────────────────────
+   Each of these answers a different question, so each gets its own colour.
+   They were all the same amber, which made the one that blocks collection
+   ("needs type") no louder than the one that is merely informational. */
+.prowlarr-badge.needs-type,
+.trk-def-badge.needs-type{color:var(--red);border-color:var(--error-border-md);background:var(--error-bg)}
+/* Purple sat too close to the accent and to the def badge beside it. Pink is
+   a token every theme already defines and nothing else on this page uses. */
+.prowlarr-badge.privacy-private{color:var(--pink);border-color:color-mix(in srgb,var(--pink) 42%,transparent);background:color-mix(in srgb,var(--pink) 13%,transparent)}
+.prowlarr-badge.privacy-public,
+.prowlarr-badge.privacy-semi-private{color:var(--text3);border-color:var(--border2);background:var(--surface3)}
+.prowlarr-badge.added{color:var(--green);border-color:color-mix(in srgb,var(--green) 38%,transparent);background:color-mix(in srgb,var(--green) 12%,transparent)}
+
+/* ── Trackers tab: section heads and imports ──────────────────────────────
+   The table's head is a .set-section-head like every other page, with the
+   toolbar buttons riding on its trailing edge. */
+.trk-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.trk-import-section{margin-top:26px}
+/* The section owns the heading now, so the first collapsible must not draw a
+   second rule above itself right underneath it. */
+.trk-import-section .prowlarr-section:first-of-type{margin-top:0;border-top:none;padding-top:0}
+.imp-toggle-name{font-weight:600}
+.imp-toggle-hint{font-size:11px;color:var(--text3);font-weight:400}
+
+/* ── Edit-tracker panel: section heads ────────────────────────────────────
+   The panel used its own divider style while every settings page moved to
+   .set-section-head. One dialog written in a second dialect is how a design
+   language stops being one. */
+.modal-sec-head{margin:18px 0 12px}
+.modal-sec-head:first-child{margin-top:0}
+.modal-sec-head .set-section-title{font-size:12px}
+
+/* ── Manual targets ───────────────────────────────────────────────────────
+   A set target is a chip — the same chip a group's requirements are drawn
+   with, because they are the same kind of fact. Four stacked text boxes made
+   the manual mode look like a different feature from the group mode, and made
+   a page of settled values look unfinished. The fields appear for the one
+   target being edited and nowhere else. */
+/* Chips flow along a row the way a group's requirements do, rather than
+   stacking one per line with a screen of empty space beside each. Shared by
+   manual targets and manual stats — the same shape of thing, so the same
+   treatment. */
+.chip-items{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-bottom:10px}
+.chip-item{min-width:0;flex:0 1 auto}
+/* The one being edited takes a full row: a text field and a date picker do not
+   belong in a wrap with chips. */
+.chip-item[data-editing="1"]{flex:1 0 100%}
+.chip-item-view{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 4px 3px 3px;border-radius:14px;
+  background:var(--surface2);border:1px solid var(--border);
+}
+.chip-item-by{font-size:10.5px;color:var(--text3);padding-right:2px;white-space:nowrap}
+/* Always drawn, never revealed on hover: buttons that appear on hover reflow a
+   wrapping row under the cursor, and a control you cannot see is one you have
+   to discover. Quiet by default instead. */
+.chip-item-acts{display:flex;gap:3px}
+.trk-act-xs{
+  width:22px;height:22px;font-size:10px;border-radius:50%;
+  border-color:transparent;background:transparent;
+}
+.chip-item-view:hover .trk-act-xs{border-color:var(--border)}
+.chip-item-edit{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
+.chip-item-edit .form-input[data-chip-input]{flex:1;min-width:120px}
+/* Inside a chip the border is the chip's, so the segment must not draw its own
+   rounded ends over it. */
+.chip-item-view .target-chip{border:none;background:transparent}
+.chip-item-view .target-chip-v{padding-right:4px}
+
+/* ── Panel field pairs ────────────────────────────────────────────────────
+   A username, a date, a scrape count: short values that were each getting a
+   full-width box, so the panel read as a very long column of half-empty
+   fields. Long secrets (API key, cookie header) stay full width, because they
+   genuinely are long. */
+.modal-fields{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));
+  gap:0 20px;
+}
+/* Saving no longer closes the panel, so Save has to say it worked. */
+#modal-save-btn.is-saved{background:var(--green);border-color:var(--green);color:var(--btn-primary-text)}
+
+/* ── General tab: hostnames ───────────────────────────────────────────────
+   One chip per host. A comma-separated run in a single box hides a typo in
+   the middle of it, and gives no way to remove one name without editing a
+   string. Nothing changed on disk — the stored value was always a list. */
+.host-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:26px;align-items:center}
+.host-chip{
+  display:inline-flex;align-items:center;gap:2px;
+  padding:3px 3px 3px 9px;border-radius:14px;
+  background:var(--surface2);border:1px solid var(--border);
+  font-size:11.5px;font-family:'Geist Mono',monospace;color:var(--text);
+}
+.host-chip-x{
+  width:18px;height:18px;border:0;border-radius:50%;background:transparent;
+  color:var(--text3);cursor:pointer;font-size:14px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.host-chip-x:hover{color:var(--red);background:var(--error-bg)}
+.host-empty{font-size:11.5px;color:var(--text3);font-style:italic}
+.host-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.host-add .form-input{max-width:300px}
+
+/* ── General tab: account confirm panels ──────────────────────────────────
+   A password box on screen for an action nobody is taking is noise, and with
+   three of them for three different actions it is also an invitation to type
+   a password into the wrong one. The field appears when the action is asked
+   for. */
+.acct-danger-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.acct-danger-row .form-hint{margin:0}
+.acct-danger-btn{color:var(--red);border-color:var(--error-border-md)}
+.acct-danger-btn:hover{color:var(--red);border-color:var(--red);background:var(--error-bg)}
+.acct-panel{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  margin-top:10px;padding:10px 12px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);
+}

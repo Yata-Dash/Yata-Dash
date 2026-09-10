@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -48,6 +49,15 @@ func Open(path string) (*Manager, error) {
 		}
 		m.applyDefaults()
 		migrated := migrateTrackerTypes(m.cfg.Trackers)
+		// A hostname stored before the check tightened would fail validation on
+		// the way back in, and UpdateSettings validates the WHOLE settings
+		// object — so one bad entry from an older build would block every
+		// unrelated settings change, with no way to remove it from the page it
+		// was blocking. Dropping it on load costs nothing (it could never have
+		// matched a real request) and unsticks the install.
+		if dropped := pruneAllowedHosts(&m.cfg.Settings); dropped {
+			migrated = true
+		}
 		// Runs once per install per BATCH: seedDefaultAlertRules is a no-op
 		// once the version counter has caught up, so this costs an extra write
 		// only on the first load after a batch is added.
@@ -96,7 +106,12 @@ func migrateTrackerTypes(trackers []models.Tracker) bool {
 //
 //	1 — promotions/demotions, target met, ratio approaching minimum
 //	2 — login required soon, API key expiring
-const seedVersion = 2
+//	3 — no new rules: routes existing rules to the notification centre, which
+//	    became a destination (an explicit destination list now means "only
+//	    these", so a rule naming a webhook would otherwise stop recording)
+//	4 — daily scrape limit reached, session cookie expired (both were header
+//	    banners dismissed to sessionStorage, so they never stayed dismissed)
+const seedVersion = 4
 
 // seedDefaultAlertRules brings an install's seeded rules up to seedVersion,
 // running only the batches it has not had. Idempotent: called on every load, a
@@ -117,13 +132,57 @@ const seedVersion = 2
 // exactly the long-standing users most likely to have an at-risk account would
 // invert the point. Both are silent on every tracker that supplies neither
 // field, since an absent field never matches a condition.
+// ensureInAppDestination keeps the notification centre present in the
+// destination list. It is a real stored destination so the rule editor, the
+// scope chips and ResolveDestinations all treat it like any other — no parallel
+// concept, and "turn the centre off" is just disabling it.
+//
+// Re-created if deleted rather than protected from deletion: a config edited by
+// hand should not be able to leave the app with alerts that resolve nowhere.
+// Its Enabled state IS preserved, so disabling it sticks.
+// countWebhooks counts the destinations that actually send somewhere, i.e.
+// everything except the built-in notification centre.
+func countWebhooks(n *models.NotificationConfig) int {
+	count := 0
+	for _, d := range n.Destinations {
+		if !d.IsInApp() {
+			count++
+		}
+	}
+	return count
+}
+
+func ensureInAppDestination(n *models.NotificationConfig) {
+	for i, d := range n.Destinations {
+		if d.ID == models.InAppDestinationID {
+			n.Destinations[i].Type = models.InAppDestinationType
+			if n.Destinations[i].Name == "" {
+				n.Destinations[i].Name = "Notification centre"
+			}
+			return
+		}
+	}
+	// Prepended: it is the destination that always exists, and the one a new
+	// user should see before they have configured anything.
+	n.Destinations = append([]models.NotifyDestination{{
+		ID:      models.InAppDestinationID,
+		Name:    "Notification centre",
+		Type:    models.InAppDestinationType,
+		Enabled: true,
+	}}, n.Destinations...)
+}
+
 func seedDefaultAlertRules(n *models.NotificationConfig) {
+	ensureInAppDestination(n)
 	// Migrate the pre-counter flag: batch 1 has run, nothing after it.
 	if n.SeedVersion == 0 && n.SeededDefaultRules {
 		n.SeedVersion = 1
 	}
 	if n.SeedVersion < 1 {
-		if len(n.Destinations) == 0 && len(n.Rules) == 0 {
+		// Webhooks, not destinations: the notification centre is always present
+		// now, so counting every destination would make an untouched install
+		// look configured and skip this batch entirely.
+		if countWebhooks(n) == 0 && len(n.Rules) == 0 {
 			n.Rules = append(n.Rules,
 				models.AlertRule{
 					ID:      newRuleID(),
@@ -179,6 +238,48 @@ func seedDefaultAlertRules(n *models.NotificationConfig) {
 			},
 		)
 		n.SeedVersion = 2
+	}
+	if n.SeedVersion < 3 {
+		// The notification centre becomes a destination, so a rule can go
+		// in-app only, webhook only, or both.
+		//
+		// Existing rules that NAME a webhook are the whole reason this is a
+		// migration. Before this, recording was unconditional — they went to
+		// their webhook AND the centre. Under the destination model an explicit
+		// list means "only these", so without appending the centre they would
+		// silently stop being recorded. A rule that picked nothing already
+		// means "everywhere" and needs no edit.
+		for i := range n.Rules {
+			if len(n.Rules[i].Destinations) > 0 &&
+				!slices.Contains(n.Rules[i].Destinations, models.InAppDestinationID) {
+				n.Rules[i].Destinations = append(n.Rules[i].Destinations, models.InAppDestinationID)
+			}
+		}
+		n.SeedVersion = 3
+	}
+	if n.SeedVersion < 4 {
+		// Both were header banners dismissed to sessionStorage, so they
+		// reappeared every session and were re-dismissed forever. A day's
+		// cooldown: each stays true for hours, and the point is a reminder.
+		n.Rules = append(n.Rules,
+			models.AlertRule{
+				ID:           newRuleID(),
+				Name:         "Daily scrape limit reached",
+				Enabled:      true,
+				Match:        "all",
+				Conditions:   []models.Condition{{Field: "scrape_limited", Op: "is_true"}},
+				CooldownMins: 1440,
+			},
+			models.AlertRule{
+				ID:           newRuleID(),
+				Name:         "Session cookie expired",
+				Enabled:      true,
+				Match:        "all",
+				Conditions:   []models.Condition{{Field: "cookie_expired", Op: "is_true"}},
+				CooldownMins: 1440,
+			},
+		)
+		n.SeedVersion = 4
 	}
 	// Kept in step so an older Yata reading this config still sees batch 1 as
 	// done and does not re-inject it.
@@ -348,6 +449,17 @@ func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
 	if n.Digest.Destinations == nil {
 		n.Digest.Destinations = []string{}
 	}
+	// On every write, not just at load: the destination list arrives from the
+	// editor, and a save that dropped the notification centre would leave rules
+	// resolving to nothing with no visible cause. Its Enabled state is
+	// preserved, so turning it off still works.
+	ensureInAppDestination(&n)
+	// Carried forward so a save can never re-trigger seeding — the editor sends
+	// the whole config back, and a client that omits the counter would
+	// otherwise re-inject every starter rule the user has deleted.
+	if n.SeedVersion < m.cfg.Notifications.SeedVersion {
+		n.SeedVersion = m.cfg.Notifications.SeedVersion
+	}
 	m.cfg.Notifications = n
 	return m.saveLocked()
 }
@@ -425,6 +537,55 @@ func (m *Manager) UpdateSettings(s models.Settings) error {
 // Values that are plainly not hostnames are rejected rather than silently
 // ignored: pasting a whole URL is the obvious mistake, and a list that quietly
 // does nothing is worse than an error saying why.
+// pruneAllowedHosts drops stored hostnames that are no longer accepted,
+// reporting whether anything went. Used on load only: user input goes through
+// CleanAllowedHosts, which refuses rather than silently discards.
+func pruneAllowedHosts(s *models.Settings) bool {
+	kept := make([]string, 0, len(s.AllowedHosts))
+	for _, h := range s.AllowedHosts {
+		h = strings.TrimSpace(h)
+		if h == "" || h == "*" || len(h) > maxHostLen || !validHostname(h) {
+			continue
+		}
+		kept = append(kept, h)
+	}
+	if len(kept) == len(s.AllowedHosts) {
+		return false
+	}
+	if len(kept) == 0 {
+		kept = nil
+	}
+	s.AllowedHosts = kept
+	return true
+}
+
+// The DNS limit for a fully-qualified name. A cap belongs here because the
+// value is stored and compared on every request, not because a long name is
+// dangerous.
+const maxHostLen = 253
+
+// validHostname reports whether h contains only what a host entry may contain.
+//
+// Wider than a bare DNS name on purpose, because hostAllowed compares entries
+// through hostOnly: "box.example.com:8420" and "[::1]" are both legitimate
+// here and normalise at compare time. Underscores are not valid in DNS but do
+// appear in container and internal names. Everything else — semicolons,
+// quotes, angle brackets, slashes, whitespace — is refused: it can never match
+// a real Host header, so storing it only ever means something went in that
+// should not have.
+func validHostname(h string) bool {
+	for _, r := range h {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.' || r == '-' || r == '_':
+		case r == ':' || r == '[' || r == ']': // port suffix, IPv6 literal
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func CleanAllowedHosts(in []string) ([]string, error) {
 	var out []string
 	for _, h := range in {
@@ -436,7 +597,17 @@ func CleanAllowedHosts(in []string) ([]string, error) {
 			return nil, errors.New("the \"*\" wildcard can only be set with --allowed-hosts " +
 				"or YATA_ALLOWED_HOSTS, not from the dashboard or an imported config")
 		}
-		if strings.Contains(h, "://") || strings.ContainsAny(h, " \t/\\?#@") {
+		// An allowlist, not a list of things to ban. The previous check named a
+		// handful of characters a URL would contain, which let anything else
+		// through — a semicolon, a quote, a script tag — and stored it as a
+		// hostname that could never match a real request. Nothing outside a
+		// hostname's own alphabet has any business here, and refusing it at
+		// the config layer means an imported config cannot smuggle it in
+		// either.
+		if len(h) > maxHostLen {
+			return nil, fmt.Errorf("that hostname is too long — %d characters, the maximum is %d", len(h), maxHostLen)
+		}
+		if !validHostname(h) {
 			return nil, fmt.Errorf("%q is not a hostname — use just the name, e.g. yata.example.com", h)
 		}
 		out = append(out, h)

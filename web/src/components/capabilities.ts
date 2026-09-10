@@ -18,12 +18,16 @@ const NOTABLE_ICONS: { field: string; icon: string; label: string }[] = [
 ];
 
 /** How a capability is obtained, in words. Rendering "not available" as an
- *  absence would read as "we didn't check". */
+ *  absence would read as "we didn't check".
+ *
+ *  Deliberately the same three phrases the legend under the table uses — a
+ *  tooltip that paraphrases the key makes the reader check whether they mean
+ *  the same thing. */
 function sourceText(source: string, label: string): string {
   switch (source) {
-    case 'api':    return `${label} — reported by the tracker's API`;
-    case 'scrape': return `${label} — only from the profile page, so it needs scraping to be on`;
-    default:       return `${label} — this tracker doesn't report it`;
+    case 'api':    return `${label} — from API`;
+    case 'scrape': return `${label} — from scraping`;
+    default:       return `${label} — not reported`;
   }
 }
 
@@ -33,7 +37,10 @@ function sourceText(source: string, label: string): string {
  * and "this tracker reports nothing" are very different claims and only one
  * of them is ours to make.
  */
-export function capabilityRow(caps: TrackerCapabilities | undefined): string {
+export function capabilityRow(
+  caps: TrackerCapabilities | undefined,
+  opts?: { userApiOnly?: boolean },
+): string {
   if (!caps || !caps.known) return '';
   const parts: string[] = [];
 
@@ -64,8 +71,17 @@ export function capabilityRow(caps: TrackerCapabilities | undefined): string {
       <i class="fas ${n.icon}"></i></span>`);
   }
 
+  // Two ways a tracker ends up API-only, and they are not the same fact. One
+  // is the operator's decision and is a property of the tracker; the other is
+  // the user's own per-tracker override, which was invisible here — so a
+  // tracker that does allow scraping looked as though it never had, and the
+  // only way to find out was to open Edit. Same mark, since the effect on what
+  // Yata collects is identical; the tooltip says which.
   if (!caps.scrape_possible) {
-    parts.push(`<span class="cap-icon cap-apionly" title="${esc('API only — this tracker\'s operator has asked not to be scraped, so everything comes from its API')}">
+    parts.push(`<span class="cap-icon cap-apionly" title="${esc('API only — scraping not allowed')}">
+      <i class="fas fa-plug"></i></span>`);
+  } else if (opts?.userApiOnly) {
+    parts.push(`<span class="cap-icon cap-apionly" title="${esc('API only — user set')}">
       <i class="fas fa-plug"></i></span>`);
   }
   return `<span class="cap-row">${parts.join('')}</span>`;
