@@ -4,8 +4,8 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-09-01",
-    "updated": "2026-08"
+    "fetched": "2026-09-10",
+    "updated": "2026-09"
   },
   "abbr": {
     "ABTorrents": "ABT",
@@ -45,6 +45,7 @@
     "DanishBytes": "DBS",
     "DarkPeers": "DP",
     "DataScene": "DS",
+    "DesiGaane": "DG",
     "DesiTorrents": "DT",
     "DigitalCore": "DC",
     "DigitalCore.Club": "DCC",
@@ -1132,6 +1133,14 @@
       "reqs": "No requirement",
       "active": true,
       "updated": "Aug 2025"
+    },
+    {
+      "from": "Blutopia",
+      "to": "Periodical",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "Blutopia",
@@ -2705,7 +2714,7 @@
       "from": "LST",
       "to": "DigitalCore.Club",
       "days": 0,
-      "reqs": "Whale or Sailbot",
+      "reqs": "Whale or Sailboat",
       "active": true,
       "updated": "Apr 2026"
     },
@@ -2721,9 +2730,17 @@
       "from": "LST",
       "to": "Luminarr",
       "days": 0,
-      "reqs": "Whale or Sailbot",
+      "reqs": "Whale or Sailboat",
       "active": true,
       "updated": "Apr 2026"
+    },
+    {
+      "from": "LST",
+      "to": "Periodical",
+      "days": 0,
+      "reqs": "Whale or Sailboat",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "LST",
@@ -2812,6 +2829,22 @@
       "reqs": "No requirement",
       "active": true,
       "updated": "Aug 2026"
+    },
+    {
+      "from": "Luminarr",
+      "to": "DesiGaane",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Luminarr",
+      "to": "DesiTorrents",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "Luminarr",
@@ -3879,19 +3912,11 @@
     },
     {
       "from": "Redacted",
-      "to": "BroadcasTheNet",
-      "days": 365,
-      "reqs": "TM+, 1 year",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Redacted",
       "to": "Concertos",
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4043,7 +4068,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4139,7 +4164,7 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",

@@ -549,7 +549,10 @@ func pruneAllowedHosts(s *models.Settings) bool {
 		}
 		kept = append(kept, h)
 	}
-	if len(kept) == len(s.AllowedHosts) {
+	// Contents, not just the count: kept holds TRIMMED values, so a stored
+	// " yata.example.com " survives the loop and would be reported as
+	// unchanged, leaving the untrimmed value in the config forever.
+	if slices.Equal(kept, s.AllowedHosts) {
 		return false
 	}
 	if len(kept) == 0 {

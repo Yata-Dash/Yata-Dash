@@ -164,7 +164,7 @@ func TestLadderFromAPIReadsStyleWhenServed(t *testing.T) {
 // hashing it would file a fresh "the tracker changed its rules" revision every
 // time they crossed a threshold.
 func TestCanonicalLadder(t *testing.T) {
-	stripped, err := CanonicalLadder([]byte(pgLadder))
+	stripped, err := CanonicalLadder([]byte(pgLadder), traxarySpec())
 	if err != nil {
 		t.Fatalf("strip: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestCanonicalLadder(t *testing.T) {
 // Two responses differing only in the user's progress must hash the same, which
 // is what makes a revision mean "the tracker changed its requirements".
 func TestCanonicalLadderIsStableAcrossUserProgress(t *testing.T) {
-	before, err := CanonicalLadder([]byte(pgLadder))
+	before, err := CanonicalLadder([]byte(pgLadder), traxarySpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestCanonicalLadderIsStableAcrossUserProgress(t *testing.T) {
 	  "internal":[],
 	  "premium":[{"id":1,"title":"1337","perks":["15% Global freeleech","15% more upload"]}]
 	}`)
-	after, err := CanonicalLadder(promoted)
+	after, err := CanonicalLadder(promoted, traxarySpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,9 +229,10 @@ func TestCanonicalLadderIsStableAcrossUserProgress(t *testing.T) {
 
 // A genuine change to the rules must still be visible after stripping.
 func TestCanonicalLadderKeepsRealChanges(t *testing.T) {
-	before, _ := CanonicalLadder([]byte(pgLadder))
+	before, _ := CanonicalLadder([]byte(pgLadder), traxarySpec())
 	raised, _ := CanonicalLadder([]byte(
-		`{"auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":107374182400,"satisfied":false}]}]}`))
+		`{"auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":107374182400,"satisfied":false}]}]}`),
+		traxarySpec())
 	if string(before) == string(raised) {
 		t.Error("a raised threshold hashed the same as the old ladder")
 	}
@@ -263,7 +264,7 @@ func TestCanonicalLadderDropsUnknownFields(t *testing.T) {
 	    ]
 	  }]
 	}`
-	out, err := CanonicalLadder([]byte(withUserState))
+	out, err := CanonicalLadder([]byte(withUserState), traxarySpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,11 +284,11 @@ func TestCanonicalLadderDropsUnknownFields(t *testing.T) {
 // what makes a stored revision mean "the tracker changed its requirements".
 func TestCanonicalLadderIgnoresUnknownUserFields(t *testing.T) {
 	base := `{"auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":53687091200%s}]}]}`
-	before, err := CanonicalLadder([]byte(fmt.Sprintf(base, "")))
+	before, err := CanonicalLadder([]byte(fmt.Sprintf(base, "")), traxarySpec())
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, err := CanonicalLadder([]byte(fmt.Sprintf(base, `,"satisfied":true,"remaining":0`)))
+	after, err := CanonicalLadder([]byte(fmt.Sprintf(base, `,"satisfied":true,"remaining":0`)), traxarySpec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +311,7 @@ func TestLadderSurvivesUnknownTopLevelShapes(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "Seedling" {
 		t.Fatalf("ladder = %+v, want Seedling alongside the noise", got)
 	}
-	out, err := CanonicalLadder([]byte(noisy))
+	out, err := CanonicalLadder([]byte(noisy), traxarySpec())
 	if err != nil {
 		t.Fatalf("canonical: %v", err)
 	}
@@ -324,7 +325,46 @@ func TestLadderSurvivesUnknownTopLevelShapes(t *testing.T) {
 // A response with no ladder at all is an error, not an empty ladder — storing
 // one would read downstream as a tracker that abolished its ranks.
 func TestCanonicalLadderRejectsResponseWithNoLadders(t *testing.T) {
-	if _, err := CanonicalLadder([]byte(`{"error":"unauthorised"}`)); err == nil {
+	if _, err := CanonicalLadder([]byte(`{"error":"unauthorised"}`), traxarySpec()); err == nil {
 		t.Error("a response carrying no ladder was accepted")
 	}
+}
+
+// The endpoint is a /api/user route, so it can carry arrays that have nothing
+// to do with ranks. Only the ladder the def names is read downstream, so only
+// that one is stored: anything else was being decoded into rank-shaped structs
+// and kept in the revision table for no reason at all.
+func TestCanonicalLadderKeepsOnlyTheDeclaredLadder(t *testing.T) {
+	body := []byte(`{
+	  "auto":[{"id":9,"title":"Seedling","requirements":[{"type":"upload","value":53687091200}]}],
+	  "activity":[{"id":1,"title":"Logged in from a new device"}],
+	  "invites":[{"id":2,"title":"someone@example.com"}],
+	  "viewer_id":4021
+	}`)
+	out, err := CanonicalLadder(body, traxarySpec())
+	if err != nil {
+		t.Fatalf("CanonicalLadder: %v", err)
+	}
+	var v map[string][]map[string]any
+	if err := json.Unmarshal(out, &v); err != nil {
+		t.Fatalf("not valid JSON: %v", err)
+	}
+	if len(v) != 1 {
+		t.Fatalf("stored %d keys (%v), want only the declared ladder", len(v), keysOf(v))
+	}
+	if _, ok := v["auto"]; !ok {
+		t.Errorf("the declared ladder is missing: %v", keysOf(v))
+	}
+	// And it still maps to a usable ladder afterwards.
+	if len(LadderFromAPI(out, traxarySpec())) != 1 {
+		t.Error("the projection no longer maps to a ladder")
+	}
+}
+
+func keysOf(m map[string][]map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

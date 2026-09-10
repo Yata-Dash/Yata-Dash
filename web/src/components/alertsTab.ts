@@ -390,8 +390,16 @@ function destSummary(r: AlertRule): string {
   // said it. Naming the count makes it clear that adding a webhook silently
   // widens every rule that picked nothing, which is the surprising part.
   if (!names.length) {
-    const enabled = destinations.filter(d => d.enabled).length;
-    return enabled === 1 ? 'notification centre' : `all ${enabled} destinations`;
+    // Name the one that is on, rather than assuming a single enabled
+    // destination must be the centre: with the centre switched off and one
+    // webhook enabled, "notification centre" was the one place the alert would
+    // not go.
+    const on = destinations.filter(d => d.enabled);
+    if (on.length === 1) {
+      const d = on[0]!;
+      return isInAppDest(d) ? 'notification centre' : (d.name || DEST_TYPE_LABEL[d.type] || d.type);
+    }
+    return on.length === 0 ? 'nowhere — every destination is off' : `all ${on.length} destinations`;
   }
   return names.length <= 2 ? names.join(', ') : `${names.length} destinations`;
 }

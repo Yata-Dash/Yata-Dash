@@ -363,3 +363,52 @@ func TestScrapeSignalConditions(t *testing.T) {
 		t.Errorf("body = %q, want the failure kind", rec.got[1].body)
 	}
 }
+
+// A tracker that was already at its scrape cap, or whose cookie had already
+// gone stale, when Yata started. Priming is meant to stop a restart re-blasting
+// webhooks about things that did not just change; it was also swallowing these
+// two, which are standing problems and exactly what the panel is a worklist
+// for. Before this they only ever appeared if the problem cleared and returned.
+func TestStandingScrapeProblemsSurvivePriming(t *testing.T) {
+	cfg := models.NotificationConfig{Rules: []models.AlertRule{
+		{ID: "r1", Name: "Daily scrape limit reached", Enabled: true,
+			Conditions: []models.Condition{{Field: "scrape_limited", Op: "is_true"}}},
+		{ID: "r2", Name: "Session cookie expired", Enabled: true,
+			Conditions: []models.Condition{{Field: "cookie_expired", Op: "is_true"}}},
+	}}
+	rec := &fakeRecorder{}
+	e := New(staticCfg{cfg}, nil)
+	e.SetRecorder(rec)
+
+	tr := models.Tracker{ID: "t1", Name: "OnlyEncodes+"}
+	// The FIRST pass for this tracker, with both already true.
+	e.Evaluate(tr, models.MergedStats{}, true,
+		TrendContext{ScrapeLimited: true, CookieExpiredKind: "login_page"})
+
+	if len(rec.got) != 2 {
+		t.Fatalf("recorded %d on the priming pass, want both standing problems", len(rec.got))
+	}
+	names := rec.got[0].ruleName + "|" + rec.got[1].ruleName
+	if !strings.Contains(names, "Daily scrape limit reached") || !strings.Contains(names, "Session cookie expired") {
+		t.Errorf("recorded %q", names)
+	}
+}
+
+// The other half of the same rule. "reachable is_true" is true of every healthy
+// tracker, so priming on it filled the panel with "Tracker Back" for everything
+// that was working — which is why the operator test exists at all. Widening it
+// for genuine problem states must not let that back in.
+func TestHealthyStatesStillDoNotPrime(t *testing.T) {
+	cfg := models.NotificationConfig{Rules: []models.AlertRule{
+		{ID: "r1", Name: "Tracker Back", Enabled: true,
+			Conditions: []models.Condition{{Field: "reachable", Op: "is_true"}}},
+	}}
+	rec := &fakeRecorder{}
+	e := New(staticCfg{cfg}, nil)
+	e.SetRecorder(rec)
+
+	e.Evaluate(models.Tracker{ID: "t1", Name: "Aither"}, models.MergedStats{}, true, TrendContext{})
+	if len(rec.got) != 0 {
+		t.Fatalf("recorded %+v on the priming pass for a healthy tracker", rec.got)
+	}
+}

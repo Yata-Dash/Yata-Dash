@@ -170,12 +170,21 @@ func requirementsFromAPI(reqs []apiGroupR, mapping map[string]string) GroupRequi
 //
 // Re-encoding also settles key order and perk shape, so two identical ladders
 // hash the same however the platform serialised them.
-func CanonicalLadder(body []byte) ([]byte, error) {
-	ladders := decodeLadders(body)
-	if len(ladders) == 0 {
-		return nil, fmt.Errorf("no group ladders in response")
+func CanonicalLadder(body []byte, spec GroupAPISpec) ([]byte, error) {
+	if spec.Ladder == "" {
+		return nil, fmt.Errorf("no ladder key declared")
 	}
-	return json.Marshal(ladders)
+	// Only the declared ladder. Every other array on this endpoint is
+	// something else the tracker happens to serve from the same /api/user
+	// route, and nothing downstream reads it — LadderFromAPI looks up
+	// spec.Ladder and nothing else. Storing the rest meant Yata kept a
+	// per-account list it had no use for, one shaped like ranks because
+	// that is the only shape it can decode.
+	groups, ok := decodeLadders(body)[spec.Ladder]
+	if !ok || len(groups) == 0 {
+		return nil, fmt.Errorf("no %q ladder in response", spec.Ladder)
+	}
+	return json.Marshal(map[string][]apiGroup{spec.Ladder: groups})
 }
 
 // decodeLadders reads the ladders out of a response, keyed as the tracker keys

@@ -28,6 +28,11 @@ const PAGE = 25;
 let open = false;
 let search = '';
 let filter = '';
+/** Bumped on every load. A response whose ticket is stale is dropped: typing
+ *  into the search box fires one request per keystroke-burst, and without this
+ *  an early slow reply can land after a later fast one and put the wrong rows
+ *  on screen — with the filter dropdown still showing what you asked for. */
+let reqSeq = 0;
 let loaded: AppAlert[] = [];
 let sources: AlertSource[] = [];
 let total = 0;
@@ -55,7 +60,9 @@ function setCount(n: number): void {
 
 /** Reload the list from the top, honouring the current search/filter. */
 async function load(): Promise<void> {
+  const ticket = ++reqSeq;
   const res = await fetchAlerts({ q: search, tracker: filter, limit: PAGE });
+  if (ticket !== reqSeq) return; // superseded while in flight
   if (!res.ok) {
     const list = el('alerts-list');
     if (list) list.innerHTML = `<div class="alerts-empty">Couldn${'’'}t load alerts.</div>`;
@@ -69,8 +76,11 @@ async function load(): Promise<void> {
 }
 
 async function loadMore(): Promise<void> {
+  const ticket = ++reqSeq;
   const res = await fetchAlerts({ q: search, tracker: filter, limit: PAGE, offset: loaded.length });
-  if (!res.ok) return;
+  // A page appended to a list that has since been re-filtered would mix two
+  // different queries' rows together.
+  if (ticket !== reqSeq || !res.ok) return;
   loaded = loaded.concat(res.data.alerts);
   total = res.data.total;
   render();
@@ -190,7 +200,11 @@ export function initAlertsPanel(): void {
     e.stopPropagation();
     const id = Number(clear.dataset['clear']);
     const res = await deleteAlert(id);
-    if (res.ok) setCount(res.data.unread);
+    // Only drop the row if the server actually dropped it. Removing it anyway
+    // told the user the alert was cleared when it was still there, and it came
+    // back on the next open with no explanation.
+    if (!res.ok) return;
+    setCount(res.data.unread);
     loaded = loaded.filter(a => a.id !== id);
     total = Math.max(0, total - 1);
     render();
