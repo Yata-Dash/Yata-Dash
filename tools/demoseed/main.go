@@ -188,7 +188,6 @@ func main() {
 	}
 	cfg.Settings = models.DefaultSettings()
 	cfg.Settings.ShowStatSources = true
-	cfg.Settings.ProfileAutoSync = false
 	// Enable a qui instance so the qBittorrent stat bar renders in the UI. The
 	// demo has no reachable qui, so the bar shows its "not reachable" state at
 	// runtime; the screenshot harness injects synthetic healthy values for the

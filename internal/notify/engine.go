@@ -24,6 +24,14 @@ type ConfigSource interface {
 	Notifications() models.NotificationConfig
 }
 
+// Recorder receives every alert the engine raises, whether or not any
+// destination is configured. It is what makes the app itself a destination —
+// see ALERTS_PANEL_PLAN.md. Nil is allowed: the engine then behaves as it did
+// before, webhooks only.
+type Recorder interface {
+	RecordAlert(ruleID, ruleName, trackerID, trackerName, title, body string)
+}
+
 // numericFields are stat fields exposed to conditions as numbers, with the unit
 // used for comparison. Sizes compare in GiB, durations in days.
 var numericFields = map[string]string{
@@ -47,6 +55,7 @@ var numericFields = map[string]string{
 type Engine struct {
 	cfg ConfigSource
 	log Logger
+	rec Recorder
 
 	mu        sync.Mutex
 	firing    map[string]bool              // "ruleID|trackerID" → currently matched
@@ -58,6 +67,15 @@ type Engine struct {
 	// because target rows are per-tracker structural data (rows can appear/
 	// disappear as the user edits targets), not a single field snapshot.
 	targetState map[string]map[string]bool
+}
+
+// SetRecorder attaches the in-app alert store. Separate from New so the
+// engine can be built before the store, and so tests that only care about
+// webhook behaviour need not supply one.
+func (e *Engine) SetRecorder(r Recorder) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.rec = r
 }
 
 // New creates an alert engine.
@@ -85,7 +103,20 @@ type TrendContext struct {
 	// per dated target row (see internal/api/pacing.go) currently behind or
 	// overdue on its deadline. Empty/nil = on pace for every dated goal.
 	GoalsBehind []string
+
+	// ScrapeLimited and CookieExpired were header banners dismissed to
+	// sessionStorage, so they came back every session and were re-dismissed
+	// forever. As conditions they get a rule's cooldown, a per-tracker name,
+	// and a place in the notification centre — and they can be webhooked, which
+	// a banner never could.
+	ScrapeLimited bool
+	// CookieExpiredKind is the failure kind behind CookieExpired, for the
+	// message ("http_403" reads very differently from "login_page").
+	CookieExpiredKind string
 }
+
+// CookieExpired reports whether the session cookie has stopped working.
+func (t TrendContext) CookieExpired() bool { return t.CookieExpiredKind != "" }
 
 // Evaluate runs every rule for one tracker against its merged stats. reachable
 // reports whether the latest fetch succeeded (drives the `reachable` field).
@@ -116,8 +147,20 @@ func (e *Engine) Evaluate(t models.Tracker, merged models.MergedStats, reachable
 		}
 		matched := evalRule(rule, merged, cur, prev, reachable, trends)
 		key := rule.ID + "|" + t.ID
-		if primed && matched && !e.firing[key] {
+		switch {
+		case primed && matched && !e.firing[key]:
 			e.fire(cfg, rule, t, merged, cur, prev, reachable, trends, key)
+		case !primed && matched && standingRule(rule):
+			// Already true when Yata started. Webhooks stay silent — priming
+			// exists so a restart does not re-blast them, and a webhook says
+			// "this just changed", which this did not.
+			//
+			// The panel is the other thing: a standing worklist. A login
+			// deadline that is already close is exactly what belongs on it, and
+			// without this it would never appear at all — the condition only
+			// fires on a false→true edge, so it would wait until the user fixed
+			// it and let it lapse again.
+			e.recordOnly(cfg, rule, t, describeMatch(rule, merged, cur, prev, reachable, trends))
 		}
 		e.firing[key] = matched
 	}
@@ -303,6 +346,54 @@ func (e *Engine) fire(cfg models.NotificationConfig, rule models.AlertRule, t mo
 	e.send(cfg, rule, t, key, describeMatch(rule, merged, cur, prev, reachable, trends))
 }
 
+// thresholdOps are the comparisons that describe a MEASUREMENT against a line.
+var thresholdOps = map[string]bool{"lt": true, "lte": true, "gt": true, "gte": true}
+
+// standingRule reports whether a rule describes a condition that stays true for
+// as long as the problem lasts — the only kind worth listing in the panel
+// merely for being true when Yata started.
+//
+// The test is the operator, not the field. A threshold ("login_days_remaining
+// ≤ 7") is a measurement: still true at startup means the problem is
+// outstanding right now, and the user should see it. A state or event predicate
+// ("reachable is true", "promoted") describes a TRANSITION, and its value at
+// startup says nothing about whether one was missed — "reachable is true"
+// matches every healthy tracker, so recording those would open the panel with a
+// row per tracker saying nothing is wrong.
+//
+// Erring towards silence: a standing state predicate ("reachable is false")
+// is missed until it next changes. Better than a panel nobody reads.
+func standingRule(rule models.AlertRule) bool {
+	for _, c := range rule.Conditions {
+		if !thresholdOps[c.Op] {
+			return false
+		}
+	}
+	return len(rule.Conditions) > 0
+}
+
+// recordOnly puts a matched condition into the in-app panel without notifying
+// anywhere. Used for conditions already true at startup, which are worth
+// listing but are not news.
+//
+// Deliberately not a flag on send(): send is the one place every alert
+// converges, and a "don't actually send" branch there is one edit away from
+// silently swallowing real webhooks.
+func (e *Engine) recordOnly(cfg models.NotificationConfig, rule models.AlertRule, t models.Tracker, detail string) {
+	if e.rec == nil {
+		return
+	}
+	// Routing applies here too. Without this a rule addressed to a webhook only
+	// would still appear in the centre, purely because it happened to be true
+	// at startup — the one path where "record" and "deliver" could disagree.
+	if inApp, _ := SplitDestinations(resolveDestinations(cfg, rule)); !inApp {
+		return
+	}
+	e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name,
+		fmt.Sprintf("Yata alert: %s", rule.Name),
+		fmt.Sprintf("%s — %s", t.Name, detail))
+}
+
 // send delivers a rule's message to its destinations, respecting cooldown.
 // Shared by fire() (level-triggered rules from Evaluate/Announce) and the
 // one-shot event path (EvaluateEvent/EvaluateTargets) — everything past
@@ -315,12 +406,21 @@ func (e *Engine) send(cfg models.NotificationConfig, rule models.AlertRule, t mo
 	}
 	title := fmt.Sprintf("Yata alert: %s", rule.Name)
 	msg := fmt.Sprintf("%s — %s", t.Name, detail)
-	dests := resolveDestinations(cfg, rule)
-	if len(dests) == 0 {
-		return
-	}
+
+	// Stamped before anything is delivered. Cooldown was only ever tracked for
+	// users who had somewhere to send to, so a destination-less user had none at
+	// all — invisible while the alert was being dropped, one row per poll now.
 	e.lastFired[key] = time.Now()
-	for _, d := range dests {
+
+	// The notification centre is a destination like any other, which is what
+	// lets one rule go in-app only and the next to Discord only. A rule that
+	// picks nothing gets both, so an install with no webhook still works — the
+	// whole point of the panel.
+	inApp, webhooks := SplitDestinations(resolveDestinations(cfg, rule))
+	if inApp && e.rec != nil {
+		e.rec.RecordAlert(rule.ID, rule.Name, t.ID, t.Name, title, msg)
+	}
+	for _, d := range webhooks {
 		go func(dest models.NotifyDestination) {
 			if err := Send(dest, title, msg); err != nil {
 				if e.log != nil {
@@ -339,6 +439,22 @@ func (e *Engine) send(cfg models.NotificationConfig, rule models.AlertRule, t mo
 // rule.Destinations = all enabled destinations).
 func resolveDestinations(cfg models.NotificationConfig, rule models.AlertRule) []models.NotifyDestination {
 	return ResolveDestinations(cfg, rule.Destinations)
+}
+
+// SplitDestinations separates the notification centre from the webhooks.
+//
+// A partition rather than a filter so a caller cannot accidentally hand the
+// centre to Send(), which has no URL to POST to. Send() refuses it as well —
+// two guards, because the failure would otherwise be silent.
+func SplitDestinations(dests []models.NotifyDestination) (inApp bool, webhooks []models.NotifyDestination) {
+	for _, d := range dests {
+		if d.IsInApp() {
+			inApp = true
+			continue
+		}
+		webhooks = append(webhooks, d)
+	}
+	return inApp, webhooks
 }
 
 // ResolveDestinations returns the enabled destinations matching ids (empty =
@@ -407,6 +523,10 @@ func evalCondition(c models.Condition, merged models.MergedStats, cur, prev map[
 		return trendMatch(c, trends.SeedingDropPct)
 	case "goal_behind_pace":
 		return boolMatch(c.Op, len(trends.GoalsBehind) > 0)
+	case "scrape_limited":
+		return boolMatch(c.Op, trends.ScrapeLimited)
+	case "cookie_expired":
+		return boolMatch(c.Op, trends.CookieExpired())
 	}
 	if c.Op == "changed" {
 		p, hadPrev := prev[c.Field]
@@ -602,6 +722,16 @@ func describeCondition(c models.Condition, merged models.MergedStats, cur, prev 
 			return "seeding count not dropping"
 		}
 		return fmt.Sprintf("seeding count down %s%% over 7d (%s %s%%)", formatPct(*trends.SeedingDropPct), opSymbol(c.Op), c.Value)
+	case "scrape_limited":
+		if !trends.ScrapeLimited {
+			return "not at the daily scrape limit"
+		}
+		return "hit the daily scrape limit"
+	case "cookie_expired":
+		if !trends.CookieExpired() {
+			return "session cookie working"
+		}
+		return "session cookie expired (" + trends.CookieExpiredKind + ") — re-copy it in Settings → Trackers"
 	case "goal_behind_pace":
 		if c.Op == "is_false" {
 			return "on pace for all goals"

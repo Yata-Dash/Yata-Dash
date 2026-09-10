@@ -167,6 +167,27 @@ func (d *DB) migrate() error {
 			                                      -- progress stripped
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_group_ladders_tracker ON group_ladders (tracker_id, id DESC)`,
+		// Alerts the rule engine raised, kept so the app itself is a
+		// destination — without one, a user with no webhook has every alert
+		// evaluated, matched and dropped (ALERTS_PANEL_PLAN.md §2).
+		//
+		// Rule and tracker names are denormalised on purpose: an alert records
+		// something that happened, so renaming a rule or removing a tracker
+		// afterwards must not rewrite history or blank the row. The ids stay so
+		// the UI can still link through when the target still exists.
+		`CREATE TABLE IF NOT EXISTS alerts (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			at           INTEGER NOT NULL,             -- unix seconds
+			rule_id      TEXT    NOT NULL,
+			rule_name    TEXT    NOT NULL,
+			tracker_id   TEXT    NOT NULL DEFAULT '',  -- '' for a global signal
+			tracker_name TEXT    NOT NULL DEFAULT '',
+			title        TEXT    NOT NULL,
+			body         TEXT    NOT NULL,
+			read_at      INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_alerts_at ON alerts (at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_alerts_unread ON alerts (read_at, rule_id, tracker_id)`,
 		// Read-only integration tokens (Settings → Integrations → API Tokens).
 		// Only the SHA-256 hash is stored; the plaintext token is shown once.
 		`CREATE TABLE IF NOT EXISTS api_tokens (

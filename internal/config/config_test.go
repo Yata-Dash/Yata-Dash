@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
 // TestFreshInstallSeedsDefaultAlertRules: a brand-new config.json (no
@@ -25,8 +28,8 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if n.SeedVersion != seedVersion {
 		t.Fatalf("expected SeedVersion %d after a fresh-install load, got %d", seedVersion, n.SeedVersion)
 	}
-	if len(n.Rules) != 5 {
-		t.Fatalf("expected 5 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
+	if len(n.Rules) != 7 {
+		t.Fatalf("expected 7 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
 	}
 	var haveEvents, haveTarget, haveGuard, haveLogin, haveKey bool
 	for _, r := range n.Rules {
@@ -77,8 +80,8 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 5 {
-		t.Fatalf("second load re-seeded: got %d rules, want 5", got)
+	if got := len(m2.Notifications().Rules); got != 7 {
+		t.Fatalf("second load re-seeded: got %d rules, want 7", got)
 	}
 }
 
@@ -125,8 +128,11 @@ func TestExistingSetupIsNotSeededWithStarters(t *testing.T) {
 	// api_key_expiry_days did not exist when this user built their rules, so
 	// withholding the guards would leave exactly the long-standing accounts
 	// most at risk with no warning at all.
-	if len(n.Rules) != 3 {
-		t.Fatalf("expected the user's rule plus the two account-deadline rules, got %+v", n.Rules)
+	// …and so does batch 4, for the same reason: the scrape-limit and
+	// expired-cookie warnings used to be banners this user could not have
+	// written a rule for.
+	if len(n.Rules) != 5 {
+		t.Fatalf("expected the user's rule plus the four later seeded rules, got %+v", n.Rules)
 	}
 
 	// A second load is a pure no-op (the counter has caught up).
@@ -134,7 +140,7 @@ func TestExistingSetupIsNotSeededWithStarters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 3 {
+	if got := len(m2.Notifications().Rules); got != 5 {
 		t.Fatalf("second load changed rule count: got %d, want 3", got)
 	}
 }
@@ -167,11 +173,14 @@ func TestAlreadySeededInstallGetsOnlyTheNewBatch(t *testing.T) {
 	if n.SeedVersion != seedVersion {
 		t.Fatalf("expected SeedVersion %d, got %d", seedVersion, n.SeedVersion)
 	}
-	if len(n.Rules) != 2 {
-		t.Fatalf("expected only the two batch-2 rules, got %+v", n.Rules)
+	if len(n.Rules) != 4 {
+		t.Fatalf("expected only the batch-2 and batch-4 rules, got %+v", n.Rules)
 	}
 	for _, r := range n.Rules {
-		if r.Name != "Login required soon" && r.Name != "API key expiring" {
+		switch r.Name {
+		case "Login required soon", "API key expiring",
+			"Daily scrape limit reached", "Session cookie expired":
+		default:
 			t.Fatalf("unexpected rule seeded: %+v", r)
 		}
 	}
@@ -222,8 +231,8 @@ func TestExistingDestinationOnlyIsNotSeeded(t *testing.T) {
 			t.Fatalf("batch 1 starter rule %q injected when a destination already existed", r.Name)
 		}
 	}
-	if len(n.Rules) != 2 {
-		t.Fatalf("expected only the two account-deadline rules, got %+v", n.Rules)
+	if len(n.Rules) != 4 {
+		t.Fatalf("expected only the batch-2 and batch-4 rules, got %+v", n.Rules)
 	}
 }
 
@@ -309,5 +318,114 @@ func TestMigrateRetiredTrackerType(t *testing.T) {
 	}
 	if m2.Trackers()[0].Type != "gazelle_antneb" {
 		t.Error("the migration was not written back to disk")
+	}
+}
+
+// The notification centre must always be a destination, so rules always have
+// somewhere to resolve to and "turn it off" is just disabling it.
+func TestInAppDestinationAlwaysPresent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	m, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	find := func(n models.NotificationConfig) (models.NotifyDestination, bool) {
+		for _, d := range n.Destinations {
+			if d.ID == models.InAppDestinationID {
+				return d, true
+			}
+		}
+		return models.NotifyDestination{}, false
+	}
+	got, ok := find(m.Notifications())
+	if !ok || !got.Enabled || got.Type != models.InAppDestinationType {
+		t.Fatalf("fresh config = %+v, want an enabled in-app destination", got)
+	}
+
+	// A save that omits it must not be able to drop it — the editor sends the
+	// whole list back, and losing it would leave rules resolving nowhere.
+	n := m.Notifications()
+	n.Destinations = []models.NotifyDestination{{ID: "abc", Name: "Discord", Type: "discord", Enabled: true}}
+	if err := m.UpdateNotifications(n); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := find(m.Notifications()); !ok {
+		t.Error("saving without the centre dropped it")
+	}
+
+	// Disabling it, though, must stick.
+	n = m.Notifications()
+	for i := range n.Destinations {
+		if n.Destinations[i].ID == models.InAppDestinationID {
+			n.Destinations[i].Enabled = false
+		}
+	}
+	if err := m.UpdateNotifications(n); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := find(m.Notifications()); got.Enabled {
+		t.Error("disabling the centre did not stick")
+	}
+}
+
+// A rule that names a webhook used to reach that webhook AND the panel, because
+// recording was unconditional. Now that an explicit list means "only these", the
+// migration must add the centre or such a rule silently stops being recorded.
+func TestSeedV3RoutesExistingRulesToTheCentre(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	raw := `{
+		"server": {"host": "0.0.0.0", "port": 8420},
+		"trackers": [],
+		"settings": {},
+		"notifications": {
+			"destinations": [{"id":"abc","name":"Discord","type":"discord","enabled":true}],
+			"rules": [
+				{"id":"r1","name":"Named","enabled":true,"destinations":["abc"],
+				 "conditions":[{"field":"ratio","op":"lt","value":"1"}]},
+				{"id":"r2","name":"Unset","enabled":true,"destinations":[],
+				 "conditions":[{"field":"ratio","op":"lt","value":"1"}]}
+			],
+			"seed_version": 2,
+			"seeded_default_rules": true
+		}
+	}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := m.Notifications()
+	byID := map[string]models.AlertRule{}
+	for _, r := range n.Rules {
+		byID[r.ID] = r
+	}
+	if !slices.Contains(byID["r1"].Destinations, models.InAppDestinationID) {
+		t.Errorf("r1 destinations = %v, want the centre appended", byID["r1"].Destinations)
+	}
+	// A rule that picked nothing already means "everywhere" — leave it alone,
+	// or it silently becomes pinned to today's destination list.
+	if len(byID["r2"].Destinations) != 0 {
+		t.Errorf("r2 destinations = %v, want left empty", byID["r2"].Destinations)
+	}
+	// Idempotent: re-opening must not append it twice.
+	m2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range m2.Notifications().Rules {
+		if r.ID != "r1" {
+			continue
+		}
+		got := 0
+		for _, id := range r.Destinations {
+			if id == models.InAppDestinationID {
+				got++
+			}
+		}
+		if got != 1 {
+			t.Errorf("centre appears %d times after a second open", got)
+		}
 	}
 }

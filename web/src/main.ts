@@ -13,11 +13,12 @@ import { startIconFallback } from './utils/icons';
 import { renderGrid, renderCard, setGridRerender } from './views/grid';
 import { renderAggCards } from './views/aggCards';
 import { renderQuiBars, refreshQuiStats, renderQUIInstanceChecklist } from './components/qui';
+import { initAlertsPanel, refreshAlertCount } from './components/alertsPanel';
 import { toast } from './components/toast';
 import { openColCustomizer, toggleColVisible } from './components/cols';
 import { initTargetsPopover, openTargetsPopover, closeTargetsPopover } from './components/targetsPopover';
 import { loadColPrefs, resetColPrefs, setScrapeStatus, scrapeStatus } from './state';
-import { errLabel, esc } from './utils/format';
+import { errLabel } from './utils/format';
 import * as trackersTab from './components/trackersTab';
 import * as logsTab from './components/logs';
 import * as alertsTab from './components/alertsTab';
@@ -59,9 +60,13 @@ async function boot() {
   await loadSettings();
   maybeShowAuthNudge(); // after settings so the persistent opt-out is honoured
   await loadTrackers();
+  initAlertsPanel(); // after trackers: the source filter names them
   initHistoryFeature();       // flag-gated tab; no-op while FEATURES.history is off
   void initPathwaysFeature(); // independent of stats — don't block the refresh
   await refreshAllStats();
+  // Stats refreshes are when rules are evaluated, so the bubble is only ever
+  // stale between polls if it isn't re-read here.
+  void refreshAlertCount();
   await loadScrapeStatus();
   await Promise.all([loadHistory(), loadTrackerGroups()]);
   // Tracker groups drive the History view's target reference lines; if the app
@@ -72,7 +77,7 @@ async function boot() {
   await refreshQuiStats(state.appSettings);
   scheduleRefresh();
   scheduleQuiRefresh();
-  autoSyncScrapes();
+  scrapeWhatIsAllowed();
 }
 
 // ── Auth gate (single-user basic auth) ─────────────────────────────────────
@@ -368,43 +373,22 @@ async function loadScrapeStatus() {
 function updateScrapeAlert() {
   const bar = document.getElementById('scrape-alert-bar');
   if (!bar) return;
+  // API-only mode is the only thing left on this bar: a standing statement of
+  // configuration, not an event, so it has nothing to alert about.
+  //
+  // The scrape-limit and expired-cookie notices moved to the notification
+  // centre (seed batch 4). As banners they were dismissed to sessionStorage,
+  // so they returned every session and were re-dismissed forever; as rules
+  // they get a cooldown, name the tracker, stay until read, and can go to a
+  // webhook as well.
   const apiOnly = state.appSettings.api_only_mode ?? false;
-  let limitedCount = 0;
-  for (const entry of Object.values(scrapeStatus)) {
-    if (!entry.allowed && entry.reason === 'daily_limit') limitedCount++;
+  if (apiOnly) {
+    bar.innerHTML = '<span style="color:var(--text3);font-size:12px"><i class="fas fa-ban" style="margin-right:5px;opacity:.7"></i>API only mode — profile scraping is disabled</span>';
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
   }
-  const parts: string[] = [];
-  if (apiOnly) parts.push('<span style="color:var(--text3);font-size:12px"><i class="fas fa-ban" style="margin-right:5px;opacity:.7"></i>API only mode — profile scraping is disabled</span>');
-  // Daily-limit notice is a WARNING (amber), not an error — the cap is often
-  // the tracker operator's and there's nothing the user can do about it, so
-  // it's dismissible for the session (like the login-protection nudge).
-  const limitDismissed = sessionStorage.getItem('yata-scrape-limit-dismissed') === '1';
-  if (limitedCount > 0 && !limitDismissed) parts.push(`<span style="color:var(--amber);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>${limitedCount} tracker${limitedCount > 1 ? 's have' : ' has'} hit the daily maximum scrapes<button type="button" class="auth-nudge-x" onclick="dismissScrapeLimitAlert()" title="Dismiss for this session">&times;</button></span>`);
-  // Expired session cookies — actionable (re-copy the cookie), so it names
-  // the trackers when few. Clears itself once a scrape succeeds again.
-  const cookieDismissed = sessionStorage.getItem('yata-cookie-expired-dismissed') === '1';
-  const expired = state.trackers.filter(t => t.enabled !== false && scrapeStatus[t.id]?.cookie_expired);
-  if (expired.length > 0 && !cookieDismissed) {
-    const who = expired.length <= 3
-      ? `${expired.map(t => esc(t.name)).join(', ')} session cookie${expired.length > 1 ? 's have' : ' has'} expired`
-      : `${expired.length} tracker session cookies have expired`;
-    parts.push(`<span style="color:var(--amber);font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:6px"><i class="fas fa-exclamation-triangle"></i>${who} — re-copy ${expired.length > 1 ? 'them' : 'it'} in Settings → Trackers<button type="button" class="auth-nudge-x" onclick="dismissCookieExpiredAlert()" title="Dismiss for this session">&times;</button></span>`);
-  }
-  if (parts.length > 0) { bar.innerHTML = parts.join('<span style="color:var(--border2);margin:0 8px">|</span>'); bar.style.display = 'flex'; }
-  else { bar.style.display = 'none'; }
 }
-
-function dismissScrapeLimitAlert() {
-  sessionStorage.setItem('yata-scrape-limit-dismissed', '1');
-  updateScrapeAlert(); // re-derive — hides the bar unless API-only mode still needs it
-}
-(window as any).dismissScrapeLimitAlert = dismissScrapeLimitAlert;
-
-function dismissCookieExpiredAlert() {
-  sessionStorage.setItem('yata-cookie-expired-dismissed', '1');
-  updateScrapeAlert();
-}
-(window as any).dismissCookieExpiredAlert = dismissCookieExpiredAlert;
 
 // ── Trackers ──────────────────────────────────────────────────────────────
 async function loadTrackers() {
@@ -679,9 +663,14 @@ initTargetsPopover({
 });
 (window as any).openTargetsPopover = openTargetsPopover;
 
-/** Auto-sync: fire allowed profile scrapes during the refresh cycle. */
-function autoSyncScrapes() {
-  if (state.appSettings.profile_auto_sync === false) return;
+/** Fire the profile scrapes the policy currently allows.
+ *
+ *  Ungated: whether a tracker may be scraped at all is API-only mode (global
+ *  or per tracker), and how often is the interval and daily cap. The old
+ *  profile_auto_sync toggle added a third axis that only applied while a
+ *  browser was open, never gated the server's fallback scrape despite being
+ *  called "on refresh", and did nothing whatsoever on a headless instance. */
+function scrapeWhatIsAllowed() {
   state.trackers
     .filter(t => t.enabled !== false && t.username && t.supports_html_scrape)
     .filter(t => scrapeStatus[t.id]?.allowed)
@@ -791,10 +780,32 @@ async function initSettingsPage() {
   renderTrackersTab();
 }
 
+/** What each settings tab is called, and what it is for.
+ *
+ *  The lede is not decoration — it is where a page gets to state the thing a
+ *  user would otherwise have to infer, e.g. that alerts work with no webhook
+ *  configured at all. */
+const SETTINGS_TAB_INFO: Record<string, { title: string; lede: string }> = {
+  general:  { title: 'General',      lede: 'Signing in to Yata, the names it answers to, and backups of your setup. Changes save automatically.' },
+  display:  { title: 'Display',      lede: 'What the dashboard shows and how it is arranged. Changes save automatically.' },
+  scraping: { title: 'Data sources',  lede: 'Where Yata’s numbers come from: each tracker’s API, its profile page when the API falls short, and what you tell Yata yourself. Everything here stays within each tracker’s own limits.' },
+  trackers: { title: 'Trackers',     lede: 'The accounts Yata watches, their credentials, and their per-tracker overrides.' },
+  qui:      { title: 'Integrations', lede: 'Other apps in your setup: what Yata reads from them, and read-only tokens that let them read Yata.' },
+  alerts:   { title: 'Alerts',       lede: 'Rules that watch your trackers, and where the results go. Alerts appear in the notification centre whether or not you set up a webhook.' },
+  logs:     { title: 'Logs',         lede: 'What Yata has been doing. Useful when a tracker stops reporting and it is not obvious why.' },
+};
+
 /** Switch the active settings tab (sidebar) and panel. */
 function switchSettingsTab(tab: string) {
   document.querySelectorAll<HTMLElement>('.settings-tab').forEach(b =>
     b.classList.toggle('active', b.dataset['tab'] === tab));
+  const info = SETTINGS_TAB_INFO[tab];
+  const titleEl = document.getElementById('settings-title');
+  const ledeEl = document.getElementById('settings-lede');
+  if (info && titleEl && ledeEl) {
+    titleEl.textContent = info.title;
+    ledeEl.textContent = info.lede;
+  }
   document.querySelectorAll<HTMLElement>('.settings-panel').forEach(p => {
     p.style.display = p.id === `settings-tab-${tab}` ? '' : 'none';
   });
@@ -814,6 +825,7 @@ function switchSettingsTab(tab: string) {
 (window as any).exportAlerts     = () => alertsTab.exportAlerts();
 (window as any).importAlertsFile = (input: HTMLInputElement) => { void alertsTab.importAlertsFile(input); };
 (window as any).toggleLogLevel = (lvl: string) => logsTab.toggleLogLevel(lvl);
+(window as any).filterLogs     = () => logsTab.filterLogs();
 (window as any).toggleLogPause = logsTab.toggleLogPause;
 (window as any).clearLogs      = () => { void logsTab.clearLogs(); };
 (window as any).downloadLogs   = logsTab.downloadLogs;
@@ -893,7 +905,7 @@ async function fullRefreshCycle(force = false) {
   await refreshAllStats(force);
   await loadHistory();
   await loadScrapeStatus();
-  autoSyncScrapes();
+  scrapeWhatIsAllowed();
 }
 
 // Both pollers skip a tick while the login gate is up. Belt and braces with
@@ -1094,7 +1106,6 @@ modalsReady.then(m => {
   (window as any).openExportConfirm   = () => { void m.openExportConfirm(); };
   (window as any).cancelExportConfirm = m.cancelExportConfirm;
   (window as any).confirmExportConfig = () => { void m.confirmExportConfig(); };
-  (window as any).toggleSettingsSync      = m.toggleSettingsSync;
   (window as any).toggleSettingsFavicon   = m.toggleSettingsFavicon;
   (window as any).toggleSettingsPrivate   = m.toggleSettingsPrivate;
   (window as any).toggleSettingsQuiBars   = m.toggleSettingsQuiBars;
@@ -1154,7 +1165,8 @@ modalsReady.then(m => {
   (window as any).checkForUpdates       = () => { void m.checkForUpdates(); };
   (window as any).toggleAutoUpdate      = () => { void m.toggleAutoUpdate(); };
   (window as any).toggleTrustProxy      = () => { void m.toggleTrustProxy(); };
-  (window as any).saveAllowedHosts      = () => { void m.saveAllowedHosts(); };
+  (window as any).addAllowedHost        = () => { void m.addAllowedHost(); };
+  (window as any).toggleAcctPanel       = (id: string) => m.toggleAcctPanel(id);
 });
 
 // ── Trackers tab wiring (trackersTab.ts, exposed on window) ───────────────
@@ -1171,6 +1183,8 @@ modalsReady.then(m => {
 (window as any).jackettFetch    = () => { void trackersTab.fetchImportIndexers('jackett'); };
 (window as any).jackettImport   = () => { void trackersTab.importSelected('jackett'); };
 (window as any).updateImportBtn = trackersTab.updateImportBtn;
+(window as any).toggleImportConn = (k: 'prowlarr' | 'jackett') => trackersTab.toggleImportConn(k);
+(window as any).trkFavFailed    = (img: HTMLImageElement) => trackersTab.trkFavFailed(img);
 
 function closeColModal() {
   document.getElementById('col-modal')?.classList.remove('open');

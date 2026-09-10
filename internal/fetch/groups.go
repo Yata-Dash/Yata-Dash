@@ -46,13 +46,12 @@ func applyCustomAuth(req *http.Request, api *defs.CustomAPI, t models.Tracker) *
 	return nil
 }
 
-// FetchGroups retrieves the tracker's own group ladder and returns the raw
-// response body with per-user progress stripped — ready to hash and store.
+// FetchGroups retrieves the tracker's own group ladder and returns it as
+// canonical JSON — ready to hash and store.
 //
-// It returns bytes rather than []defs.GroupDef because what gets stored is
-// what the TRACKER said, not what this version of Yata understood: a better
-// mapping later (when the platform starts serving colours, say) re-derives
-// from the response, with nothing to refetch.
+// It returns bytes rather than []defs.GroupDef so the store keeps the ladder as
+// the TRACKER described it, structure and all, rather than one version of
+// Yata's reading of it.
 func (c *Client) FetchGroups(t models.Tracker) ([]byte, *Error) {
 	spec := c.Registry.GroupAPI(t.URL, t.Type)
 	if spec == nil || spec.Path == "" {
@@ -102,9 +101,12 @@ func (c *Client) FetchGroups(t models.Tracker) ([]byte, *Error) {
 	if len(defs.LadderFromAPI(body, *spec)) == 0 {
 		return nil, errf("parse_error", fmt.Errorf("no %q ladder in response", spec.Ladder))
 	}
-	stripped, err := defs.StripGroupProgress(body)
+	// Never the raw body: CanonicalLadder projects it down to the ladder fields
+	// Yata models, so nothing account-specific the endpoint carries — it is a
+	// /api/user route — can reach the caller or the store.
+	canonical, err := defs.CanonicalLadder(body)
 	if err != nil {
 		return nil, errf("parse_error", err)
 	}
-	return stripped, nil
+	return canonical, nil
 }

@@ -60,6 +60,7 @@
   --green:   #34d399;   /* Uploaded, good ratio, seeding counts */
   --red:     #f87171;   /* Errors, hit & runs, warnings */
   --amber:   #fbbf24;   /* Leeching, snatched, caution states */
+  --yellow:  #facc15;   /* Rate limits and other "wait and retry" states */
   --blue:    #60a5fa;   /* Buffer, seeding, info */
   --teal:    #2dd4bf;   /* Seed size, FL tokens */
   --purple:  #a78bfa;   /* Downloaded */

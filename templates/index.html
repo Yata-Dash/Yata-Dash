@@ -93,6 +93,10 @@
          class="btn btn-ghost btn-icon btn-sm" title="View on GitHub" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none">
         <i class="fa-brands fa-github" style="font-size:15px"></i>
       </a>
+      <button class="btn btn-ghost btn-icon btn-sm alerts-flag" id="alerts-btn" title="Alerts" aria-haspopup="dialog" aria-expanded="false">
+        <i class="fas fa-flag" style="font-size:14px"></i>
+        <span id="alerts-count" class="alerts-count" hidden></span>
+      </button>
       <button class="btn btn-ghost btn-icon btn-sm" id="privacy-btn" title="Blur usernames (privacy mode)">
         <svg id="privacy-eye" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -116,6 +120,17 @@
       </button>
     </div>
   </header>
+
+  <!-- Alerts panel — the app's own alert destination. Rendered by JS. -->
+  <div id="alerts-panel" class="alerts-panel" hidden role="dialog" aria-label="Alerts">
+    <div class="alerts-panel-head">
+      <input type="search" id="alerts-search" class="alerts-search" placeholder="Search alerts" autocomplete="off">
+      <select id="alerts-filter" class="alerts-filter" aria-label="Filter by source"></select>
+      <button type="button" class="btn btn-ghost btn-sm" id="alerts-read-all">Mark all read</button>
+    </div>
+    <div id="alerts-list" class="alerts-list"></div>
+    <div id="alerts-more" class="alerts-more" hidden></div>
+  </div>
 
   <!-- Scrape alert bar — hidden by default, shown by JS when limits are hit -->
   <div id="scrape-alert-bar" style="display:none;align-items:center;gap:10px;padding:6px 20px;background:var(--surface);border-bottom:1px solid var(--border);min-height:32px;flex-wrap:wrap"></div>
@@ -276,7 +291,9 @@
           <div class="page-subtitle">Estimated invite routes from your current trackers — community data, reference only</div>
         </div>
         <div class="pw-combo" id="pw-combo">
-          <input class="form-input" type="text" id="pw-target-input" placeholder="Select a target tracker…" autocomplete="off" spellcheck="false"/>
+          <input class="form-input" type="text" id="pw-target-input" name="yata-pathway-target"
+                 placeholder="Select a target tracker…" autocomplete="off" spellcheck="false"
+                 data-lpignore="true" data-1p-ignore data-form-type="other"/>
           <div class="pw-combo-list" id="pw-combo-list" style="display:none"></div>
         </div>
       </div>
@@ -292,14 +309,18 @@
 
     <!-- ════ SETTINGS PAGE (full-page view, #/settings) ════ -->
     <div id="settings-page" style="display:none">
-      <div class="settings-header">
-        <a class="settings-back" href="#/">
+      <!-- The title now names the TAB, not the page. It read as chrome when it
+           said "Settings" — the sidebar already said that, so the largest text
+           on screen carried no information. -->
+      <div class="settings-header set-head">
+        <a class="settings-back" href="#/" title="Back to dashboard" aria-label="Back to dashboard">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Dashboard
         </a>
-        <div>
-          <div class="page-title">Settings</div>
-          <div class="page-subtitle">Changes save automatically</div>
+        <div class="set-head-text">
+          <div class="set-eyebrow">Settings</div>
+          <h1 class="set-title" id="settings-title">General</h1>
+          <p class="set-lede" id="settings-lede">Changes save automatically.</p>
         </div>
       </div>
 
@@ -307,7 +328,7 @@
         <nav class="settings-tabs" id="settings-tabs" aria-label="Settings sections">
           <button type="button" class="settings-tab active" data-tab="general">General</button>
           <button type="button" class="settings-tab" data-tab="display">Display</button>
-          <button type="button" class="settings-tab" data-tab="scraping">Scraping</button>
+          <button type="button" class="settings-tab" data-tab="scraping">Data sources</button>
           <button type="button" class="settings-tab" data-tab="trackers">Trackers</button>
           <button type="button" class="settings-tab" data-tab="qui">Integrations</button>
           <button type="button" class="settings-tab" data-tab="alerts">Alerts</button>
@@ -318,166 +339,198 @@
 
           <!-- ── Tab: General ─────────────────────────────────────────── -->
           <div class="settings-panel" id="settings-tab-general">
-            <p class="settings-section-label">About</p>
-            <div class="form-group" style="margin-bottom:14px">
-              <div class="ver-grid" id="s-version-grid">
-                <div class="ver-row"><span class="ver-label">App</span><code id="s-ver-app" class="ver-val">…</code><span id="s-ver-app-badge" class="ver-badge"></span></div>
-                <div class="ver-row"><span class="ver-label">Definitions</span><code id="s-ver-defs" class="ver-val">…</code><span id="s-ver-defs-badge" class="ver-badge"></span></div>
-                <div class="ver-row"><span class="ver-label">Pathways</span><code id="s-ver-pathways" class="ver-val">…</code><span id="s-ver-pathways-badge" class="ver-badge"></span></div>
-                <!-- Hidden until the build is stamped: a blank row would just
-                     look broken on a build that has no commit to report. -->
-                <div class="ver-row" id="s-ver-commit-row" hidden><span class="ver-label">Commit</span><code id="s-ver-commit" class="ver-val">…</code><span id="s-ver-commit-badge" class="ver-badge"></span></div>
-                <div class="ver-row" id="s-ver-built-row" hidden><span class="ver-label">Built</span><code id="s-ver-built" class="ver-val">…</code></div>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
-                <button type="button" id="s-update-check" class="btn btn-ghost btn-sm" onclick="checkForUpdates()">Check for updates</button>
-                <span id="s-update-status" style="font-size:11px;color:var(--text3)"></span>
-              </div>
-              <label class="alerts-inline" style="margin-top:10px;font-size:12px">
-                <input type="checkbox" id="s-update-auto" onchange="toggleAutoUpdate()"/> Check automatically once a day
-              </label>
-              <div style="font-size:11px;color:var(--text3);margin-top:6px">Update checks contact <code>github.com</code> to read the latest published versions — nothing is sent, and only when you click or enable the daily check. Handy for bug reports: quote these three lines so we can tell if your defs or pathways are out of date.</div>
-            </div>
+            <!-- Four sections flowing into columns rather than a main column
+                 plus a rail. About is reference material — read when filing a
+                 bug, never touched otherwise — so it should not be at the top
+                 pushing the controls down; but parked alone in a fixed rail it
+                 just left a tall empty column on a wide screen. auto-fit gives
+                 it a column beside the others instead, and one column on a
+                 phone with the settings first. -->
+            <div class="set-grid">
 
-            <p class="settings-section-label" style="margin-top:16px">Account</p>
-            <div class="form-group" style="margin-bottom:14px" id="s-account-section">
-              <div style="font-size:12px;color:var(--text3);font-style:italic">Loading…</div>
-            </div>
-
-            <p class="settings-section-label" style="margin-top:16px">Network</p>
-            <div class="form-group" style="margin-bottom:14px">
-              <label class="alerts-inline" style="font-size:12px">
-                <input type="checkbox" id="s-trust-proxy" onchange="toggleTrustProxy()"/> Behind a reverse proxy — trust <code>X-Forwarded-*</code> headers
-              </label>
-              <div style="font-size:11px;color:var(--text3);margin-top:6px">Enable only when Yata sits behind a reverse proxy you control (nginx, Caddy, Traefik…). Uses <code>X-Forwarded-For</code> for login rate-limiting (so one bad client can't lock everyone out through the proxy) and <code>X-Forwarded-Proto</code> to mark the session cookie Secure behind HTTPS. <strong style="color:var(--amber)">Leave off when directly exposed — these headers can be faked by clients.</strong></div>
-            </div>
-
-            <div class="form-group" style="margin-bottom:14px">
-              <label class="form-label" for="s-allowed-hosts" style="font-size:12px">Hostnames this instance answers to</label>
-              <input class="form-input" type="text" id="s-allowed-hosts" placeholder="yata.example.com, box.tailnet-name.ts.net"
-                     onchange="saveAllowedHosts()" autocapitalize="off" autocorrect="off" spellcheck="false"/>
-              <div style="font-size:11px;color:var(--text3);margin-top:6px">
-                Leave empty unless you reach Yata by a <em>name</em>. Browsing to an IP address or <code>localhost</code> always works and needs nothing here.
-                Add your domain or Tailscale name — comma-separated for more than one — and it applies straight away, no restart.
-                <strong>Set this before you need it:</strong> if you set Yata up on this machine but reach it by a domain when you're away, add the domain now, while you can still get to this page.
-                <br>Names Yata wasn't told about are refused, which is what stops a web page you visit from re-pointing its own domain at your machine to read this dashboard.
-              </div>
-            </div>
-
-            <p class="settings-section-label" style="margin-top:16px">Data</p>
-
-            <div class="form-group" style="margin-bottom:16px">
-              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Configuration</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Download a full backup of your configuration (trackers, targets, settings) as a JSON file, or import one to restore it. <strong style="color:var(--amber)">This file is a backup, not something to share — it holds every tracker API key and session cookie you have entered.</strong></div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="openExportConfirm()"><i class="fas fa-download" style="margin-right:6px"></i>Export config</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('s-import-file').click()"><i class="fas fa-upload" style="margin-right:6px"></i>Import config</button>
-                <input type="file" id="s-import-file" accept="application/json,.json" style="display:none" onchange="importConfigFile(this)"/>
-              </div>
-
-              <!-- Export confirmation. The password stops someone at a borrowed
-                   machine; the wording is the only thing that helps a user who
-                   has been ASKED for this file, so it names that case. -->
-              <div id="s-export-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--amber);border-radius:6px;background:var(--bg2)">
-                <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:6px">
-                  <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>This file unlocks every tracker you have added
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Account</h2>
+                    <p class="set-section-note">Signing in to Yata itself. Separate from your tracker credentials.</p>
+                  </div>
+                  <div id="s-account-section">
+                    <div style="font-size:12px;color:var(--text3);font-style:italic">Loading&hellip;</div>
+                  </div>
                 </div>
-                <div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.5">
-                  It contains your API keys and session cookies in plain text. Anyone who gets a copy can act as you on those trackers.
-                  <strong>Nobody legitimate will ever ask you for it</strong> — not tracker staff, not this project, not anyone offering help with a problem.
-                  Send a <em>log</em> instead: those have credentials stripped out.
-                </div>
-                <div id="s-export-authrow" style="display:none">
-                  <input class="form-input" type="password" id="s-export-pw" placeholder="Your Yata password" autocomplete="current-password" style="margin-bottom:8px"/>
-                  <input class="form-input" type="text" id="s-export-code" inputmode="numeric" autocomplete="one-time-code" placeholder="Authenticator code" style="display:none;margin-bottom:8px"/>
-                </div>
-                <div id="s-export-error" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none"></div>
-                <div style="display:flex;gap:8px">
-                  <button type="button" class="btn btn-primary btn-sm" onclick="confirmExportConfig()">Download backup</button>
-                  <button type="button" class="btn btn-ghost btn-sm" onclick="cancelExportConfirm()">Cancel</button>
-                </div>
-              </div>
-              <div style="font-size:11px;color:var(--amber);margin-top:8px"><i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>Importing <strong>overwrites</strong> your current trackers and settings — the existing config is replaced and that data is lost. A backup of the current config is saved automatically first.</div>
-            </div>
 
-            <div class="form-group" style="margin-bottom:16px">
-              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Tracker history</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Export your recorded daily stat history (uploaded, ratio, seed size, bonus, …) as a CSV for personal analysis in a spreadsheet.</div>
-              <button type="button" class="btn btn-ghost btn-sm" onclick="exportHistoryCsv()"><i class="fas fa-file-csv" style="margin-right:6px"></i>Export history (CSV)</button>
-            </div>
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Network</h2>
+                    <p class="set-section-note">How Yata is reached, and which names it will answer to.</p>
+                  </div>
+                  <label class="set-toggle" style="padding-top:0">
+                    <input type="checkbox" id="s-trust-proxy" onchange="toggleTrustProxy()" style="accent-color:var(--accent);width:14px;height:14px"/>
+                    <span class="set-toggle-label">Behind a reverse proxy &mdash; trust <code>X-Forwarded-*</code> headers</span>
+                    <i class="set-info" role="img" title="Turn on only when Yata sits behind a reverse proxy you control (nginx, Caddy, Traefik). X-Forwarded-For is used for login rate-limiting, so one bad client cannot lock everyone out through the proxy, and X-Forwarded-Proto marks the session cookie Secure behind HTTPS." aria-label="Turn on only when Yata sits behind a reverse proxy you control. Used for login rate-limiting and to mark the session cookie Secure behind HTTPS."></i>
+                  </label>
+                  <p class="form-hint" style="color:var(--amber);margin:0 0 14px 24px">Leave off when Yata is directly exposed &mdash; these headers can be faked by clients.</p>
 
-            <div class="form-group" style="margin-bottom:6px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-backup-track" onclick="toggleSettingsBackup()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Automatic config backups</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Periodically save a copy of your config to the backups folder. Off by default.</div>
+                  <div class="form-group">
+                    <label class="form-label" for="s-host-input">Hostnames this instance answers to</label>
+                    <!-- One host per chip rather than one long comma-separated
+                         string: the list is what matters, and a typo in the
+                         middle of a run-on line is invisible. The stored shape
+                         is unchanged — it was always a list, the commas only
+                         ever existed in this field. -->
+                    <div class="host-list" id="s-host-list"></div>
+                    <div class="host-add">
+                      <!-- name/autocomplete matter here: with none of them the
+                           browser reads the surrounding Account section and
+                           offers the saved username, which is the one thing
+                           this field never wants. -->
+                      <input class="form-input" type="text" id="s-host-input" name="yata-hostname"
+                             placeholder="yata.example.com" autocomplete="off"
+                             data-lpignore="true" data-1p-ignore data-form-type="other"
+                             maxlength="253" autocapitalize="off" autocorrect="off" spellcheck="false"
+                             onkeydown="if(event.key==='Enter'){event.preventDefault();addAllowedHost();}"/>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="addAllowedHost()">Add</button>
+                    </div>
+                    <div class="form-hint" style="margin-top:8px">
+                      Only needed if you reach Yata by a <em>name</em> &mdash; an IP or <code>localhost</code> always works.
+                      <strong>Add it before you travel</strong>, while you can still get to this page.
+                      <i class="set-info" role="img" title="Any other name is refused, which stops a web page you visit from re-pointing its own domain at your machine to read this dashboard. Applies straight away, no restart." aria-label="Any other name is refused, which stops a web page you visit from re-pointing its own domain at your machine. Applies straight away."></i>
+                    </div>
+                  </div>
                 </div>
-              </label>
-            </div>
-            <div id="s-backup-opts" style="margin:8px 0 0 0">
-              <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
-                <label style="display:flex;flex-direction:column;gap:4px">
-                  <span style="font-size:11px;color:var(--text3)">Frequency</span>
-                  <select class="form-input" id="s-backup-frequency" style="width:auto;padding:4px 8px">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </label>
-                <label style="display:flex;flex-direction:column;gap:4px">
-                  <span style="font-size:11px;color:var(--text3)">Keep last</span>
-                  <input class="form-input" type="number" id="s-backup-keep" min="1" max="99" style="width:80px;padding:4px 8px" oninput="this.value=Math.min(99,Math.max(1,parseInt(this.value)||1))"/>
-                </label>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="backupNow()">Back up now</button>
-              </div>
-              <div id="s-backup-list" style="font-size:11px;color:var(--text3)"></div>
-            </div>
 
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Data</h2>
+                    <p class="set-section-note">Backups of your setup, and your recorded history.</p>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom:16px">
+                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Configuration</div>
+                    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">A full backup of your setup (trackers, targets, settings) as a JSON file. <strong style="color:var(--amber)">It holds every tracker API key and session cookie you have entered &mdash; back it up, never share it.</strong></div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="openExportConfirm()"><i class="fas fa-download" style="margin-right:6px"></i>Export config</button>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('s-import-file').click()"><i class="fas fa-upload" style="margin-right:6px"></i>Import config</button>
+                      <input type="file" id="s-import-file" accept="application/json,.json" style="display:none" onchange="importConfigFile(this)"/>
+                    </div>
+
+                    <!-- Export confirmation. The password stops someone at a borrowed
+                         machine; the wording is the only thing that helps a user who
+                         has been ASKED for this file, so it names that case. -->
+                    <div id="s-export-confirm" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--amber);border-radius:6px;background:var(--bg2)">
+                      <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:6px">
+                        <i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>This file unlocks every tracker you have added
+                      </div>
+                      <div style="font-size:11px;color:var(--text2);margin-bottom:10px;line-height:1.5">
+                        It contains your API keys and session cookies in plain text. Anyone who gets a copy can act as you on those trackers.
+                        <strong>Nobody legitimate will ever ask you for it</strong> &mdash; not tracker staff, not this project, not anyone offering help with a problem.
+                        Send a <em>log</em> instead: those have credentials stripped out.
+                      </div>
+                      <div id="s-export-authrow" style="display:none">
+                        <input class="form-input" type="password" id="s-export-pw" placeholder="Your Yata password" autocomplete="current-password" style="margin-bottom:8px;max-width:280px"/>
+                        <input class="form-input" type="text" id="s-export-code" inputmode="numeric" autocomplete="one-time-code" placeholder="Authenticator code" style="display:none;margin-bottom:8px;max-width:280px"/>
+                      </div>
+                      <div id="s-export-error" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none"></div>
+                      <div style="display:flex;gap:8px">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="confirmExportConfig()">Download backup</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="cancelExportConfirm()">Cancel</button>
+                      </div>
+                    </div>
+                    <div style="font-size:11px;color:var(--amber);margin-top:8px"><i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>Importing <strong>overwrites</strong> your current trackers and settings. A backup of the current config is saved automatically first.</div>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom:16px">
+                    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Tracker history</div>
+                    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Your recorded daily stats (uploaded, ratio, seed size, bonus&hellip;) as a CSV, for a spreadsheet.</div>
+                    <!-- A .form-group is a column flex, so a lone button stretches
+                         the whole width unless it is told not to. -->
+                    <button type="button" class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="exportHistoryCsv()"><i class="fas fa-file-csv" style="margin-right:6px"></i>Export history (CSV)</button>
+                  </div>
+
+                  <label class="set-toggle">
+                    <div class="toggle-track" id="s-backup-track" onclick="toggleSettingsBackup()"><div class="toggle-thumb"></div></div>
+                    <span class="set-toggle-label">Automatic config backups</span>
+                    <i class="set-info" role="img" title="Periodically saves a copy of your config to the backups folder. Off by default." aria-label="Periodically saves a copy of your config to the backups folder. Off by default."></i>
+                  </label>
+                  <div id="s-backup-opts" style="margin:8px 0 0 0">
+                    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+                      <label style="display:flex;flex-direction:column;gap:4px">
+                        <span style="font-size:11px;color:var(--text3)">Frequency</span>
+                        <select class="form-input" id="s-backup-frequency" style="width:auto;padding:4px 8px">
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </label>
+                      <label style="display:flex;flex-direction:column;gap:4px">
+                        <span style="font-size:11px;color:var(--text3)">Keep last</span>
+                        <input class="form-input" type="number" id="s-backup-keep" min="1" max="99" style="width:80px;padding:4px 8px" oninput="this.value=Math.min(99,Math.max(1,parseInt(this.value)||1))"/>
+                      </label>
+                      <button type="button" class="btn btn-ghost btn-sm" onclick="backupNow()">Back up now</button>
+                    </div>
+                    <div id="s-backup-list" style="font-size:11px;color:var(--text3)"></div>
+                  </div>
+                </div>
+
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">About</h2>
+                    <p class="set-section-note">Quote these when reporting a bug &mdash; they say whether your defs or pathways are behind.</p>
+                  </div>
+                  <div class="ver-grid" id="s-version-grid">
+                    <div class="ver-row"><span class="ver-label">App</span><code id="s-ver-app" class="ver-val">&hellip;</code><span id="s-ver-app-badge" class="ver-badge"></span></div>
+                    <div class="ver-row"><span class="ver-label">Definitions</span><code id="s-ver-defs" class="ver-val">&hellip;</code><span id="s-ver-defs-badge" class="ver-badge"></span></div>
+                    <div class="ver-row"><span class="ver-label">Pathways</span><code id="s-ver-pathways" class="ver-val">&hellip;</code><span id="s-ver-pathways-badge" class="ver-badge"></span></div>
+                    <!-- Hidden until the build is stamped: a blank row would just
+                         look broken on a build that has no commit to report. -->
+                    <div class="ver-row" id="s-ver-commit-row" hidden><span class="ver-label">Commit</span><code id="s-ver-commit" class="ver-val">&hellip;</code><span id="s-ver-commit-badge" class="ver-badge"></span></div>
+                    <div class="ver-row" id="s-ver-built-row" hidden><span class="ver-label">Built</span><code id="s-ver-built" class="ver-val">&hellip;</code></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+                    <button type="button" id="s-update-check" class="btn btn-ghost btn-sm" onclick="checkForUpdates()">Check for updates</button>
+                    <span id="s-update-status" style="font-size:11px;color:var(--text3)"></span>
+                  </div>
+                  <label class="alerts-inline" style="margin-top:10px;font-size:12px">
+                    <input type="checkbox" id="s-update-auto" onchange="toggleAutoUpdate()"/> Check automatically once a day
+                    <i class="set-info" role="img" title="Update checks read the latest published versions from github.com. Nothing is sent, and only when you click or enable the daily check." aria-label="Update checks read the latest published versions from github.com. Nothing is sent."></i>
+                  </label>
+                </div>
+            </div>
           </div>
 
           <!-- ── Tab: Display ─────────────────────────────────────────── -->
           <div class="settings-panel" id="settings-tab-display" style="display:none">
-            <p class="settings-section-label">Theme</p>
-            <div id="s-theme-grid" class="theme-grid" style="margin-bottom:14px">
-              <span style="font-size:12px;color:var(--text3);font-style:italic">Loading themes…</span>
-            </div>
-
-            <!-- Live preview of common app elements — reflects the selected
-                 theme (via CSS variables) AND the Display toggles below, so it
-                 updates instantly. Card body is rendered by renderThemePreview(). -->
-            <div class="theme-preview" aria-label="Theme element preview">
-              <div class="theme-preview-label">Preview</div>
-              <div class="theme-preview-card" id="theme-preview-card"></div>
-            </div>
-
-            <p class="settings-section-label">Tracker Names</p>
-            <div class="form-group" style="margin-bottom:14px">
+            <!-- Settings left, theme + preview pinned right: the preview
+                 answers "what does this toggle do?", which it can only do
+                 while still on screen when you reach the toggle. -->
+            <div class="set-split">
+              <div class="set-split-main">
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Names & labels</h2>
+                  
+                  </div>
+<div class="form-group" style="margin-bottom:14px">
+  <div style="font-size:11px;color:var(--amber);margin-bottom:4px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons used by groups will be replaced with a free alternative unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
+              <!-- Live icon-set health (filled by renderIconSetStatus after the font probe) -->
+              <div id="fa-status" style="display:none;font-size:11px;margin-bottom:10px;line-height:1.5"></div>
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Tracker name display</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">How tracker names appear in cards and the detail table</div>
               <div style="display:flex;flex-direction:column;gap:6px" id="s-name-mode-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-name-mode" value="name" style="accent-color:var(--accent)">
-                  <span style="font-size:13px;color:var(--text)">Name only <span style="color:var(--text3);font-size:12px">— eg. Seedpool</span></span>
+                  <span style="font-size:13px;color:var(--text)">Name only <span style="color:var(--text3);font-size:12px">— eg. Demo Tracker</span></span>
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-name-mode" value="both" style="accent-color:var(--accent)">
-                  <span style="font-size:13px;color:var(--text)">Name and abbreviation <span style="color:var(--text3);font-size:12px">— eg. Seedpool [SP]</span></span>
+                  <span style="font-size:13px;color:var(--text)">Name and abbreviation <span style="color:var(--text3);font-size:12px">— eg. Demo Tracker [DT]</span></span>
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-name-mode" value="abbr" style="accent-color:var(--accent)">
-                  <span style="font-size:13px;color:var(--text)">Abbreviation only <span style="color:var(--text3);font-size:12px">— eg. [SP]</span></span>
+                  <span style="font-size:13px;color:var(--text)">Abbreviation only <span style="color:var(--text3);font-size:12px">— eg. [DT]</span></span>
                 </label>
               </div>
-            </div>
-
-            <p class="settings-section-label">Dashboard</p>
-            <div class="form-group" style="margin-bottom:4px">
+            </div><div class="form-group" style="margin-bottom:4px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Group name display</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">How your user group appears in the table and expanded detail rows</div>
-              <div style="font-size:11px;color:var(--amber);margin-bottom:4px"><i class="fas fa-lightbulb" style="margin-right:5px"></i>FA Pro icons won't display unless you drop your Font Awesome <code>css/all.min.css</code> and <code>webfonts/</code> into <code>static/fontawesome/</code></div>
-              <!-- Live icon-set health (filled by renderIconSetStatus after the font probe) -->
-              <div id="fa-status" style="display:none;font-size:11px;margin-bottom:10px;line-height:1.5"></div>
+              
               <div style="display:flex;flex-direction:column;gap:6px" id="s-group-name-style-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-group-name-style" value="plain" style="accent-color:var(--accent)">
@@ -488,11 +541,8 @@
                   <span style="font-size:13px;color:var(--text)">Styled <span style="color:var(--text3);font-size:12px">— group colour and icon matching the tracker website</span></span>
                 </label>
               </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom:4px;margin-top:12px">
+            </div><div class="form-group" style="margin-bottom:4px;margin-top:12px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Username display</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Whether your username appears plain or styled with your group colour (as shown on tracker profile pages)</div>
               <div style="display:flex;flex-direction:column;gap:6px" id="s-username-style-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                   <input type="radio" name="s-username-style" value="plain" style="accent-color:var(--accent)">
@@ -504,109 +554,32 @@
                 </label>
               </div>
             </div>
-
-            <div class="form-group" style="margin-bottom:10px;margin-top:12px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-favicon-track" onclick="toggleSettingsFavicon()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Show tracker favicons</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Display each tracker's favicon next to its name in cards and the detail table</div>
                 </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-stat-src-track" onclick="toggleSettingsStatSources()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Show stat sources</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Adds a small dot next to each stat showing whether it came from the tracker API or a profile scrape</div>
+                <div class="set-grid" style="margin-top:26px">
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">On cards &amp; table</h2>
+                  <p class="set-section-note">Extra detail shown against each tracker.</p>
+                  </div>
+                  <label class="set-toggle"><div class="toggle-track" id="s-favicon-track" onclick="toggleSettingsFavicon()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Tracker favicons</span><i class="set-info" role="img" title="Display each tracker's favicon next to its name in cards and the detail table" aria-label="Display each tracker's favicon next to its name in cards and the detail table"></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-stat-src-track" onclick="toggleSettingsStatSources()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Stat source dots</span><i class="set-info" role="img" title="Adds a small dot next to each stat showing whether it came from the tracker API or a profile scrape" aria-label="Adds a small dot next to each stat showing whether it came from the tracker API or a profile scrape"></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-tracker-rules-track" onclick="toggleSettingsTrackerRules()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Tracker rules on cards</span><i class="set-info" role="img" title="A compact reference line at the bottom of each card with the tracker's account rules from its definition — min ratio and min seed time (e.g. &quot;Ratio ≥ 1 · Seed ≥ 10 days&quot;). Display only; the Detail view's Rules section always shows." aria-label="A compact reference line at the bottom of each card with the tracker's account rules from its definition — min ratio and min seed time (e.g. &quot;Ratio ≥ 1 · Seed ≥ 10 days&quot;). Display only; the Detail view's Rules section always shows."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-unread-mail-track" onclick="toggleSettingsUnreadMail()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Unread mail icon</span><i class="set-info" role="img" title="Shows an envelope on a tracker's card (and in the detail table's expanded info) when its site header reports unread mail. Updated by profile scrapes, so at most once per scrape interval." aria-label="Shows an envelope on a tracker's card (and in the detail table's expanded info) when its site header reports unread mail. Updated by profile scrapes, so at most once per scrape interval."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-unread-notif-track" onclick="toggleSettingsUnreadNotif()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Unread notifications icon</span><i class="set-info" role="img" title="Same, but a bell for the tracker's notification feed (likes, comments, system messages) — often noisier than mail, so it gets its own toggle." aria-label="Same, but a bell for the tracker's notification feed (likes, comments, system messages) — often noisier than mail, so it gets its own toggle."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-hnr-highlight-track" onclick="toggleSettingsHnrHighlight()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Highlight hit &amp; runs</span><i class="set-info" role="img" title="Highlight hit & runs in red. Some trackers' H&Rs are permanent — turn off if the red is noise." aria-label="Highlight hit & runs in red. Some trackers' H&Rs are permanent — turn off if the red is noise."></i></label>
                 </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-target-eta-track" onclick="toggleSettingsTargetEtas()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Target time estimates</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Shows estimated time to reach each target and your next group, from your recent growth rate (uploads, seed size, bonus, account age). Independent of the Pathways estimates.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-rate-hover-track" onclick="toggleSettingsRateHovers()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Trend rate on hover</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Hovering a stat shows its recent per-day trend — e.g. bonus points "≈ 3,423 per day" or download "≈ 245.3 GiB per day" (upload, download, buffer, bonus, uploads).</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-tracker-rules-track" onclick="toggleSettingsTrackerRules()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Tracker rules on cards</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">A compact reference line at the bottom of each card with the tracker's account rules from its definition — min ratio and min seed time (e.g. "Ratio ≥ 1 · Seed ≥ 10 days"). Display only; the Detail view's Rules section always shows.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-unread-mail-track" onclick="toggleSettingsUnreadMail()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Unread mail icon</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Shows an envelope on a tracker's card (and in the detail table's expanded info) when its site header reports unread mail. Updated by profile scrapes, so at most once per scrape interval.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-unread-notif-track" onclick="toggleSettingsUnreadNotif()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Unread notifications icon</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Same, but a bell for the tracker's notification feed (likes, comments, system messages) — often noisier than mail, so it gets its own toggle.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-hnr-highlight-track" onclick="toggleSettingsHnrHighlight()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Highlight hit &amp; runs</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Highlight hit &amp; runs in red. Some trackers' H&amp;Rs are permanent — turn off if the red is noise.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-login-click-track" onclick="toggleSettingsLoginClick()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Opening a tracker counts as a login</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Clicking a tracker's link from Yata records a login for it, feeding the inactivity countdown. Off by default — with it off you can still record one explicitly from the tracker's Detail page. Yata never sees you log in; this only ever stores what you tell it.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-goal-pacing-track" onclick="toggleSettingsGoalPacing()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Goal pacing on Detail</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">On the Tracker Detail page, shows a line under each target with a deadline: the rate you need vs. your recent rate, and an on-track/behind verdict (or the extra upload needed for a ratio goal).</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-goal-chips-track" onclick="toggleSettingsGoalChips()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Goal chips on cards/table</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">A compact "on track" / "behind" / "overdue" chip after a target's time estimate, on grid cards and the table's expanded targets — independent of the Detail pacing line above.</div>
-                </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Targets &amp; goals</h2>
+                  <p class="set-section-note">Projections and pacing on target rows.</p>
+                  </div>
+                  <label class="set-toggle"><div class="toggle-track" id="s-target-eta-track" onclick="toggleSettingsTargetEtas()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Time estimates on targets</span><i class="set-info" role="img" title="Shows estimated time to reach each target and your next group, from your recent growth rate (uploads, seed size, bonus, account age). Independent of the Pathways estimates." aria-label="Shows estimated time to reach each target and your next group, from your recent growth rate (uploads, seed size, bonus, account age). Independent of the Pathways estimates."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-goal-chips-track" onclick="toggleSettingsGoalChips()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Goal chips</span><i class="set-info" role="img" title="A compact &quot;on track&quot; / &quot;behind&quot; / &quot;overdue&quot; chip after a target's time estimate, on grid cards and the table's expanded targets — independent of the Detail pacing line above." aria-label="A compact &quot;on track&quot; / &quot;behind&quot; / &quot;overdue&quot; chip after a target's time estimate, on grid cards and the table's expanded targets — independent of the Detail pacing line above."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-goal-pacing-track" onclick="toggleSettingsGoalPacing()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Goal pacing on Detail</span><i class="set-info" role="img" title="On the Tracker Detail page, shows a line under each target with a deadline: the rate you need vs. your recent rate, and an on-track/behind verdict (or the extra upload needed for a ratio goal)." aria-label="On the Tracker Detail page, shows a line under each target with a deadline: the rate you need vs. your recent rate, and an on-track/behind verdict (or the extra upload needed for a ratio goal)."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-rate-hover-track" onclick="toggleSettingsRateHovers()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Trend rate on hover</span><i class="set-info" role="img" title="Hovering a stat shows its recent per-day trend — e.g. bonus points &quot;≈ 3,423 per day&quot; or download &quot;≈ 245.3 GiB per day&quot; (upload, download, buffer, bonus, uploads)." aria-label="Hovering a stat shows its recent per-day trend — e.g. bonus points &quot;≈ 3,423 per day&quot; or download &quot;≈ 245.3 GiB per day&quot; (upload, download, buffer, bonus, uploads)."></i></label>
+<div class="form-group" style="margin-bottom:10px">
               <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Duration format</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">How you want trend estimates displayed. Effects dashboard and pathway views.
+              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Format for trend estimates on dashboard and in pathways.
               </div>
               <div style="display:flex;flex-direction:column;gap:6px" id="s-duration-format-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -619,68 +592,82 @@
                 </label>
               </div>
             </div>
-            <p class="settings-section-label" style="margin-top:16px">Private Mode</p>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-private-track" onclick="toggleSettingsPrivate()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Blur usernames</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Blurs usernames so you can share screenshots without exposing account details</div>
                 </div>
-              </label>
-            </div>
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Pathways</h2>
+                  <p class="set-section-note">Options for the invite-route view.</p>
+                  </div>
+                  <label class="set-toggle"><div class="toggle-track" id="s-private-track" onclick="toggleSettingsPrivate()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Blur usernames</span><i class="set-info" role="img" title="Blurs usernames so you can share screenshots without exposing account details" aria-label="Blurs usernames so you can share screenshots without exposing account details"></i></label>
+                </div>
+                <div class="set-section">
+                  <div class="set-section-head">
+                    <h2 class="set-section-title">Privacy</h2>
+                  <p class="set-section-note">What Yata puts on screen that you might not want in a screenshot.</p>
+                  </div>
+                  <label class="set-toggle"><div class="toggle-track" id="s-pw-eta-track" onclick="toggleSettingsPathwayEtas()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Estimated time to reach</span><i class="set-info" role="img" title="Shows overall arrival estimates on paths and classes, including exact account-age countdowns. Progress bars always show." aria-label="Shows overall arrival estimates on paths and classes, including exact account-age countdowns. Progress bars always show."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-pw-disabled-track" onclick="toggleSettingsPathwayDisabled()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Include disabled trackers</span><i class="set-info" role="img" title="Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate." aria-label="Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate."></i></label>
+                  <label class="set-toggle"><div class="toggle-track" id="s-trend-est-track" onclick="toggleSettingsTrendEstimates()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Stat trend estimates</span><i class="set-info" role="img" title="Projects upload / seed size / bonus requirements from your last 7 days of growth (≈ chips on individual stats)" aria-label="Projects upload / seed size / bonus requirements from your last 7 days of growth (≈ chips on individual stats)"></i></label>
+                </div>
+                </div>
+              </div>
+              <aside class="set-split-side">
+              <!-- Preview first: the aside is pinned as one block, so whatever
+                   sits at its top is what stays on screen. Behind the 12 theme
+                   swatches it was pushed out of view exactly when a toggle
+                   further down needed demonstrating.
 
-            <p class="settings-section-label" style="margin-top:16px">Pathways</p>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-pw-eta-track" onclick="toggleSettingsPathwayEtas()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Estimated time to reach</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Shows overall arrival estimates on paths and classes, including exact account-age countdowns. Progress bars always show.</div>
+                   The card reflects the selected theme (CSS variables) AND the
+                   Display toggles, and updates as you change them. -->
+              <div class="set-section">
+                <div class="theme-preview" aria-label="Theme element preview">
+                  <div class="theme-preview-label">Preview</div>
+                  <div class="theme-preview-card" id="theme-preview-card"></div>
                 </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-pw-disabled-track" onclick="toggleSettingsPathwayDisabled()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Include disabled trackers</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate.</div>
+              </div>
+              <div class="set-section">
+                <div class="set-section-head"><h2 class="set-section-title">Theme</h2></div>
+                <div id="s-theme-grid" class="theme-grid">
+                  <span style="font-size:12px;color:var(--text3);font-style:italic">Loading themes…</span>
                 </div>
-              </label>
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-trend-est-track" onclick="toggleSettingsTrendEstimates()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Stat trend estimates</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Projects upload / seed size / bonus requirements from your last 7 days of growth (≈ chips on individual stats)</div>
-                </div>
-              </label>
+              </div>
+            </aside>
             </div>
           </div>
 
           <!-- ── Tab: Scraping ────────────────────────────────────────── -->
           <div class="settings-panel" id="settings-tab-scraping" style="display:none">
-            <p class="settings-section-label">Automatic Refresh</p>
+            <div class="set-grid">
+              <div class="set-stack">
+              <div class="set-section">
+                <div class="set-section-head">
+                  <h2 class="set-section-title">Tracker APIs</h2>
+                  <p class="set-section-note">Fetching stats from each tracker&rsquo;s API.</p>
+                </div>
             <div class="form-group" style="margin-bottom:14px">
-              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">API Refresh Interval (minutes)</label>
+              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:5px">API refresh interval <i class="set-info" role="img" title="How often stats refresh from tracker APIs while the app is idle. Manual refresh and Tracker Test are always allowed." aria-label="How often stats refresh from tracker APIs while the app is idle. Manual refresh and Tracker Test are always allowed."></i></label>
               <div style="display:flex;align-items:center;gap:10px">
                 <input type="number" id="s-refresh-interval" class="form-input" min="15" style="width:100px"
                   placeholder="30" oninput="this.value=Math.max(15,parseInt(this.value)||15)">
-                <span style="font-size:11px;color:var(--text3)">Min 15 min — how often stats auto-refresh from tracker APIs while idle. Manual refresh &amp; Tracker Test are always allowed.</span>
+                <span class="input-unit">min &mdash; 15 or more</span>
               </div>
             </div>
-            <p class="settings-section-label">Profile Scraping</p>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track on" id="s-profile-sync-track" onclick="toggleSettingsSync()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Auto-sync profile on refresh</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Re-scrapes Avg Seed Time, Seed Size, Join Date etc. each time the dashboard auto-refreshes (respecting the scrape rate limits below)</div>
+            
+              </div>
+
+              <div class="set-section">
+                <div class="set-section-head">
+                  <h2 class="set-section-title">Login records</h2>
+                  <p class="set-section-note">Where login dates come from when a tracker&rsquo;s API doesn&rsquo;t report them.</p>
                 </div>
-              </label>
-            </div>
+                <label class="set-toggle"><div class="toggle-track" id="s-login-click-track" onclick="toggleSettingsLoginClick()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Opening a tracker counts as a login</span><i class="set-info" role="img" title="Clicking a tracker's link from Yata records a login for it, feeding the inactivity countdown. Off by default — with it off you can still record one explicitly from the tracker's Detail page. Yata never sees you log in; this only ever stores what you tell it." aria-label="Clicking a tracker's link from Yata records a login for it, feeding the inactivity countdown. Off by default — with it off you can still record one explicitly from the tracker's Detail page. Yata never sees you log in; this only ever stores what you tell it."></i></label>
+              </div>
+              </div>
+              <div class="set-section">
+                <div class="set-section-head">
+                  <h2 class="set-section-title">Profile scraping</h2>
+                  <p class="set-section-note">When a tracker allows it, scraping fills in stats its API doesn&rsquo;t provide.</p>
+                </div>
             <div class="form-group" style="margin-bottom:10px">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
                 <div class="toggle-track" id="s-api-only-track" onclick="_settingsToggle('s-api-only-track')"><div class="toggle-thumb"></div></div>
@@ -691,33 +678,35 @@
               </label>
             </div>
             <div class="form-group" style="margin-bottom:4px" id="s-scrape-interval-group">
-              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Scrape Interval</label>
+              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:5px">Scrape interval <i class="set-info" role="img" title="Each tracker scrapes at this interval or its own limit, whichever is longer." aria-label="Each tracker scrapes at this interval or its own limit, whichever is longer."></i></label>
               <div style="display:flex;align-items:center;gap:8px">
                 <input type="number" id="s-scrape-interval" class="form-input" min="60" style="width:100px"
                   placeholder="120" oninput="_softValidateScrapeInterval()" onchange="_commitScrapeInterval()">
                 <span class="input-unit">min</span>
                 <span id="s-scrape-interval-lock" style="font-size:11px;color:var(--amber);display:none">🔒 locked — derived from max scrapes</span>
               </div>
-              <span id="s-scrape-interval-hint" style="display:block;font-size:11px;color:var(--text3);margin-top:4px">Minimum 60 min. Each tracker scrapes at this interval or its own limit &mdash; whichever is longer.</span>
+              <span id="s-scrape-interval-hint" style="display:block;font-size:11px;color:var(--text3);margin-top:4px">60 or more.</span>
               <span id="s-scrape-interval-error" style="display:none;font-size:11px;color:var(--red);margin-top:2px">Minimum is 60 minutes &mdash; the value is raised to 60 when you leave the field.</span>
             </div>
             <div class="form-group" style="margin-bottom:4px" id="s-max-scrapes-group">
-              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:block">Max Scrapes Per Day</label>
+              <label style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:5px">Max scrapes per day <i class="set-info" role="img" title="Each tracker still honours its own cap, or its operator's, whichever is lower. Resets at UTC midnight." aria-label="Each tracker still honours its own cap, or its operator's, whichever is lower. Resets at UTC midnight."></i></label>
               <div style="display:flex;align-items:center;gap:8px">
                 <input type="number" id="s-max-scrapes" class="form-input" min="0" style="width:100px"
                   placeholder="0" oninput="_onMaxScrapesChange()">
                 <span class="input-unit">per tracker, per UTC day</span>
               </div>
-              <span style="display:block;font-size:11px;color:var(--text3);margin-top:4px">0 = no global cap &mdash; each tracker still honours its own or its operator&rsquo;s cap, whichever is lower. Resets at UTC midnight.</span>
+              <span style="display:block;font-size:11px;color:var(--text3);margin-top:4px">0 = no global cap.</span>
             </div>
             <div class="form-group" style="margin-bottom:10px" id="s-auto-interval-group">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                 <input type="checkbox" id="s-auto-interval" style="accent-color:var(--accent);width:14px;height:14px" onchange="_onAutoIntervalChange()">
                 <div>
-                  <span style="font-size:13px;color:var(--text)">Auto-calculate interval from max scrapes</span>
-                  <div style="font-size:11px;color:var(--text3);margin-top:1px">Locks the interval field and sets it to 1440 ÷ max (e.g. 24 scrapes → 60 min).</div>
+                  <span style="font-size:13px;color:var(--text);display:inline-flex;align-items:center;gap:5px">Auto-calculate interval from max scrapes <i class="set-info" role="img" title="Locks the interval field and sets it to 1440 divided by the daily maximum — 24 scrapes becomes 60 minutes." aria-label="Locks the interval field and sets it to 1440 divided by the daily maximum — 24 scrapes becomes 60 minutes."></i></span>
                 </div>
               </label>
+            </div>
+          
+              </div>
             </div>
           </div>
 
@@ -725,8 +714,18 @@
           <div class="settings-panel" id="settings-tab-trackers" style="display:none">
 
             <div id="trackers-list-section">
-              <div class="trk-head">
-                <p class="settings-section-label" style="border-bottom:none;padding:0;margin:0;flex:1">Configured Trackers</p>
+              <div class="set-section-head trk-head">
+                <div class="set-head-text" style="flex:1;min-width:0">
+                  <h2 class="set-section-title">Configured trackers</h2>
+                </div>
+                <!-- Reload definitions used to sit below the imports, past the
+                     whole table — an action on the table, placed where you
+                     would only find it by scrolling past what it changes. -->
+                <button class="btn btn-ghost btn-sm" id="s-reload-defs-btn" type="button" onclick="reloadDefs()"
+                  title="Re-read the tracker definition files in defs/ without restarting">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  Reload definitions
+                </button>
                 <button class="btn btn-ghost btn-sm" id="trk-test-all-btn" type="button" title="Test API &amp; scrape connectivity for every tracker, one at a time (respects all rate limits)">Test All</button>
                 <button class="btn btn-primary btn-sm" id="trk-add-btn" type="button">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -739,9 +738,9 @@
                        off (back to the order trackers were added in). -->
                   <thead><tr>
                     <th style="width:48px" aria-sort="none"><button type="button" class="trk-sort" data-sortkey="enabled" onclick="trkSort('enabled')" title="Sort by enabled / disabled">On<span class="trk-sort-ind"></span></button></th>
-                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="name" onclick="trkSort('name')" title="Sort by name">Name<span class="trk-sort-ind"></span></button></th>
-                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="url" onclick="trkSort('url')" title="Sort by URL">URL<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="name" onclick="trkSort('name')" title="Sort by name">Tracker<span class="trk-sort-ind"></span></button></th>
                     <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="type" onclick="trkSort('type')" title="Sort by tracker type">Type<span class="trk-sort-ind"></span></button></th>
+                    <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="caps" onclick="trkSort('caps')" title="Sort by how much of the promotion ladder Yata can track — least covered first">Capabilities<span class="trk-sort-ind"></span></button></th>
                     <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="def" onclick="trkSort('def')" title="Sort by definition — manually-added trackers last">Def<span class="trk-sort-ind"></span></button></th>
                     <th aria-sort="none"><button type="button" class="trk-sort" data-sortkey="test" onclick="trkSort('test')" title="Sort by test result — failures first">Test Status<span class="trk-sort-ind"></span></button></th>
                     <th style="text-align:right">Actions</th>
@@ -752,21 +751,55 @@
                 </table>
               </div>
 
-              <!-- Import from Prowlarr (collapsible) -->
+              <!-- What the colours in Capabilities mean. A key, not a tooltip:
+                   a colour you cannot decode is not information, and hiding
+                   the decoder behind a hover means finding it by accident. -->
+              <div class="cap-legend">
+                <span class="cap-legend-title">Capabilities</span>
+                <span class="cap-legend-item"><span class="cap-icon cap-on"><i class="fas fa-circle"></i></span>from API</span>
+                <span class="cap-legend-item"><span class="cap-icon cap-scrape"><i class="fas fa-circle"></i></span>from scraping</span>
+                <span class="cap-legend-item"><span class="cap-icon cap-off"><i class="fas fa-circle"></i></span>not reported</span>
+                <span class="cap-legend-item"><span class="cap-icon cap-apionly"><i class="fas fa-plug"></i></span>API only</span>
+                <span class="cap-legend-sep"></span>
+                <span class="cap-legend-item"><span class="cap-chip cap-full"><i class="fas fa-bullseye"></i>n/n</span>promotion requirements tracked</span>
+              </div>
+
+              <!-- The two importers are one job — "get trackers in from the
+                   manager I already run" — so they sit under one heading
+                   rather than reading as two unrelated features. -->
+              <div class="set-section trk-import-section">
+                <div class="set-section-head">
+                  <h2 class="set-section-title">Import trackers</h2>
+                  <p class="set-section-note">Bring in trackers you have already set up in an indexer manager, with their credentials where it stores them.</p>
+                </div>
+
               <div class="prowlarr-section">
                 <button type="button" class="prowlarr-toggle" id="prowlarr-toggle">
                   <svg id="prowlarr-chev" class="expand-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                  Import from Prowlarr
+                  <span class="imp-toggle-name">Prowlarr</span>
+                  <span class="imp-toggle-hint">indexer manager</span>
                 </button>
                 <div id="prowlarr-body" style="display:none">
-                  <div class="form-row" style="margin-top:10px">
-                    <div class="form-group">
-                      <label class="form-label">Prowlarr URL</label>
-                      <input class="form-input" type="url" id="prowlarr-url" placeholder="http://localhost:9696"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Prowlarr API Key</label>
-                      <input class="form-input" type="password" id="prowlarr-key" placeholder="Prowlarr → Settings → General → API Key"/>
+                  <!-- The connection is set once and then left alone, so it
+                       collapses to a summary. The fields open on their own
+                       while there is nothing saved — there is nothing to tidy
+                       away yet, and the first thing to do is fill them in. -->
+                  <div class="imp-conn">
+                    <span class="imp-conn-label">Prowlarr</span>
+                    <span class="imp-conn-value" id="prowlarr-conn-summary">Not set up</span>
+                    <button type="button" class="btn-autofill" id="prowlarr-conn-btn"
+                      onclick="toggleImportConn('prowlarr')" aria-expanded="false" aria-controls="prowlarr-conn">Edit</button>
+                  </div>
+                  <div class="imp-conn-fields" id="prowlarr-conn" hidden>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label class="form-label" for="prowlarr-url">Address</label>
+                        <input class="form-input" type="url" id="prowlarr-url" placeholder="http://localhost:9696"/>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="prowlarr-key">API key</label>
+                        <input class="form-input" type="password" id="prowlarr-key" placeholder="Prowlarr → Settings → General → API Key"/>
+                      </div>
                     </div>
                   </div>
                   <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
@@ -784,17 +817,30 @@
               <div class="prowlarr-section">
                 <button type="button" class="prowlarr-toggle" id="jackett-toggle">
                   <svg id="jackett-chev" class="expand-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                  Import from Jackett
+                  <span class="imp-toggle-name">Jackett</span>
+                  <span class="imp-toggle-hint">indexer manager</span>
                 </button>
                 <div id="jackett-body" style="display:none">
-                  <div class="form-row" style="margin-top:10px">
-                    <div class="form-group">
-                      <label class="form-label">Jackett URL</label>
-                      <input class="form-input" type="url" id="jackett-url" placeholder="http://localhost:9117"/>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Jackett Admin Password</label>
-                      <input class="form-input" type="password" id="jackett-key" placeholder="Leave blank if Jackett has no password"/>
+                  <!-- The connection is set once and then left alone, so it
+                       collapses to a summary. The fields open on their own
+                       while there is nothing saved — there is nothing to tidy
+                       away yet, and the first thing to do is fill them in. -->
+                  <div class="imp-conn">
+                    <span class="imp-conn-label">Jackett</span>
+                    <span class="imp-conn-value" id="jackett-conn-summary">Not set up</span>
+                    <button type="button" class="btn-autofill" id="jackett-conn-btn"
+                      onclick="toggleImportConn('jackett')" aria-expanded="false" aria-controls="jackett-conn">Edit</button>
+                  </div>
+                  <div class="imp-conn-fields" id="jackett-conn" hidden>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label class="form-label" for="jackett-url">Address</label>
+                        <input class="form-input" type="url" id="jackett-url" placeholder="http://localhost:9117"/>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="jackett-key">Admin password</label>
+                        <input class="form-input" type="password" id="jackett-key" placeholder="Leave blank if Jackett has no password"/>
+                      </div>
                     </div>
                   </div>
                   <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
@@ -807,18 +853,8 @@
                   <p class="form-hint" style="margin-top:8px">Credentials come from Jackett's stored indexer settings — API keys <em>and</em> session cookies import where available, so scraping can work out of the box. Cookies expire eventually; refresh them via Edit if a scrape stops working.</p>
                 </div>
               </div>
+              </div><!-- /trk-import-section -->
 
-              <!-- Tracker definitions (moved here from the Scraping tab) -->
-              <p class="settings-section-label" style="margin-top:18px">Tracker Definitions</p>
-              <div class="form-group" style="margin-bottom:10px">
-                <div style="display:flex;align-items:center;gap:12px">
-                  <button class="btn btn-ghost btn-sm" id="s-reload-defs-btn" onclick="reloadDefs()">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    Reload Definitions
-                  </button>
-                  <span style="font-size:11px;color:var(--text3)">Re-reads the tracker definition files in <code>defs/</code> without restarting</span>
-                </div>
-              </div>
             </div>
 
             <!-- Inline add/edit tracker panel (replaces the old tracker modal) -->
@@ -838,6 +874,7 @@
                   <div class="form-group" style="margin-bottom:12px">
                     <label class="form-label">Select Tracker</label>
                     <input class="form-input" id="modal-add-search" type="text" autocomplete="off"
+                      name="yata-tracker-search" data-lpignore="true" data-1p-ignore data-form-type="other"
                       placeholder="Search by name or abbreviation…" oninput="onAddTrackerFilter()" style="margin-bottom:8px"/>
                     <select class="form-input" id="modal-add-select" onchange="onAddTrackerSelect()">
                       <option value="">— Choose a tracker —</option>
@@ -880,15 +917,15 @@
                 <!-- ══ Name / URL — shown in manual add mode and always in edit mode ═ -->
                 <!-- In add/predefined mode the values are pre-filled but still editable -->
                 <div id="modal-name-url-group">
-                  <div id="modal-manual-name-url">
+                  <div id="modal-manual-name-url" class="modal-fields">
                     <div class="form-group">
-                      <label class="form-label">Name</label>
+                      <label class="form-label" for="modal-name">Name</label>
                       <input class="form-input" type="text" id="modal-name" placeholder="e.g. Seedpool"/>
                     </div>
                     <div class="form-group">
-                      <label class="form-label">Base URL</label>
+                      <label class="form-label" for="modal-url">Base URL</label>
                       <input class="form-input" type="url" id="modal-url" placeholder="https://tracker.example.org" oninput="window.checkTrackerOptOut?.()"/>
-                      <span class="form-hint">Root URL — no trailing slash</span>
+                      <span class="form-hint">Root URL &mdash; no trailing slash</span>
                     </div>
                   </div>
                   <!-- Opt-out blocking notice (tracker asked not to be supported) -->
@@ -897,10 +934,25 @@
 
                 <!-- ══ Credentials ══════════════════════════════════════════ -->
                 <div id="modal-credentials-section">
-                  <div class="form-group" id="modal-username-group">
-                    <label class="form-label" id="modal-username-label">Username</label>
-                    <input class="form-input" type="text" id="modal-username" placeholder="Your username on this tracker"/>
-                    <span class="form-hint" id="modal-username-hint">Used to scrape extended stats from your profile page. Auto-filled when API key is set.</span>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title">Credentials</h3>
+                    <p class="set-section-note">What Yata signs in with. Only what this tracker needs is shown.</p>
+                  </div>
+                  <!-- A username and a date are short values; a 400px box for
+                       either just makes the panel look like it is waiting for
+                       something longer. They pair up; the secrets below do not,
+                       because an API key or a cookie header genuinely is long. -->
+                  <div class="modal-fields">
+                    <div class="form-group" id="modal-username-group">
+                      <label class="form-label" id="modal-username-label" for="modal-username">Username</label>
+                      <input class="form-input" type="text" id="modal-username" placeholder="Your username on this tracker"/>
+                      <span class="form-hint" id="modal-username-hint">Used to scrape extended stats from your profile page. Auto-filled when API key is set.</span>
+                    </div>
+                    <div class="form-group" id="modal-joindate-group">
+                      <label class="form-label" id="modal-joindate-label" for="modal-joindate">Join Date <span class="opt">(optional)</span></label>
+                      <input class="form-input" type="date" id="modal-joindate" max="2100-12-31" style="max-width:200px"/>
+                      <span class="form-hint" id="modal-joindate-hint">Only used when the tracker doesn&rsquo;t report one (e.g. MyAnonamouse). Set once &mdash; it never changes.</span>
+                    </div>
                   </div>
                   <!-- Tracker software type. Shown in edit mode only for
                        trackers with no definition — a defined tracker's type
@@ -913,11 +965,6 @@
                     </div>
                     <span class="form-hint" id="modal-edit-type-hint">Yata has no definition for this tracker, so its software couldn't be identified. Pick the type it runs, or use Detect to try each one with your API key. Nothing is collected until a type is set.</span>
                     <div id="modal-detect-result" style="display:none;font-size:11.5px;margin-top:8px"></div>
-                  </div>
-                  <div class="form-group" id="modal-joindate-group">
-                    <label class="form-label" id="modal-joindate-label">Join Date <span class="opt">(optional)</span></label>
-                    <input class="form-input" type="date" id="modal-joindate" max="2100-12-31" style="max-width:200px"/>
-                    <span class="form-hint" id="modal-joindate-hint">Your account creation date. Used for account-age tracking only when the tracker doesn't report it (e.g. MyAnonamouse). Set once — it never changes.</span>
                   </div>
                   <div class="form-group" id="modal-key-group">
                     <label class="form-label" id="modal-key-label">API Key</label>
@@ -937,7 +984,10 @@
 
                 <!-- ══ Scraping section (edit mode, non-demo trackers) ══ -->
                 <div id="modal-scrape-section" style="display:none">
-                  <div class="modal-divider"><span class="modal-divider-label">Scraping</span><div class="modal-divider-line"></div></div>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title">Scraping</h3>
+                    <p class="set-section-note">How often Yata may scrape this tracker&rsquo;s profile page, overriding the global limits.</p>
+                  </div>
 
                   <!-- Operator-requested limits — emphasised in red -->
                   <div id="modal-scrape-req" class="modal-scrape-req" style="display:none"></div>
@@ -955,6 +1005,10 @@
 
                   <!-- Scrape options (greyed when API-only) -->
                   <div id="modal-scrape-opts">
+                    <!-- Two numbers that are read together and constrain each
+                         other — stacking them put a full field's height between
+                         a cap and the interval derived from it. -->
+                    <div class="modal-fields">
                     <div class="form-group" id="modal-min-scrape-group">
                       <label class="form-label">Min Scrape Interval</label>
                       <div style="display:flex;align-items:center;gap:8px">
@@ -974,7 +1028,8 @@
                       <span class="form-hint">0 = follow the global cap or this tracker&rsquo;s limit &mdash; whichever is lower.</span>
                       <span class="form-error" id="modal-max-scrapes-error" style="display:none;font-size:11px;color:var(--red);margin-top:4px"></span>
                     </div>
-                    <div class="form-group">
+                    </div>
+                    <div class="form-group" style="margin-top:12px">
                       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text)">
                         <input type="checkbox" id="modal-auto-interval" onchange="modalOnAutoIntervalChange()" style="accent-color:var(--accent)"/>
                         Auto-calculate interval from max scrapes per day
@@ -989,9 +1044,11 @@
                      (pick any stat this tracker reports, one row per target). -->
                 <!-- ══ Manual stats (typed in — no fetching) ═══════════ -->
                 <div id="modal-manual-section" style="display:none">
-                  <div class="modal-divider"><span class="modal-divider-label">Manual Stats</span><div class="modal-divider-line"></div></div>
-                  <span class="form-hint" id="modal-manual-hint" style="margin-top:-6px">Yata never contacts this tracker &mdash; these are the numbers it shows. Update them whenever you like; each save is recorded, so history and charts build up over time.</span>
-                  <div id="modal-manual-rows" style="margin-top:10px"></div>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title">Manual stats</h3>
+                  </div>
+                  <span class="form-hint" id="modal-manual-hint" style="margin-top:-6px">Yata never contacts this tracker &mdash; these are the numbers it shows. Every save is recorded, so history and charts still build up over time.</span>
+                  <div id="modal-manual-rows" class="chip-items" style="margin-top:10px"></div>
                   <div class="target-add-row">
                     <select class="form-input" id="modal-manual-add-select" style="max-width:260px">
                       <option value="">&#8212; choose a stat &#8212;</option>
@@ -1001,21 +1058,24 @@
                 </div>
 
                 <div id="modal-targets-section">
-                  <div class="modal-divider"><span class="modal-divider-label">Targets <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></span><div class="modal-divider-line"></div></div>
-                  <span class="form-hint" style="margin-top:-6px">Goals toward your next user group</span>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title">Targets</h3>
+                    <p class="set-section-note">What you are working toward on this tracker. Pick the group you want next and Yata fills in its requirements, or set your own.</p>
+                  </div>
                   <div class="form-row" id="modal-target-group-row" style="display:none">
                     <div class="form-group" style="flex:1">
-                      <label class="form-label">Target Group</label>
+                      <label class="form-label" for="modal-target-group-select">Aiming for</label>
                       <select class="form-input" id="modal-target-group-select">
-                        <option value="">&#8212; manual &#8212;</option>
+                        <option value="">Set my own targets</option>
                       </select>
+                      <span class="form-hint">Choosing a group fills in its requirements for you.</span>
                     </div>
                   </div>
                   <div id="modal-target-group-hint" style="display:none"></div>
                   <div id="modal-target-builder" style="display:none">
-                    <div id="modal-target-rows"></div>
+                    <div id="modal-target-rows" class="chip-items"></div>
                     <div class="target-add-row">
-                      <select class="form-input" id="modal-target-add-select" style="max-width:260px">
+                      <select class="form-input" id="modal-target-add-select" style="max-width:240px">
                         <option value="">&#8212; choose a stat &#8212;</option>
                       </select>
                       <button type="button" class="btn btn-ghost btn-sm" onclick="modalAddTargetRow()" style="white-space:nowrap">+ Add target</button>
@@ -1025,7 +1085,9 @@
 
                 <!-- ══ Status toggle (edit mode only) ══════════════════════ -->
                 <div class="form-group" id="modal-enabled-group" style="display:none">
-                  <div class="modal-divider"><span class="modal-divider-label">Status</span><div class="modal-divider-line"></div></div>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title">Status</h3>
+                  </div>
                   <label class="form-toggle" style="margin-top:4px">
                     <div class="toggle-track on" id="modal-toggle-track" onclick="toggleEnabled()"><div class="toggle-thumb"></div></div>
                     <span id="modal-toggle-label" style="font-size:13px;color:var(--text2)">Enabled</span>
@@ -1034,7 +1096,9 @@
 
                 <!-- ══ Demo / test scenario switcher ════════════════════════ -->
                 <div id="modal-mock-group" style="display:none">
-                  <div class="modal-divider"><span class="modal-divider-label" style="color:var(--amber)">⬡ Test Mode</span><div class="modal-divider-line"></div></div>
+                  <div class="set-section-head modal-sec-head">
+                    <h3 class="set-section-title" style="color:var(--amber)">⬡ Test mode</h3>
+                  </div>
                   <div class="form-group">
                     <label class="form-label">Test Scenario</label>
                     <select class="form-input" id="modal-mock-scenario"></select>
@@ -1081,97 +1145,120 @@
             </div>
           </div>
 
-          <!-- ── Tab: Integrations (internal id/tab key kept as "qui") ─── -->
+          <!-- ── Tab: Integrations (internal id/tab key kept as "qui") ───
+               Two sections, and the split is the direction data flows:
+               "Connected services" is what Yata reads FROM, "API access" is
+               what other tools read OUT of Yata. That is what makes room for
+               autobrr and anything after it — a new service is one more card,
+               not a new page shape. Prowlarr and Jackett are deliberately NOT
+               here: they import trackers, so they live with the trackers. -->
           <div class="settings-panel" id="settings-tab-qui" style="display:none">
-            <p class="settings-section-label">Integrations</p>
-            <div class="form-group" style="margin-bottom:10px">
-              <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-                <div class="toggle-track" id="s-qui-bars-track" onclick="toggleSettingsQuiBars()"><div class="toggle-thumb"></div></div>
-                <div>
-                  <div style="font-size:13px;font-weight:600;color:var(--text)">Qui</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">Shows general Qui (qBittorrent) stats in a bar along the top of the dashboard.</div>
-                </div>
-              </label>
-            </div>
-            <div id="s-qui-options">
-            <p style="font-size:12px;color:var(--text3);margin-bottom:10px">
-              <a class="link-accent" href="https://github.com/autobrr/qui" target="_blank" rel="noopener noreferrer">Qui</a> is a qBittorrent management UI. Configure its address and API key, then select which instances to show.
-            </p>
-            <div class="form-row">
-              <div class="form-group" style="grid-column:1/-1">
-                <label class="form-label">QUI URL</label>
-                <input class="form-input" type="url" id="s-qui-url" placeholder="http://localhost:7476" oninput="scheduleQuiInstanceLoad()"/>
-                <span class="form-hint">Base URL of your QUI instance — no trailing slash</span>
+            <div class="set-section">
+              <div class="set-section-head">
+                <h2 class="set-section-title">Connected services</h2>
+                <p class="set-section-note">Apps Yata reads data from.</p>
               </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group" style="grid-column:1/-1">
-                <label class="form-label">API Key</label>
-                <input class="form-input" type="password" id="s-qui-key" placeholder="Your QUI API key" oninput="scheduleQuiInstanceLoad()"/>
-                <span class="form-hint">Found in QUI Settings → API. Shows ●●●●●●●● when a key is stored — leave it to keep the key, clear it to remove.</span>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group" style="grid-column:1/-1">
-                <label class="form-label">Refresh Interval (seconds)</label>
-                <input class="form-input" type="number" id="s-qui-refresh" min="1" style="max-width:140px"
-                  placeholder="10" oninput="this.value=Math.max(1,parseInt(this.value)||1)"/>
-                <span class="form-hint">How often the qui bars update — local data, so it can stay fast. Min 1 s; use the toggle above to turn qui off entirely.</span>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group" style="grid-column:1/-1">
-                <label class="form-label">Seed Size Fallback</label>
-                <select class="form-input" id="s-qui-seedsize-mode" style="width:auto;padding:4px 8px">
-                  <option value="off">Don't use qui seed size</option>
-                  <option value="missing">Only fill in missing data</option>
-                  <option value="prefer">Prefer qui over scrapes</option>
-                </select>
-                <span class="form-hint">Qui knows the total size each tracker's torrents are seeding. It's a calculation over the instances above — a tracker's own number is the truth (multi-client and seedbox setups undercount) — so even "Prefer" never overrides a tracker API that reports seed size; it only beats profile scrapes. "Missing" fills in only where neither the API nor a scrape has a value.</span>
-              </div>
-            </div>
-            <div id="s-qui-instances-section">
-              <div class="modal-divider" style="margin:14px 0 10px"><span class="modal-divider-label">Instances</span><div class="modal-divider-line"></div>
-                <button class="btn-autofill" id="s-qui-refresh-btn" type="button" onclick="loadQuiInstancesForSettings()" title="Reload instances using the URL/key typed above (works before saving)">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                  Reload
-                </button>
-              </div>
-              <div id="s-qui-instance-list" style="display:flex;flex-direction:column;gap:6px;min-height:32px">
-                <span style="font-size:12px;color:var(--text3);font-style:italic">Loading instances…</span>
-              </div>
-            </div>
-            </div><!-- /s-qui-options -->
 
-            <!-- ── API tokens (read-only integration tokens) ──────────── -->
-            <div class="modal-divider" style="margin:18px 0 10px"><span class="modal-divider-label">API Tokens</span><div class="modal-divider-line"></div></div>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:10px">
-              Read-only tokens let other apps — homelab dashboards like
-              <a class="link-accent" href="https://gethomepage.dev/" target="_blank" rel="noopener noreferrer">Homepage</a> or
-              <a class="link-accent" href="https://homarr.dev/" target="_blank" rel="noopener noreferrer">Homarr</a>, scripts, monitoring — read your
-              stats without your login. A token only unlocks the read-only endpoints (<code>/api/summary</code>, <code>/api/history/series</code>);
-              it can never change anything or see tracker credentials. Full details in the
-              <a class="link-accent" href="https://github.com/Yata-Dash/Yata-Dash/blob/main/docs/API.md" target="_blank" rel="noopener noreferrer">API reference</a>.
-            </p>
-            <div id="s-token-new" style="display:none;margin-bottom:10px"></div>
-            <div id="s-token-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;min-height:20px">
-              <span style="font-size:12px;color:var(--text3);font-style:italic">Loading…</span>
+              <div class="set-card">
+                <div class="set-card-head">
+                  <div class="toggle-track" id="s-qui-bars-track" onclick="toggleSettingsQuiBars()" role="switch" title="Show the qui bar on the dashboard"><div class="toggle-thumb"></div></div>
+                  <span class="set-card-name">qui</span>
+                  <span class="set-card-meta">qBittorrent stats along the top of the dashboard</span>
+                  <div class="set-card-actions">
+                    <a class="set-card-meta link-accent" href="https://github.com/autobrr/qui" target="_blank" rel="noopener noreferrer">What is qui?</a>
+                  </div>
+                </div>
+
+                <!-- Greyed out by toggleSettingsQuiBars() while qui is off. -->
+                <div class="set-card-body" id="s-qui-options">
+                  <!-- Connection and instances sit side by side because they
+                       are cause and effect: the list fills in as the address
+                       and key become valid. -->
+                  <div class="set-card-cols">
+                    <div class="set-stack">
+                      <div class="form-group">
+                        <label class="form-label" for="s-qui-url">Address</label>
+                        <input class="form-input" type="url" id="s-qui-url" placeholder="http://localhost:7476" oninput="scheduleQuiInstanceLoad()"/>
+                        <span class="form-hint">No trailing slash</span>
+                      </div>
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label" for="s-qui-key">API key
+                          <i class="set-info" role="img" title="Clear the field to remove a stored key." aria-label="Clear the field to remove a stored key."></i>
+                        </label>
+                        <input class="form-input" type="password" id="s-qui-key" placeholder="Your qui API key" oninput="scheduleQuiInstanceLoad()"/>
+                        <span class="form-hint">qui &rarr; Settings &rarr; API</span>
+                      </div>
+                    </div>
+
+                    <div class="set-stack" id="s-qui-instances-section">
+                      <div class="set-subhead">
+                        <span class="set-subhead-title">Instances</span>
+                        <button class="btn-autofill" id="s-qui-refresh-btn" type="button" onclick="loadQuiInstancesForSettings()" title="Reload instances using the address and key typed above — works before saving">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                          Reload
+                        </button>
+                      </div>
+                      <div id="s-qui-instance-list" class="qui-inst-list">
+                        <span class="qui-inst-note">Loading instances&hellip;</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="set-card-row">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label" for="s-qui-refresh">Refresh</label>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <input class="form-input" type="number" id="s-qui-refresh" min="1" style="width:100px"
+                          placeholder="10" oninput="this.value=Math.max(1,parseInt(this.value)||1)"/>
+                        <span class="input-unit">seconds &mdash; 1 or more</span>
+                      </div>
+                      <span class="form-hint">Local data, so it can stay fast.</span>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label" for="s-qui-seedsize-mode">Seed size fallback
+                        <i class="set-info" role="img" title="qui totals the size of each tracker's torrents across the instances above. The tracker's own API is the truth and always wins — multi-client and seedbox setups undercount — so Prefer only ever beats a profile scrape. Missing fills in only where nothing else has a value." aria-label="qui totals the size of each tracker's torrents across the instances above. The tracker's own API always wins, so Prefer only ever beats a profile scrape. Missing fills in only where nothing else has a value."></i>
+                      </label>
+                      <select class="form-input" id="s-qui-seedsize-mode" style="width:auto;align-self:flex-start;padding:4px 8px">
+                        <option value="off">Don&rsquo;t use qui seed size</option>
+                        <option value="missing">Only fill in missing data</option>
+                        <option value="prefer">Prefer qui over scrapes</option>
+                      </select>
+                      <span class="form-hint">Never overrides a tracker&rsquo;s own API.</span>
+                    </div>
+                  </div>
+                </div><!-- /s-qui-options -->
+              </div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input class="form-input" type="text" id="s-token-name" placeholder="Token name — e.g. Homepage widget" maxlength="64" style="max-width:320px"
-                onkeydown="if(event.key==='Enter'){event.preventDefault();createApiTokenFromSettings();}"/>
-              <button type="button" class="btn btn-primary btn-sm" onclick="createApiTokenFromSettings()">Create token</button>
+
+            <div class="set-section">
+              <div class="set-section-head">
+                <h2 class="set-section-title">API access</h2>
+                <p class="set-section-note">Read-only tokens let other tools &mdash; homelab dashboards, scripts, monitoring &mdash; read your stats without your login.
+                  <i class="set-info" role="img" title="A token only unlocks the read-only endpoints (/api/summary, /api/history/series). It can never change a setting or read a tracker's credentials." aria-label="A token only unlocks the read-only endpoints. It can never change a setting or read a tracker's credentials."></i>
+                  <a class="link-accent" href="https://github.com/Yata-Dash/Yata-Dash/blob/main/docs/API.md" target="_blank" rel="noopener noreferrer">API reference</a>
+                </p>
+              </div>
+              <div id="s-token-new" style="display:none;margin-bottom:10px"></div>
+              <div id="s-token-list" class="token-list">
+                <span class="qui-inst-note">Loading&hellip;</span>
+              </div>
+              <div class="token-create">
+                <input class="form-input" type="text" id="s-token-name" name="yata-token-name" autocomplete="off"
+                  data-lpignore="true" data-1p-ignore data-form-type="other"
+                  placeholder="Token name — e.g. Homepage widget" maxlength="64" style="max-width:320px"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();createApiTokenFromSettings();}"/>
+                <button type="button" class="btn btn-primary btn-sm" onclick="createApiTokenFromSettings()">Create token</button>
+              </div>
             </div>
           </div>
 
           <!-- ── Tab: Alerts (webhooks + rule builder) ────────────────── -->
           <div class="settings-panel" id="settings-tab-alerts" style="display:none">
-            <p class="settings-section-label">Alerts &amp; Notifications</p>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
-              Send webhook notifications (Discord, Telegram, Gotify, or a generic JSON POST) when a rule's conditions are met — e.g. ratio drops below a threshold, a hit &amp; run appears, unread mail or notifications arrive (updated by profile scrapes, so up to one scrape interval late), or a tracker event starts (freeleech, open registration, etc. — the banner text is passed through). Rules are checked every few minutes on the server, so alerts fire even with no browser open.
-            </p>
-            <div id="alerts-content"><div style="font-size:12px;color:var(--text3);font-style:italic">Loading…</div></div>
-            <div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <!-- The old intro paragraph moved into the page lede (main.ts,
+                 SETTINGS_TAB_INFO) and the per-section notes below, so each
+                 explanation now sits next to the thing it explains. -->
+            <div id="alerts-content"><div class="set-empty">Loading…</div></div>
+            <div class="set-actions">
               <button type="button" class="btn btn-primary" data-action="save-alerts">Save alerts</button>
               <div style="flex:1"></div>
               <button type="button" class="btn btn-ghost btn-sm" onclick="exportAlerts()"><i class="fas fa-download" style="margin-right:6px"></i>Export alerts</button>
@@ -1183,22 +1270,28 @@
 
           <!-- ── Tab: Logs (live rolling log viewer) ──────────────────── -->
           <div class="settings-panel" id="settings-tab-logs" style="display:none">
-            <p class="settings-section-label">Logs</p>
-            <p style="font-size:12px;color:var(--text3);margin-bottom:12px">
-              Live application log — useful for troubleshooting and for attaching to GitHub issues. Everything is captured to a rotating file on disk (<code id="s-log-path">…</code>); the level buttons below only choose what's <em>shown</em> here.
-            </p>
+            <!-- No section heading: the page title already says "Logs", and the
+                 old intro said what the lede now says. The two facts worth
+                 keeping are the file path (you need it to attach to an issue)
+                 and that the level chips filter the VIEW only — that one moved
+                 onto the chips, where the misunderstanding would happen. -->
             <div class="log-toolbar">
-              <span style="font-size:11px;color:var(--text3)">Show</span>
+              <span style="font-size:11px;color:var(--text3);display:inline-flex;align-items:center;gap:5px">Show
+                <i class="set-info" role="img" title="Filters what is listed here only. Every level is always written to the log file, whatever you pick." aria-label="Filters what is listed here only. Every level is always written to the log file, whatever you pick."></i>
+              </span>
               <div class="log-levels" id="s-log-levels"></div>
-              <label class="log-tool-item" style="cursor:pointer;margin-left:8px">
+              <input type="search" id="s-log-search" class="form-input log-search" placeholder="Search logs" autocomplete="off" oninput="filterLogs()">
+              <label class="log-tool-item" style="cursor:pointer">
                 <input type="checkbox" id="s-log-autoscroll" checked style="accent-color:var(--accent)"/>
                 <span style="font-size:12px;color:var(--text2)">Auto-scroll</span>
               </label>
               <div style="flex:1"></div>
+              <span id="s-log-count" class="log-count"></span>
               <button type="button" class="btn btn-ghost btn-sm" id="s-log-pause" onclick="toggleLogPause()">Pause</button>
               <button type="button" class="btn btn-ghost btn-sm" onclick="downloadLogs()">Download</button>
               <button type="button" class="btn btn-danger btn-sm" onclick="clearLogs()">Clear</button>
             </div>
+            <div class="log-path-line">Written to <code id="s-log-path">…</code></div>
             <div class="log-view" id="s-log-view"><div class="log-empty">Loading…</div></div>
           </div>
 
@@ -1280,7 +1373,6 @@ function _applyScrapeLockouts() {
   if (normalHint) normalHint.style.display = locked ? 'none' : 'block';
 }
 function toggleSettingsFavicon()  { _settingsToggle('s-favicon-track'); }
-function toggleSettingsSync()     { _settingsToggle('s-profile-sync-track'); }
 function toggleSettingsPrivate()  { _settingsToggle('s-private-track'); }
 function toggleSettingsStatSources() { _settingsToggle('s-stat-src-track'); }
 function toggleSettingsPathwayEtas() { _settingsToggle('s-pw-eta-track'); }

@@ -90,7 +90,7 @@ export function renderQuiBars(settings: AppSettings, meta: QUIInstanceMeta[]): v
     el.style.display = '';
     const enabled = settings.qui_enabled_instances ?? [];
     el.innerHTML = enabled.length === 0
-      ? `<div class="qui-bar" style="margin-bottom:16px"><span style="font-size:12px;color:var(--text3);font-style:italic">QUI not configured — open ⚙ Settings to add instances</span></div>`
+      ? `<div class="qui-bar" style="margin-bottom:16px"><span style="font-size:12px;color:var(--text3);font-style:italic">qui not configured — Settings → Integrations</span></div>`
       : enabled.map(id => {
           const m = meta.find(x => x.id === id);
           return buildQuiBarHTML(id, m?.name ?? `Instance ${id}`);
@@ -178,18 +178,28 @@ export async function renderQUIInstanceChecklist(
   const listEl = document.getElementById('s-qui-instance-list');
   if (!listEl) return { ok: false, error: 'no list element' };
 
-  listEl.innerHTML = '<span style="font-size:12px;color:var(--text3);font-style:italic">Loading…</span>';
+  // Nothing to reach yet is not a failure. Before this the blank-address case
+  // rendered the same red "could not reach" as a wrong key, so a fresh install
+  // opened the tab already looking broken.
+  const typedUrl = (override?.url ?? '').trim() || (settings.qui_url ?? '').trim();
+  const typedKey = (override?.key ?? '').trim() || (settings.qui_api_key ?? '').trim();
+  if (!typedUrl || !typedKey) {
+    listEl.innerHTML = '<span class="qui-inst-note">Add an address and API key to list instances.</span>';
+    return { ok: true };
+  }
+
+  listEl.innerHTML = '<span class="qui-inst-note">Loading…</span>';
   const { ok, data } = await api.fetchQUIInstances(override?.url, override?.key);
 
   if (!ok || !Array.isArray(data)) {
     const err = (data as unknown as { error?: string })?.error ?? 'connection_error';
-    listEl.innerHTML = '<span style="font-size:12px;color:var(--red)">Could not reach QUI — check URL and API key</span>';
+    listEl.innerHTML = '<span style="font-size:12px;color:var(--red)">Could not reach qui — check the address and API key</span>';
     return { ok: false, error: err };
   }
 
   const enabled = settings.qui_enabled_instances ?? [];
   if (!data.length) {
-    listEl.innerHTML = '<span style="font-size:12px;color:var(--text3)">No instances found at this URL</span>';
+    listEl.innerHTML = '<span class="qui-inst-note">Connected, but qui has no instances configured.</span>';
     return { ok: true };
   }
 

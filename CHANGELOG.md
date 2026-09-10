@@ -6,6 +6,51 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **In-app alerts panel.** A flag in the header with an unread count, opening a
+  searchable list of what the alert rules have fired.
+
+  The notification centre is a **destination**, like a webhook — so a rule can
+  go in-app only, webhook only, or (by picking nothing) both. Turning the
+  destination off turns the centre off. Existing rules that named a webhook are
+  migrated to keep the centre as well, so nothing silently stops being recorded.
+
+  Alerts previously went only to webhooks, and `Engine.send` returned early
+  when a rule had no destination — so with nothing configured every alert was
+  evaluated, matched and discarded, the seeded account-deadline rules included.
+  Yata is now a destination itself, recording before that check, so alerts work
+  with no setup. Webhooks are unchanged and receive the same words.
+
+  Kept for 90 days or 500 alerts, whichever comes first; unread ones survive
+  the age cut. Closes [#23](https://github.com/Yata-Dash/Yata-Dash/issues/23).
+
+- **The scrape-limit and expired-cookie warnings are alerts now**, not header
+  banners. As banners they were dismissed to `sessionStorage`, so they returned
+  every session and were re-dismissed forever. As rules they name the tracker,
+  carry the failure kind, respect a cooldown, stay until read, and can go to a
+  webhook. Seeded on, so they need no setup.
+
+### Fixed
+
+- **Conditions already true when Yata starts now appear in the panel.** The
+  engine primes silently on the first pass so a restart doesn't re-blast
+  webhooks — which meant a standing problem like a login deadline already close
+  was recorded nowhere, and wouldn't surface until you fixed it and let it
+  lapse again. Webhooks still stay silent; the panel is a worklist, so it lists
+  it.
+
+- **The alerts filter no longer strands you on one tracker.** Its options were
+  built from the rows on screen, so filtering to a tracker left only that
+  tracker to choose from. They now come from every source that has raised an
+  alert, which also covers trackers whose alerts have scrolled past the first
+  page.
+
+- **Alert cooldown now applies with no webhook configured.** The last-fired
+  time was only stamped once a destination existed, so a user with none had no
+  cooldown — harmless while alerts were being discarded, one panel row per poll
+  once they are not.
+
 ## [Beta-20260904]
 
 ### Added

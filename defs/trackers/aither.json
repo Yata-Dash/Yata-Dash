@@ -583,58 +583,6 @@
       ]
     },
     {
-      "name": "Uranus",
-      "style": {
-        "color": "#1a6b48",
-        "icon": "fas fa-user-astronaut",
-        "sparkle": true
-      },
-      "requirements": {
-        "any_of": [
-          {
-            "min_uploaded": "100 TiB"
-          },
-          {
-            "min_seed_size": "25 TiB"
-          }
-        ],
-        "min_ratio": 2.0,
-        "min_age": "2Y",
-        "min_seedtime": "3M",
-        "min_uploads": 5000
-      },
-      "perks": [
-        {
-          "icon": "fas fa-arrow-down-short-wide text-blue",
-          "label": "DL slots: 50"
-        },
-        {
-          "icon": "fas fa-upload text-success",
-          "label": "Upload Torrents"
-        },
-        {
-          "icon": "fas fa-paper-plane",
-          "label": "Send invite"
-        },
-        {
-          "icon": "fas fa-comments",
-          "label": "Invites Forum"
-        },
-        {
-          "icon": "fas fa-star text-gold",
-          "label": "Freeleech"
-        },
-        {
-          "icon": "fas fa-syringe",
-          "label": "Immune to automated HnR warnings"
-        },
-        {
-          "icon": "fas fa-tasks",
-          "label": "Torrent moderation bypass"
-        }
-      ]
-    },
-    {
       "name": "Titan",
       "style": {
         "color": "#214e96",

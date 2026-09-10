@@ -60,6 +60,11 @@ func Send(dest models.NotifyDestination, title, message string) error {
 		payload map[string]any
 	)
 	switch strings.ToLower(dest.Type) {
+	case models.InAppDestinationType:
+		// The notification centre is recorded by the engine, not posted to.
+		// Reaching here means a caller skipped SplitDestinations; say so rather
+		// than failing as a malformed webhook with an empty URL.
+		return fmt.Errorf("the notification centre is not a webhook — record it instead of sending")
 	case "discord":
 		url = dest.URL
 		payload = map[string]any{"content": fmt.Sprintf("**%s**\n%s", title, message)}

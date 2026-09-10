@@ -330,7 +330,6 @@ export interface AppSettings {
   show_target_etas: boolean | null; // dashboard target time estimates; null = true
   show_rate_hovers: boolean | null; // per-day trend tooltips on stat hover; null = true
   duration_format: 'ym' | 'days' | string; // "" = "ym" (1Y 9M style)
-  profile_auto_sync: boolean;
   api_only_mode: boolean;           // disable all HTML scraping globally
   scrape_interval_minutes: number;  // min 60 — backend enforces
   max_scrapes_per_day: number;      // 0 = unlimited
@@ -818,3 +817,39 @@ export interface ColPref {
 
 export type SortDir = 'asc' | 'desc';
 export type ViewMode = 'grid' | 'table' | 'pathways' | 'history';
+
+// ── In-app alerts (from /api/alerts) ──────────────────────────────────────
+
+/** One alert the rule engine raised. Rule and tracker NAMES are stored with
+ *  the row, so a renamed rule or removed tracker never rewrites history. */
+export interface AppAlert {
+  id: number;
+  at: number;
+  rule_id: string;
+  rule_name: string;
+  /** '' for a signal that belongs to no tracker. */
+  tracker_id: string;
+  tracker_name: string;
+  title: string;
+  body: string;
+  /** 0 = unread. */
+  read_at: number;
+}
+
+/** One origin that has raised an alert. tracker_id '' = Yata itself. */
+export interface AlertSource {
+  tracker_id: string;
+  tracker_name: string;
+}
+
+export interface AlertsResponse {
+  alerts: AppAlert[];
+  /** Total matching the current filter — the page may be shorter. */
+  total: number;
+  /** Unfiltered unread count: it drives the header bubble, so filtering the
+   *  list must not change how many alerts the user is told they have. */
+  unread: number;
+  /** Every origin that has raised an alert — unfiltered, for the same reason:
+   *  the filter control describes the whole set, not the current view. */
+  sources: AlertSource[];
+}

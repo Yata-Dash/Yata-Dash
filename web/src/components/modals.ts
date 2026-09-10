@@ -290,7 +290,10 @@ const DEFAULT_JOINDATE_LABEL = 'Join Date <span class="opt">(optional)</span>';
  *  tracker doesn't require a join date, so switching between trackers in one
  *  modal session can't leave the "this tracker doesn't report one" text
  *  standing over a tracker that does. */
-const DEFAULT_JOINDATE_HINT = "Your account creation date. Used for account-age tracking only when the tracker doesn't report it (e.g. MyAnonamouse). Set once — it never changes.";
+// The field is labelled "Join Date" and the panel already says what this
+// tracker is; the only non-obvious parts are when it matters and that it is
+// a one-off.
+const DEFAULT_JOINDATE_HINT = "Only used when the tracker doesn't report one (e.g. MyAnonamouse). Set once — it never changes.";
 
 /** Mark/unmark fields the selected tracker type requires (username for the
  *  API call; join_date for API-only trackers that report no join date). */
@@ -669,12 +672,13 @@ function manualStatLabel(key: string): string {
 /** manual_stats as the modal opened — reseeded into the rows on open. */
 let _editManualStats: Record<string, string> = {};
 
-function manualRowHtml(key: string, value: string): string {
-  return `<div class="target-edit-row" data-manual-key="${esc(key)}">
-    <span class="target-edit-label">${esc(manualStatLabel(key))}</span>
-    <input class="form-input" type="text" data-manual-input placeholder="${esc(manualPlaceholder(key))}" value="${esc(value)}"/>
-    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove stat" onclick="modalRemoveManualRow('${jsId(key)}')">&times;</button>
-  </div>`;
+function manualRowHtml(key: string, value: string, editing = false): string {
+  return chipItemHtml({
+    kind: 'manual', key, label: manualStatLabel(key), value,
+    placeholder: manualPlaceholder(key), noun: 'stat',
+    removeCall: `modalRemoveManualRow('${jsId(key)}')`,
+    editing,
+  });
 }
 
 /** (Re)build the rows from a manual_stats map, in the canonical display order
@@ -689,6 +693,7 @@ function renderManualRows(stats: Record<string, string>) {
     .map(([k, v]) => manualRowHtml(k, v))
     .join('');
   refreshManualAddSelect();
+  wireChipItems(wrap);
 }
 
 /** Rebuild the "+ Add stat" picker: every offerable stat minus those added. */
@@ -707,10 +712,11 @@ export function modalAddManualRow(): void {
   const sel = document.getElementById('modal-manual-add-select') as HTMLSelectElement | null;
   const wrap = document.getElementById('modal-manual-rows');
   if (!sel || !wrap || !sel.value) return;
-  wrap.insertAdjacentHTML('beforeend', manualRowHtml(sel.value, ''));
+  wrap.insertAdjacentHTML('beforeend', manualRowHtml(sel.value, '', true));
   const key = sel.value;
   refreshManualAddSelect();
-  wrap.querySelector<HTMLInputElement>(`[data-manual-key="${CSS.escape(key)}"] input`)?.focus();
+  wireChipItems(wrap);
+  wrap.querySelector<HTMLInputElement>(`[data-manual-key="${CSS.escape(key)}"] [data-chip-input]`)?.focus();
 }
 
 export function modalRemoveManualRow(key: string): void {
@@ -721,6 +727,7 @@ export function modalRemoveManualRow(key: string): void {
 /** Read the rows back into a manual_stats map. Empty inputs are dropped, so
  *  clearing a value removes the stat — the same gesture as removing the row. */
 function collectManualRows(): Record<string, string> {
+  closeOpenChipEdits();
   const out: Record<string, string> = {};
   for (const row of document.querySelectorAll<HTMLElement>('#modal-manual-rows [data-manual-key]')) {
     const key = row.dataset['manualKey'] ?? '';
@@ -842,14 +849,157 @@ export function targetDisplayValue(key: string, stored: string): string {
  *  readable) — reaching an age by a date is arbitrary (see the plan), so
  *  "days" never gets one. Empty inputs prefill on first focus via
  *  wireTargetDeadlinePrefill; clearing removes the deadline on save. */
-function targetRowHtml(key: string, value: string, deadline: string): string {
-  const spec = targetSpecFor(key);
-  return `<div class="target-edit-row" data-target-key="${esc(key)}">
-    <span class="target-edit-label" title="${esc(spec.hint ?? '')}">${esc(spec.label)}</span>
-    <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
-    ${goalDateControlHtml(key, deadline)}
-    <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove target" onclick="modalRemoveTargetRow('${jsId(key)}')">&times;</button>
+/** A goal date as it reads in the chip: "by 3 Mar 2027". */
+function goalDateLabel(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return '';
+  return `by ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
+/**
+ * One manual target, in two states that both live in the DOM at once.
+ *
+ * A set target reads as a chip — the same chip a group's requirements are
+ * drawn with, because they are the same kind of fact and looked like two
+ * unrelated features when one was chips and the other was a column of text
+ * boxes. The boxes only appear for the target being edited.
+ *
+ * The edit half is never removed, only hidden: collectTargetRows and
+ * collectTargetDeadlines read their values straight out of the DOM, and a
+ * hidden input still carries its value. That keeps saving untouched by this
+ * change.
+ */
+/**
+ * The shared shell for a key/value item that reads as a chip until you edit
+ * it. Targets and manual stats are the same shape — a stat, a value you typed,
+ * and add/remove — so they get the same treatment rather than one being chips
+ * and the other a column of text boxes.
+ *
+ * `dataAttr` is what identifies the item ("target" / "manual"), and the input
+ * carries `data-<dataAttr>-input`, because both collectors read their values
+ * straight out of the DOM.
+ */
+function chipItemHtml(o: {
+  kind: 'target' | 'manual';
+  key: string;
+  label: string;
+  hint?: string;
+  value: string;
+  placeholder: string;
+  noun: string;              // "target" / "stat", for the button labels
+  removeCall: string;        // the global the × and trash call
+  chipExtraHtml?: string;    // trailing chip content (a goal date)
+  editExtraHtml?: string;    // extra control in the fields row (the date picker)
+  editing: boolean;
+}): string {
+  const { kind, key, label, value, editing } = o;
+  const titleAttr = o.hint ? ` title="${esc(o.hint)}"` : '';
+  return `<div class="chip-item" data-${kind}-key="${esc(key)}" data-editing="${editing ? '1' : '0'}">
+    <div class="chip-item-view"${editing ? ' hidden' : ''}>
+      <span class="target-chip"${titleAttr}>
+        <span class="target-chip-k">${esc(label)}</span>
+        <span class="target-chip-v" data-chip-value>${esc(value)}</span>
+      </span>
+      ${o.chipExtraHtml ?? ''}
+      <span class="chip-item-acts">
+        <button type="button" class="trk-act trk-act-xs" data-chip-edit title="Edit this ${esc(o.noun)}" aria-label="Edit ${esc(label)}"><i class="fas fa-pen-to-square"></i></button>
+        <button type="button" class="trk-act trk-act-xs trk-act-danger" title="Remove this ${esc(o.noun)}" aria-label="Remove ${esc(label)}" onclick="${o.removeCall}"><i class="fas fa-trash"></i></button>
+      </span>
+    </div>
+    <div class="chip-item-edit"${editing ? '' : ' hidden'}>
+      <span class="target-edit-label"${titleAttr}>${esc(label)}</span>
+      <input class="form-input" type="text" data-${kind}-input data-chip-input placeholder="${esc(o.placeholder)}" value="${esc(value)}"/>
+      ${o.editExtraHtml ?? ''}
+      <button type="button" class="btn btn-ghost btn-sm" data-chip-done title="Done editing">Done</button>
+      <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove ${esc(o.noun)}" onclick="${o.removeCall}">&times;</button>
+    </div>
   </div>`;
+}
+
+function targetRowHtml(key: string, value: string, deadline: string, editing = false): string {
+  const spec = targetSpecFor(key);
+  const dateLabel = goalDateLabel(deadline);
+  return chipItemHtml({
+    kind: 'target', key, label: spec.label, hint: spec.hint, value,
+    placeholder: spec.placeholder, noun: 'target',
+    removeCall: `modalRemoveTargetRow('${jsId(key)}')`,
+    chipExtraHtml: `<span class="chip-item-by" data-chip-date${dateLabel ? '' : ' hidden'}>${esc(dateLabel)}</span>`,
+    editExtraHtml: goalDateControlHtml(key, deadline),
+    editing,
+  });
+}
+
+/** Flip one item between its chip and its fields, keeping the chip's text in
+ *  step with whatever was typed. Shared by targets and manual stats. */
+function setChipEditing(item: HTMLElement, editing: boolean): void {
+  const view = item.querySelector<HTMLElement>('.chip-item-view');
+  const edit = item.querySelector<HTMLElement>('.chip-item-edit');
+  if (!view || !edit) return;
+  if (!editing) {
+    const value = item.querySelector<HTMLInputElement>('[data-chip-input]')?.value.trim() ?? '';
+    // An empty value is not a target or a stat, and both collectors drop it
+    // anyway — better to drop it where the user can see it happen.
+    if (!value) {
+      const isTarget = 'targetKey' in item.dataset;
+      item.remove();
+      if (isTarget) refreshTargetAddSelect(); else refreshManualAddSelect();
+      return;
+    }
+    const chip = item.querySelector<HTMLElement>('[data-chip-value]');
+    if (chip) chip.textContent = value;
+    const iso = item.querySelector<HTMLInputElement>('[data-target-deadline]')?.value ?? '';
+    const dateEl = item.querySelector<HTMLElement>('[data-chip-date]');
+    if (dateEl) {
+      const label = goalDateLabel(iso);
+      dateEl.textContent = label;
+      dateEl.hidden = !label;
+    }
+  }
+  view.hidden = editing;
+  edit.hidden = !editing;
+  // The chips flow along a row; the one being edited takes a full row to
+  // itself, because a text field and a date picker do not belong in a wrap.
+  item.dataset['editing'] = editing ? '1' : '0';
+  if (editing) item.querySelector<HTMLInputElement>('[data-chip-input]')?.focus();
+}
+
+/** Edit / Done, delegated on the container so it survives every rebuild.
+ *  Guarded per container, since there are two of them on the panel. */
+function wireChipItems(wrap: HTMLElement): void {
+  if (wrap.dataset['chipWired']) return;
+  wrap.dataset['chipWired'] = '1';
+  wrap.addEventListener('click', e => {
+    const el = e.target as HTMLElement;
+    const editBtn = el.closest<HTMLElement>('[data-chip-edit]');
+    if (editBtn) {
+      const item = editBtn.closest<HTMLElement>('.chip-item');
+      if (item) setChipEditing(item, true);
+      return;
+    }
+    const doneBtn = el.closest<HTMLElement>('[data-chip-done]');
+    if (doneBtn) {
+      const item = doneBtn.closest<HTMLElement>('.chip-item');
+      if (item) setChipEditing(item, false);
+    }
+  });
+  // Enter commits the item rather than submitting the panel.
+  wrap.addEventListener('keydown', e => {
+    if ((e as KeyboardEvent).key !== 'Enter') return;
+    const input = (e.target as HTMLElement).closest<HTMLElement>('[data-chip-input]');
+    if (!input) return;
+    e.preventDefault();
+    const item = input.closest<HTMLElement>('.chip-item');
+    if (item) setChipEditing(item, false);
+  });
+}
+
+/** Commit every item still open for editing, in both containers. */
+function closeOpenChipEdits(): void {
+  for (const item of document.querySelectorAll<HTMLElement>('#modal-target-rows .chip-item, #modal-manual-rows .chip-item')) {
+    const edit = item.querySelector<HTMLElement>('.chip-item-edit');
+    if (edit && !edit.hidden) setChipEditing(item, false);
+  }
 }
 
 /** (Re)build the manual rows from a targets map. */
@@ -862,6 +1012,7 @@ function renderTargetRows(targets: Record<string, string>) {
     .join('');
   refreshTargetAddSelect();
   wireTargetDeadlinePrefill();
+  wireChipItems(wrap);
   wireGoalDateUI(wrap);
 }
 
@@ -906,15 +1057,18 @@ export function modalAddTargetRow(): void {
   const sel = document.getElementById('modal-target-add-select') as HTMLSelectElement | null;
   const wrap = document.getElementById('modal-target-rows');
   if (!sel || !wrap || !sel.value) return;
-  wrap.insertAdjacentHTML('beforeend', targetRowHtml(sel.value, '', ''));
+  wrap.insertAdjacentHTML('beforeend', targetRowHtml(sel.value, '', '', true));
   refreshTargetAddSelect();
-  wrap.querySelector<HTMLInputElement>(`[data-target-key="${sel.value}"] input`)?.focus();
+  wireChipItems(wrap);
+  wrap.querySelector<HTMLInputElement>(`[data-target-key="${CSS.escape(sel.value)}"] [data-target-input]`)?.focus();
 }
 
 export function modalRemoveTargetRow(key: string): void {
   document.querySelector(`#modal-target-rows [data-target-key="${CSS.escape(key)}"]`)?.remove();
   refreshTargetAddSelect();
 }
+
+
 
 /** Normalize a raw target input to its stored form (days/avg_seed parse to a
  *  number string; everything else is passed through). Returns null when the
@@ -930,6 +1084,7 @@ export function normalizeTargetValue(key: string, raw: string): string | null {
 
 /** Read the builder rows back into a targets map (normalizing days/avg_seed). */
 function collectTargetRows(): Record<string, string> {
+  closeOpenChipEdits();
   const out: Record<string, string> = {};
   for (const row of document.querySelectorAll<HTMLElement>('#modal-target-rows [data-target-key]')) {
     const key = row.dataset['targetKey'] ?? '';
@@ -1348,6 +1503,35 @@ export async function modalTestTracker(): Promise<void> {
 // Save Tracker
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Confirm a save on the button itself. The panel no longer closes, so the
+ *  toast is the only other signal and it is easy to miss when your eyes are on
+ *  the field you just changed. */
+function markSaved(): void {
+  const btn = document.getElementById('modal-save-btn');
+  if (!btn) return;
+  const original = btn.dataset['label'] ?? btn.textContent ?? 'Save Changes';
+  btn.dataset['label'] = original;
+  btn.textContent = 'Saved ✓';
+  btn.classList.add('is-saved');
+  window.clearTimeout(Number(btn.dataset['savedTimer'] ?? 0));
+  btn.dataset['savedTimer'] = String(window.setTimeout(() => {
+    btn.textContent = btn.dataset['label'] ?? 'Save Changes';
+    btn.classList.remove('is-saved');
+  }, 1600));
+}
+
+/** After a save the stored key and cookie are what the fields showed, so put
+ *  the panel back into the state a fresh open would give it: the mask
+ *  sentinel, meaning "unchanged". Without this a second save re-sends the
+ *  plaintext, and the panel keeps a secret on screen for as long as it is
+ *  left open. */
+function remaskSecrets(): void {
+  for (const id of ['modal-key', 'modal-session-cookie']) {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (el && el.value) el.value = MASKED_KEY;
+  }
+}
+
 export async function saveTracker(deps: ModalDeps) {
   const id    = getVal('modal-tracker-id');
   const isNew = !id;
@@ -1468,7 +1652,13 @@ export async function saveTracker(deps: ModalDeps) {
     const { ok } = await api.updateTracker(id, payload);
     if (ok) {
       deps.toast(`${name} updated`, 'success');
-      closeModal();
+      // Saving is not the same as being finished. Editing a tracker is a
+      // several-things-at-once job — a key, then a target, then a limit — and
+      // closing on every save made Save mean "save and leave", so the only way
+      // to keep a change was to postpone it. Adding a tracker still closes:
+      // that one IS finished, and the next thing to do is look at the list.
+      markSaved();
+      remaskSecrets();
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -1629,6 +1819,15 @@ const PREVIEW_GROUP: GroupDef = {
 // Event globe used by the preview event banner (matches the detail view).
 const PREVIEW_EVENT_ICON = eventGlobeSvg('flex-shrink:0');
 
+/** Display toggles the preview card can show the effect of. Anything not here
+ *  either has no on-card representation (favicon in the browser tab, pathway
+ *  options, hover-only behaviour) or is not a card concern at all. */
+const PREVIEW_TOGGLE_IDS = [
+  's-private-track', 's-stat-src-track', 's-favicon-track', 's-target-eta-track',
+  's-tracker-rules-track', 's-unread-mail-track', 's-unread-notif-track',
+  's-hnr-highlight-track', 's-goal-chips-track',
+];
+
 /** Read the live (possibly-unsaved) Display form state into a settings object
  *  so the preview reflects choices before they're saved. */
 function previewSettings(): AppSettings {
@@ -1643,8 +1842,26 @@ function previewSettings(): AppSettings {
     duration_format:   radio('s-duration-format', 'ym'),
     private_mode:      on('s-private-track'),
     show_stat_sources: on('s-stat-src-track'),
+    // Everything below was settable but invisible here, so the preview could
+    // not answer "what does this do?" for most of the page — which is the one
+    // job it has.
+    show_favicons:              on('s-favicon-track'),
+    show_target_etas:           on('s-target-eta-track'),
+    show_tracker_rules:         on('s-tracker-rules-track'),
+    show_unread_mail:           on('s-unread-mail-track'),
+    show_unread_notifications:  on('s-unread-notif-track'),
+    highlight_hnr:              on('s-hnr-highlight-track'),
+    show_goal_chips:            on('s-goal-chips-track'),
   } as AppSettings;
 }
+
+// A stand-in favicon: an inline data URI, never a real tracker's. The preview
+// must not reach out to a site the user may not even have an account on, and
+// the whole card is deliberately fictional.
+const PREVIEW_FAVICON =
+  'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="%236d56eb"/><path d="M4.5 11V5h2.2c1.2 0 2 .7 2 1.8s-.8 1.9-2 1.9H5.8V11zm1.3-3.4h.8c.6 0 .9-.3.9-.8s-.3-.8-.9-.8h-.8zM10 11V5h1.3v6z" fill="%23fff"/></svg>`
+      .replace(/#/g, '%23'));
 
 /** Render the live theme/display preview card from current form state. */
 export function renderThemePreview(): void {
@@ -1660,11 +1877,27 @@ export function renderThemePreview(): void {
   const dot = (src: 'api' | 'scrape') =>
     s.show_stat_sources ? `<span class="stat-src stat-src--${src}" style="margin-left:5px"></span>` : '';
   const eta = (days: number) =>
-    `<span class="target-eta" style="margin-left:6px">≈ ${esc(fmtEtaDays(days, s.duration_format))}</span>`;
+    s.show_target_etas === false ? ''
+      : `<span class="target-eta" style="margin-left:6px">≈ ${esc(fmtEtaDays(days, s.duration_format))}</span>`;
+  const chip = (kind: 'ontrack' | 'behind', label: string) =>
+    s.show_goal_chips === false ? ''
+      : ` <span class="goal-chip goal-chip--${kind}">${label}</span>`;
+  const flags =
+    (s.show_unread_mail !== false ? '<span class="unread-flag" title="Unread mail"><i class="fas fa-envelope"></i></span>' : '') +
+    (s.show_unread_notifications !== false ? '<span class="unread-flag" title="Unread notifications"><i class="fas fa-bell"></i></span>' : '');
+  // Green under 1, otherwise red unless the user has turned the highlight off.
+  const hnrColor = s.highlight_hnr === false ? 'text3' : 'red';
+  const rulesLine = s.show_tracker_rules === false ? ''
+    : `<div class="card-rules" style="margin-top:10px"><i class="fas fa-scale-balanced"></i><span>Ratio ≥ 1.0 · Seed ≥ 14 days · Login every 90 days</span></div>`;
 
   card.innerHTML = `
     <div class="theme-preview-head">
-      <span class="theme-preview-name"><span class="theme-preview-dot"></span>${esc(nameTxt)}</span>
+      <span class="theme-preview-name">
+        <span class="theme-preview-dot"></span>
+        ${s.show_favicons ? `<img class="tracker-favicon" src="${PREVIEW_FAVICON}" alt="" style="width:14px;height:14px;flex-shrink:0">` : ''}
+        ${esc(nameTxt)}
+        ${flags}
+      </span>
       <span class="badge-membership" title="Account age">6M 5W 4D</span>
     </div>
     <div class="card-user" style="margin-bottom:8px">
@@ -1682,6 +1915,7 @@ export function renderThemePreview(): void {
       <div class="stat-item"><div class="stat-label">Buffer</div><div class="stat-value blue">3.10 TB${dot('scrape')}</div></div>
       <div class="stat-item"><div class="stat-label">Avg Seed Time</div><div class="stat-value pink">88d${dot('scrape')}</div></div>
       <div class="stat-item"><div class="stat-label">Bonus</div><div class="stat-value orange">14,208${dot('api')}</div></div>
+      <div class="stat-item"><div class="stat-label">Hit &amp; Runs</div><div class="stat-value ${hnrColor}">2${dot('scrape')}</div></div>
     </div>
     <div class="targets-section" style="margin-top:10px">
       <div class="target-row">
@@ -1694,18 +1928,19 @@ export function renderThemePreview(): void {
       <div class="target-row">
         <div class="target-header">
           <span class="target-lbl">Seed time</span>
-          <span class="target-vals">88d <span class="tgt">/ 120d</span>${eta(32)}</span>
+          <span class="target-vals">88d <span class="tgt">/ 120d</span>${eta(32)}${chip('ontrack', 'on track')}</span>
         </div>
         <div class="progress-track"><div class="progress-fill amber" style="width:43%"></div></div>
       </div>
       <div class="target-row">
         <div class="target-header">
           <span class="target-lbl">Upload target</span>
-          <span class="target-vals">1.8 TB <span class="tgt">/ 10 TB</span>${eta(852)}</span>
+          <span class="target-vals">1.8 TB <span class="tgt">/ 10 TB</span>${eta(852)}${chip('behind', 'behind')}</span>
         </div>
         <div class="progress-track"><div class="progress-fill red" style="width:18%"></div></div>
       </div>
     </div>
+    ${rulesLine}
     <div class="theme-preview-actions">
       <span class="btn btn-primary btn-sm" role="presentation">Refresh</span>
       <span class="btn btn-ghost btn-sm" role="presentation">Details</span>
@@ -1830,11 +2065,14 @@ export async function renderAccountSection(): Promise<void> {
     <div style="font-size:13px;font-weight:600;color:var(--text);margin:20px 0 6px">Two-factor authentication</div>
     <div id="s-2fa-section"></div>
 
-    <div style="font-size:13px;font-weight:600;color:var(--text);margin:18px 0 6px">Disable protection</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Removes the account and turns login off. Enter your current password to confirm.</div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:420px">
-      <input class="form-input" type="password" id="s-acct-disablepw" placeholder="Current password" autocomplete="current-password" style="max-width:200px"/>
-      <button type="button" class="btn btn-danger btn-sm" onclick="accountDisable()">Disable login protection</button>
+    <div class="acct-danger-row">
+      <button type="button" class="btn btn-ghost btn-sm acct-danger-btn" onclick="toggleAcctPanel('s-acct-disable')">Disable login protection</button>
+      <span class="form-hint">Removes the account and turns login off.</span>
+    </div>
+    <div class="acct-panel" id="s-acct-disable" hidden>
+      <input class="form-input" type="password" id="s-acct-disablepw" placeholder="Current password" autocomplete="current-password" style="max-width:220px"/>
+      <button type="button" class="btn btn-danger btn-sm" onclick="accountDisable()">Confirm &mdash; turn login off</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-acct-disable')">Cancel</button>
     </div>`;
 
   render2FASection(data.totp_enabled === true, data.recovery_codes_left);
@@ -1850,9 +2088,11 @@ function render2FASection(enabled: boolean, codesLeft?: number): void {
   if (!enabled) {
     box.innerHTML = `
       <div style="font-size:12px;color:var(--text3);margin-bottom:10px">A code from your phone on top of your password. Worth turning on if Yata is reachable from outside your network — a password alone is one leak away from someone else's hands. Works with any authenticator app.</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:460px">
-        <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:200px"/>
-        <button type="button" class="btn btn-primary btn-sm" onclick="twoFactorStart()">Set up two-factor</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="toggleAcctPanel('s-2fa-setup')">Set up two-factor</button>
+      <div class="acct-panel" id="s-2fa-setup" hidden>
+        <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:220px"/>
+        <button type="button" class="btn btn-primary btn-sm" onclick="twoFactorStart()">Continue</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-2fa-setup')">Cancel</button>
       </div>
       <div id="s-2fa-error" class="login-error" style="display:none;margin-top:10px"></div>
       <div id="s-2fa-enrol"></div>`;
@@ -1865,15 +2105,46 @@ function render2FASection(enabled: boolean, codesLeft?: number): void {
     <div style="font-size:11px;color:var(--${low ? 'amber' : 'text3'});margin-bottom:10px">
       ${codesLeft ?? 0} recovery code${codesLeft === 1 ? '' : 's'} remaining${low ? ' — generate a new set before you run out, or losing your phone locks you out.' : '.'}
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:520px">
-      <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:180px"/>
-      <input class="form-input" type="text" id="s-2fa-code" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" style="max-width:120px"/>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="twoFactorRegenerate()">New recovery codes</button>
-      <button type="button" class="btn btn-danger btn-sm" onclick="twoFactorDisable()">Turn off</button>
+    <div class="acct-danger-row">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-2fa-regen')">New recovery codes</button>
+      <button type="button" class="btn btn-ghost btn-sm acct-danger-btn" onclick="toggleAcctPanel('s-2fa-off')">Turn two-factor off</button>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px">New recovery codes need your password. Turning 2FA off needs your password <em>and</em> a current code.</div>
+    <div class="acct-panel" id="s-2fa-regen" hidden>
+      <input class="form-input" type="password" id="s-2fa-pw" placeholder="Current password" autocomplete="current-password" style="max-width:200px"/>
+      <button type="button" class="btn btn-primary btn-sm" onclick="twoFactorRegenerate()">Generate new codes</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-2fa-regen')">Cancel</button>
+    </div>
+    <div class="acct-panel" id="s-2fa-off" hidden>
+      <input class="form-input" type="password" id="s-2fa-offpw" placeholder="Current password" autocomplete="current-password" style="max-width:180px"/>
+      <input class="form-input" type="text" id="s-2fa-code" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" style="max-width:120px"/>
+      <button type="button" class="btn btn-danger btn-sm" onclick="twoFactorDisable()">Confirm &mdash; turn off</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-2fa-off')">Cancel</button>
+    </div>
     <div id="s-2fa-error" class="login-error" style="display:none;margin-top:10px"></div>
     <div id="s-2fa-enrol"></div>`;
+}
+
+/** Show or hide one of the Account section's confirm panels.
+ *
+ *  A password box sitting on screen for an action nobody is taking is both
+ *  noise and an invitation to type a password into the wrong one — there were
+ *  three of them, for three different actions, all visible at once. The field
+ *  now appears when the action is asked for, and closing clears it so a typed
+ *  password does not linger. Opening one closes the others. */
+export function toggleAcctPanel(id: string): void {
+  const panel = document.getElementById(id);
+  if (!panel) return;
+  const opening = panel.hidden;
+  for (const other of document.querySelectorAll<HTMLElement>('#s-account-section .acct-panel')) {
+    if (other !== panel) { other.hidden = true; clearPanelInputs(other); }
+  }
+  panel.hidden = !opening;
+  if (opening) panel.querySelector<HTMLInputElement>('input')?.focus();
+  else clearPanelInputs(panel);
+}
+
+function clearPanelInputs(panel: HTMLElement): void {
+  for (const input of panel.querySelectorAll<HTMLInputElement>('input')) input.value = '';
 }
 
 function twoFactorError(msg: string) {
@@ -1951,7 +2222,7 @@ export async function twoFactorEnable(): Promise<void> {
 /** Turn 2FA off — needs the password and a current second factor. */
 export async function twoFactorDisable(): Promise<void> {
   twoFactorError('');
-  const pw = acctVal('s-2fa-pw');
+  const pw = acctVal('s-2fa-offpw');
   const code = acctVal('s-2fa-code').trim();
   if (!pw || !code) { twoFactorError('Enter your password and a current code.'); return; }
   if (!confirm('Turn off two-factor authentication?\n\nYour account will be protected by its password alone, and your recovery codes will stop working.')) return;
@@ -2303,33 +2574,97 @@ export async function toggleAutoUpdate(): Promise<void> {
 /** Persist the reverse-proxy header opt-in immediately (like the other toggles).
  *  On failure, revert appSettings AND the checkbox — mirrors togglePrivacyQuick
  *  (main.ts) — so the UI never claims a setting persisted when it didn't. */
-/** The Network hostname field, parsed into the list the API expects. */
+/** The hostnames currently on screen, in order.
+ *
+ *  The stored shape has always been a list — the commas only ever existed in
+ *  the old single input, so drawing one chip per host changes nothing on disk
+ *  and nothing for anyone upgrading. */
 function readAllowedHostsField(): string[] {
-  const el = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
-  if (!el) return appSettings.allowed_hosts ?? [];
-  return el.value.split(',').map(h => h.trim()).filter(Boolean);
+  const list = document.getElementById('s-host-list');
+  if (!list) return appSettings.allowed_hosts ?? [];
+  return [...list.querySelectorAll<HTMLElement>('[data-host]')]
+    .map(el => el.dataset['host'] ?? '').filter(Boolean);
 }
 
-/** Save the allowed-hosts list on edit, reverting the field if it is refused.
+/** Draw the chips from the saved list.
+ *
+ *  The remove button carries no inline handler. It used to interpolate the
+ *  hostname into an onclick through jsId(), whose allowlist is
+ *  [A-Za-z0-9_-] — so every name containing a dot became the empty string and
+ *  no × worked at all. Reaching for a stronger escape would have fixed the
+ *  symptom; not building code out of user text is the actual answer, and it
+ *  closes the "paste this in here" shape of problem for good. The click is
+ *  delegated below and reads data-host, which is data and stays data. */
+export function renderAllowedHosts(): void {
+  const list = document.getElementById('s-host-list');
+  if (!list) return;
+  const hosts = appSettings.allowed_hosts ?? [];
+  list.innerHTML = hosts.length
+    ? hosts.map(h => `<span class="host-chip" data-host="${esc(h)}">
+        <span class="host-chip-name">${esc(h)}</span>
+        <button type="button" class="host-chip-x" data-host-remove title="Stop answering to this name" aria-label="Remove ${esc(h)}">&times;</button>
+      </span>`).join('')
+    : `<span class="host-empty">No names set &mdash; IP and localhost still work.</span>`;
+  wireHostList(list);
+}
+
+function wireHostList(list: HTMLElement): void {
+  if (list.dataset['wired']) return;
+  list.dataset['wired'] = '1';
+  list.addEventListener('click', e => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-host-remove]');
+    if (!btn) return;
+    const host = btn.closest<HTMLElement>('[data-host]')?.dataset['host'];
+    if (host) void removeAllowedHost(host);
+  });
+}
+
+/** Add whatever is in the box. A pasted comma- or space-separated run still
+ *  works, because that is how this field used to be filled in and muscle
+ *  memory outlives a redesign. */
+export async function addAllowedHost(): Promise<void> {
+  const input = document.getElementById('s-host-input') as HTMLInputElement | null;
+  if (!input) return;
+  const parts = input.value.split(/[,\s]+/).map(h => h.trim().toLowerCase()).filter(Boolean);
+  if (!parts.length) { input.focus(); return; }
+  const current = appSettings.allowed_hosts ?? [];
+  const merged = [...current];
+  for (const p of parts) if (!merged.some(h => h.toLowerCase() === p)) merged.push(p);
+  if (merged.length === current.length) {
+    input.value = '';
+    _sd?.toast('Already on the list', 'error');
+    return;
+  }
+  if (await commitAllowedHosts(merged)) input.value = '';
+  input.focus();
+}
+
+export async function removeAllowedHost(host: string): Promise<void> {
+  const current = appSettings.allowed_hosts ?? [];
+  await commitAllowedHosts(current.filter(h => h !== host));
+}
+
+/** Save a hostname list, redrawing from whatever actually stuck.
  *
  *  Worth getting right: someone typing their domain here is usually doing it
  *  BEFORE they travel, and will not find out it failed until they are away
  *  from the machine. So a rejection has to be visible now, not silent. */
-export async function saveAllowedHosts(): Promise<void> {
-  if (!_sd) return;
-  const hosts = readAllowedHostsField();
+async function commitAllowedHosts(hosts: string[]): Promise<boolean> {
+  if (!_sd) return false;
   const previous = appSettings.allowed_hosts ?? [];
   const { ok, data } = await api.saveSettings({ ...appSettings, allowed_hosts: hosts });
   if (ok) {
     appSettings.allowed_hosts = hosts;
+    renderAllowedHosts();
     _sd.toast(hosts.length
       ? `Yata will answer to ${hosts.join(', ')}`
       : 'Hostnames cleared — IP and localhost access still work', 'success');
-    return;
+    return true;
   }
-  const el = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
-  if (el) el.value = previous.join(', ');
+  appSettings.allowed_hosts = previous;
+  renderAllowedHosts();
   _sd.toast((data as { error?: string })?.error ?? 'Could not save the hostname list', 'error');
+  return false;
 }
 
 export async function toggleTrustProxy(): Promise<void> {
@@ -2354,15 +2689,13 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   // Mask round-trip: show the mask sentinel (NOT a blank field) when a key is
   // stored — saving sends it back unchanged; typing replaces; clearing clears.
   (document.getElementById('s-qui-key') as HTMLInputElement).value = settings.qui_api_key ?? '';
-  setPlaceholder('s-qui-key', settings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your QUI API key');
+  setPlaceholder('s-qui-key', settings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
   (document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement).value = settings.qui_seedsize_mode ?? 'off';
 
-  const syncTrack    = document.getElementById('s-profile-sync-track');
   const faviconTrack = document.getElementById('s-favicon-track');
   const privateTrack = document.getElementById('s-private-track');
   const quiBarsTrack = document.getElementById('s-qui-bars-track');
   const statSrcTrack = document.getElementById('s-stat-src-track');
-  if (syncTrack)    syncTrack.className    = `toggle-track ${settings.profile_auto_sync !== false ? 'on' : ''}`;
   if (faviconTrack) faviconTrack.className = `toggle-track ${settings.show_favicons ? 'on' : ''}`;
   if (privateTrack) privateTrack.className = `toggle-track ${settings.private_mode ? 'on' : ''}`;
   if (quiBarsTrack) quiBarsTrack.className = `toggle-track ${settings.qui_bars_visible !== false ? 'on' : ''}`;
@@ -2452,6 +2785,18 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
     r.onchange = renderThemePreview;
   });
 
+  // Every toggle the preview can demonstrate re-renders it on click.
+  //
+  // Only the radios did this before, so a toggle changed the saved setting and
+  // the card sat there unchanged — including the two the preview already read.
+  // The card is the page's explanation of what these do; it has to move when
+  // they do. The inline onclick flips the class first (it is an attribute
+  // handler, so it runs before listeners added here), and previewSettings()
+  // then reads the new state.
+  for (const id of PREVIEW_TOGGLE_IDS) {
+    document.getElementById(id)?.addEventListener('click', () => renderThemePreview());
+  }
+
   // Versions + update check (General tab). Loads cached status (no network).
   void loadUpdateStatus();
   const auto = document.getElementById('s-update-auto') as HTMLInputElement | null;
@@ -2461,8 +2806,7 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   void renderAccountSection();
   const trustProxy = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
   if (trustProxy) trustProxy.checked = settings.trust_proxy_headers ?? false;
-  const allowedHosts = document.getElementById('s-allowed-hosts') as HTMLInputElement | null;
-  if (allowedHosts) allowedHosts.value = (settings.allowed_hosts ?? []).join(', ');
+  renderAllowedHosts();
 
   // Data: automatic backup settings + backup list (General tab).
   const backupTrack = document.getElementById('s-backup-track');
@@ -2519,11 +2863,6 @@ function applyCustomCredentialLabels(def: DefInfo, fallbackHint?: string) {
   if (hint) hint.textContent = h
     ? `${def.name}: ${h}`
     : `Session token or API key required by ${def.name} — check tracker preferences/security settings`;
-}
-
-export function toggleSettingsSync() {
-  const t = document.getElementById('s-profile-sync-track');
-  if (t) t.className = `toggle-track ${t.classList.contains('on') ? '' : 'on'}`;
 }
 
 export function toggleSettingsFavicon() {
@@ -2664,7 +3003,6 @@ export async function saveSettings(deps: SettingsDeps) {
     qui_enabled_instances: enabledIds,
     qui_bars_visible:      isOn('s-qui-bars-track', true),
     qui_seedsize_mode:     ((document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement)?.value ?? 'off') as AppSettings['qui_seedsize_mode'],
-    profile_auto_sync:     isOn('s-profile-sync-track', true),
     show_favicons:         isOn('s-favicon-track', false),
     private_mode:          isOn('s-private-track', false),
     show_stat_sources:     isOn('s-stat-src-track', false),
@@ -2710,7 +3048,7 @@ export async function saveSettings(deps: SettingsDeps) {
     // Re-sync the key field with the (re)masked value so a second save
     // round-trips safely instead of wiping the stored key.
     setVal('s-qui-key', appSettings.qui_api_key ?? '');
-    setPlaceholder('s-qui-key', appSettings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your QUI API key');
+    setPlaceholder('s-qui-key', appSettings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
     await deps.loadQUIInstances();
     deps.renderQuiBarsWrapper();
     deps.renderTable();
