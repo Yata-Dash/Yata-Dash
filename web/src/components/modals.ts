@@ -8,7 +8,7 @@ import type {
 } from '../types';
 import { MANUAL_TYPE, MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
-import { approvalIcon, approvalWarns } from '../utils/approval';
+import { approvalIcon, approvalWarns, scrapeSanctioned } from '../utils/approval';
 import { capabilityRow } from './capabilities';
 import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
@@ -76,6 +76,14 @@ let _requiredFields: string[]      = [];
 let _scrapeFloor   = 60;     // effective minimum interval = max(60, def request)
 let _scrapeCap     = 0;      // operator daily cap from the def (0 = none)
 let _apiOnlyLocked = false;  // def forbids scraping → API-only forced on
+/** Add mode: the user pressed through the "not approved" notice and wants to
+ *  scrape after all, so the save has to say so — otherwise the server's
+ *  API-only default would leave the cookie they just pasted unused. */
+let _scrapeAllowedAtAdd = false;
+/** Edit mode: nothing from this tracker's staff sanctions scraping (no def, or
+ *  a def nobody has heard back on), so API-only carries a warning and puts the
+ *  session cookie away while it is on. */
+let _scrapeUnsanctioned = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tracker definition helpers
@@ -394,6 +402,7 @@ export function onAddTypeSelect() {
   show('modal-name-url-group');
   show('modal-add-divider');
   showFormForType(typeKey);
+  applyUnapprovedScrapeNotice(typeKey, undefined);
   setupManualSection(typeKey, undefined);
   setEl('modal-save-btn', 'Add Tracker');
   setTimeout(() => (document.getElementById('modal-name') as HTMLInputElement)?.focus(), 50);
@@ -448,8 +457,12 @@ function applyPredefinedDef(def: DefInfo) {
   applyRequiredFieldsUI(def.required_fields ?? typeRequiredFields(def.type));
   // API-only def → the session cookie does nothing (no profile scraping),
   // unless the def's API itself authenticates with it (auth_method
-  // session_cookie) — then the field IS the credential and stays.
-  if (def.scrape_disabled && !def.needs_session_cookie) hide('modal-session-cookie-group');
+  // session_cookie) — then the field IS the credential and stays, and there is
+  // no scraping decision to put behind a notice either.
+  if (!def.needs_session_cookie) {
+    if (def.scrape_disabled) hide('modal-session-cookie-group');
+    else applyUnapprovedScrapeNotice(def.type, def.approval_status);
+  }
   setEl('modal-save-btn', `Add ${def.name}`);
 }
 
@@ -515,6 +528,35 @@ function showFormForType(typeKey: string) {
   // Mark inputs required by this type (e.g. gazelle → username)
   applyRequiredFieldsUI(typeRequiredFields(typeKey));
   applySessionCookieLabel();
+  // Cleared here rather than per branch: every path through this function
+  // decides the cookie's visibility from scratch, and a notice left over from
+  // a previous selection would contradict whatever it just decided.
+  hide('modal-noapproval-group');
+  _scrapeAllowedAtAdd = false;
+}
+
+/** Add mode: until someone from a tracker's staff has sanctioned scraping,
+ *  the cookie field is put away behind a short notice instead of being offered
+ *  as an ordinary credential — the server starts such a tracker API-only, so a
+ *  cookie pasted here would sit unused. Covers both a tracker with no def at
+ *  all and one whose def nobody has heard back on. Types that never scrape say
+ *  nothing: there is no scraping to approve. */
+function applyUnapprovedScrapeNotice(typeKey: string, approval: string | undefined): void {
+  if (typeKey === 'test' || typeKey === MANUAL_TYPE || typeKey === UNKNOWN_TYPE) return;
+  if (scrapeSanctioned(approval)) return;
+  hide('modal-session-cookie-group');
+  show('modal-noapproval-group');
+}
+
+/** "Add session cookie anyway" — the user has checked the tracker's rules and
+ *  wants to scrape. Revealing the field is not enough on its own: the save
+ *  must also send api_only:false, or the server default would file the cookie
+ *  away against a tracker it has been told never to scrape. */
+export function allowUnapprovedScrape(): void {
+  _scrapeAllowedAtAdd = true;
+  hide('modal-noapproval-group');
+  show('modal-session-cookie-group');
+  (document.getElementById('modal-session-cookie') as HTMLInputElement | null)?.focus();
 }
 
 /** Session cookie field text. The cookie is always the optional scraping
@@ -1305,20 +1347,32 @@ function setupScrapeSection(t: Tracker) {
     else maxScrapesInput.removeAttribute('max');
   }
 
+  _scrapeUnsanctioned = !_apiOnlyLocked && !scrapeSanctioned(t.def_approval);
+
   const apiOnlyOn = _apiOnlyLocked || !!t.api_only;
   const track = document.getElementById('modal-api-only-track');
   if (track) track.className = `toggle-track ${apiOnlyOn ? 'on' : ''}`;
   const apiHint = document.getElementById('modal-api-only-hint');
   if (apiHint) {
+    // The unsanctioned wording replaces the neutral one rather than joining it:
+    // what the toggle does is obvious from its name, what turning it off means
+    // for this particular tracker is not.
     apiHint.textContent = _apiOnlyLocked
       ? 'This tracker is API-only — its definition does not support profile scraping.'
+      : _scrapeUnsanctioned
+      ? 'Scraping has not been approved by this tracker — check its rules or ask staff before turning this off.'
       : 'Only use the tracker API for this tracker — never scrape the profile page.';
+    // Named explicitly in both directions: the template sets this colour
+    // inline, so clearing the property would strip the default rather than
+    // fall back to it.
+    apiHint.style.color = _scrapeUnsanctioned && !_apiOnlyLocked ? 'var(--amber)' : 'var(--text3)';
   }
   const apiLabel = document.getElementById('modal-api-only-label');
   if (apiLabel) apiLabel.style.opacity = _apiOnlyLocked ? '0.7' : '';
 
   renderScrapeReq(t);
   applyScrapeLockState();
+  applyUnsanctionedCookieState();
   modalValidateInterval();
   modalValidateMaxScrapes();
 }
@@ -1368,6 +1422,19 @@ function recomputeAutoInterval() {
   modalValidateInterval();
 }
 
+/** The session cookie is a scraping credential and nothing else, so on a
+ *  tracker whose staff have never sanctioned scraping it appears only once the
+ *  user has turned API-only off. Left alone on sanctioned trackers: a stored
+ *  cookie vanishing from a form it has always been part of reads as data loss.
+ *  The input itself stays in the DOM either way, so the "keep current" mask
+ *  still round-trips through save. */
+function applyUnsanctionedCookieState(): void {
+  if (!_scrapeUnsanctioned) return;
+  const apiOnly = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
+  if (apiOnly) hide('modal-session-cookie-group');
+  else show('modal-session-cookie-group');
+}
+
 /** Toggle the per-tracker API-only setting (no-op when locked by the def). */
 export function modalToggleApiOnly() {
   if (_apiOnlyLocked) return;
@@ -1375,6 +1442,7 @@ export function modalToggleApiOnly() {
   if (!track) return;
   track.className = `toggle-track ${track.classList.contains('on') ? '' : 'on'}`;
   applyScrapeLockState();
+  applyUnsanctionedCookieState();
   modalValidateInterval();
   modalValidateMaxScrapes();
 }
@@ -1641,6 +1709,11 @@ export async function saveTracker(deps: ModalDeps) {
     if (!_apiOnlyLocked) {
       payload.api_only = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
     }
+  } else if (_scrapeAllowedAtAdd) {
+    // Add mode has no scraping section, so the only way to say "scrape this
+    // one" is here — without it the server's API-only default for an unknown
+    // tracker would silently outrank the cookie the user just pasted.
+    payload.api_only = false;
   }
 
   if (isDemo || (!isNew && document.getElementById('modal-mock-group')?.style.display !== 'none')) {

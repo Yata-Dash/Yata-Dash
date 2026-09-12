@@ -18,6 +18,35 @@ func registerPathways(r chi.Router, d *Deps) {
 	r.Get("/pathways/targets", pathwayTargets(d))
 	r.Get("/pathways/paths", pathwayPaths(d))
 	r.Get("/pathways/from", pathwayFrom(d))
+	r.Get("/pathways/pinned", pathwayPinned(d))
+}
+
+// GET /api/pathways/pinned — every pinned chain measured against the user's
+// trackers, in stored order. Pins are names only and are re-resolved here on
+// every read (see PINNED_PATHWAYS_PLAN.md), so a dataset sync can never
+// silently drop one: a hop that has gone is reported as such and the user
+// decides. Pin and unpin are ordinary settings saves.
+func pathwayPinned(d *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if d.Paths == nil {
+			jsonError(w, "pathways_data_missing", http.StatusNotFound)
+			return
+		}
+		users := mapUserTrackers(d)
+		groupsFor, inviteReqsFor := defLookups(d)
+		pins := d.Cfg.Settings().PathwayPins
+		out := make([]pathways.PinResult, 0, len(pins))
+		for _, pin := range pins {
+			if len(pin.Hops) < 2 {
+				continue // malformed — nothing to measure and nothing to show
+			}
+			out = append(out, pathways.EvalPin(d.Paths, pin.Hops, users, groupsFor, inviteReqsFor))
+		}
+		jsonOK(w, map[string]any{
+			"source": d.Paths.Source,
+			"pins":   out,
+		})
+	}
 }
 
 // GET /api/pathways/from?tracker=<id> — active direct routes leaving one of

@@ -290,6 +290,10 @@ type Settings struct {
 	// and ride along in config export/import.
 	PathwayFavorites     []string `json:"pathway_favorites,omitempty"`
 	PathwayNotInterested []string `json:"pathway_not_interested,omitempty"`
+	// PathwayPins are the user's chosen invite paths (PINNED_PATHWAYS_PLAN.md).
+	// Names only: routes are re-resolved on every read, so a pin survives a
+	// dataset sync and reports, rather than hides, a hop that has gone.
+	PathwayPins []PathwayPin `json:"pathway_pins,omitempty"`
 	// PathwaysIncludeDisabled lets DISABLED trackers act as pathway starting
 	// points — imported/def-less trackers a user keeps purely as a "I'm a
 	// member here" record. Their stats are ALWAYS treated as unknown (frozen
@@ -598,4 +602,10 @@ type TrackerStatsResponse struct {
 	// average. The frontend uses it for target/promotion ETAs. A field with
 	// no measurable growth is omitted.
 	Rates map[string]float64 `json:"rates,omitempty"`
+}
+
+// PathwayPin is one pinned invite path: dataset tracker names, the user's
+// starting tracker first and the destination last.
+type PathwayPin struct {
+	Hops []string `json:"hops"`
 }

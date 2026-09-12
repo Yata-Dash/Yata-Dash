@@ -353,6 +353,9 @@ export interface AppSettings {
   allowed_hosts?: string[];
   pathway_favorites?: string[];                // pathway targets pinned to the top of the picker
   pathway_not_interested?: string[];           // pathway targets pushed to the bottom, excluded from reqs-met
+  /** Pinned invite paths — dataset names, start first, destination last.
+   *  Names only; the server re-resolves them on every read. */
+  pathway_pins?: PathwayPin[];
   pathways_include_disabled?: boolean;         // disabled trackers can start paths (stats always unknown)
   qui_url: string;
   qui_api_key: string;
@@ -767,6 +770,29 @@ export interface PathwayPath {
 export interface PathwayFromResponse {
   source: PathwaySource;
   routes: PathwayStep[] | null;
+}
+
+export interface PathwayPin { hops: string[] }
+
+/** One pinned chain measured against the user's trackers
+ *  (GET /api/pathways/pinned). See PINNED_PATHWAYS_PLAN.md. */
+export interface PinResult extends PathwayPath {
+  hops: string[];
+  destination: string;
+  state: 'ok' | 'inactive' | 'missing' | 'no_start' | 'reached';
+  /** Index into hops of the hop whose route is missing/inactive; -1 otherwise. */
+  broken_hop: number;
+  /** Index into hops the evaluation started from — the furthest hop the user
+   *  already holds. Hops before it are done. -1 when none is held. */
+  start_index: number;
+  /** Leaf requirements met / listed on the first open hop. */
+  met: number;
+  total: number;
+}
+
+export interface PathwayPinnedResponse {
+  source: PathwaySource;
+  pins: PinResult[];
 }
 
 /** Offered when the user has no path to the target. */

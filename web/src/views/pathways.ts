@@ -10,8 +10,8 @@ import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
 import { getFaviconUrl } from '../utils/parse';
 import type {
-  PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayReqProgress,
-  PathwaySource, PathwayStep, PathwayTarget,
+  PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayPin, PathwayReqProgress,
+  PathwaySource, PathwayStep, PathwayTarget, PinResult,
 } from '../types';
 
 const TARGET_KEY = 'u3d-pathway-target';
@@ -27,6 +27,7 @@ let pathsSeq = 0; // guards out-of-order responses when switching targets fast
 let listFilter: 'all' | 'met' | 'fav' =
   (localStorage.getItem(FILTER_KEY) as 'all' | 'met' | 'fav') || 'all';
 let lastComboFilter = ''; // the text filter of the currently rendered list
+let lastPinned: PinResult[] = []; // last /pinned answer, re-rendered on expand/collapse
 
 // ── Favourites / not-interested (server-side settings, survive browsers) ──
 
@@ -50,6 +51,156 @@ function togglePathwayList(name: string, which: 'fav' | 'hide') {
   appSettings.pathway_not_interested = [...hid].sort();
   void api.saveSettings({ ...appSettings });
   renderComboList(lastComboFilter); // reflect immediately, list stays open
+}
+
+// ── Pinned paths (server-side settings; PINNED_PATHWAYS_PLAN.md) ──────────
+
+function pinList(): PathwayPin[] { return appSettings.pathway_pins ?? []; }
+const chainKey = (hops: string[]) => hops.join(' → ');
+function isPinned(hops: string[]): boolean {
+  const k = chainKey(hops);
+  return pinList().some(p => chainKey(p.hops) === k);
+}
+/** The chain a searched path represents: start tracker, then every hop. */
+function pathHops(p: PathwayPath): string[] {
+  return [p.start_name, ...p.steps.map(s => s.to)];
+}
+
+/** Pin or unpin an exact chain. One pin per destination: pinning a different
+ *  path to a destination already pinned replaces it, which is what "choose a
+ *  path per destination" means — two near-identical cards for one place
+ *  would be the list arguing with itself. */
+async function togglePin(hops: string[]) {
+  const k = chainKey(hops);
+  const dest = hops[hops.length - 1];
+  const wasPinned = isPinned(hops);
+  const kept = pinList().filter(p => chainKey(p.hops) !== k && p.hops[p.hops.length - 1] !== dest);
+  appSettings.pathway_pins = wasPinned ? kept : [...kept, { hops }];
+  await api.saveSettings({ ...appSettings });
+  renderPaths();          // pin buttons reflect the new state
+  await refreshPinned();  // the section itself
+}
+
+/** Re-measure every pin. Called on init, after each pin/unpin, and whenever
+ *  the view is shown — stats move between visits. */
+export async function refreshPinned(): Promise<void> {
+  const el = document.getElementById('pw-pinned');
+  if (!el) return;
+  if (!pinList().length) { lastPinned = []; el.style.display = 'none'; el.innerHTML = ''; return; }
+  const { ok, data } = await api.fetchPathwayPinned();
+  if (!ok || !Array.isArray(data?.pins)) return;
+  lastPinned = data.pins;
+  renderPinned();
+}
+
+function renderPinned() {
+  const el = document.getElementById('pw-pinned');
+  if (!el) return;
+  if (!lastPinned.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<div class="pw-pinned-head">
+      <span class="pw-pinned-title"><i class="fas fa-thumbtack"></i> Pinned paths</span>
+      <span class="pw-pinned-sub">Your chosen routes, measured from wherever you have got to.</span>
+    </div>
+    ${lastPinned.map((r, i) => renderPinCard(r, i)).join('')}`;
+}
+
+/** What the card says about a pin that is not simply in progress. */
+function pinStateNote(r: PinResult): string {
+  const broken = r.broken_hop >= 0 ? `${esc(r.hops[r.broken_hop - 1] ?? '')} → ${esc(r.hops[r.broken_hop] ?? '')}` : '';
+  switch (r.state) {
+    case 'missing':  return `The route ${broken} is no longer in the community data. It may have been removed or renamed — check the tracker.`;
+    case 'inactive': return `The route ${broken} is marked inactive in the community data.`;
+    case 'no_start': return 'None of the trackers on this path are in Yata any more, so there is nothing to measure it from.';
+    case 'reached':  return `You have ${esc(r.destination)} — this path is complete.`;
+    default:         return '';
+  }
+}
+
+function renderPinCard(r: PinResult, idx: number): string {
+  const open = r.steps?.[0];
+  const measurable = r.state === 'ok' && !!open && !r.start_disabled;
+  const ready = measurable && open.eta_days === 0 && !open.has_unknown;
+  const start = r.state === 'ok' ? trackers.find(t => t.id === r.start_tracker_id) : undefined;
+
+  // The chain: hops before the start index are done, the start carries the
+  // favicon, later hops are the same expandable step chips as a searched path,
+  // and a broken hop is marked rather than dropped.
+  const chips: string[] = [];
+  r.hops.forEach((name, hi) => {
+    if (hi > 0) chips.push('<span class="pw-arrow">→</span>');
+    const isLast = hi === r.hops.length - 1;
+    if (hi < r.start_index) {
+      chips.push(`<span class="pw-chip pw-chip-done" title="Done — you have this tracker">✓ ${esc(name)}</span>`);
+    } else if (hi === r.start_index && !isLast) {
+      const favUrl = start?.url ? getFaviconUrl(start.url) : '';
+      chips.push(`<span class="pw-chip pw-chip-start${r.start_disabled ? ' pw-chip-start--disabled' : ''}" title="Your tracker — progress is measured from here">
+        ${favUrl ? `<img class="pw-chip-favicon" src="${esc(favUrl)}" alt="" onerror="this.style.display='none'">` : ''}
+        ${esc(start?.name || name)}${r.start_disabled ? '<span class="pw-chip-disabled-tag">Disabled</span>' : ''}
+      </span>`);
+    } else if (r.broken_hop >= 0 && hi >= r.broken_hop) {
+      chips.push(`<span class="pw-chip pw-chip-broken${isLast ? ' pw-chip-target' : ''}" title="${r.state === 'missing' ? 'Route no longer listed' : 'Route marked inactive'}">${esc(name)}</span>`);
+    } else if (r.state === 'ok' && hi > r.start_index) {
+      const si = hi - r.start_index - 1;
+      const key = `pin:${idx}:${si}`;
+      const s = r.steps[si];
+      chips.push(`<span class="pw-chip pw-chip-step${isLast ? ' pw-chip-target' : ''}${expandedSteps.has(key) ? ' expanded' : ''}"
+            data-step-key="${key}" title="Click for route details">
+        ${esc(name)}${s?.estimated ? '<span class="pw-chip-est" title="Estimate — no live stats beyond the first hop">≈</span>' : ''}
+        <svg class="pw-chip-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </span>`);
+    } else {
+      const done = r.state === 'reached' && isLast;
+      chips.push(`<span class="pw-chip${isLast ? ' pw-chip-target' : ''}${done ? ' pw-chip-done' : ''}">${done ? '✓ ' : ''}${esc(name)}</span>`);
+    }
+  });
+
+  const details = r.state === 'ok'
+    ? r.steps.map((s, si) => expandedSteps.has(`pin:${idx}:${si}`) ? renderStepDetail(s) : '').join('')
+    : '';
+
+  // The bar measures the first open hop only — the one with live numbers.
+  // Done hops sit ahead of it as filled segments so a 2-hop pin reads as
+  // "one down". Unmeasurable → dashed, like an untrackable target.
+  const doneHops = Math.max(0, r.start_index);
+  const openHops = r.hops.length - 1 - doneHops;
+  const pct = measurable && r.total > 0 ? (r.met / r.total) * 100 : 0;
+  const color = ready ? 'green' : pct >= 60 ? 'amber' : 'red';
+  const segs: string[] = [];
+  for (let i = 0; i < doneHops; i++) segs.push('<div class="progress-track pw-pin-seg"><div class="progress-fill green" style="width:100%"></div></div>');
+  if (openHops > 0) {
+    segs.push(measurable && r.total > 0
+      ? `<div class="progress-track pw-pin-seg"><div class="progress-fill ${color}" style="width:${pct.toFixed(1)}%"></div></div>`
+      : '<div class="pw-track--unavail pw-pin-seg"></div>');
+    for (let i = 1; i < openHops; i++) segs.push('<div class="progress-track pw-pin-seg pw-pin-seg--later"></div>');
+  }
+  const barLabel = r.state === 'reached' ? 'Complete'
+    : !measurable ? (r.state === 'ok' ? 'Not measurable' : '')
+    : r.total === 0 ? 'No requirements listed — check the tracker'
+    : ready ? `Ready — request an invite from ${esc(r.hops[r.start_index])}`
+    : `${r.met} of ${r.total} requirement${r.total === 1 ? '' : 's'} met on the next hop`;
+
+  const etaChip = measurable && (showEtas() || ready)
+    ? `<span class="pw-eta${ready ? ' pw-eta-ready' : ''}">${pathEtaLabel(r)}</span>`
+    : '';
+  const note = pinStateNote(r);
+  const hopsLeft = r.state === 'ok' ? `<span class="pw-hops">${openHops} hop${openHops === 1 ? '' : 's'} to go</span>` : '<span class="pw-hops"></span>';
+
+  return `<div class="pw-path-card pw-pin-card pw-pin--${r.state}">
+    <div class="pw-path-head">
+      <span class="pw-pin-dest">${esc(r.destination)}</span>
+      ${etaChip}
+      ${hopsLeft}
+      <button type="button" class="pw-pin-btn on" data-unpin="${idx}" title="Unpin this path"><i class="fas fa-thumbtack"></i></button>
+    </div>
+    <div class="pw-chain">${chips.join('')}</div>
+    <div class="pw-pin-progress">
+      <div class="pw-pin-segs">${segs.join('')}</div>
+      ${barLabel ? `<div class="pw-pin-bar-label${ready ? ' pw-pin-bar-label--ready' : ''}">${barLabel}</div>` : ''}
+    </div>
+    ${note ? `<div class="pw-pin-note"><i class="fas fa-circle-info"></i> ${note}</div>` : ''}
+    ${details}
+  </div>`;
 }
 
 // ── ETA gating (per spec) ─────────────────────────────────────────────────
@@ -123,6 +274,7 @@ export async function initPathways(): Promise<boolean> {
   renderDisclosure();
   wireCombo();
   wireBody();
+  void refreshPinned();
 
   // Restore the last selection (persisted like the view choice).
   const saved = localStorage.getItem(TARGET_KEY) ?? '';
@@ -274,14 +426,31 @@ async function selectTarget(name: string) {
 // ── Paths rendering ───────────────────────────────────────────────────────
 
 function wireBody() {
-  // Delegated click → expand/collapse step chips.
-  document.getElementById('pw-body')?.addEventListener('click', e => {
-    const chip = (e.target as HTMLElement).closest<HTMLElement>('[data-step-key]');
+  // Delegated clicks: pin buttons, and expand/collapse of step chips. The
+  // pinned section has its own chips with their own keys, so the same
+  // handler serves both containers and re-renders only the one it hit.
+  const onClick = (rerender: () => void) => (e: Event) => {
+    const t = e.target as HTMLElement;
+    const pin = t.closest<HTMLElement>('[data-pin-path]');
+    if (pin?.dataset['pinPath'] !== undefined) {
+      const p = lastResult?.paths?.[Number(pin.dataset['pinPath'])];
+      if (p) void togglePin(pathHops(p));
+      return;
+    }
+    const unpin = t.closest<HTMLElement>('[data-unpin]');
+    if (unpin?.dataset['unpin'] !== undefined) {
+      const r = lastPinned[Number(unpin.dataset['unpin'])];
+      if (r) void togglePin(r.hops);
+      return;
+    }
+    const chip = t.closest<HTMLElement>('[data-step-key]');
     if (!chip?.dataset['stepKey']) return;
     const key = chip.dataset['stepKey'];
     if (expandedSteps.has(key)) expandedSteps.delete(key); else expandedSteps.add(key);
-    renderPaths();
-  });
+    rerender();
+  };
+  document.getElementById('pw-body')?.addEventListener('click', onClick(renderPaths));
+  document.getElementById('pw-pinned')?.addEventListener('click', onClick(renderPinned));
 }
 
 function renderPaths() {
@@ -373,11 +542,19 @@ function renderPathCard(p: PathwayPath, idx: number): string {
     : '';
   // The "+" suffix and the bottom explanation line already convey that the
   // headline is an account-age minimum — no inline note needed.
+  const hops = pathHops(p);
+  const pinned = isPinned(hops);
+  const dest = hops[hops.length - 1];
+  const replaces = !pinned && pinList().some(x => x.hops[x.hops.length - 1] === dest);
+  const pinTip = pinned ? 'Unpin this path'
+    : replaces ? `Pin this path (replaces your pinned path to ${dest})`
+    : 'Pin this path — track it at the top of Pathways';
   return `<div class="pw-path-card${idx === 0 ? ' pw-best' : ''}">
     <div class="pw-path-head">
       ${idx === 0 ? '<span class="pw-best-badge">Best path</span>' : ''}
       ${etaChip}
       <span class="pw-hops">${p.steps.length} hop${p.steps.length === 1 ? '' : 's'}</span>
+      <button type="button" class="pw-pin-btn${pinned ? ' on' : ''}" data-pin-path="${idx}" title="${esc(pinTip)}"><i class="fas fa-thumbtack"></i></button>
     </div>
     <div class="pw-chain">${chips.join('')}</div>
     ${details}

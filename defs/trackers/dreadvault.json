@@ -1,0 +1,669 @@
+{
+  "schema_version": 1,
+  "key": "dreadvault",
+  "name": "DreadVault",
+  "abbr": "DV",
+  "url": "https://dreadvault.org",
+  "type": "unit3d",
+  "last_updated": "2026-09-11",
+  "notes": "Stock UNIT3D 9.2.0 /api/user only — probed 2026-09-11: no /api/user/stats, no /api/me, no join date in the response (hence api.required_fields). Staff have not been approached yet; a contact through Seedpool may be able to ask for an expanded API.",
+  "api": {
+    "required_fields": [
+      "join_date"
+    ]
+  },
+  "rules": {
+    "min_ratio": 0.7,
+    "min_seed_days": 5,
+    "max_login_gap_days": 90
+  },
+  "groups": [
+    {
+      "name": "Leech",
+      "style": {
+        "color": "#6F9B45",
+        "icon": "fas fa-times"
+      },
+      "requirements": {
+        "min_ratio": 0.6
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: 0"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "style": {
+        "color": "#357F78",
+        "icon": "fas fa-user"
+      },
+      "requirements": {},
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        }
+      ]
+    },
+    {
+      "name": "Wanderer",
+      "style": {
+        "color": "#347E8E",
+        "icon": "fas fa-person-walking"
+      },
+      "requirements": {
+        "min_uploaded": "1 TiB",
+        "min_ratio": 0.4,
+        "min_age": "1M"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Survivor",
+      "style": {
+        "color": "#4F6FA8",
+        "icon": "fas fa-heart-pulse"
+      },
+      "requirements": {
+        "min_uploaded": "5 TiB",
+        "min_ratio": 0.4,
+        "min_age": "2M"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Night Stalker",
+      "style": {
+        "color": "#62458C",
+        "icon": "fas fa-moon"
+      },
+      "requirements": {
+        "min_uploaded": "20 TiB",
+        "min_ratio": 0.4,
+        "min_age": "3M"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Grave Keeper",
+      "style": {
+        "color": "#75458F",
+        "icon": "fas fa-skull"
+      },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_ratio": 0.4,
+        "min_age": "6M"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Dreadborn",
+      "style": {
+        "color": "#9B3D78",
+        "icon": "fas fa-skull-crossbones"
+      },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 0.4,
+        "min_age": "1Y"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Shadow Walker",
+      "style": {
+        "color": "#A83F69",
+        "icon": "fas fa-shoe-prints"
+      },
+      "requirements": {
+        "min_ratio": 0.4,
+        "min_age": "1M",
+        "min_seedtime": "1M",
+        "min_seed_size": "5 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Bloodbound",
+      "style": {
+        "color": "#8B0000",
+        "icon": "fas fa-droplet"
+      },
+      "requirements": {
+        "min_ratio": 0.4,
+        "min_age": "3M",
+        "min_seedtime": "2M",
+        "min_seed_size": "10 TiB"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Plague Doctor",
+      "style": {
+        "color": "#7ff932",
+        "icon": "fas fa-shield-virus"
+      },
+      "requirements": {
+        "description": "An ancient presence whose experience commands respect."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "DVL",
+      "style": {
+        "color": "#FF1493",
+        "icon": "fas fa-eye-evil"
+      },
+      "requirements": {
+        "description": "Internal release group"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Harbinger",
+      "style": {
+        "color": "#7C3AED",
+        "icon": "fas fa-eye"
+      },
+      "requirements": {
+        "description": "A feared and respected presence among the realm’s greatest."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Ancient One",
+      "style": {
+        "color": "#00A6A6",
+        "icon": "fas fa-dragon"
+      },
+      "requirements": {
+        "min_uploaded": "10 TiB",
+        "min_ratio": 1.5,
+        "min_age": "6M",
+        "min_seedtime": "1M",
+        "min_seed_size": "5 TiB",
+        "min_uploads": 500
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-chevron-double-up torrent-icons__double-upload",
+          "label": "Double upload"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Crypt Patron",
+      "style": {
+        "color": "#FFD700",
+        "icon": "fas fa-star"
+      },
+      "requirements": {
+        "description": "Donor — the first offering."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Vault Sovereign",
+      "style": {
+        "color": "#00D4FF",
+        "icon": "fas fa-gem"
+      },
+      "requirements": {
+        "description": "Donor — VIP benefits for the chosen duration."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "The Eternal",
+      "style": {
+        "color": "#B026FF",
+        "icon": "fas fa-infinity"
+      },
+      "requirements": {
+        "description": "Donor — a permanent place within the darkness."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-chevron-double-up torrent-icons__double-upload",
+          "label": "Double upload"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "The Dread Ascendant",
+      "style": {
+        "color": "#9affc7",
+        "icon": "fas fa-scythe"
+      },
+      "requirements": {
+        "description": "Donor — the highest supporter tier."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-chevron-double-up torrent-icons__double-upload",
+          "label": "Double upload"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Lorekeeper",
+      "style": {
+        "color": "#BDB76B",
+        "icon": "fas fa-user-pen"
+      },
+      "requirements": {
+        "description": "Staff role, awarded by DreadVault."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    },
+    {
+      "name": "Vault Warden",
+      "style": {
+        "color": "#FF7F50",
+        "icon": "fas fa-badge-check"
+      },
+      "requirements": {
+        "description": "Staff role, awarded by DreadVault."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-arrow-down-short-wide text-blue",
+          "label": "DL slots: ∞"
+        },
+        {
+          "icon": "fas fa-upload text-success",
+          "label": "Upload Torrents"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invite"
+        },
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "Immune to automated HnR warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Torrent moderation bypass"
+        }
+      ]
+    }
+  ]
+}

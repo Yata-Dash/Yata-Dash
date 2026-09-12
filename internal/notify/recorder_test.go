@@ -394,21 +394,34 @@ func TestStandingScrapeProblemsSurvivePriming(t *testing.T) {
 	}
 }
 
-// The other half of the same rule. "reachable is_true" is true of every healthy
-// tracker, so priming on it filled the panel with "Tracker Back" for everything
-// that was working — which is why the operator test exists at all. Widening it
-// for genuine problem states must not let that back in.
+// The other half of the same rule. Priming on a predicate that is true of a
+// HEALTHY tracker fills the panel with good news for the whole list — that is
+// what "reachable is_true" did, and why the operator test exists at all.
+//
+// The negated forms matter as much as reachable: scrape_limited and
+// cookie_expired are booleans, so either polarity is expressible, and
+// "scrape_limited is_false" describes every tracker that is fine. Allowing the
+// FIELD through without checking the operator let that straight back in — this
+// case is here because the first version of the widening missed it.
 func TestHealthyStatesStillDoNotPrime(t *testing.T) {
-	cfg := models.NotificationConfig{Rules: []models.AlertRule{
-		{ID: "r1", Name: "Tracker Back", Enabled: true,
-			Conditions: []models.Condition{{Field: "reachable", Op: "is_true"}}},
-	}}
-	rec := &fakeRecorder{}
-	e := New(staticCfg{cfg}, nil)
-	e.SetRecorder(rec)
+	healthy := []models.Condition{
+		{Field: "reachable", Op: "is_true"},
+		{Field: "scrape_limited", Op: "is_false"},
+		{Field: "cookie_expired", Op: "is_false"},
+	}
+	for _, c := range healthy {
+		cfg := models.NotificationConfig{Rules: []models.AlertRule{
+			{ID: "r1", Name: "All is well", Enabled: true, Conditions: []models.Condition{c}},
+		}}
+		rec := &fakeRecorder{}
+		e := New(staticCfg{cfg}, nil)
+		e.SetRecorder(rec)
 
-	e.Evaluate(models.Tracker{ID: "t1", Name: "Aither"}, models.MergedStats{}, true, TrendContext{})
-	if len(rec.got) != 0 {
-		t.Fatalf("recorded %+v on the priming pass for a healthy tracker", rec.got)
+		// A tracker with nothing wrong: reachable, not capped, cookie fine.
+		e.Evaluate(models.Tracker{ID: "t1", Name: "Aither"}, models.MergedStats{}, true, TrendContext{})
+		if len(rec.got) != 0 {
+			t.Errorf("%s %s recorded %+v on the priming pass for a healthy tracker",
+				c.Field, c.Op, rec.got)
+		}
 	}
 }

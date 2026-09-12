@@ -29,3 +29,12 @@ export function approvalIcon(status?: string, note?: string): string {
   if (!approvalWarns(status)) return '';
   return `<i class="fas fa-triangle-exclamation approval-warn${status === 'informal' ? ' informal' : ''}" title="${esc(approvalTitle(status, note))}"></i>`;
 }
+
+/** Whether scraping this tracker has any staff blessing at all. A def nobody
+ *  has asked — or is still waiting on — counts the same as no def: Yata starts
+ *  API-only and the user turns scraping on deliberately, after reading the
+ *  tracker's rules. Mirrors applyScrapeDefault in internal/api/trackers.go. */
+export function scrapeSanctioned(status?: string): boolean {
+  const s = status ?? 'unknown';
+  return s === 'approved' || s === 'informal';
+}
