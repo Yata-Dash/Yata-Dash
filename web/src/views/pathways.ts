@@ -72,7 +72,16 @@ function pathHops(p: PathwayPath): string[] {
  *  path to a destination already pinned replaces it, which is what "choose a
  *  path per destination" means — two near-identical cards for one place
  *  would be the list arguing with itself. */
-async function togglePin(hops: string[]) {
+let pinQueue: Promise<void> = Promise.resolve();
+function togglePin(hops: string[]): Promise<void> {
+  // One at a time. Two clicks inside one save's round trip would otherwise
+  // let a failed first save restore a snapshot taken before the second — and
+  // undo a change the server had accepted.
+  pinQueue = pinQueue.then(() => doTogglePin(hops), () => doTogglePin(hops));
+  return pinQueue;
+}
+
+async function doTogglePin(hops: string[]) {
   const k = chainKey(hops);
   const dest = hops[hops.length - 1];
   const wasPinned = isPinned(hops);

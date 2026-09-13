@@ -76,6 +76,10 @@ func EvalPin(d *Data, hops []string, users []UserTracker,
 	u := userByName[hops[res.StartIndex]]
 	res.State = PinOK
 	var steps []Step
+	// Deliberately from StartIndex, not 0. Hops behind the user are history:
+	// whether Aither → HDBits still exists says nothing about someone who
+	// already holds HDBits, and failing their pin over it would be reporting a
+	// problem they cannot have. The chain ahead is what still has to work.
 	for i := res.StartIndex; i < len(hops)-1; i++ {
 		r, ok := findRoute(d, hops[i], hops[i+1])
 		if !ok {
