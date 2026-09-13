@@ -28,11 +28,21 @@ const PAGE = 25;
 let open = false;
 let search = '';
 let filter = '';
-/** Bumped on every load. A response whose ticket is stale is dropped: typing
- *  into the search box fires one request per keystroke-burst, and without this
- *  an early slow reply can land after a later fast one and put the wrong rows
- *  on screen — with the filter dropdown still showing what you asked for. */
+/** Bumped on every load AND whenever the query changes. A response whose
+ *  ticket is stale is dropped: typing into the search box fires one request per
+ *  keystroke-burst, and without this an early slow reply can land after a later
+ *  fast one and put the wrong rows on screen.
+ *
+ *  Bumping on the keystroke, not just on the request it eventually triggers,
+ *  is what covers the debounce window: a "show older" page already in flight
+ *  when the search text changes would otherwise still hold a current ticket and
+ *  append the previous query's rows. */
 let reqSeq = 0;
+
+/** Invalidate anything in flight, because the question just changed. */
+function newQuery(): void {
+  reqSeq++;
+}
 let loaded: AppAlert[] = [];
 let sources: AlertSource[] = [];
 let total = 0;
@@ -177,12 +187,14 @@ export function initAlertsPanel(): void {
   let timer: number | undefined;
   el<HTMLInputElement>('alerts-search')?.addEventListener('input', ev => {
     search = (ev.target as HTMLInputElement).value;
+    newQuery();
     window.clearTimeout(timer);
     timer = window.setTimeout(() => { void load(); }, 200);
   });
 
   el<HTMLSelectElement>('alerts-filter')?.addEventListener('change', ev => {
     filter = (ev.target as HTMLSelectElement).value;
+    newQuery();
     void load();
   });
 

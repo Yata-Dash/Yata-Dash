@@ -1481,6 +1481,7 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-chip-favicon{width:13px;height:13px;flex-shrink:0;border-radius:2px}
 .pw-chip-step{cursor:pointer;transition:border-color .15s,background .15s}
 .pw-chip-step:hover{border-color:var(--accent)}
+.pw-chip-step:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pw-chip-step.expanded{background:var(--surface3);border-color:var(--accent-border-md)}
 .pw-chip-step.expanded .pw-chip-chev{transform:rotate(180deg)}
 .pw-chip-chev{flex-shrink:0;color:var(--text3);transition:transform .15s}
@@ -1537,6 +1538,36 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-req--unknown .pw-req-icon{color:var(--text3)}
 .pw-req--unknown{cursor:help}
 .pw-req-eta{font-size:11px;color:var(--amber);font-family:'Geist Mono',monospace;white-space:nowrap}
+
+/* Pinned paths — the user's chosen routes, above the search
+   (PINNED_PATHWAYS_PLAN.md). Cards reuse .pw-path-card; the additions are the
+   segmented bar (one segment per hop, done hops full green), the state note,
+   and the pin toggle that also sits on searched path cards. */
+.pw-pinned-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:4px 0 10px}
+.pw-pinned-title{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text2)}
+.pw-pinned-title .fa-thumbtack{color:var(--accent);margin-right:4px;font-size:11px}
+.pw-pinned-sub{font-size:11.5px;color:var(--text3)}
+#pw-pinned{margin-bottom:22px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.pw-pin-dest{font-size:14px;font-weight:700;color:var(--text)}
+.pw-pin-btn{
+  display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+  border:1px solid var(--border2);border-radius:6px;background:var(--surface2);
+  color:var(--text3);cursor:pointer;font-size:11px;transition:color .15s,border-color .15s,background .15s;
+}
+.pw-pin-btn:hover{color:var(--accent);border-color:var(--accent)}
+.pw-pin-btn.on{color:var(--accent);border-color:var(--accent-border-md);background:var(--accent-bg-sm)}
+.pw-pin-btn.on:hover{color:var(--red);border-color:var(--red)}
+.pw-pin-progress{margin-top:10px}
+.pw-pin-segs{display:flex;gap:4px}
+.pw-pin-seg{flex:1}
+.pw-pin-seg--later{opacity:.45}
+.pw-pin-bar-label{font-size:11px;color:var(--text3);margin-top:5px}
+.pw-pin-bar-label--ready{color:var(--green);font-weight:600}
+.pw-chip-done{color:var(--green);border-color:color-mix(in srgb,var(--green) 40%,var(--border2));background:color-mix(in srgb,var(--green) 8%,var(--surface2))}
+.pw-chip-broken{color:var(--text3);border-style:dashed;text-decoration:line-through;text-decoration-color:var(--red)}
+.pw-pin-note{font-size:11.5px;color:var(--amber);margin-top:8px;display:flex;gap:6px;align-items:flex-start;line-height:1.45}
+.pw-pin-note .fa-circle-info{margin-top:2px}
+.pw-pin--reached .pw-pin-note{color:var(--green)}
 
 /* No-path notice + suggestions */
 .pw-notice{

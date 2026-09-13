@@ -7,7 +7,7 @@ import type {
 import { MASKED_KEY, UNKNOWN_TYPE } from '../types';
 import * as api from '../api';
 import { appSettings } from '../state';
-import { approvalIcon, approvalTitle, approvalWarns } from '../utils/approval';
+import { approvalIcon, approvalTitle, approvalWarns, scrapeSanctioned } from '../utils/approval';
 import { jsId, esc, safeUrl } from '../utils/format';
 import { getFaviconUrl } from '../utils/parse';
 import { findOptOut } from '../utils/optout';
@@ -232,7 +232,9 @@ export function renderTrackersTable(trackers: Tracker[], deps: TabDeps): void {
         </div></div>
       </td>
       <td class="trk-td-type" title="Type key: ${esc(t.type)}">${esc(typeLabel(t.type))}</td>
-      <td class="trk-td-caps">${capabilityRow(t.capabilities, { userApiOnly: t.api_only })}</td>
+      <td class="trk-td-caps">${capabilityRow(t.capabilities, {
+        userApiOnly: t.api_only, unsanctioned: !scrapeSanctioned(t.def_approval),
+      })}</td>
       <td class="trk-td-def">${defBadge}</td>
       <td class="trk-td-test">${testCell}</td>
       <td class="trk-td-actions">${actions}</td>

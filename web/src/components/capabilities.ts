@@ -39,7 +39,7 @@ function sourceText(source: string, label: string): string {
  */
 export function capabilityRow(
   caps: TrackerCapabilities | undefined,
-  opts?: { userApiOnly?: boolean },
+  opts?: { userApiOnly?: boolean; unsanctioned?: boolean },
 ): string {
   if (!caps || !caps.known) return '';
   const parts: string[] = [];
@@ -81,7 +81,13 @@ export function capabilityRow(
     parts.push(`<span class="cap-icon cap-apionly" title="${esc('API only — scraping not allowed')}">
       <i class="fas fa-plug"></i></span>`);
   } else if (opts?.userApiOnly) {
-    parts.push(`<span class="cap-icon cap-apionly" title="${esc('API only — user set')}">
+    // "User set" is only the whole truth on a tracker whose staff have
+    // sanctioned scraping. Everywhere else API-only is where Yata starts, and
+    // saying why is more use than saying who.
+    const tip = opts.unsanctioned
+      ? 'API only — scraping not approved by this tracker'
+      : 'API only — user set';
+    parts.push(`<span class="cap-icon cap-apionly" title="${esc(tip)}">
       <i class="fas fa-plug"></i></span>`);
   }
   return `<span class="cap-row">${parts.join('')}</span>`;

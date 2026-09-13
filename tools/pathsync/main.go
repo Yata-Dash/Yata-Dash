@@ -34,10 +34,21 @@ type upstreamRoute struct {
 	Updated string   `json:"updated"`
 }
 
+// upstreamTracker is one trackerInfo entry. Only the abbreviation is used;
+// type/country/birthdate/description are upstream's own display fields.
+type upstreamTracker struct {
+	Abbr string `json:"abbr"`
+}
+
 type upstream struct {
 	RouteInfo         map[string]map[string]upstreamRoute `json:"routeInfo"`
 	UnlockInviteClass map[string][]any                    `json:"unlockInviteClass"`
-	AbbrList          map[string]string                   `json:"abbrList"`
+	// Abbreviations moved in September 2026 from a flat abbrList into
+	// trackerInfo[name].abbr. Both are read so a sync against either layout
+	// works; the sync refuses to write an empty map, because that is what a
+	// third layout would look like and it once went out unnoticed.
+	AbbrList    map[string]string          `json:"abbrList"`
+	TrackerInfo map[string]upstreamTracker `json:"trackerInfo"`
 }
 
 // ── Yata shapes (must match internal/pathways/types.go) ──────────────────
@@ -98,7 +109,18 @@ func main() {
 	o.Source.URL = "https://github.com/handokota/trackerpathways"
 	o.Source.License = "MIT"
 	o.Source.Fetched = time.Now().UTC().Format("2006-01-02")
-	o.Abbr = up.AbbrList
+	o.Abbr = map[string]string{}
+	for name, a := range up.AbbrList {
+		o.Abbr[name] = a
+	}
+	for name, ti := range up.TrackerInfo {
+		if ti.Abbr != "" {
+			o.Abbr[name] = ti.Abbr
+		}
+	}
+	if len(o.Abbr) == 0 {
+		log.Fatal("upstream carries no abbreviations under abbrList or trackerInfo — the layout has changed again; not writing")
+	}
 	o.Unlocks = map[string]unlockClass{}
 
 	for src, targets := range up.RouteInfo {

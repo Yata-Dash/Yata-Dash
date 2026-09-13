@@ -4,7 +4,7 @@ import type {
   AlertRule, AlertsResponse, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult,
   DetectTypeResponse, DryRunResult,
   HistorySeriesResponse,
-  LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse,
+  LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse, PathwayPinnedResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
   ScrapeStatusMap, StatsMap, TestStatusMap, ThemeInfo, Tracker, TrackerGroupMap,
   TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, TrackerTestResult, UpdateStatus,
@@ -309,6 +309,9 @@ export const fetchPathwayTargets = () =>
 
 export const fetchPathwayPaths = (target: string) =>
   call<PathwayPathsResponse>(`/api/pathways/paths?target=${encodeURIComponent(target)}`);
+
+export const fetchPathwayPinned = () =>
+  call<PathwayPinnedResponse>('/api/pathways/pinned');
 
 // ── Mock / demo trackers ──────────────────────────────────────────────────
 

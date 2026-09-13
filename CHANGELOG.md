@@ -6,6 +6,35 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260911]
+
+### Added
+
+- **Pinned pathways.** Pin an exact path from any Pathways result and it is
+  tracked in its own section at the top of the view: the chain, a progress bar
+  for the next hop, and the same ETA as the search. A pin is stored as tracker
+  names only and re-resolved on every read, so it survives a pathways update
+  and says so when a route has gone rather than disappearing. Progress follows
+  you — add the intermediate tracker to Yata and the pin measures from there.
+  One pin per destination. Closes
+  [#47](https://github.com/Yata-Dash/Yata-Dash/issues/47).
+
+- **DreadVault**, a UNIT3D tracker. Its nineteen-rank ladder (Leech →
+  Vault Warden) is in, with each rank's colour and icon. Stock `/api/user`
+  only — no extended stats endpoint and no join date, so it asks for one at
+  setup. Staff have not been approached, so it ships unapproved and scraping
+  is off by default.
+
+### Changed
+
+- **A tracker with no definition now starts API-only.** Adding one by hand, or
+  importing it from Prowlarr or Jackett, offered the session cookie as an
+  ordinary credential — so the first thing Yata did with a tracker nobody had
+  ever spoken to was scrape it. The cookie now sits behind a notice saying
+  scraping has not been approved, and turning it on is a deliberate step. A def
+  whose approval is unknown or still pending is treated the same way: it is a
+  default, not a lock, and existing trackers keep whatever they are set to.
+
 ## [Beta-20260910]
 
 ### Added
