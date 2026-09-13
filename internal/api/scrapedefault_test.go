@@ -19,7 +19,7 @@ func add(t *testing.T, d *Deps, body string) models.TrackerView {
 	w := httptest.NewRecorder()
 	createTracker(d)(w, r)
 	if w.Code != http.StatusCreated {
-		t.Fatalf("create %s -> %d: %s", body, w.Code, w.Body.String())
+		t.Fatalf("create tracker -> %d: %s", w.Code, w.Body.String())
 	}
 	var v models.TrackerView
 	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {

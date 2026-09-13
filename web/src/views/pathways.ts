@@ -8,6 +8,7 @@ import * as api from '../api';
 import { appSettings, trackers } from '../state';
 import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
+import { toast } from '../components/toast';
 import { getFaviconUrl } from '../utils/parse';
 import type {
   PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayPin, PathwayReqProgress,
@@ -28,6 +29,7 @@ let listFilter: 'all' | 'met' | 'fav' =
   (localStorage.getItem(FILTER_KEY) as 'all' | 'met' | 'fav') || 'all';
 let lastComboFilter = ''; // the text filter of the currently rendered list
 let lastPinned: PinResult[] = []; // last /pinned answer, re-rendered on expand/collapse
+let pinnedSeq = 0; // guards out-of-order /pinned responses (view switch vs. a pin/unpin)
 
 // ── Favourites / not-interested (server-side settings, survive browsers) ──
 
@@ -74,20 +76,34 @@ async function togglePin(hops: string[]) {
   const k = chainKey(hops);
   const dest = hops[hops.length - 1];
   const wasPinned = isPinned(hops);
-  const kept = pinList().filter(p => chainKey(p.hops) !== k && p.hops[p.hops.length - 1] !== dest);
+  const before = pinList();
+  const kept = before.filter(p => chainKey(p.hops) !== k && p.hops[p.hops.length - 1] !== dest);
   appSettings.pathway_pins = wasPinned ? kept : [...kept, { hops }];
-  await api.saveSettings({ ...appSettings });
+  pinnedSeq++; // the list just changed — any /pinned answer still in flight is about the old one
+  const { ok } = await api.saveSettings({ ...appSettings });
+  if (!ok) {
+    // Put the list back exactly as it was, or the buttons would claim a pin
+    // the server never heard about and the next reload would contradict them.
+    appSettings.pathway_pins = before;
+    toast(wasPinned ? 'Could not unpin — settings did not save' : 'Could not pin — settings did not save', 'error');
+    renderPaths();
+    return;
+  }
   renderPaths();          // pin buttons reflect the new state
   await refreshPinned();  // the section itself
 }
 
 /** Re-measure every pin. Called on init, after each pin/unpin, and whenever
- *  the view is shown — stats move between visits. */
+ *  the view is shown — stats move between visits. Two of those can overlap
+ *  (switch to the view, then pin something), so each request takes a ticket
+ *  and a superseded answer is dropped rather than painted over a newer one. */
 export async function refreshPinned(): Promise<void> {
   const el = document.getElementById('pw-pinned');
   if (!el) return;
   if (!pinList().length) { lastPinned = []; el.style.display = 'none'; el.innerHTML = ''; return; }
+  const ticket = ++pinnedSeq;
   const { ok, data } = await api.fetchPathwayPinned();
+  if (ticket !== pinnedSeq) return;
   if (!ok || !Array.isArray(data?.pins)) return;
   lastPinned = data.pins;
   renderPinned();
@@ -131,7 +147,7 @@ function renderPinCard(r: PinResult, idx: number): string {
     if (hi > 0) chips.push('<span class="pw-arrow">→</span>');
     const isLast = hi === r.hops.length - 1;
     if (hi < r.start_index) {
-      chips.push(`<span class="pw-chip pw-chip-done" title="Done — you have this tracker">✓ ${esc(name)}</span>`);
+      chips.push(`<span class="pw-chip pw-chip-done" title="Behind you — progress is measured from further along the path">✓ ${esc(name)}</span>`);
     } else if (hi === r.start_index && !isLast) {
       const favUrl = start?.url ? getFaviconUrl(start.url) : '';
       chips.push(`<span class="pw-chip pw-chip-start${r.start_disabled ? ' pw-chip-start--disabled' : ''}" title="Your tracker — progress is measured from here">
@@ -145,7 +161,7 @@ function renderPinCard(r: PinResult, idx: number): string {
       const key = `pin:${idx}:${si}`;
       const s = r.steps[si];
       chips.push(`<span class="pw-chip pw-chip-step${isLast ? ' pw-chip-target' : ''}${expandedSteps.has(key) ? ' expanded' : ''}"
-            data-step-key="${key}" title="Click for route details">
+            data-step-key="${key}" title="Click for route details" role="button" tabindex="0" aria-expanded="${expandedSteps.has(key)}">
         ${esc(name)}${s?.estimated ? '<span class="pw-chip-est" title="Estimate — no live stats beyond the first hop">≈</span>' : ''}
         <svg class="pw-chip-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </span>`);
@@ -430,6 +446,14 @@ function wireBody() {
   // pinned section has its own chips with their own keys, so the same
   // handler serves both containers and re-renders only the one it hit.
   const onClick = (rerender: () => void) => (e: Event) => {
+    // Step chips are spans styled as buttons, so Enter and Space have to be
+    // wired by hand; the pin buttons are real buttons and need nothing.
+    if (e.type === 'keydown') {
+      const key = (e as KeyboardEvent).key;
+      if (key !== 'Enter' && key !== ' ') return;
+      if (!(e.target as HTMLElement).closest('[data-step-key]')) return;
+      e.preventDefault();
+    }
     const t = e.target as HTMLElement;
     const pin = t.closest<HTMLElement>('[data-pin-path]');
     if (pin?.dataset['pinPath'] !== undefined) {
@@ -449,8 +473,11 @@ function wireBody() {
     if (expandedSteps.has(key)) expandedSteps.delete(key); else expandedSteps.add(key);
     rerender();
   };
-  document.getElementById('pw-body')?.addEventListener('click', onClick(renderPaths));
-  document.getElementById('pw-pinned')?.addEventListener('click', onClick(renderPinned));
+  for (const [id, rerender] of [['pw-body', renderPaths], ['pw-pinned', renderPinned]] as const) {
+    const el = document.getElementById(id);
+    el?.addEventListener('click', onClick(rerender));
+    el?.addEventListener('keydown', onClick(rerender));
+  }
 }
 
 function renderPaths() {
@@ -527,7 +554,7 @@ function renderPathCard(p: PathwayPath, idx: number): string {
     const isTarget = si === p.steps.length - 1;
     chips.push(`<span class="pw-arrow">→</span>
       <span class="pw-chip pw-chip-step${isTarget ? ' pw-chip-target' : ''}${expandedSteps.has(key) ? ' expanded' : ''}"
-            data-step-key="${key}" title="Click for route details">
+            data-step-key="${key}" title="Click for route details" role="button" tabindex="0" aria-expanded="${expandedSteps.has(key)}">
         ${esc(s.to)}${s.estimated ? '<span class="pw-chip-est" title="Estimate — no live stats beyond the first hop">≈</span>' : ''}
         <svg class="pw-chip-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </span>`);

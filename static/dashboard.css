@@ -1481,6 +1481,7 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .pw-chip-favicon{width:13px;height:13px;flex-shrink:0;border-radius:2px}
 .pw-chip-step{cursor:pointer;transition:border-color .15s,background .15s}
 .pw-chip-step:hover{border-color:var(--accent)}
+.pw-chip-step:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pw-chip-step.expanded{background:var(--surface3);border-color:var(--accent-border-md)}
 .pw-chip-step.expanded .pw-chip-chev{transform:rotate(180deg)}
 .pw-chip-chev{flex-shrink:0;color:var(--text3);transition:transform .15s}

@@ -44,11 +44,13 @@ func EvalPin(d *Data, hops []string, users []UserTracker,
 	groupsFor func(string) []defs.GroupDef,
 	inviteReqsFor func(string) *defs.InviteReqs) PinResult {
 	res := PinResult{Hops: hops, BrokenHop: -1, StartIndex: -1}
+	if len(hops) > 0 {
+		res.Destination = hops[len(hops)-1]
+	}
 	if len(hops) < 2 {
-		res.State = PinMissing
+		res.State = PinMissing // nothing to walk; still returned so it can be unpinned
 		return res
 	}
-	res.Destination = hops[len(hops)-1]
 
 	userByName := map[string]UserTracker{}
 	for _, u := range users {

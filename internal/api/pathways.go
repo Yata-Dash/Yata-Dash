@@ -36,10 +36,9 @@ func pathwayPinned(d *Deps) http.HandlerFunc {
 		groupsFor, inviteReqsFor := defLookups(d)
 		pins := d.Cfg.Settings().PathwayPins
 		out := make([]pathways.PinResult, 0, len(pins))
+		// Malformed pins (a hand-edited config) are returned too, as
+		// "missing": a pin the UI never shows is one the user can never unpin.
 		for _, pin := range pins {
-			if len(pin.Hops) < 2 {
-				continue // malformed — nothing to measure and nothing to show
-			}
 			out = append(out, pathways.EvalPin(d.Paths, pin.Hops, users, groupsFor, inviteReqsFor))
 		}
 		jsonOK(w, map[string]any{
