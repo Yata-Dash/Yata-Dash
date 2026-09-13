@@ -367,9 +367,13 @@ var thresholdOps = map[string]bool{"lt": true, "lte": true, "gt": true, "gte": t
 // rather than a state of health. The operator test alone excluded them, which
 // is why the seeded scrape-limit and expired-cookie rules never appeared on a
 // restart: they are is_true predicates, and both are exactly the kind of
-// outstanding problem the panel exists to list. "reachable is_true" stays out
-// for the opposite reason — it is true of every healthy tracker, so priming on
-// it filled the panel with good news.
+// outstanding problem the panel exists to list.
+//
+// The FIELD alone does not make a rule a standing problem, because these are
+// booleans and either polarity is expressible. "scrape_limited is_false" is
+// true of every tracker that is fine, so priming on it would fill the panel
+// with good news for the whole list — the same fault "reachable is_true"
+// causes, which is why the operator test exists at all.
 var standingProblems = map[string]bool{"scrape_limited": true, "cookie_expired": true}
 
 func standingRule(rule models.AlertRule) bool {
@@ -377,7 +381,7 @@ func standingRule(rule models.AlertRule) bool {
 		if thresholdOps[c.Op] {
 			continue
 		}
-		if standingProblems[c.Field] {
+		if c.Op == "is_true" && standingProblems[c.Field] {
 			continue
 		}
 		return false

@@ -297,6 +297,9 @@
           <div class="pw-combo-list" id="pw-combo-list" style="display:none"></div>
         </div>
       </div>
+      <!-- Pinned paths — the user's chosen routes, measured live. Hidden
+           until something is pinned (PINNED_PATHWAYS_PLAN.md). -->
+      <div id="pw-pinned" style="display:none"></div>
       <div id="pw-body"></div>
       <div class="pw-disclosure" id="pw-disclosure"></div>
     </div><!-- /view-pathways -->
@@ -595,15 +598,15 @@
                 </div>
                 <div class="set-section">
                   <div class="set-section-head">
-                    <h2 class="set-section-title">Pathways</h2>
-                  <p class="set-section-note">Options for the invite-route view.</p>
+                    <h2 class="set-section-title">Privacy</h2>
+                  <p class="set-section-note">What Yata puts on screen that you might not want in a screenshot.</p>
                   </div>
                   <label class="set-toggle"><div class="toggle-track" id="s-private-track" onclick="toggleSettingsPrivate()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Blur usernames</span><i class="set-info" role="img" title="Blurs usernames so you can share screenshots without exposing account details" aria-label="Blurs usernames so you can share screenshots without exposing account details"></i></label>
                 </div>
                 <div class="set-section">
                   <div class="set-section-head">
-                    <h2 class="set-section-title">Privacy</h2>
-                  <p class="set-section-note">What Yata puts on screen that you might not want in a screenshot.</p>
+                    <h2 class="set-section-title">Pathways</h2>
+                  <p class="set-section-note">Options for the invite-route view.</p>
                   </div>
                   <label class="set-toggle"><div class="toggle-track" id="s-pw-eta-track" onclick="toggleSettingsPathwayEtas()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Estimated time to reach</span><i class="set-info" role="img" title="Shows overall arrival estimates on paths and classes, including exact account-age countdowns. Progress bars always show." aria-label="Shows overall arrival estimates on paths and classes, including exact account-age countdowns. Progress bars always show."></i></label>
                   <label class="set-toggle"><div class="toggle-track" id="s-pw-disabled-track" onclick="toggleSettingsPathwayDisabled()"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Include disabled trackers</span><i class="set-info" role="img" title="Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate." aria-label="Lets trackers you've disabled still show the paths leading out of them — useful for imported trackers Yata has no definition for yet. They're marked as disabled, and because no stats are available they never show a time estimate."></i></label>
@@ -970,6 +973,16 @@
                     <label class="form-label" id="modal-key-label">API Key</label>
                     <input class="form-input" type="password" id="modal-key" placeholder="Your API token"/>
                     <span class="form-hint" id="modal-key-hint">Profile → API Token settings</span>
+                  </div>
+                  <!-- Add mode, no def: nobody has asked this tracker's staff
+                       whether scraping is welcome, so it starts API-only and the
+                       cookie stays out of the way until the user says otherwise. -->
+                  <div class="form-group" id="modal-noapproval-group" style="display:none">
+                    <div class="modal-def-approval">
+                      <i class="fas fa-triangle-exclamation approval-warn"></i>
+                      Not approved for scraping &mdash; Yata will use this tracker&rsquo;s API only. Check its rules or ask staff first.
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="allowUnapprovedScrape()" style="margin-top:8px">Add session cookie anyway</button>
                   </div>
                   <div class="form-group" id="modal-session-cookie-group">
                     <label class="form-label" id="modal-session-cookie-label">Session Cookie <span class="opt">(optional — for extended profile stats)</span></label>

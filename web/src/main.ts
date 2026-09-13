@@ -24,7 +24,7 @@ import * as logsTab from './components/logs';
 import * as alertsTab from './components/alertsTab';
 import * as tokensTab from './components/tokensTab';
 import { FEATURES } from './config';
-import { initPathways } from './views/pathways';
+import { initPathways, refreshPinned } from './views/pathways';
 import { setCapsOpen } from './components/capabilities';
 import type { ColPref, HistoryPoint, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
 
@@ -729,6 +729,8 @@ function applyView(v: ViewMode, rerender: boolean) {
   if (!onSettings && v === 'history') {
     import('./views/history').then(m => m.renderHistory(state.trackers));
   }
+  // Pins are measured against live stats, which move between visits.
+  if (!onSettings && v === 'pathways') void refreshPinned();
   if (rerender) { renderGridFull(); renderTable(); renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings); }
 }
 (window as any).setView = (v: ViewMode) => {
@@ -1146,6 +1148,7 @@ modalsReady.then(m => {
   (window as any).onAddTrackerFilter   = m.onAddTrackerFilter;
   (window as any).onAddTypeSelect      = m.onAddTypeSelect;
   (window as any).modalToggleApiOnly       = m.modalToggleApiOnly;
+  (window as any).allowUnapprovedScrape    = m.allowUnapprovedScrape;
   (window as any).modalValidateInterval    = m.modalValidateInterval;
   (window as any).modalOnAutoIntervalChange = m.modalOnAutoIntervalChange;
   (window as any).modalOnMaxScrapesChange  = m.modalOnMaxScrapesChange;

@@ -229,9 +229,11 @@ func createTracker(d *Deps) http.HandlerFunc {
 			Targets: map[string]string{},
 		}
 		// Default name/type from the def registry when the URL matches.
+		approval := defs.ApprovalUnknown
 		if td, ok := d.Reg.TrackerByURL(t.URL); ok {
 			t.Name = td.Name
 			t.Type = td.Type
+			approval = td.ApprovalStatus()
 		}
 		applyPayload(&t, p)
 		if t.Type == "" {
@@ -245,6 +247,7 @@ func createTracker(d *Deps) http.HandlerFunc {
 		if t.Name == "" {
 			t.Name = t.URL
 		}
+		applyScrapeDefault(d, &t, approval, p.APIOnly != nil)
 		clampTrackerScrape(d, &t)
 		if err := d.Cfg.AddTracker(t); err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
@@ -254,6 +257,36 @@ func createTracker(d *Deps) http.HandlerFunc {
 		d.logInfof("tracker: added %s (%s, type %s)", t.Name, t.ID, t.Type)
 		jsonStatus(w, http.StatusCreated, toView(d, t))
 	}
+}
+
+// applyScrapeDefault decides whether a NEWLY added tracker starts API-only.
+//
+// Scraping a tracker is something its staff should have agreed to, and for a
+// site with no def nobody has ever asked — which is exactly the case for a
+// manual add or a Prowlarr/Jackett import of a tracker Yata doesn't know. So
+// the default is API only, and the user turns scraping on themselves once
+// they have read that tracker's rules. A def whose approval is still unknown
+// or merely pending gets the same treatment: "we haven't asked yet" and "we
+// have no def" are the same position from the tracker's side.
+//
+// A DEFAULT, not a lock — an explicit api_only in the request always wins, and
+// the toggle stays live in Edit. The flag that genuinely cannot be overridden
+// is scrape.disable_scraping, which records an operator's actual refusal.
+// Types that architecturally cannot scrape are left alone: an API-only flag on
+// a manual or demo tracker implies traffic that never happens.
+func applyScrapeDefault(d *Deps, t *models.Tracker, approval string, explicit bool) {
+	if explicit {
+		return
+	}
+	switch approval {
+	case defs.ApprovalApproved, defs.ApprovalInformal:
+		return // staff said yes
+	}
+	rs := d.Reg.ResolveScrape(t.URL, t.Type)
+	if rs.SkipHTMLScrape || rs.DisableScraping {
+		return
+	}
+	t.APIOnly = true
 }
 
 func updateTracker(d *Deps) http.HandlerFunc {
