@@ -105,6 +105,10 @@ func (t Tracker) ManualLayer() map[string]any {
 			out[field] = v
 		}
 	}
+	// Ratio and buffer follow from uploaded and downloaded unless typed.
+	for field, v := range DerivedManualStats(t.ManualStats) {
+		out[field] = v
+	}
 	// Last: the dedicated Join Date input owns join_date outright.
 	if jd := strings.TrimSpace(t.JoinDate); jd != "" {
 		out["join_date"] = jd

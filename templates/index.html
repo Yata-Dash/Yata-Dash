@@ -1062,6 +1062,10 @@
                   </div>
                   <span class="form-hint" id="modal-manual-hint" style="margin-top:-6px">Yata never contacts this tracker &mdash; these are the numbers it shows. Every save is recorded, so history and charts still build up over time.</span>
                   <div id="modal-manual-rows" class="chip-items" style="margin-top:10px"></div>
+                  <!-- Ratio and buffer worked out from uploaded/downloaded. Not
+                       rows: nothing here is saved, the server derives the same
+                       two on every read (models.DerivedManualStats). -->
+                  <div id="modal-manual-derived" class="chip-items chip-items--derived" style="display:none"></div>
                   <div class="target-add-row">
                     <select class="form-input" id="modal-manual-add-select" style="max-width:260px">
                       <option value="">&#8212; choose a stat &#8212;</option>

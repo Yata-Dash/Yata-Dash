@@ -105,6 +105,7 @@ const FIELDS: FieldDef[] = [
   // too, but are presented as operators on 'group' rather than as their own
   // fields; toDisplay/fromDisplay do the translation.
   { value: 'target_met', label: 'Target met (any target row)', type: 'event' },
+  { value: 'pathway_ready', label: 'Pinned path requirements met (next hop)', type: 'event' },
 ];
 
 function fieldDef(name: string): FieldDef { return FIELDS.find(f => f.value === name) ?? FIELDS[0]; }

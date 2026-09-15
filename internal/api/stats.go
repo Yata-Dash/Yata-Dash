@@ -11,6 +11,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/notify"
+	"github.com/Yata-Dash/Yata-Dash/internal/pathways"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 )
 
@@ -211,6 +212,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		// same values against themselves.
 		if resp.OK {
 			evaluateTrackerTargets(d, t, resp.Fields, trends)
+			evaluateTrackerPins(d, t, resp.Fields, trends)
 		}
 	}
 	return resp
@@ -286,6 +288,36 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 		return
 	}
 	d.Alerts.EvaluateTargets(t, merged, rows, met, total, trends)
+}
+
+// evaluateTrackerPins re-measures every pinned path and hands the engine one
+// row per pin, so a pin whose next hop just became fully met fires
+// pathway_ready. All pins go in every time — the engine only diffs the ones
+// measured from THIS tracker (that is whose numbers just moved) and uses the
+// rest to know what is still pinned. Nothing to do when nothing is pinned,
+// which is the common case and skips the user-tracker mapping entirely.
+func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
+	pins := d.Cfg.Settings().PathwayPins
+	if len(pins) == 0 || d.Paths == nil {
+		return
+	}
+	users := mapUserTrackers(d)
+	groupsFor, inviteReqsFor := defLookups(d)
+	rows := make([]notify.PinRow, 0, len(pins))
+	for _, pin := range pins {
+		r := pathways.EvalPin(d.Paths, pin.Hops, users, groupsFor, inviteReqsFor)
+		if r.State != pathways.PinOK || len(r.Steps) == 0 {
+			continue
+		}
+		open := r.Steps[0]
+		rows = append(rows, notify.PinRow{
+			Key:       strings.Join(pin.Hops, " → "),
+			Label:     "path to " + r.Destination + ", " + open.From + " → " + open.To,
+			TrackerID: r.StartTrackerID,
+			Ready:     !r.StartDisabled && open.ETADays == 0 && !open.HasUnknown,
+		})
+	}
+	d.Alerts.EvaluatePins(t, merged, rows, trends)
 }
 
 // RefreshFloorMinutes is the lowest the automatic API-refresh interval can be

@@ -544,3 +544,55 @@ func TestAccountDeadlineConditions(t *testing.T) {
 		}
 	}
 }
+
+// EvaluatePins mirrors EvaluateTargets' edge rules, with one extra: only the
+// pins measured from the tracker just refreshed are diffed. A pin measured
+// from another tracker keeps its state across the pass rather than being
+// re-judged on numbers that did not move — or worse, primed as "known" by a
+// tracker that never saw it.
+func TestEvaluatePinsEdgeTracking(t *testing.T) {
+	dest := models.NotifyDestination{ID: "d1", Type: "generic", Enabled: true}
+	rule := models.AlertRule{ID: "r1", Name: "Pinned path requirements met", Enabled: true, Match: "all",
+		Conditions: []models.Condition{{Field: "pathway_ready", Op: "is_true"}}}
+	eng := New(fakeCfg{n: models.NotificationConfig{Destinations: []models.NotifyDestination{dest}, Rules: []models.AlertRule{rule}}}, nil)
+	a := models.Tracker{ID: "a", Name: "Aither"}
+	b := models.Tracker{ID: "b", Name: "Blutopia"}
+	m := merged(nil)
+	fired := func(id string) bool { _, ok := eng.lastFired["r1|"+id]; return ok }
+	reset := func() { delete(eng.lastFired, "r1|a"); delete(eng.lastFired, "r1|b") }
+
+	// Two pins, one measured from each tracker. Refreshing A primes A's pin
+	// only; B's pin is untouched and must not count as seen.
+	rows := func(aReady, bReady bool) []PinRow {
+		return []PinRow{
+			{Key: "Aither → Anthelion", Label: "path to Anthelion", TrackerID: "a", Ready: aReady},
+			{Key: "Blutopia → BTN", Label: "path to BTN", TrackerID: "b", Ready: bReady},
+		}
+	}
+	eng.EvaluatePins(a, m, rows(false, true), TrendContext{})
+	if fired("a") || fired("b") {
+		t.Fatal("first sighting must prime silently")
+	}
+	// B refreshes with its pin already ready: still a first sighting for B.
+	eng.EvaluatePins(b, m, rows(false, true), TrendContext{})
+	if fired("b") {
+		t.Fatal("B's pin was never seen from B before — must prime, not fire")
+	}
+
+	// A's pin goes ready on A's refresh: fires once, and only for A.
+	eng.EvaluatePins(a, m, rows(true, true), TrendContext{})
+	if !fired("a") || fired("b") {
+		t.Fatalf("A ready should fire for A only: a=%v b=%v", fired("a"), fired("b"))
+	}
+	reset()
+	eng.EvaluatePins(a, m, rows(true, true), TrendContext{})
+	if fired("a") {
+		t.Fatal("already-ready pin must not re-fire")
+	}
+
+	// Unpinned: dropped from state, so re-pinning primes again.
+	eng.EvaluatePins(a, m, rows(true, true)[1:], TrendContext{})
+	if _, known := eng.pinState["Aither → Anthelion"]; known {
+		t.Fatal("an unpinned chain must leave the state")
+	}
+}

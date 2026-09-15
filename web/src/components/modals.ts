@@ -13,7 +13,7 @@ import { capabilityRow } from './capabilities';
 import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
 import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
-import { parseAgeDays, parseSeedTime } from '../utils/parse';
+import { parseAgeDays, parseSeedTime, parseSize } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { findOptOut, optOutMessage } from '../utils/optout';
 import { defaultGoalDeadline } from '../utils/pacing';
@@ -736,6 +736,88 @@ function renderManualRows(stats: Record<string, string>) {
     .join('');
   refreshManualAddSelect();
   wireChipItems(wrap);
+  refreshManualDerived();
+}
+
+// ── Derived stats ─────────────────────────────────────────────────────────
+//
+// Ratio and buffer follow from uploaded and downloaded on nearly every
+// tracker, so the form works them out instead of asking. They are previewed
+// here and derived again on the server (models.DerivedManualStats) — the two
+// formulas must agree. Nothing is saved: a typed value wins by existing, so
+// "enter it yourself" just turns the preview into an ordinary row.
+
+const DERIVED_TIPS: Record<string, string> = {
+  ratio: 'Uploaded ÷ downloaded. Enter a ratio yourself if this tracker counts it differently.',
+  buffer: 'Uploaded − downloaded. Enter a buffer yourself if this tracker counts it differently.',
+};
+
+/** The same two formulas as the server, from what the rows currently hold. */
+function manualDerived(stats: Record<string, string>): Record<string, string> {
+  const up = parseSize(stats['uploaded']);
+  const down = parseSize(stats['downloaded']);
+  if (up == null || down == null) return {};
+  const out: Record<string, string> = {};
+  if (!stats['ratio']) {
+    if (down > 0) out['ratio'] = (up / down).toFixed(2);
+    else if (up > 0) out['ratio'] = '∞';
+  }
+  if (!stats['buffer']) {
+    const gib = up - down;
+    const abs = Math.abs(gib);
+    const size = abs < 0.005 ? '0.00 GiB' : abs >= 1024 ? `${(abs / 1024).toFixed(2)} TiB` : `${abs.toFixed(2)} GiB`;
+    out['buffer'] = (gib < 0 ? '-' : '') + size;
+  }
+  return out;
+}
+
+/** Read the rows without committing open edits — this runs on every Done. */
+function peekManualRows(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of document.querySelectorAll<HTMLElement>('#modal-manual-rows [data-manual-key]')) {
+    const key = row.dataset['manualKey'] ?? '';
+    const raw = (row.querySelector<HTMLInputElement>('[data-manual-input]')?.value ?? '').trim();
+    if (key && raw) out[key] = raw;
+  }
+  return out;
+}
+
+function refreshManualDerived(): void {
+  const wrap = document.getElementById('modal-manual-derived');
+  if (!wrap) return;
+  const derived = manualDerived(peekManualRows());
+  const keys = Object.keys(derived);
+  wrap.style.display = keys.length ? '' : 'none';
+  wrap.innerHTML = keys.map(k => `<div class="chip-item chip-item--derived" data-derived-key="${esc(k)}">
+    <div class="chip-item-view">
+      <span class="target-chip" title="${esc(DERIVED_TIPS[k] ?? '')}">
+        <span class="target-chip-k">${esc(manualStatLabel(k))}</span>
+        <span class="target-chip-v">${esc(derived[k])}</span>
+        <span class="chip-item-by">calculated</span>
+      </span>
+      <span class="chip-item-acts">
+        <button type="button" class="trk-act trk-act-xs" data-derived-edit="${esc(k)}" title="Enter a different value" aria-label="Enter ${esc(manualStatLabel(k))} yourself"><i class="fas fa-pen-to-square"></i></button>
+      </span>
+    </div>
+  </div>`).join('');
+  if (!wrap.dataset['derivedWired']) {
+    wrap.dataset['derivedWired'] = '1';
+    wrap.addEventListener('click', e => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-derived-edit]');
+      const key = btn?.dataset['derivedEdit'];
+      if (!key) return;
+      // Becomes a real row, prefilled with the calculated figure and open for
+      // editing; the preview for that key disappears because it now exists.
+      const rows = document.getElementById('modal-manual-rows');
+      const value = wrap.querySelector<HTMLElement>(`[data-derived-key="${CSS.escape(key)}"] .target-chip-v`)?.textContent ?? '';
+      if (!rows) return;
+      rows.insertAdjacentHTML('beforeend', manualRowHtml(key, value, true));
+      refreshManualAddSelect();
+      wireChipItems(rows);
+      refreshManualDerived();
+      rows.querySelector<HTMLInputElement>(`[data-manual-key="${CSS.escape(key)}"] [data-chip-input]`)?.select();
+    });
+  }
 }
 
 /** Rebuild the "+ Add stat" picker: every offerable stat minus those added. */
@@ -764,6 +846,7 @@ export function modalAddManualRow(): void {
 export function modalRemoveManualRow(key: string): void {
   document.querySelector(`#modal-manual-rows [data-manual-key="${CSS.escape(key)}"]`)?.remove();
   refreshManualAddSelect();
+  refreshManualDerived();
 }
 
 /** Read the rows back into a manual_stats map. Empty inputs are dropped, so
@@ -815,7 +898,7 @@ function setupManualSection(typeKey: string, stats: Record<string, string> | und
   const hint = document.getElementById('modal-manual-hint');
   if (hint) {
     hint.textContent = typeKey === MANUAL_TYPE
-      ? 'Yata never contacts this tracker — these are the numbers it shows. Update them whenever you like; each save is recorded, so history and charts build up over time.'
+      ? 'Yata never contacts this tracker — these are the numbers it shows. Ratio and buffer are worked out from uploaded and downloaded unless you enter them. Each save is recorded, so history and charts build up over time.'
       : "Typed-in values for this tracker. They fill only the stats its API and profile page don't report — anything fetched wins over what you enter here.";
   }
   renderManualRows(_editManualStats);
@@ -985,7 +1068,7 @@ function setChipEditing(item: HTMLElement, editing: boolean): void {
     if (!value) {
       const isTarget = 'targetKey' in item.dataset;
       item.remove();
-      if (isTarget) refreshTargetAddSelect(); else refreshManualAddSelect();
+      if (isTarget) refreshTargetAddSelect(); else { refreshManualAddSelect(); refreshManualDerived(); }
       return;
     }
     const chip = item.querySelector<HTMLElement>('[data-chip-value]');
@@ -1004,6 +1087,7 @@ function setChipEditing(item: HTMLElement, editing: boolean): void {
   // itself, because a text field and a date picker do not belong in a wrap.
   item.dataset['editing'] = editing ? '1' : '0';
   if (editing) item.querySelector<HTMLInputElement>('[data-chip-input]')?.focus();
+  else if ('manualKey' in item.dataset) refreshManualDerived();
 }
 
 /** Edit / Done, delegated on the container so it survives every rebuild.
