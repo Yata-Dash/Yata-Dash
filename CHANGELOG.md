@@ -6,6 +6,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260920]
+
 ### Added
 
 - **qui problem counts as alert conditions.** With *Problem counts for alerts*
