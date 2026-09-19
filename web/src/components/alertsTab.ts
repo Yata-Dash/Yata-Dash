@@ -6,7 +6,7 @@
 // State is held in memory and saved as a whole via PUT /api/notifications.
 import * as api from '../api';
 import { esc } from '../utils/format';
-import { trackers } from '../state';
+import { appSettings, trackers } from '../state';
 import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotifyDestination } from '../types';
 import type { ToastType } from './toast';
 
@@ -98,6 +98,14 @@ const FIELDS: FieldDef[] = [
   { value: 'cookie_expired',   label: 'Session cookie expired', type: 'bool',
     hint: 'Profile scrapes are being refused. Re-copy the cookie in Settings → Trackers.' },
   { value: 'goal_behind_pace', label: 'Behind goal pace',   type: 'bool' },
+  // qui problem counts, per tracker (QUI_ALERTS_PLAN.md). Labelled rather
+  // than hidden when qui is off: a filtered catalogue would silently rewrite a
+  // saved rule that uses one, see fieldDef. Absent — so never matching —
+  // whenever qui alerts are off or qui could not be read.
+  { value: 'qui_unregistered',  label: 'Unregistered torrents (qui only)',        type: 'numeric' },
+  { value: 'qui_tracker_down',  label: 'Torrents with tracker down (qui only)',   type: 'numeric' },
+  { value: 'qui_tracker_error', label: 'Torrents with tracker error (qui only)',  type: 'numeric' },
+  { value: 'qui_errored',       label: 'Errored torrents (qui only)',             type: 'numeric' },
   { value: 'group', label: 'Group / class', type: 'string', ops: GROUP_OPS,
     hint: '"changed" is checked on every refresh; promotions and demotions fire once, at the moment they are detected.' },
   // One-shot events (fire at the moment they happen, not polled) — see
@@ -108,7 +116,14 @@ const FIELDS: FieldDef[] = [
   { value: 'pathway_ready', label: 'Pinned path requirements met (next hop)', type: 'event' },
 ];
 
-function fieldDef(name: string): FieldDef { return FIELDS.find(f => f.value === name) ?? FIELDS[0]; }
+/** A stored field the catalogue does not know — a config written by a newer
+ *  Yata, say — must keep its name. Resolving it to FIELDS[0] made the select
+ *  show "Ratio", and the next collectFromDOM saved that: a rule quietly
+ *  rewritten by being looked at. */
+function fieldDef(name: string): FieldDef {
+  return FIELDS.find(f => f.value === name) ?? { value: name, label: `${name} (unknown field)`, type: 'numeric' };
+}
+const isQuiField = (name: string) => name.startsWith('qui_');
 function opsFor(fd: FieldDef): OpDef[] {
   if (fd.ops) return fd.ops;
   return fd.type === 'bool' ? BOOL_OPS : fd.type === 'string' ? STR_OPS : fd.type === 'event' ? EVENT_OPS : NUM_OPS;
@@ -518,6 +533,7 @@ function renderRule(r: AlertRule, ri: number): string {
     <div class="alerts-conds">
       ${r.conditions.map((c, ci) => renderCond(c, ri, ci)).join('')}
       <button type="button" class="btn btn-ghost btn-sm" data-action="add-cond" data-rule="${ri}">+ Add condition</button>
+      ${quiNeededNote(r)}
     </div>
     <div class="alerts-row" style="margin-top:8px;align-items:center;gap:8px">
       <span style="font-size:11px;color:var(--text3);width:60px">Send to</span>
@@ -538,7 +554,9 @@ function renderRule(r: AlertRule, ri: number): string {
 function renderCond(c: AlertCondition, ri: number, ci: number): string {
   const d = toDisplay(c);
   const fd = fieldDef(d.field);
-  const fieldSel = `<select class="form-input cond-field" data-action="cond-field" data-rule="${ri}" data-cond="${ci}" style="flex:2">${FIELDS.map(f => opt(f.value, f.label, d.field)).join('')}</select>`;
+  const known = FIELDS.some(f => f.value === d.field);
+  const fieldSel = `<select class="form-input cond-field" data-action="cond-field" data-rule="${ri}" data-cond="${ci}" style="flex:2">${
+    (known ? FIELDS : [fd, ...FIELDS]).map(f => opt(f.value, f.label, d.field)).join('')}</select>`;
   const opTitle = fd.hint ? ` title="${esc(fd.hint)}"` : '';
   const opSel = `<select class="form-input cond-op" style="flex:1"${opTitle}>${opsFor(fd).map(o => opt(o.value, o.label, d.op)).join('')}</select>`;
   const needsValue = fd.type === 'numeric' || fd.type === 'size';
@@ -547,6 +565,18 @@ function renderCond(c: AlertCondition, ri: number, ci: number): string {
     ${fieldSel}${opSel}${valInput}
     <button type="button" class="btn btn-ghost btn-sm" data-action="remove-cond" data-rule="${ri}" data-cond="${ci}">✕</button>
   </div>`;
+}
+
+/** A rule on a qui field with no qui to read can never fire. Said once, in
+ *  the rule, only when both halves are true — a label says the field needs
+ *  qui; this says this rule is currently dead. */
+function quiNeededNote(r: AlertRule): string {
+  if (!r.conditions.some(c => isQuiField(c.field))) return '';
+  const url = (appSettings.qui_url ?? '').trim();
+  const on = !!appSettings.qui_alerts_enabled;
+  if (url && on) return '';
+  const why = !url ? 'qui is not set up' : 'qui alert counts are switched off';
+  return `<div style="font-size:11px;color:var(--amber);margin-top:6px"><i class="fas fa-triangle-exclamation" style="margin-right:5px"></i>This rule uses a qui field but ${why} — it cannot fire until that changes (Settings → Integrations → qui).</div>`;
 }
 
 // ── Collect DOM → model (selections live in the model, not the DOM) ──────────

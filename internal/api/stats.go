@@ -536,7 +536,7 @@ func toAnyMap(in map[string]string) map[string]any {
 func RunRefreshCycle(d *Deps) {
 	// One qui pull feeds every tracker's seedsize fallback for this cycle
 	// (cheap no-op when the mode is off; see quiseed.go).
-	refreshQUISeedsize(d)
+	refreshQUI(d)
 	for _, t := range d.Cfg.Trackers() {
 		if !t.Enabled {
 			continue

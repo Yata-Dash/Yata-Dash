@@ -377,6 +377,11 @@ type Settings struct {
 	//   "missing" — fills in only when neither the API nor a scrape has it
 	//   "prefer"  — beats scrapes, still loses to the tracker's API
 	QUISeedsizeMode string `json:"qui_seedsize_mode"`
+	// QUIAlertsEnabled polls qui for per-tracker problem counts (unregistered,
+	// tracker down/error, errored torrents) that alert rules can condition on.
+	// Off by default: a few extra requests per refresh, only useful to someone
+	// who has written such a rule. See QUI_ALERTS_PLAN.md.
+	QUIAlertsEnabled bool `json:"qui_alerts_enabled"`
 
 	// ── Indexer-manager imports (saved on first successful fetch so the
 	//    import sections come prefilled; secrets are masked like QUIAPIKey) ──

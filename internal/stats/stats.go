@@ -112,6 +112,21 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 		}
 	}
 	priority = demoteStaleAPI(priority, layers, time.Now())
+	// The qui problem counts (qui_unregistered and kin) live only in the qui
+	// layer and belong to no other source, so the seedsize mode — which is
+	// about whether qui's SEED SIZE may stand in for a tracker's — has no say
+	// over them. With the layer otherwise excluded, they are read on their own.
+	quiIncluded := false
+	for _, src := range priority {
+		quiIncluded = quiIncluded || src == models.SourceQUI
+	}
+	if !quiIncluded {
+		for field, fv := range layers[string(models.SourceQUI)] {
+			if strings.HasPrefix(field, "qui_") && present(fv.Value) {
+				out[field] = models.StatField{Value: fv.Value, Source: models.SourceQUI, UpdatedAt: fv.UpdatedAt}
+			}
+		}
+	}
 	for _, src := range priority {
 		for field, fv := range layers[string(src)] {
 			if !reported(src, fv.Value) {

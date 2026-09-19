@@ -596,3 +596,25 @@ func TestEvaluatePinsEdgeTracking(t *testing.T) {
 		t.Fatal("an unpinned chain must leave the state")
 	}
 }
+
+// qui counts are ordinary numeric fields with one property that matters: an
+// absent field never matches, so a rule on unregistered torrents goes quiet
+// when qui alerts are off or qui could not be read, instead of reading 0.
+func TestQUIFieldsAreSilentWhenAbsent(t *testing.T) {
+	gt := models.Condition{Field: "qui_unregistered", Op: "gt", Value: "0"}
+	eq0 := models.Condition{Field: "qui_unregistered", Op: "eq", Value: "0"}
+	none := map[string]string{}
+	if evalCondition(gt, models.MergedStats{}, none, none, true, TrendContext{}) {
+		t.Error("absent count matched > 0")
+	}
+	if evalCondition(eq0, models.MergedStats{}, none, none, true, TrendContext{}) {
+		t.Error("absent count matched == 0 — absence must not read as zero")
+	}
+	have := map[string]string{"qui_unregistered": "3"}
+	if !evalCondition(gt, models.MergedStats{}, have, none, true, TrendContext{}) {
+		t.Error("3 > 0 should match")
+	}
+	if got := describeCondition(gt, models.MergedStats{}, have, none, TrendContext{}); got != "unregistered torrents 3 > 0 (qui)" {
+		t.Errorf("description = %q", got)
+	}
+}

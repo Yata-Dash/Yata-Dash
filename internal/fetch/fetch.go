@@ -459,6 +459,7 @@ func normalizeActiveEvents(data map[string]any) {
 	events := make([]any, 0, len(raw))
 	var names []string
 	var soonestEnd int64
+	staleBefore := now().Add(-eventGrace).Unix()
 	for _, item := range raw {
 		ev, ok := item.(map[string]any)
 		if !ok {
@@ -472,6 +473,13 @@ func normalizeActiveEvents(data map[string]any) {
 			clean[k] = v
 		}
 		endsAt := eventUnix(clean["ends_at"])
+		if endsAt > 0 && endsAt < staleBefore {
+			// Some trackers never take the flag down: Aither's events endpoint
+			// kept answering "freeleech is on, until the 5th" ten days after
+			// the 5th. An event that far gone is not information, so it is
+			// dropped here rather than shown as "Ended" indefinitely.
+			continue
+		}
 		if endsAt > 0 {
 			clean["ends_at"] = endsAt
 		}
@@ -516,6 +524,15 @@ func normalizeActiveEvents(data map[string]any) {
 		data["active_event_ends_at"] = soonestEnd
 	}
 }
+
+// eventGrace is how long a finished event is still listed (as "Ended") before
+// it is dropped. Long enough that an event ending overnight is still visible
+// the next day, and that a tracker whose clock runs a little behind Yata's
+// never loses a live one.
+const eventGrace = 48 * time.Hour
+
+// now is the clock normalizeActiveEvents reads; tests pin it.
+var now = time.Now
 
 // eventName is an event's display name, falling back to a prettified type slug
 // ("upload_contest" → "Upload Contest") when the tracker leaves name null.

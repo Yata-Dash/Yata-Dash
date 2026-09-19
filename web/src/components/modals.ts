@@ -2848,6 +2848,8 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   (document.getElementById('s-qui-key') as HTMLInputElement).value = settings.qui_api_key ?? '';
   setPlaceholder('s-qui-key', settings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
   (document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement).value = settings.qui_seedsize_mode ?? 'off';
+  const quiAlertsTrack = document.getElementById('s-qui-alerts-track');
+  if (quiAlertsTrack) quiAlertsTrack.className = `toggle-track ${settings.qui_alerts_enabled ? 'on' : ''}`;
 
   const faviconTrack = document.getElementById('s-favicon-track');
   const privateTrack = document.getElementById('s-private-track');
@@ -3039,6 +3041,12 @@ export function toggleSettingsPrivate() {
   renderThemePreview();
 }
 
+export function toggleSettingsQuiAlerts() {
+  const t = document.getElementById('s-qui-alerts-track');
+  if (!t) return;
+  t.className = `toggle-track ${t.classList.contains('on') ? '' : 'on'}`;
+}
+
 export function toggleSettingsQuiBars() {
   const t = document.getElementById('s-qui-bars-track');
   if (!_sd) return;
@@ -3160,6 +3168,7 @@ export async function saveSettings(deps: SettingsDeps) {
     qui_enabled_instances: enabledIds,
     qui_bars_visible:      isOn('s-qui-bars-track', true),
     qui_seedsize_mode:     ((document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement)?.value ?? 'off') as AppSettings['qui_seedsize_mode'],
+    qui_alerts_enabled:    isOn('s-qui-alerts-track', false),
     show_favicons:         isOn('s-favicon-track', false),
     private_mode:          isOn('s-private-track', false),
     show_stat_sources:     isOn('s-stat-src-track', false),

@@ -1149,6 +1149,7 @@ modalsReady.then(m => {
   (window as any).onAddTypeSelect      = m.onAddTypeSelect;
   (window as any).modalToggleApiOnly       = m.modalToggleApiOnly;
   (window as any).allowUnapprovedScrape    = m.allowUnapprovedScrape;
+  (window as any).toggleSettingsQuiAlerts  = m.toggleSettingsQuiAlerts;
   (window as any).modalValidateInterval    = m.modalValidateInterval;
   (window as any).modalOnAutoIntervalChange = m.modalOnAutoIntervalChange;
   (window as any).modalOnMaxScrapesChange  = m.modalOnMaxScrapesChange;

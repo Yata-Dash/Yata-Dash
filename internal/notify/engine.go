@@ -48,6 +48,17 @@ var numericFields = map[string]string{
 	"avg_seed_time": "days",
 }
 
+// quiFieldLabels names the per-tracker qui problem counts (see
+// internal/api/quiproblems.go). They are ordinary numeric fields to the
+// evaluator — absent when qui alerts are off or qui could not be read, so a
+// rule on them stays quiet rather than reading 0 — and only need naming here.
+var quiFieldLabels = map[string]string{
+	"qui_unregistered":  "unregistered torrents",
+	"qui_tracker_down":  "torrents with tracker down",
+	"qui_tracker_error": "torrents with tracker error",
+	"qui_errored":       "errored torrents",
+}
+
 // Engine evaluates alert rules against fresh stats and fires webhooks on the
 // rising edge (false→true) of a rule. State is kept in memory; the first
 // evaluation per tracker after start "primes" silently so a restart never
@@ -805,6 +816,15 @@ func describeCondition(c models.Condition, merged models.MergedStats, cur, prev 
 			return "not behind on any goal"
 		}
 		return "behind goal pace: " + strings.Join(trends.GoalsBehind, ", ")
+	}
+	if label, ok := quiFieldLabels[c.Field]; ok {
+		// Client-side counts, so say so: "3 unregistered torrents" is a
+		// qBittorrent observation, not something the tracker reported.
+		have := cur[c.Field]
+		if have == "" {
+			return label + ": qui not read"
+		}
+		return fmt.Sprintf("%s %s %s %s (qui)", label, have, opSymbol(c.Op), c.Value)
 	}
 	if c.Op == "changed" {
 		return fmt.Sprintf("%s changed: %s → %s", c.Field, prev[c.Field], cur[c.Field])

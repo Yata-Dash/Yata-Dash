@@ -6,7 +6,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
 // QUI seedsize: qui's torrents endpoint reports, per announce host, the total
@@ -24,26 +26,40 @@ type quiTrackerTransfer struct {
 }
 
 // quiTorrentsCounts is the (partial) shape of GET
-// /api/instances/{id}/torrents?page=0&limit=1 — everything but the per-host
-// totals is ignored.
+// /api/instances/{id}/torrents?page=0&limit=1: the per-host byte totals that
+// feed seed size, and the instance-wide status counts that say which problem
+// classes are worth a filtered fetch at all.
 type quiTorrentsCounts struct {
 	Counts struct {
+		Status           map[string]int                `json:"status"`
 		TrackerTransfers map[string]quiTrackerTransfer `json:"trackerTransfers"`
 	} `json:"counts"`
 }
 
-// refreshQUISeedsize fetches per-tracker seeding totals from every enabled
-// qui instance and rewrites the qui stat layer of every enabled tracker —
-// including CLEARING it where qui has nothing, so a removed torrent set or a
-// renamed announce host can't leave a stale seed_size behind. No-op when the
-// mode is off or qui isn't configured. Errors are logged and skipped: qui
-// being down must never disturb a refresh cycle.
-func refreshQUISeedsize(d *Deps) {
+// quiSnapshot is one instance's answer for this refresh.
+type quiSnapshot struct {
+	seed     map[string]int64            // announce host → max totalSize
+	problems map[string]quiProblemCounts // announce host → counts (alerts on only)
+}
+
+// refreshQUI polls every enabled qui instance once and rewrites the qui stat
+// layer of every enabled tracker with whatever is switched on: seed size
+// (Settings.QUISeedsizeMode) and the per-tracker problem counts the alert
+// rules read (Settings.QUIAlertsEnabled). One writer, because the layer is
+// replaced wholesale — two independent halves would each wipe the other's
+// fields. No-op when neither is on or qui isn't configured. Errors are logged
+// and skipped: qui being down must never disturb a refresh cycle.
+//
+// Absence is the honest answer whenever qui cannot be read: a rule on
+// qui_unregistered must go quiet then, not read 0 and announce "all clear".
+// So counts are written only when EVERY instance answered — a floor from the
+// instances that did would under-report exactly when the user most needs the
+// number — and the previous counts are carried across otherwise.
+func refreshQUI(d *Deps) {
 	set := d.Cfg.Settings()
-	if set.QUISeedsizeMode != "missing" && set.QUISeedsizeMode != "prefer" {
-		return
-	}
-	if set.QUIURL == "" {
+	seedOn := set.QUISeedsizeMode == "missing" || set.QUISeedsizeMode == "prefer"
+	alertsOn := set.QUIAlertsEnabled
+	if (!seedOn && !alertsOn) || set.QUIURL == "" {
 		return
 	}
 	instances := set.QUIEnabledInstances
@@ -56,34 +72,47 @@ func refreshQUISeedsize(d *Deps) {
 	// mirror hosts (speedapp's three announce domains) all report the same
 	// torrents, so matching takes the MAX across hosts; across instances the
 	// torrent sets are genuinely different boxes, so those add.
-	perInstance := make([]map[string]int64, 0, len(instances))
+	var snaps []quiSnapshot
+	truncated := false
 	for _, id := range instances {
 		u := fmt.Sprintf("%s/api/instances/%d/torrents?page=0&limit=1", set.QUIURL, id)
 		body, _, err := quiFetch(u, set.QUIAPIKey)
 		if err != nil {
-			d.logDebugf("qui seedsize: instance %d fetch failed: %v", id, err)
+			d.logDebugf("qui: instance %d fetch failed: %v", id, err)
 			continue
 		}
 		var data quiTorrentsCounts
 		if err := json.Unmarshal(body, &data); err != nil {
-			d.logDebugf("qui seedsize: instance %d parse failed: %v", id, err)
+			d.logDebugf("qui: instance %d parse failed: %v", id, err)
 			continue
 		}
-		hosts := map[string]int64{}
+		snap := quiSnapshot{seed: map[string]int64{}}
 		for host, tt := range data.Counts.TrackerTransfers {
-			if h := normalizeHost(host); h != "" && tt.TotalSize > hosts[h] {
-				hosts[h] = tt.TotalSize
+			if h := normalizeHost(host); h != "" && tt.TotalSize > snap.seed[h] {
+				snap.seed[h] = tt.TotalSize
 			}
 		}
-		perInstance = append(perInstance, hosts)
+		if alertsOn {
+			problems, trunc, err := fetchQUIProblems(set.QUIURL, set.QUIAPIKey, id, data.Counts.Status)
+			if err != nil {
+				d.logDebugf("qui: instance %d problem counts failed: %v", id, err)
+				continue // this instance did not fully answer
+			}
+			snap.problems = problems
+			truncated = truncated || trunc
+		}
+		snaps = append(snaps, snap)
 	}
-	if len(perInstance) == 0 {
+	if len(snaps) == 0 {
 		return // qui unreachable — keep whatever layers exist rather than wiping
 	}
 	// If some (but not all) instances failed, a tracker legitimately seeding
 	// only on a down instance would otherwise read as total==0 and get its
 	// layer wiped. Treat that case as unknown rather than confirmed-empty.
-	partial := len(perInstance) < len(instances)
+	partial := len(snaps) < len(instances)
+	if truncated {
+		d.logWarnf("qui: more than %d torrents in a problem class — counts are a floor", quiProblemLimit)
+	}
 
 	for _, t := range d.Cfg.Trackers() {
 		if !t.Enabled {
@@ -93,30 +122,69 @@ func refreshQUISeedsize(d *Deps) {
 		if len(siteHosts) == 0 {
 			continue
 		}
-		var total int64
-		for _, hosts := range perInstance {
-			// MAX across every candidate domain, not a sum: a tracker's
-			// alias domains (retroflix.net / retroflix.club) and mirror
-			// hosts all announce the same torrents.
-			var best int64
-			for h, size := range hosts {
-				for _, site := range siteHosts {
-					if hostMatches(h, site) && size > best {
-						best = size
+		existing := map[string]store.FieldValue{}
+		if layers, err := d.Stats.DB.Layers(t.ID); err == nil {
+			existing = layers[string(models.SourceQUI)]
+		}
+		layer := map[string]any{}
+
+		if seedOn {
+			var total int64
+			for _, snap := range snaps {
+				// MAX across every candidate domain, not a sum: a tracker's
+				// alias domains (retroflix.net / retroflix.club) and mirror
+				// hosts all announce the same torrents.
+				var best int64
+				for h, size := range snap.seed {
+					for _, site := range siteHosts {
+						if hostMatches(h, site) && size > best {
+							best = size
+						}
 					}
 				}
+				total += best
 			}
-			total += best
+			switch {
+			case total > 0:
+				layer["seed_size"] = parse.BytesToSize(total)
+			case partial:
+				// An instance is down and this tracker read zero — ambiguous,
+				// keep what it had rather than risk wiping real data.
+				if fv, ok := existing["seed_size"]; ok {
+					layer["seed_size"] = fv.Value
+				}
+			}
+			// else: every instance answered and none has it — cleared.
 		}
-		if total > 0 {
-			_ = d.Stats.SaveQUI(t.ID, map[string]any{"seed_size": parse.BytesToSize(total)})
-		} else if !partial {
-			_ = d.Stats.SaveQUI(t.ID, map[string]any{}) // clear — nothing seeding there now
+
+		if alertsOn {
+			if partial {
+				for k, fv := range existing {
+					if strings.HasPrefix(k, "qui_") {
+						layer[k] = fv.Value
+					}
+				}
+			} else {
+				var c quiProblemCounts
+				for _, snap := range snaps {
+					s := sumQUIProblems(snap.problems, siteHosts)
+					c.Unregistered += s.Unregistered
+					c.TrackerDown += s.TrackerDown
+					c.TrackerError += s.TrackerError
+					c.Errored += s.Errored
+				}
+				// Zeros are written on purpose: a count that fell to zero is
+				// how a "> 0" rule clears, and "qui answered, nothing wrong"
+				// is a different fact from "qui did not answer".
+				layer["qui_unregistered"] = c.Unregistered
+				layer["qui_tracker_down"] = c.TrackerDown
+				layer["qui_tracker_error"] = c.TrackerError
+				layer["qui_errored"] = c.Errored
+			}
 		}
-		// else: an instance is down and this tracker read zero — ambiguous,
-		// leave its existing layer alone rather than risk wiping real data.
+		_ = d.Stats.SaveQUI(t.ID, layer)
 	}
-	d.logDebugf("qui seedsize: refreshed from %d instance(s)", len(perInstance))
+	d.logDebugf("qui: refreshed from %d instance(s)", len(snaps))
 }
 
 // trackerSiteHosts returns every domain a tracker is known by: its

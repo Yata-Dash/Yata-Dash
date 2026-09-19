@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 	"github.com/Yata-Dash/Yata-Dash/internal/version"
 )
 
@@ -176,6 +177,7 @@ func checkUpdates(d *Deps) http.HandlerFunc {
 			d.logInfof("updates: checked — app %s/%s defs %s/%s pathways %s/%s",
 				s.App.Current, s.App.Latest, s.Defs.Current, s.Defs.Latest,
 				s.Pathways.Current, s.Pathways.Latest)
+			announceAppUpdate(d, s)
 		}
 		jsonOK(w, s)
 	}
@@ -196,9 +198,40 @@ func StartUpdateChecker(d *Deps) {
 							s.App.Current, s.App.Latest, s.Defs.Current, s.Defs.Latest,
 							s.Pathways.Current, s.Pathways.Latest)
 					}
+					announceAppUpdate(d, s)
 				}
 			}
 			time.Sleep(24 * time.Hour)
 		}
 	}()
+}
+
+// updateRuleID is the alert origin for "a newer Yata exists". Not a rule the
+// user can edit: it is gated by the update check itself, which is opt-in.
+const updateRuleID = "yata_update"
+
+const releasesURL = "https://github.com/Yata-Dash/Yata-Dash/releases"
+
+// announceAppUpdate raises one in-app alert per new version — the daily check
+// runs every day, and the same version must not arrive every day. The store's
+// unread guard is not enough on its own: read the first notice and the next
+// check would raise it again. So the last notice for this origin is compared
+// by the version it named, read or not.
+func announceAppUpdate(d *Deps, s updateStatus) {
+	if !s.App.Available || d.DB == nil {
+		return
+	}
+	title := "Yata " + s.App.Latest + " is available"
+	if last, ok := d.DB.LatestAlert(updateRuleID); ok && last.Title == title {
+		return
+	}
+	err := d.DB.AddAlert(store.Alert{
+		At: time.Now().UTC().Unix(), RuleID: updateRuleID, RuleName: "Yata update",
+		Title: title,
+		Body:  "You are on " + s.App.Current + ". Release notes and downloads are on GitHub.",
+		URL:   releasesURL,
+	})
+	if err != nil {
+		d.logWarnf("updates: recording the version notice failed: %v", err)
+	}
 }

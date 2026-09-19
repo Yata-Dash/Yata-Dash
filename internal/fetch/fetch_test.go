@@ -1681,7 +1681,51 @@ func TestFetchUnit3DRealRatioNull(t *testing.T) {
 // TestFetchUnit3DActiveEvents: the structured event list must both survive for
 // the detail page AND drive the flat canonical fields every other surface (and
 // every alert rule) already speaks.
+// freezeNow pins the clock the event normaliser reads, so a fixture with a
+// fixed end date stays "recent" no matter when the test runs.
+func freezeNow(t *testing.T, at string) {
+	t.Helper()
+	fixed, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := now
+	now = func() time.Time { return fixed }
+	t.Cleanup(func() { now = prev })
+}
+
+// Trackers do not always take an event down when it ends — Aither's events
+// endpoint kept reporting freeleech "until the 5th" well into the month. A
+// day or two of "Ended" is useful; ten days of it is not.
+func TestStaleEventsAreDropped(t *testing.T) {
+	freezeNow(t, "2026-09-15T12:00:00Z")
+	data := fetchUnit3DBody(t, `{
+		"username":"Zenith",
+		"active_events":[
+			{"type":"global_freeleech","name":"Long gone","status":"live","ends_at":"2026-09-05T16:00:00+00:00"},
+			{"type":"double_upload","name":"Just ended","status":"live","ends_at":"2026-09-14T16:00:00+00:00"},
+			{"type":"upload_contest","name":"Still on","status":"live","ends_at":"2026-09-20T00:00:00+00:00"}
+		]
+	}`)
+	evs, _ := data["active_events"].([]any)
+	if len(evs) != 2 {
+		t.Fatalf("active_events = %#v, want the two within 48h", data["active_events"])
+	}
+	if got := data["active_event"]; got != "Double Upload — Just ended · Upload Contest — Still on" {
+		t.Errorf("active_event = %#v", got)
+	}
+	// The whole list stale → no events at all, not an empty list.
+	data = fetchUnit3DBody(t, `{"username":"Z","active_events":[
+		{"type":"global_freeleech","status":"live","ends_at":"2026-09-01T00:00:00+00:00"}]}`)
+	for _, f := range []string{"active_event", "active_events", "active_event_ends_at"} {
+		if _, present := data[f]; present {
+			t.Errorf("%s present for a tracker whose only event ended two weeks ago", f)
+		}
+	}
+}
+
 func TestFetchUnit3DActiveEvents(t *testing.T) {
+	freezeNow(t, "2026-07-15T00:00:00Z")
 	data := fetchUnit3DBody(t, `{
 		"username":"Zenith",
 		"active_events":[
@@ -2313,6 +2357,7 @@ func unit3dForkRegistry(t *testing.T, baseURL string) *defs.Registry {
 // rename happens FIRST. It didn't, and seeding_size reached the UI as a raw
 // byte count.
 func TestFetchUnit3DForkMappings(t *testing.T) {
+	freezeNow(t, "2026-09-04T00:00:00Z")
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -2433,6 +2478,7 @@ func TestEventUnixNamedZones(t *testing.T) {
 // goes through the same normaliser the UNIT3D path uses, so these render
 // identically to every other tracker's events.
 func TestFetchCustomEventList(t *testing.T) {
+	freezeNow(t, "2026-09-03T00:00:00Z")
 	dir := t.TempDir()
 	for _, sub := range []string{"types", "trackers"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
@@ -2551,6 +2597,7 @@ func TestFetchCustomNoEventList(t *testing.T) {
 // RFC3339 with six fractional digits — "2026-09-03T06:29:05.000000Z" — which
 // drives both the login countdown and the event countdown.
 func TestFetchTraxaryResponseShape(t *testing.T) {
+	freezeNow(t, "2026-09-03T00:00:00Z")
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/user" {
 			t.Errorf("path = %q, want /api/user", r.URL.Path)
