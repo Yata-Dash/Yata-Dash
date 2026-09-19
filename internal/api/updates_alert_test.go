@@ -50,4 +50,16 @@ func TestAppUpdateIsAnnouncedOncePerVersion(t *testing.T) {
 	if alerts[0].URL != releasesURL || alerts[0].Title != "Yata Beta-20260915 is available" {
 		t.Errorf("newest = %+v", alerts[0])
 	}
+
+	// The 0915 notice is still unread when 0920 arrives. The store allows one
+	// unread per origin, so without superseding, the newer one would be
+	// silently dropped and the panel would go on pointing at the old release.
+	announceAppUpdate(d, status("Beta-20260920"))
+	alerts, _, _ = d.DB.Alerts(store.AlertQuery{TrackerID: "app"})
+	if len(alerts) != 3 || alerts[0].Title != "Yata Beta-20260920 is available" {
+		t.Fatalf("newer version behind an unread notice: %+v", alerts)
+	}
+	if alerts[0].ReadAt != 0 || alerts[1].ReadAt == 0 {
+		t.Errorf("the newest should be the unread one and the superseded one read: %+v", alerts[:2])
+	}
 }

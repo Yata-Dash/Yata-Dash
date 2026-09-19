@@ -299,6 +299,9 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
 	pins := d.Cfg.Settings().PathwayPins
 	if len(pins) == 0 || d.Paths == nil {
+		// An empty pass, so the engine forgets every chain: a pin removed and
+		// later re-pinned must prime afresh, not inherit a state from before.
+		d.Alerts.EvaluatePins(t, merged, nil, trends)
 		return
 	}
 	users := mapUserTrackers(d)
