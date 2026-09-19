@@ -4,7 +4,7 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-09-12",
+    "fetched": "2026-09-19",
     "updated": "2026-09"
   },
   "abbr": {
@@ -258,6 +258,22 @@
     },
     {
       "from": "Aither",
+      "to": "Luminarr",
+      "days": 0,
+      "reqs": "Prometheus+",
+      "active": true,
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Aither",
+      "to": "MidnightScene",
+      "days": 0,
+      "reqs": "Prometheus+, 3TB upload",
+      "active": true,
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Aither",
       "to": "Nebulance",
       "days": 0,
       "reqs": "Prometheus+",
@@ -267,8 +283,8 @@
     {
       "from": "Aither",
       "to": "OldToonsWorld",
-      "days": 180,
-      "reqs": "Prometheus+, 6 months",
+      "days": 0,
+      "reqs": "Prometheus+",
       "active": true,
       "updated": "Dec 2025"
     },
@@ -310,7 +326,23 @@
       "days": 0,
       "reqs": "Prometheus+",
       "active": true,
-      "updated": "Dec 2025"
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Aither",
+      "to": "RetroFlix",
+      "days": 0,
+      "reqs": "Prometheus+",
+      "active": true,
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Aither",
+      "to": "RocketHD",
+      "days": 0,
+      "reqs": "Prometheus+",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "Aither",
@@ -429,14 +461,6 @@
       "to": "BakaBT",
       "days": 180,
       "reqs": "6 months, ratio\u003e1, seeding at least half of your snatched torrents",
-      "active": true,
-      "updated": "Jan 2026"
-    },
-    {
-      "from": "AnimeBytes",
-      "to": "BroadcasTheNet",
-      "days": 365,
-      "reqs": "TM, 1 year",
       "active": true,
       "updated": "Jan 2026"
     },
@@ -753,14 +777,6 @@
       "updated": "Feb 2026"
     },
     {
-      "from": "AsianCinema",
-      "to": "Nebulance",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": false,
-      "updated": "Sep 2026"
-    },
-    {
       "from": "AvistaZ",
       "to": "AnimeZ",
       "days": 120,
@@ -791,14 +807,6 @@
       "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
       "active": true,
       "updated": "Apr 2026"
-    },
-    {
-      "from": "Bemaniso",
-      "to": "Orpheus",
-      "days": 0,
-      "reqs": "PU",
-      "active": true,
-      "updated": "Oct 2024"
     },
     {
       "from": "Bemaniso",
@@ -1427,10 +1435,10 @@
     {
       "from": "BrokenStones",
       "to": "LST",
-      "days": 90,
-      "reqs": "3 months",
+      "days": 270,
+      "reqs": "Elite or higher, 9 months",
       "active": true,
-      "updated": "Jun 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "BrokenStones",
@@ -1447,6 +1455,14 @@
       "reqs": "No requirement",
       "active": true,
       "updated": "Jun 2026"
+    },
+    {
+      "from": "BrokenStones",
+      "to": "OldToonsWorld",
+      "days": 0,
+      "reqs": "Extreme User or higher, actively seeding at least 10 GiB total",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "BrokenStones",
@@ -1471,6 +1487,14 @@
       "reqs": "No requirement",
       "active": true,
       "updated": "Jun 2026"
+    },
+    {
+      "from": "BrokenStones",
+      "to": "inTheShadow",
+      "days": 0,
+      "reqs": "Elite or higher",
+      "active": false,
+      "updated": "Sep 2026"
     },
     {
       "from": "CapybaraBR",
@@ -1522,7 +1546,7 @@
     },
     {
       "from": "Cathode-Ray.Tube",
-      "to": "Aither",
+      "to": "Hawke-uno",
       "days": -1,
       "reqs": "Unknown",
       "active": false,
@@ -1530,11 +1554,19 @@
     },
     {
       "from": "Cathode-Ray.Tube",
-      "to": "Hawke-uno",
-      "days": -1,
-      "reqs": "Unknown",
-      "active": false,
-      "updated": "Dec 2024"
+      "to": "OldToonsWorld",
+      "days": 0,
+      "reqs": "Analog Ace user or higher",
+      "active": true,
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "Cathode-Ray.Tube",
+      "to": "YuScene",
+      "days": 0,
+      "reqs": "No requirement",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "CinemaZ",
@@ -1919,14 +1951,6 @@
       "reqs": "Legendary Gamer, Legendary Invites forum",
       "active": true,
       "updated": "Sep 2026"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "BroadcasTheNet",
-      "days": 730,
-      "reqs": "Master Gamer, 2 years,  250 uploads, Legendary Invites forum",
-      "active": true,
-      "updated": "Nov 2025"
     },
     {
       "from": "GazelleGames",
@@ -2378,7 +2402,7 @@
     },
     {
       "from": "Great Poster Wall",
-      "to": "Wintersakura",
+      "to": "WinterSakura",
       "days": 0,
       "reqs": "PU+",
       "active": true,
@@ -4294,23 +4318,23 @@
       "days": 0,
       "reqs": "No requirement",
       "active": true,
-      "updated": "Jul 2026"
-    },
-    {
-      "from": "RetroFlix",
-      "to": "LST",
-      "days": 0,
-      "reqs": "No requirement",
-      "active": true,
-      "updated": "Jul 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "RetroFlix",
       "to": "MidnightScene",
       "days": 180,
-      "reqs": "6 months, 3 TB upload",
+      "reqs": "6 months, 3TB upload",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Sep 2026"
+    },
+    {
+      "from": "RetroMoviesClub",
+      "to": "OldToonsWorld",
+      "days": 0,
+      "reqs": "Supporting Actor+",
+      "active": true,
+      "updated": "Sep 2026"
     },
     {
       "from": "RocketHD",
