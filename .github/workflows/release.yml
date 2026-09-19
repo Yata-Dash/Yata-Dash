@@ -105,7 +105,6 @@ jobs:
           target_commitish: ${{ github.event.workflow_run.head_sha || github.sha }}
           files: dist/*.zip
           body_path: dist/RELEASE_NOTES.md
-          prerelease: true                 # beta builds aren't "Latest stable"
           fail_on_unmatched_files: true
 
       - name: Summary

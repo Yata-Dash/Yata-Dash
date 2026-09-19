@@ -72,9 +72,17 @@ func putSettings(d *Deps) http.HandlerFunc {
 		// Seedsize mode switched on (or its qui config changed): populate the
 		// qui layers now instead of waiting up to a refresh cycle. Async —
 		// settings saves must not block on a qui round-trip.
-		if ns := d.Cfg.Settings(); ns.QUISeedsizeMode != "off" &&
-			(ns.QUISeedsizeMode != stored.QUISeedsizeMode || ns.QUIURL != stored.QUIURL || ns.QUIAPIKey != stored.QUIAPIKey) {
-			go refreshQUISeedsize(d)
+		ns := d.Cfg.Settings()
+		quiChanged := ns.QUIURL != stored.QUIURL || ns.QUIAPIKey != stored.QUIAPIKey
+		seedTurnedOn := ns.QUISeedsizeMode != "off" && (ns.QUISeedsizeMode != stored.QUISeedsizeMode || quiChanged)
+		alertsTurnedOn := ns.QUIAlertsEnabled && (!stored.QUIAlertsEnabled || quiChanged)
+		if seedTurnedOn || alertsTurnedOn {
+			go refreshQUI(d)
+		}
+		// Switched off: stored counts would otherwise stay merged — and keep
+		// matching rules — until something else rewrote the layer.
+		if stored.QUIAlertsEnabled && !ns.QUIAlertsEnabled {
+			go clearQUIProblemCounts(d)
 		}
 		jsonOK(w, maskSettings(d.Cfg.Settings()))
 	}

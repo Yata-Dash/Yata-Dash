@@ -363,6 +363,8 @@ export interface AppSettings {
   qui_bars_visible: boolean | null; // null = true
   /** Where qui's per-tracker seeding totals slot into the seed_size merge.
    *  Never beats the tracker's own API in any mode. */
+  /** Poll qui for per-tracker problem counts that alert rules can use. */
+  qui_alerts_enabled?: boolean;
   qui_seedsize_mode: 'off' | 'missing' | 'prefer';
   backup_enabled: boolean;          // automatic config backups (opt-in)
   backup_frequency: 'daily' | 'weekly' | 'monthly' | string;
@@ -858,6 +860,8 @@ export interface AppAlert {
   tracker_name: string;
   title: string;
   body: string;
+  /** Somewhere to go, when the alert has one (the update notice). */
+  url?: string;
   /** 0 = unread. */
   read_at: number;
 }

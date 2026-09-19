@@ -4,8 +4,10 @@
   "name": "SpeedApp",
   "abbr": "SP",
   "url": "https://speedapp.io",
+  "aliases": ["https://speedapp.to", "https://speedappio.org"],
+  "notes": "Aliases are its announce mirrors (ramjet.speedapp.to, ramjet.speedappio.org): qui counts torrents by primary announce host, and a mirror the def does not name is a torrent Yata cannot attribute.",
   "type": "custom",
-  "last_updated": "2026-07-22",
+  "last_updated": "2026-09-15",
   "approved_by": {
     "name": "ovrflo",
     "role": "Staff",

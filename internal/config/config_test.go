@@ -28,8 +28,8 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if n.SeedVersion != seedVersion {
 		t.Fatalf("expected SeedVersion %d after a fresh-install load, got %d", seedVersion, n.SeedVersion)
 	}
-	if len(n.Rules) != 7 {
-		t.Fatalf("expected 7 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
+	if len(n.Rules) != 8 {
+		t.Fatalf("expected 8 seeded rules, got %d: %+v", len(n.Rules), n.Rules)
 	}
 	var haveEvents, haveTarget, haveGuard, haveLogin, haveKey bool
 	for _, r := range n.Rules {
@@ -80,8 +80,8 @@ func TestFreshInstallSeedsDefaultAlertRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 7 {
-		t.Fatalf("second load re-seeded: got %d rules, want 7", got)
+	if got := len(m2.Notifications().Rules); got != 8 {
+		t.Fatalf("second load re-seeded: got %d rules, want 8", got)
 	}
 }
 
@@ -131,8 +131,8 @@ func TestExistingSetupIsNotSeededWithStarters(t *testing.T) {
 	// …and so does batch 4, for the same reason: the scrape-limit and
 	// expired-cookie warnings used to be banners this user could not have
 	// written a rule for.
-	if len(n.Rules) != 5 {
-		t.Fatalf("expected the user's rule plus the four later seeded rules, got %+v", n.Rules)
+	if len(n.Rules) != 6 {
+		t.Fatalf("expected the user's rule plus the five later seeded rules, got %+v", n.Rules)
 	}
 
 	// A second load is a pure no-op (the counter has caught up).
@@ -140,8 +140,8 @@ func TestExistingSetupIsNotSeededWithStarters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(m2.Notifications().Rules); got != 5 {
-		t.Fatalf("second load changed rule count: got %d, want 3", got)
+	if got := len(m2.Notifications().Rules); got != 6 {
+		t.Fatalf("second load changed rule count: got %d, want 6", got)
 	}
 }
 
@@ -173,13 +173,13 @@ func TestAlreadySeededInstallGetsOnlyTheNewBatch(t *testing.T) {
 	if n.SeedVersion != seedVersion {
 		t.Fatalf("expected SeedVersion %d, got %d", seedVersion, n.SeedVersion)
 	}
-	if len(n.Rules) != 4 {
-		t.Fatalf("expected only the batch-2 and batch-4 rules, got %+v", n.Rules)
+	if len(n.Rules) != 5 {
+		t.Fatalf("expected only the batch-2, batch-4 and batch-5 rules, got %+v", n.Rules)
 	}
 	for _, r := range n.Rules {
 		switch r.Name {
 		case "Login required soon", "API key expiring",
-			"Daily scrape limit reached", "Session cookie expired":
+			"Daily scrape limit reached", "Session cookie expired", "Pinned path requirements met":
 		default:
 			t.Fatalf("unexpected rule seeded: %+v", r)
 		}
@@ -231,8 +231,8 @@ func TestExistingDestinationOnlyIsNotSeeded(t *testing.T) {
 			t.Fatalf("batch 1 starter rule %q injected when a destination already existed", r.Name)
 		}
 	}
-	if len(n.Rules) != 4 {
-		t.Fatalf("expected only the batch-2 and batch-4 rules, got %+v", n.Rules)
+	if len(n.Rules) != 5 {
+		t.Fatalf("expected only the batch-2, batch-4 and batch-5 rules, got %+v", n.Rules)
 	}
 }
 

@@ -111,7 +111,7 @@ func migrateTrackerTypes(trackers []models.Tracker) bool {
 //	    these", so a rule naming a webhook would otherwise stop recording)
 //	4 — daily scrape limit reached, session cookie expired (both were header
 //	    banners dismissed to sessionStorage, so they never stayed dismissed)
-const seedVersion = 4
+const seedVersion = 5
 
 // seedDefaultAlertRules brings an install's seeded rules up to seedVersion,
 // running only the batches it has not had. Idempotent: called on every load, a
@@ -280,6 +280,18 @@ func seedDefaultAlertRules(n *models.NotificationConfig) {
 			},
 		)
 		n.SeedVersion = 4
+	}
+	if n.SeedVersion < 5 {
+		// Fires only for a pinned path, and only on the transition to every
+		// requirement met — the one moment on a path that is actually news.
+		n.Rules = append(n.Rules, models.AlertRule{
+			ID:         newRuleID(),
+			Name:       "Pinned path requirements met",
+			Enabled:    true,
+			Match:      "all",
+			Conditions: []models.Condition{{Field: "pathway_ready", Op: "is_true"}},
+		})
+		n.SeedVersion = 5
 	}
 	// Kept in step so an older Yata reading this config still sees batch 1 as
 	// done and does not re-inject it.

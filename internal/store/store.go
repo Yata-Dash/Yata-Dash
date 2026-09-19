@@ -252,6 +252,14 @@ func (d *DB) migrate() error {
 	}); err != nil {
 		return err
 	}
+	// An alert may point somewhere — the update notice links to the release.
+	// A column rather than a URL buried in the body, so the panel renders a
+	// deliberate link and never has to guess at what in a body is one.
+	if err := d.addColumns("alerts", map[string]string{
+		"url": "TEXT NOT NULL DEFAULT ''",
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 

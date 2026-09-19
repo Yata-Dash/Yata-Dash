@@ -48,6 +48,17 @@ var numericFields = map[string]string{
 	"avg_seed_time": "days",
 }
 
+// quiFieldLabels names the per-tracker qui problem counts (see
+// internal/api/quiproblems.go). They are ordinary numeric fields to the
+// evaluator — absent when qui alerts are off or qui could not be read, so a
+// rule on them stays quiet rather than reading 0 — and only need naming here.
+var quiFieldLabels = map[string]string{
+	"qui_unregistered":  "unregistered torrents",
+	"qui_tracker_down":  "torrents with tracker down",
+	"qui_tracker_error": "torrents with tracker error",
+	"qui_errored":       "errored torrents",
+}
+
 // Engine evaluates alert rules against fresh stats and fires webhooks on the
 // rising edge (false→true) of a rule. State is kept in memory; the first
 // evaluation per tracker after start "primes" silently so a restart never
@@ -67,6 +78,10 @@ type Engine struct {
 	// because target rows are per-tracker structural data (rows can appear/
 	// disappear as the user edits targets), not a single field snapshot.
 	targetState map[string]map[string]bool
+	// pinState is EvaluatePins' edge-tracking state: pinned-chain key →
+	// whether its next hop was fully met last time. Flat, not per tracker,
+	// because the tracker a pin is measured from moves as the user advances.
+	pinState map[string]bool
 }
 
 // SetRecorder attaches the in-app alert store. Separate from New so the
@@ -88,6 +103,7 @@ func New(cfg ConfigSource, log Logger) *Engine {
 		prevVals:    map[string]map[string]string{},
 		primed:      map[string]bool{},
 		targetState: map[string]map[string]bool{},
+		pinState:    map[string]bool{},
 	}
 }
 
@@ -212,7 +228,7 @@ func (e *Engine) Announce(rules []models.AlertRule, trackers []models.Tracker, m
 // triggered conditions, these happen once, at the moment they're detected —
 // there is no "currently true" state to poll later.
 type EventContext struct {
-	Kind   string // "promoted" | "demoted" | "target_met"
+	Kind   string // "promoted" | "demoted" | "target_met" | "pathway_ready"
 	Detail string // human text, e.g. "promoted: User → Power User" or "met target 3/5 — Ratio"
 }
 
@@ -300,7 +316,48 @@ func describeEvent(rule models.AlertRule, ev EventContext, merged models.MergedS
 
 // isEventField reports whether a condition field is a one-shot event kind.
 func isEventField(f string) bool {
-	return f == "promoted" || f == "demoted" || f == "target_met"
+	return f == "promoted" || f == "demoted" || f == "target_met" || f == "pathway_ready"
+}
+
+// PinRow is one pinned path as the edge tracker sees it: the chain's identity,
+// which tracker its next hop is measured from, and whether every listed
+// requirement on that hop is met. Label is the event's human text.
+type PinRow struct {
+	Key       string
+	Label     string
+	TrackerID string
+	Ready     bool
+}
+
+// EvaluatePins fires a pathway_ready event for each pin whose next hop goes
+// from not-all-met to all-met. Same rules as EvaluateTargets: first sighting
+// primes silently, and only pins measured from the tracker that was just
+// refreshed are diffed — the others are carried across untouched, since
+// their numbers are not the ones that just moved. Pins absent from the pass
+// (unpinned) drop out of the state.
+func (e *Engine) EvaluatePins(t models.Tracker, merged models.MergedStats, rows []PinRow, trends TrendContext) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	next := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		was, known := e.pinState[row.Key]
+		if row.TrackerID != t.ID {
+			if known {
+				next[row.Key] = was
+			}
+			continue
+		}
+		next[row.Key] = row.Ready
+		if !known {
+			continue
+		}
+		if !was && row.Ready {
+			ev := EventContext{Kind: "pathway_ready", Detail: "path requirements met — " + row.Label}
+			e.evaluateEventLocked(t, merged, ev, trends)
+		}
+	}
+	e.pinState = next
 }
 
 // TargetRow is one evaluated target row for event tracking — an EDGE unit,
@@ -521,7 +578,7 @@ func evalCondition(c models.Condition, merged models.MergedStats, cur, prev map[
 	case "unread_mail", "unread_notifications":
 		// Scraped presence flags ("true"/"false"; unset = unknown → not true).
 		return boolMatch(c.Op, cur[c.Field] == "true")
-	case "promoted", "demoted", "target_met":
+	case "promoted", "demoted", "target_met", "pathway_ready":
 		// One-shot event fields only ever match inside EvaluateEvent's
 		// point-in-time firing — a level-triggered poll (Evaluate/Announce)
 		// or a dry-run preview has no "event happening right now" to see.
@@ -719,6 +776,8 @@ func describeCondition(c models.Condition, merged models.MergedStats, cur, prev 
 		return "demoted (fires when a demotion happens)"
 	case "target_met":
 		return "target met (fires when a target is reached)"
+	case "pathway_ready":
+		return "pinned path ready (fires when every requirement for the next hop is met)"
 	case "ratio_min_eta_days":
 		if trends.RatioMinEtaDays == nil {
 			return "ratio not declining toward the minimum"
@@ -757,6 +816,15 @@ func describeCondition(c models.Condition, merged models.MergedStats, cur, prev 
 			return "not behind on any goal"
 		}
 		return "behind goal pace: " + strings.Join(trends.GoalsBehind, ", ")
+	}
+	if label, ok := quiFieldLabels[c.Field]; ok {
+		// Client-side counts, so say so: "3 unregistered torrents" is a
+		// qBittorrent observation, not something the tracker reported.
+		have := cur[c.Field]
+		if have == "" {
+			return label + ": qui not read"
+		}
+		return fmt.Sprintf("%s %s %s %s (qui)", label, have, opSymbol(c.Op), c.Value)
 	}
 	if c.Op == "changed" {
 		return fmt.Sprintf("%s changed: %s → %s", c.Field, prev[c.Field], cur[c.Field])

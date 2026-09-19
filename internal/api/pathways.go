@@ -22,7 +22,7 @@ func registerPathways(r chi.Router, d *Deps) {
 }
 
 // GET /api/pathways/pinned — every pinned chain measured against the user's
-// trackers, in stored order. Pins are names only and are re-resolved here on
+// trackers, closest first (see SortPins). Pins are names only and are re-resolved here on
 // every read (see PINNED_PATHWAYS_PLAN.md), so a dataset sync can never
 // silently drop one: a hop that has gone is reported as such and the user
 // decides. Pin and unpin are ordinary settings saves.
@@ -41,6 +41,7 @@ func pathwayPinned(d *Deps) http.HandlerFunc {
 		for _, pin := range pins {
 			out = append(out, pathways.EvalPin(d.Paths, pin.Hops, users, groupsFor, inviteReqsFor))
 		}
+		pathways.SortPins(out)
 		jsonOK(w, map[string]any{
 			"source": d.Paths.Source,
 			"pins":   out,

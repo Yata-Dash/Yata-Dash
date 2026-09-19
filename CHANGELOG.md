@@ -6,6 +6,46 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260920]
+
+### Added
+
+- **qui problem counts as alert conditions.** With *Problem counts for alerts*
+  on in the qui settings, each refresh counts unregistered, tracker-down,
+  tracker-error and errored torrents per tracker, so a rule like *unregistered
+  torrents > 0* fires for the tracker concerned. The weekly digest carries the
+  standing counts and a quiet week says what still needs attention. The fields
+  are absent — so rules stay quiet — whenever qui cannot be read; a zero is
+  only ever qui's own answer.
+
+- **A new Yata version raises an alert**, once per version, with a link to the
+  release. Only when the update check runs — the opt-in daily one or the
+  button.
+
+- **A pinned path tells you when its requirements are met.** New `pathway_ready` alert
+  event, seeded on: fires once when every requirement on a pin's next hop is
+  met. Pins can also be set from Tracker Detail's "pathways from here", and
+  the pinned list now orders itself closest first — ready, then only stats
+  left, then by the account-age wait.
+
+- **Manual stats work out ratio and buffer for you.** Enter uploaded and
+  downloaded and both appear as calculated chips; enter either yourself and
+  your figure wins. Nothing calculated is stored — it follows the numbers it
+  came from.
+
+### Fixed
+
+- **The weekly digest no longer nags about pathway targets you marked "not
+  interested".**
+
+- **A rule using a field this build does not know keeps it.** Opening such a
+  rule showed the first field in the list and saved it that way.
+
+- **An event a tracker forgot to take down no longer shows forever.** Aither's
+  events endpoint kept reporting freeleech "until the 5th" ten days on, so the
+  banner read "Ended" indefinitely. Events more than two days past their end
+  are dropped on fetch.
+
 ## [Beta-20260911]
 
 ### Added

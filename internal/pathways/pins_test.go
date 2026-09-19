@@ -93,3 +93,37 @@ func TestEvalPinReportsWhatTheDatasetLost(t *testing.T) {
 		t.Errorf("one-hop pin: state = %q", res.State)
 	}
 }
+
+// Closest first: ready, then only-stats-left, then by the age floor — and
+// anything not in play after all of those.
+func TestSortPinsClosestFirst(t *testing.T) {
+	mk := func(name, state string, eta float64, unknown, disabled bool) PinResult {
+		p := PinResult{Destination: name, State: state}
+		if state == PinOK {
+			p.Steps = []Step{{ETADays: eta, HasUnknown: unknown}}
+			p.TotalETADays = eta
+			p.StartDisabled = disabled
+		}
+		return p
+	}
+	pins := []PinResult{
+		mk("broken", PinMissing, 0, false, false),
+		mk("wait-90", PinOK, 90, false, false),
+		mk("reached", PinReached, 0, false, false),
+		mk("wait-30", PinOK, 30, true, false),
+		mk("stats-left", PinOK, 0, true, false),
+		mk("disabled", PinOK, 0, true, true),
+		mk("ready", PinOK, 0, false, false),
+	}
+	SortPins(pins)
+	var got []string
+	for _, p := range pins {
+		got = append(got, p.Destination)
+	}
+	want := []string{"ready", "stats-left", "wait-30", "wait-90", "disabled", "reached", "broken"}
+	for i := range want {
+		if i >= len(got) || got[i] != want[i] {
+			t.Fatalf("order = %v, want %v", got, want)
+		}
+	}
+}

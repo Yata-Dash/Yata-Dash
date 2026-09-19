@@ -1555,6 +1555,9 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   color:var(--text3);cursor:pointer;font-size:11px;transition:color .15s,border-color .15s,background .15s;
 }
 .pw-pin-btn:hover{color:var(--accent);border-color:var(--accent)}
+.pw-pin-btn-sm{width:22px;height:22px;font-size:10px;margin-left:auto}
+.detail-route{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.detail-route-reqs{flex:1 0 100%}
 .pw-pin-btn.on{color:var(--accent);border-color:var(--accent-border-md);background:var(--accent-bg-sm)}
 .pw-pin-btn.on:hover{color:var(--red);border-color:var(--red)}
 .pw-pin-progress{margin-top:10px}
@@ -2397,6 +2400,11 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
   background:var(--surface2);border:1px solid var(--border);
 }
 .chip-item-by{font-size:10.5px;color:var(--text3);padding-right:2px;white-space:nowrap}
+/* Derived (calculated) manual stats: same chip, dashed so it reads as
+   "worked out, not typed" — the pen turns it into a typed row. */
+.chip-items--derived{margin-top:-2px}
+.chip-item--derived .chip-item-view{border-style:dashed;opacity:.85}
+.chip-item--derived .chip-item-by{font-style:italic}
 /* Always drawn, never revealed on hover: buttons that appear on hover reflow a
    wrapping row under the cursor, and a control you cannot see is one you have
    to discover. Quiet by default instead. */

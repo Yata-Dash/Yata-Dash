@@ -1,6 +1,10 @@
 package pathways
 
-import "github.com/Yata-Dash/Yata-Dash/internal/defs"
+import (
+	"sort"
+
+	"github.com/Yata-Dash/Yata-Dash/internal/defs"
+)
 
 // Pin states — see PINNED_PATHWAYS_PLAN.md §1. A pin is never dropped by
 // the app; each state is reported and the user decides.
@@ -122,4 +126,40 @@ func countLeafReqs(rows []ReqProgress) (met, total int) {
 		}
 	}
 	return met, total
+}
+
+// SortPins orders pins closest-first, which is what a "what should I be
+// working on" list wants: ready now, then "only stats left" (age met, timing
+// unknown), then by the account-age floor still to wait out. Pins that
+// cannot be measured come after those that can, a completed pin after those
+// still in play, and a broken one last. Stable, so pinning order breaks ties.
+func SortPins(pins []PinResult) {
+	sort.SliceStable(pins, func(i, j int) bool {
+		a, b := pinRank(pins[i]), pinRank(pins[j])
+		if a != b {
+			return a < b
+		}
+		return pins[i].TotalETADays < pins[j].TotalETADays
+	})
+}
+
+func pinRank(p PinResult) int {
+	switch p.State {
+	case PinOK:
+		open := p.Steps
+		switch {
+		case p.StartDisabled || len(open) == 0:
+			return 3 // listed, nothing measurable
+		case open[0].ETADays == 0 && !open[0].HasUnknown:
+			return 0 // ready — ask for the invite
+		case p.TotalETADays == 0:
+			return 1 // "0D+": age met, something else still to do
+		default:
+			return 2 // waiting on account age, sorted by how long
+		}
+	case PinReached:
+		return 4
+	default:
+		return 5 // missing / inactive / no start
+	}
 }

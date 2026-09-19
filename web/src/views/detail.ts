@@ -23,6 +23,7 @@ import {
 } from '../utils/series';
 import type { HistoryRangeKey, SeriesUnit } from '../utils/series';
 import type { ActiveEvent, HistoryEvent, HistorySeriesResponse, PathwayStep, Tracker, TrackerStatsResponse } from '../types';
+import { isPinned, pinTitle, togglePin } from '../utils/pins';
 
 // ── State (not persisted except the per-tracker chart picks) ────────────────
 
@@ -598,14 +599,29 @@ function renderPathwaysCol(): void {
       ? '<span class="pw-met-dot" title="Meets the listed requirements — community data, not a guarantee of an invite">✓ reqs met</span>'
       : (showEtas && s.eta_days > 0 ? `<span class="pw-req-eta">${fmtEtaDays(s.eta_days)}${s.has_unknown ? '+' : ''}</span>` : '');
     const star = favs.has(s.to) ? '<span class="detail-route-fav" title="Pathways favourite">★</span>' : '';
+    // A direct route is a one-hop chain, so it can be pinned from here —
+    // for most people the next hop is the one that matters. Longer chains
+    // are pinned from the Pathways view.
+    const hops = [s.from, s.to];
+    const pin = `<button type="button" class="pw-pin-btn pw-pin-btn-sm${isPinned(hops) ? ' on' : ''}" data-pin-to="${esc(s.to)}" title="${esc(pinTitle(hops))}"><i class="fas fa-thumbtack"></i></button>`;
     return `<div class="detail-route">
-      <span class="detail-route-to">→ ${esc(s.to)}</span>${star}${chip}
+      <span class="detail-route-to">→ ${esc(s.to)}</span>${star}${chip}${pin}
       ${s.reqs_raw ? `<div class="detail-route-reqs">${esc(s.reqs_raw)}</div>` : ''}
     </div>`;
   }).join('');
   el.innerHTML = `<div class="exp-section-title" title="Active direct invite routes in the community pathways dataset — reference only">Pathways from here</div>
     <div class="detail-routes">${rows}</div>
     ${routes.length > MAX_ROUTES ? `<div class="detail-empty">+ ${routes.length - MAX_ROUTES} more in the Pathways view.</div>` : ''}`;
+  if (!el.dataset['pinWired']) {
+    el.dataset['pinWired'] = '1';
+    el.addEventListener('click', e => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-pin-to]');
+      const to = btn?.dataset['pinTo'];
+      const from = (lastRoutes ?? []).find(r => r.to === to)?.from;
+      if (!to || !from) return;
+      void togglePin([from, to]).then(renderPathwaysCol);
+    });
+  }
 }
 
 /** The two event timelines, sharing one card and one row budget.

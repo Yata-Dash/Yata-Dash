@@ -1062,6 +1062,10 @@
                   </div>
                   <span class="form-hint" id="modal-manual-hint" style="margin-top:-6px">Yata never contacts this tracker &mdash; these are the numbers it shows. Every save is recorded, so history and charts still build up over time.</span>
                   <div id="modal-manual-rows" class="chip-items" style="margin-top:10px"></div>
+                  <!-- Ratio and buffer worked out from uploaded/downloaded. Not
+                       rows: nothing here is saved, the server derives the same
+                       two on every read (models.DerivedManualStats). -->
+                  <div id="modal-manual-derived" class="chip-items chip-items--derived" style="display:none"></div>
                   <div class="target-add-row">
                     <select class="form-input" id="modal-manual-add-select" style="max-width:260px">
                       <option value="">&#8212; choose a stat &#8212;</option>
@@ -1238,6 +1242,9 @@
                       </select>
                       <span class="form-hint">Never overrides a tracker&rsquo;s own API.</span>
                     </div>
+                  </div>
+                  <div class="set-card-row">
+                    <label class="set-toggle" style="margin-bottom:0"><div class="toggle-track" id="s-qui-alerts-track" onclick="toggleSettingsQuiAlerts()" role="switch"><div class="toggle-thumb"></div></div><span class="set-toggle-label">Problem counts for alerts</span><i class="set-info" role="img" title="Counts unregistered, tracker-down, tracker-error and errored torrents per tracker on each refresh, for alert rules such as &ldquo;unregistered torrents &gt; 0&rdquo;. A few extra requests per refresh; nothing is shown on cards." aria-label="Counts unregistered, tracker-down, tracker-error and errored torrents per tracker on each refresh, for alert rules. A few extra requests per refresh."></i></label>
                   </div>
                 </div><!-- /s-qui-options -->
               </div>
