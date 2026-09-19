@@ -105,6 +105,10 @@ func (t Tracker) ManualLayer() map[string]any {
 			out[field] = v
 		}
 	}
+	// Ratio and buffer follow from uploaded and downloaded unless typed.
+	for field, v := range DerivedManualStats(t.ManualStats) {
+		out[field] = v
+	}
 	// Last: the dedicated Join Date input owns join_date outright.
 	if jd := strings.TrimSpace(t.JoinDate); jd != "" {
 		out["join_date"] = jd
@@ -373,6 +377,11 @@ type Settings struct {
 	//   "missing" — fills in only when neither the API nor a scrape has it
 	//   "prefer"  — beats scrapes, still loses to the tracker's API
 	QUISeedsizeMode string `json:"qui_seedsize_mode"`
+	// QUIAlertsEnabled polls qui for per-tracker problem counts (unregistered,
+	// tracker down/error, errored torrents) that alert rules can condition on.
+	// Off by default: a few extra requests per refresh, only useful to someone
+	// who has written such a rule. See QUI_ALERTS_PLAN.md.
+	QUIAlertsEnabled bool `json:"qui_alerts_enabled"`
 
 	// ── Indexer-manager imports (saved on first successful fetch so the
 	//    import sections come prefilled; secrets are masked like QUIAPIKey) ──

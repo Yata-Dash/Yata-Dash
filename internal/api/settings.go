@@ -74,7 +74,7 @@ func putSettings(d *Deps) http.HandlerFunc {
 		// settings saves must not block on a qui round-trip.
 		if ns := d.Cfg.Settings(); ns.QUISeedsizeMode != "off" &&
 			(ns.QUISeedsizeMode != stored.QUISeedsizeMode || ns.QUIURL != stored.QUIURL || ns.QUIAPIKey != stored.QUIAPIKey) {
-			go refreshQUISeedsize(d)
+			go refreshQUI(d)
 		}
 		jsonOK(w, maskSettings(d.Cfg.Settings()))
 	}

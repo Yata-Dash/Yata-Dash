@@ -129,7 +129,7 @@ function row(a: AppAlert): string {
         <span class="alert-rule">${esc(heading)}</span>
         <span class="alert-when" title="${esc(new Date(a.at * 1000).toLocaleString())}">${esc(fmtAgo(a.at))}</span>
       </div>
-      <div class="alert-body">${esc(a.body)}</div>
+      <div class="alert-body">${esc(a.body)}${a.url ? ` <a class="alert-link link-accent" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}</div>
       <div class="alert-where">${esc(where)}</div>
     </div>
     <button type="button" class="alert-clear" data-clear="${a.id}" title="Clear this alert" aria-label="Clear">&times;</button>

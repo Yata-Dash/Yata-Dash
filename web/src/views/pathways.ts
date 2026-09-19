@@ -8,10 +8,10 @@ import * as api from '../api';
 import { appSettings, trackers } from '../state';
 import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
-import { toast } from '../components/toast';
+import { isPinned, pinList, pinTitle, togglePin as togglePinShared } from '../utils/pins';
 import { getFaviconUrl } from '../utils/parse';
 import type {
-  PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayPin, PathwayReqProgress,
+  PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayReqProgress,
   PathwaySource, PathwayStep, PathwayTarget, PinResult,
 } from '../types';
 
@@ -56,50 +56,18 @@ function togglePathwayList(name: string, which: 'fav' | 'hide') {
 }
 
 // ── Pinned paths (server-side settings; PINNED_PATHWAYS_PLAN.md) ──────────
+// The pin rules themselves live in utils/pins.ts, shared with Tracker Detail.
 
-function pinList(): PathwayPin[] { return appSettings.pathway_pins ?? []; }
-const chainKey = (hops: string[]) => hops.join(' → ');
-function isPinned(hops: string[]): boolean {
-  const k = chainKey(hops);
-  return pinList().some(p => chainKey(p.hops) === k);
-}
 /** The chain a searched path represents: start tracker, then every hop. */
 function pathHops(p: PathwayPath): string[] {
   return [p.start_name, ...p.steps.map(s => s.to)];
 }
 
-/** Pin or unpin an exact chain. One pin per destination: pinning a different
- *  path to a destination already pinned replaces it, which is what "choose a
- *  path per destination" means — two near-identical cards for one place
- *  would be the list arguing with itself. */
-let pinQueue: Promise<void> = Promise.resolve();
-function togglePin(hops: string[]): Promise<void> {
-  // One at a time. Two clicks inside one save's round trip would otherwise
-  // let a failed first save restore a snapshot taken before the second — and
-  // undo a change the server had accepted.
-  pinQueue = pinQueue.then(() => doTogglePin(hops), () => doTogglePin(hops));
-  return pinQueue;
-}
-
-async function doTogglePin(hops: string[]) {
-  const k = chainKey(hops);
-  const dest = hops[hops.length - 1];
-  const wasPinned = isPinned(hops);
-  const before = pinList();
-  const kept = before.filter(p => chainKey(p.hops) !== k && p.hops[p.hops.length - 1] !== dest);
-  appSettings.pathway_pins = wasPinned ? kept : [...kept, { hops }];
-  pinnedSeq++; // the list just changed — any /pinned answer still in flight is about the old one
-  const { ok } = await api.saveSettings({ ...appSettings });
-  if (!ok) {
-    // Put the list back exactly as it was, or the buttons would claim a pin
-    // the server never heard about and the next reload would contradict them.
-    appSettings.pathway_pins = before;
-    toast(wasPinned ? 'Could not unpin — settings did not save' : 'Could not pin — settings did not save', 'error');
-    renderPaths();
-    return;
-  }
-  renderPaths();          // pin buttons reflect the new state
-  await refreshPinned();  // the section itself
+async function togglePin(hops: string[]) {
+  pinnedSeq++; // the list is about to change — any /pinned answer in flight is about the old one
+  const ok = await togglePinShared(hops);
+  renderPaths();               // pin buttons reflect the new (or restored) state
+  if (ok) await refreshPinned(); // the section itself
 }
 
 /** Re-measure every pin. Called on init, after each pin/unpin, and whenever
@@ -202,7 +170,7 @@ function renderPinCard(r: PinResult, idx: number): string {
   const barLabel = r.state === 'reached' ? 'Complete'
     : !measurable ? (r.state === 'ok' ? 'Not measurable' : '')
     : r.total === 0 ? 'No requirements listed — check the tracker'
-    : ready ? `Ready — request an invite from ${esc(r.hops[r.start_index])}`
+    : ready ? `Path requirements met for ${esc(r.hops[r.start_index])} → ${esc(r.hops[r.start_index + 1])}`
     : `${r.met} of ${r.total} requirement${r.total === 1 ? '' : 's'} met on the next hop`;
 
   const etaChip = measurable && (showEtas() || ready)
@@ -580,11 +548,7 @@ function renderPathCard(p: PathwayPath, idx: number): string {
   // headline is an account-age minimum — no inline note needed.
   const hops = pathHops(p);
   const pinned = isPinned(hops);
-  const dest = hops[hops.length - 1];
-  const replaces = !pinned && pinList().some(x => x.hops[x.hops.length - 1] === dest);
-  const pinTip = pinned ? 'Unpin this path'
-    : replaces ? `Pin this path (replaces your pinned path to ${dest})`
-    : 'Pin this path — track it at the top of Pathways';
+  const pinTip = pinTitle(hops);
   return `<div class="pw-path-card${idx === 0 ? ' pw-best' : ''}">
     <div class="pw-path-head">
       ${idx === 0 ? '<span class="pw-best-badge">Best path</span>' : ''}

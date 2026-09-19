@@ -108,7 +108,7 @@ func TestRefreshQUISeedsizePreservesLayerOnPartialInstanceFailure(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	refreshQUISeedsize(d)
+	refreshQUI(d)
 
 	layer, err := d.DB.Layer(tr.ID, string(models.SourceQUI))
 	if err != nil {

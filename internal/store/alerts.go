@@ -28,7 +28,9 @@ type Alert struct {
 	TrackerName string `json:"tracker_name"`
 	Title       string `json:"title"`
 	Body        string `json:"body"`
-	ReadAt      int64  `json:"read_at"`
+	// URL is an optional place to go — "" for most alerts.
+	URL    string `json:"url,omitempty"`
+	ReadAt int64  `json:"read_at"`
 }
 
 // AddAlert records one alert, unless an unread one for the same rule and
@@ -51,10 +53,23 @@ func (d *DB) AddAlert(a Alert) error {
 	// and a duplicate row in a worklist is exactly what the guard exists to
 	// prevent — so the second insert is dropped rather than raced for.
 	_, err := d.sql.Exec(
-		`INSERT OR IGNORE INTO alerts (at, rule_id, rule_name, tracker_id, tracker_name, title, body, read_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-		a.At, a.RuleID, a.RuleName, a.TrackerID, a.TrackerName, a.Title, a.Body)
+		`INSERT OR IGNORE INTO alerts (at, rule_id, rule_name, tracker_id, tracker_name, title, body, url, read_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		a.At, a.RuleID, a.RuleName, a.TrackerID, a.TrackerName, a.Title, a.Body, a.URL)
 	return err
+}
+
+// LatestAlert returns the most recent alert a rule raised, read or not — so a
+// once-per-occurrence notice (a new version) can tell whether it has already
+// said this, without depending on the unread guard, which stops applying the
+// moment the user reads the first one.
+func (d *DB) LatestAlert(ruleID string) (Alert, bool) {
+	var a Alert
+	err := d.sql.QueryRow(
+		`SELECT id, at, rule_id, rule_name, tracker_id, tracker_name, title, body, url, read_at
+		 FROM alerts WHERE rule_id = ? ORDER BY at DESC, id DESC LIMIT 1`, ruleID).
+		Scan(&a.ID, &a.At, &a.RuleID, &a.RuleName, &a.TrackerID, &a.TrackerName, &a.Title, &a.Body, &a.URL, &a.ReadAt)
+	return a, err == nil
 }
 
 // AlertQuery filters a listing. The zero value returns the most recent page.
@@ -84,7 +99,7 @@ func (d *DB) Alerts(q AlertQuery) ([]Alert, int, error) {
 		limit = 50
 	}
 	rows, err := d.sql.Query(
-		`SELECT id, at, rule_id, rule_name, tracker_id, tracker_name, title, body, read_at
+		`SELECT id, at, rule_id, rule_name, tracker_id, tracker_name, title, body, url, read_at
 		 FROM alerts`+where+` ORDER BY at DESC, id DESC LIMIT ? OFFSET ?`,
 		append(args, limit, max(q.Offset, 0))...)
 	if err != nil {
@@ -95,7 +110,7 @@ func (d *DB) Alerts(q AlertQuery) ([]Alert, int, error) {
 	for rows.Next() {
 		var a Alert
 		if err := rows.Scan(&a.ID, &a.At, &a.RuleID, &a.RuleName,
-			&a.TrackerID, &a.TrackerName, &a.Title, &a.Body, &a.ReadAt); err != nil {
+			&a.TrackerID, &a.TrackerName, &a.Title, &a.Body, &a.URL, &a.ReadAt); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, a)

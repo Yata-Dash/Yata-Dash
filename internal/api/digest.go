@@ -17,6 +17,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/notify"
+	"github.com/Yata-Dash/Yata-Dash/internal/parse"
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
@@ -133,6 +134,7 @@ func buildDigest(d *Deps, now time.Time) (text string, readyNow []string) {
 	var trackerLines []string
 	watched := 0
 	anyMovement := false
+	var attention quiAttention
 	for _, t := range allTrackers {
 		if !t.Enabled {
 			continue
@@ -144,6 +146,10 @@ func buildDigest(d *Deps, now time.Time) (text string, readyNow []string) {
 		}
 		rates := d.Stats.GrowthRates(t.ID)
 		line, moved := trackerDigestLine(d, t, merged, rates, since, now)
+		if frag := quiDigestFragment(merged); frag != "" {
+			line += " · " + frag
+		}
+		attention.add(t.Name, merged)
 		trackerLines = append(trackerLines, line)
 		if moved {
 			anyMovement = true
@@ -167,6 +173,12 @@ func buildDigest(d *Deps, now time.Time) (text string, readyNow []string) {
 	if !anyMovement && len(events) == 0 && len(newlyMet) == 0 {
 		text = fmt.Sprintf("All quiet this week — no stat movement, no group changes. %d tracker%s watched.",
 			watched, plural(watched))
+		// Outstanding work beats the heartbeat: "all quiet" with torrents
+		// sitting unregistered would be wrong. The week stays one line; it
+		// just stops hiding actions.
+		if s := attention.summary(); s != "" {
+			text += " Needs attention: " + s + "."
+		}
 		return text, readyNow
 	}
 
@@ -187,6 +199,78 @@ func buildDigest(d *Deps, now time.Time) (text string, readyNow []string) {
 		b.WriteString("\nNewly requirements-met: " + strings.Join(newlyMet, ", ") + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n"), readyNow
+}
+
+// quiDigestFragment is a tracker line's standing qui problem counts — the
+// current total, never a delta. An unregistered torrent is one the tracker
+// dropped and stays that way until the user acts, so it is outstanding work
+// rather than a week's news, and a delta that reads 0 because five were fixed
+// and five new ones appeared would go quiet exactly when it should not. Only
+// the non-zero ones, so a clean tracker adds nothing.
+func quiDigestFragment(merged models.MergedStats) string {
+	var parts []string
+	for _, f := range quiDigestFields {
+		if n := quiCount(merged, f.field); n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, f.label))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+var quiDigestFields = []struct{ field, label string }{
+	{"qui_unregistered", "unregistered"},
+	{"qui_tracker_down", "tracker down"},
+	{"qui_tracker_error", "tracker error"},
+	{"qui_errored", "errored"},
+}
+
+func quiCount(merged models.MergedStats, field string) int {
+	f, ok := merged[field]
+	if !ok {
+		return 0
+	}
+	return int(parse.AnyFloat(f.Value))
+}
+
+// quiAttention totals the problem counts across trackers for the quiet-week
+// line, naming the trackers behind each class in count order.
+type quiAttention struct {
+	perClass map[string][]namedCount
+}
+
+type namedCount struct {
+	name string
+	n    int
+}
+
+func (a *quiAttention) add(name string, merged models.MergedStats) {
+	for _, f := range quiDigestFields {
+		if n := quiCount(merged, f.field); n > 0 {
+			if a.perClass == nil {
+				a.perClass = map[string][]namedCount{}
+			}
+			a.perClass[f.field] = append(a.perClass[f.field], namedCount{name, n})
+		}
+	}
+}
+
+func (a *quiAttention) summary() string {
+	var parts []string
+	for _, f := range quiDigestFields {
+		rows := a.perClass[f.field]
+		if len(rows) == 0 {
+			continue
+		}
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].n > rows[j].n })
+		total := 0
+		var who []string
+		for _, r := range rows {
+			total += r.n
+			who = append(who, fmt.Sprintf("%s %d", r.name, r.n))
+		}
+		parts = append(parts, fmt.Sprintf("%d %s (%s)", total, f.label, strings.Join(who, ", ")))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func plural(n int) string {
@@ -421,9 +505,16 @@ func readyPathwayTargetNames(d *Deps) []string {
 		return nil
 	}
 	mine, ready := pathwayReadiness(d)
+	// A target dismissed in Pathways ("not interested") is dismissed here
+	// too — the digest was nagging about exactly the trackers the user had
+	// said they did not want to hear about.
+	skip := map[string]bool{}
+	for _, n := range d.Cfg.Settings().PathwayNotInterested {
+		skip[n] = true
+	}
 	out := make([]string, 0, len(ready))
 	for name := range ready {
-		if !mine[name] {
+		if !mine[name] && !skip[name] {
 			out = append(out, name)
 		}
 	}
