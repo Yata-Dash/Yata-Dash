@@ -222,8 +222,16 @@ func announceAppUpdate(d *Deps, s updateStatus) {
 		return
 	}
 	title := "Yata " + s.App.Latest + " is available"
-	if last, ok := d.DB.LatestAlert(updateRuleID); ok && last.Title == title {
-		return
+	if last, ok := d.DB.LatestAlert(updateRuleID); ok {
+		if last.Title == title {
+			return
+		}
+		// A newer version supersedes an older notice still unread: it is no
+		// longer the thing to act on, and the store's one-unread-per-origin
+		// guard would otherwise let the stale one block the current one.
+		if last.ReadAt == 0 {
+			_ = d.DB.MarkAlertsRead([]int64{last.ID}, time.Now().UTC())
+		}
 	}
 	err := d.DB.AddAlert(store.Alert{
 		At: time.Now().UTC().Unix(), RuleID: updateRuleID, RuleName: "Yata update",

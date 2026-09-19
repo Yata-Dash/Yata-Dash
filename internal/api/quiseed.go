@@ -74,6 +74,7 @@ func refreshQUI(d *Deps) {
 	// torrent sets are genuinely different boxes, so those add.
 	var snaps []quiSnapshot
 	truncated := false
+	problemsComplete := alertsOn // false once any instance's problem fetch fails
 	for _, id := range instances {
 		u := fmt.Sprintf("%s/api/instances/%d/torrents?page=0&limit=1", set.QUIURL, id)
 		body, _, err := quiFetch(u, set.QUIAPIKey)
@@ -93,13 +94,17 @@ func refreshQUI(d *Deps) {
 			}
 		}
 		if alertsOn {
+			// A failed problem fetch does not unsay the counts fetch that
+			// just succeeded: the seed snapshot is kept, and only the problem
+			// counts are treated as unread this pass.
 			problems, trunc, err := fetchQUIProblems(set.QUIURL, set.QUIAPIKey, id, data.Counts.Status)
 			if err != nil {
 				d.logDebugf("qui: instance %d problem counts failed: %v", id, err)
-				continue // this instance did not fully answer
+				problemsComplete = false
+			} else {
+				snap.problems = problems
+				truncated = truncated || trunc
 			}
-			snap.problems = problems
-			truncated = truncated || trunc
 		}
 		snaps = append(snaps, snap)
 	}
@@ -110,6 +115,7 @@ func refreshQUI(d *Deps) {
 	// only on a down instance would otherwise read as total==0 and get its
 	// layer wiped. Treat that case as unknown rather than confirmed-empty.
 	partial := len(snaps) < len(instances)
+	problemsComplete = problemsComplete && !partial
 	if truncated {
 		d.logWarnf("qui: more than %d torrents in a problem class — counts are a floor", quiProblemLimit)
 	}
@@ -158,7 +164,7 @@ func refreshQUI(d *Deps) {
 		}
 
 		if alertsOn {
-			if partial {
+			if !problemsComplete {
 				for k, fv := range existing {
 					if strings.HasPrefix(k, "qui_") {
 						layer[k] = fv.Value
@@ -185,6 +191,31 @@ func refreshQUI(d *Deps) {
 		_ = d.Stats.SaveQUI(t.ID, layer)
 	}
 	d.logDebugf("qui: refreshed from %d instance(s)", len(snaps))
+}
+
+// clearQUIProblemCounts strips the qui_* fields from every tracker's qui
+// layer, keeping seed size. For the moment problem counts are switched off:
+// refreshQUI stops writing them, but a value already stored would otherwise
+// go on being merged — and matching rules — as though it were still current.
+func clearQUIProblemCounts(d *Deps) {
+	for _, t := range d.Cfg.Trackers() {
+		layers, err := d.Stats.DB.Layers(t.ID)
+		if err != nil {
+			continue
+		}
+		layer := map[string]any{}
+		had := false
+		for k, fv := range layers[string(models.SourceQUI)] {
+			if strings.HasPrefix(k, "qui_") {
+				had = true
+				continue
+			}
+			layer[k] = fv.Value
+		}
+		if had {
+			_ = d.Stats.SaveQUI(t.ID, layer)
+		}
+	}
 }
 
 // trackerSiteHosts returns every domain a tracker is known by: its

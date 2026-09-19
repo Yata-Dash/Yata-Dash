@@ -9,6 +9,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 	"github.com/Yata-Dash/Yata-Dash/internal/pathways"
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
 // A pinned path's next hop crossing into "every requirement met" is the one
@@ -86,4 +87,29 @@ func TestPinnedPathReadyFiresOnceOnTheTransition(t *testing.T) {
 		t.Errorf("body %q should name the destination", got.Alerts[0].Body)
 	}
 	t.Log(got.Alerts[0].Body)
+}
+
+// Unpinning everything must make the engine forget: a chain pinned again
+// later is a first sighting, not a continuation of a state from before.
+func TestUnpinningEverythingForgetsPinState(t *testing.T) {
+	d := testDeps(t)
+	d.Alerts = notify.New(d.Cfg, nil)
+	d.Alerts.SetRecorder(NewAlertRecorder(d))
+	owner := models.Tracker{ID: "own1", Name: "Owner", URL: "https://aura4k.net", Enabled: true}
+	_ = d.Cfg.AddTracker(owner)
+
+	// Seed the engine with a remembered "not ready" for a chain.
+	d.Alerts.EvaluatePins(owner, models.MergedStats{}, []notify.PinRow{{Key: "A → B", TrackerID: owner.ID, Ready: false}}, notify.TrendContext{})
+	// No pins in settings → the refresh path must clear it, not skip it.
+	evaluateTrackerPins(d, owner, models.MergedStats{}, notify.TrendContext{})
+	// Re-pinned and immediately ready: a first sighting primes, never fires.
+	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{Rules: []models.AlertRule{{
+		ID: "r1", Name: "Ready", Enabled: true, Match: "all",
+		Conditions: []models.Condition{{Field: "pathway_ready", Op: "is_true"}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	d.Alerts.EvaluatePins(owner, models.MergedStats{}, []notify.PinRow{{Key: "A → B", TrackerID: owner.ID, Ready: true}}, notify.TrendContext{})
+	if _, n, _ := d.DB.Alerts(store.AlertQuery{}); n != 0 {
+		t.Fatalf("re-pinned chain fired off a stale state: %d alert(s)", n)
+	}
 }

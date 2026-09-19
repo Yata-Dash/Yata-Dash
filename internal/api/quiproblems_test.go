@@ -159,3 +159,63 @@ func TestDigestReportsStandingQUICounts(t *testing.T) {
 		t.Errorf("a tracker without counts must add nothing, got %q", frag)
 	}
 }
+
+// A failed problem fetch does not unsay the counts fetch that succeeded a
+// moment earlier: seed size from that instance is still written, and only the
+// problem counts are carried across from the previous pass.
+func TestQUISeedSurvivesAFailedProblemFetch(t *testing.T) {
+	d := testDeps(t)
+	tr := quiTracker(t, d)
+	// Counts answer; every filtered fetch fails.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("filters") != "" {
+			http.Error(w, "boom", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"counts":{"status":{"unregistered":1},"trackerTransfers":{"ramjet.speedapp.io":{"totalSize":2147483648}}}}`)
+	}))
+	defer ts.Close()
+	s := d.Cfg.Settings()
+	s.QUIURL, s.QUIAlertsEnabled, s.QUISeedsizeMode = ts.URL, true, "missing"
+	s.QUIEnabledInstances = []int{1}
+	if err := d.Cfg.UpdateSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	// Counts from an earlier, healthy pass.
+	if err := d.Stats.SaveQUI(tr.ID, map[string]any{"qui_unregistered": 4}); err != nil {
+		t.Fatal(err)
+	}
+
+	refreshQUI(d)
+
+	// The layer itself: the test store has no seedsize-mode hook, so the
+	// merge would not show seed_size regardless of what was written.
+	layers, _ := d.Stats.DB.Layers(tr.ID)
+	qui := layers["qui"]
+	if fmt.Sprint(qui["seed_size"].Value) != "2.00 GiB" {
+		t.Errorf("seed_size = %v, want 2.00 GiB from the counts fetch that succeeded", qui["seed_size"].Value)
+	}
+	if fmt.Sprint(qui["qui_unregistered"].Value) != "4" {
+		t.Errorf("qui_unregistered = %v, want the previous 4 carried across", qui["qui_unregistered"].Value)
+	}
+}
+
+// Switching problem counts off removes what was stored, and only that: a rule
+// must stop matching on stale numbers, and seed size is a separate setting.
+func TestClearingQUIProblemCountsKeepsSeedSize(t *testing.T) {
+	d := testDeps(t)
+	tr := quiTracker(t, d)
+	if err := d.Stats.SaveQUI(tr.ID, map[string]any{"seed_size": "1.00 TiB", "qui_unregistered": 3, "qui_errored": 0}); err != nil {
+		t.Fatal(err)
+	}
+	clearQUIProblemCounts(d)
+	layers, _ := d.Stats.DB.Layers(tr.ID)
+	qui := layers["qui"]
+	if _, ok := qui["qui_unregistered"]; ok {
+		t.Error("qui_unregistered still stored after switching problem counts off")
+	}
+	if fmt.Sprint(qui["seed_size"].Value) != "1.00 TiB" {
+		t.Errorf("seed_size = %v, want kept", qui["seed_size"].Value)
+	}
+}
