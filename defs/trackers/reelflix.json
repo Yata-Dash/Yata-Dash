@@ -5,7 +5,7 @@
   "abbr": "RFX",
   "url": "https://reelflix.cc",
   "type": "unit3d",
-  "last_updated": "2026-09-02",
+  "last_updated": "2026-09-20",
   "approved_by": {
     "name": "Slikk",
     "role": "SysOp",
@@ -16,8 +16,8 @@
   },
   "rules": {
     "min_ratio": 0.8,
-    "min_seed_days": 3,
-    "max_login_gap_days": 60
+    "max_login_gap_days": 90,
+    "note": "No minimum seedtime and no hit-and-run rule. Disabled after 90+ days with no login AND no actively announcing torrent (either resets the clock); a disabled account has a further 90 days to be recovered (180 total) before it is pruned for good."
   },
   "invite_requirements": {
     "min_class": "Elite"
