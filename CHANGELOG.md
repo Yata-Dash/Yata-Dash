@@ -6,6 +6,26 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **Size units setting** (Settings → Display). *As the tracker reports* keeps
+  each site's own label; *Always GiB / TiB* relabels every size to the binary
+  ladder so a row of stats reads in one unit. A relabel only: Yata has always
+  read GB and GiB with the same 1024 factor, because tracker software computes
+  binary sizes whichever label it prints.
+
+- **Typed sizes, durations and numbers are checked where you type them.**
+  Manual stats, targets and alert thresholds rewrite a readable value in its
+  canonical form on leaving the field — `200g` → `200.00 GB`, `3 months 6
+  days` → `3M 6D` — and refuse one they cannot read, with the shape spelled
+  out. The server refuses the same values, naming the field.
+
+### Fixed
+
+- **A typed seed time no longer drifts on save.** The server read months as
+  30.44 days and years as 365.25 when it stored a value, but printed them as
+  30 and 365, so `3M 6D` came back as `3M 1W 7h 40m 48s`.
+
 ## [Beta-20260920]
 
 ### Added

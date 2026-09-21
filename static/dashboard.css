@@ -2416,6 +2416,10 @@ input[type="date"].form-input::-webkit-calendar-picker-indicator{filter:invert(.
 .chip-item-view:hover .trk-act-xs{border-color:var(--border)}
 .chip-item-edit{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
 .chip-item-edit .form-input[data-chip-input]{flex:1;min-width:120px}
+/* A refused value says why under its own row, in both the chip editor and the
+   dashboard targets popover, and the row stays open until it is fixed. */
+.chip-item-err,.target-edit-err{flex-basis:100%;font-size:11px;color:var(--red);line-height:1.3}
+.target-edit-row{flex-wrap:wrap}
 /* Inside a chip the border is the chip's, so the segment must not draw its own
    rounded ends over it. */
 .chip-item-view .target-chip{border:none;background:transparent}

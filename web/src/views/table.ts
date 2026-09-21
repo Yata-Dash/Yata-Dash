@@ -3,6 +3,7 @@ import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupM
 import { MANUAL_TYPE, usesAPIKey } from '../types';
 import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
+import { displaySize } from '../utils/units';
 import { getSortedTrackers } from '../utils/sort';
 import { fieldOf, getVisibleCols, numOf, scrapeStatus, strOf } from '../state';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
@@ -252,11 +253,11 @@ function buildCell(
         </div></td>`;
     }
     case 'uploaded': {
-      const v = strOf(s, 'uploaded');
+      const v = displaySize(strOf(s, 'uploaded'));
       return `<td class="td-mono"${rtip('uploaded')} style="color:var(--green)">${v ? esc(v) + dot('uploaded') : dash}</td>`;
     }
     case 'downloaded': {
-      const v = strOf(s, 'downloaded');
+      const v = displaySize(strOf(s, 'downloaded'));
       return `<td class="td-mono"${rtip('downloaded')} style="color:var(--purple)">${v ? esc(v) + dot('downloaded') : dash}</td>`;
     }
     case 'ratio': {
@@ -270,11 +271,11 @@ function buildCell(
       return `<td class="td-mono"${tip} style="color:var(--${rc})">${!isNaN(r) ? fmtRatio(r) + dot('ratio') : dash}</td>`;
     }
     case 'buffer': {
-      const v = strOf(s, 'buffer');
+      const v = displaySize(strOf(s, 'buffer'));
       return `<td class="td-mono"${rtip('buffer')} style="color:var(--blue)">${v ? esc(v) + dot('buffer') : dash}</td>`;
     }
     case 'seed_size': {
-      const v = strOf(s, 'seed_size');
+      const v = displaySize(strOf(s, 'seed_size'));
       return `<td class="td-mono td-center" style="color:var(--teal)">${v ? esc(v) + dot('seed_size') : dash}</td>`;
     }
     case 'avg_seed_time': {
@@ -329,11 +330,11 @@ function buildCell(
     // Pre-freeleech transfer. Same colours as Uploaded/Downloaded so the pair
     // reads as the same quantity measured differently, not a separate stat.
     case 'real_uploaded': {
-      const v = strOf(s, 'real_uploaded');
+      const v = displaySize(strOf(s, 'real_uploaded'));
       return `<td class="td-mono" style="color:var(--green)">${v ? esc(v) + dot('real_uploaded') : dash}</td>`;
     }
     case 'real_downloaded': {
-      const v = strOf(s, 'real_downloaded');
+      const v = displaySize(strOf(s, 'real_downloaded'));
       return `<td class="td-mono" style="color:var(--purple)">${v ? esc(v) + dot('real_downloaded') : dash}</td>`;
     }
     case 'fl_tokens': {

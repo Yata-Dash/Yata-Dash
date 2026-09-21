@@ -595,6 +595,21 @@
                 </label>
               </div>
             </div>
+<div class="form-group" style="margin-bottom:10px">
+              <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Size units</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Trackers label the same 1024-based sizes as GB or GiB depending on their software. Yata reads both the same way; this only picks the label.
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px" id="s-size-units-group">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="radio" name="s-size-units" value="reported" style="accent-color:var(--accent)">
+                  <span style="font-size:13px;color:var(--text)">As the tracker reports</span> <span style="color:var(--text3);font-size:12px">(379.40 GB on one site, 3.77 TiB on another)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="radio" name="s-size-units" value="binary" style="accent-color:var(--accent)">
+                  <span style="font-size:13px;color:var(--text)">Always GiB / TiB</span> <span style="color:var(--text3);font-size:12px">(every size relabelled to match)</span>
+                </label>
+              </div>
+            </div>
                 </div>
                 <div class="set-section">
                   <div class="set-section-head">

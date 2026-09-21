@@ -75,8 +75,11 @@ func SeedTimeToSeconds(s string) *float64 {
 		v, _ := strconv.ParseFloat(m[1], 64)
 		return v
 	}
-	total := grp(`([\d.]+)\s*Y`, "i")*365.25*86400 +
-		grp(`([\d.]+)\s*M`)*30.44*86400 + // uppercase M only
+	// 365-day years and 30-day months, the same ladder FormatSeedTime
+	// prints and utils/parse.ts reads: with 365.25 and 30.44 here, a typed
+	// "3M 6D" came back from its own round trip as "3M 1W 7h 40m 48s".
+	total := grp(`([\d.]+)\s*Y`, "i")*365*86400 +
+		grp(`([\d.]+)\s*M`)*30*86400 + // uppercase M only
 		grp(`([\d.]+)\s*W`, "i")*7*86400 +
 		grp(`([\d.]+)\s*D`, "i")*86400 +
 		grp(`([\d.]+)\s*h`)*3600 +

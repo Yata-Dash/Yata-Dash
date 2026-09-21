@@ -5,6 +5,7 @@ import type { AppSettings, StatField, Tracker, TrackerStatsResponse } from '../t
 import { MANUAL_TYPE, usesAPIKey } from '../types';
 import { jsId, esc, fieldLabel, fmtRatio, fmtSeedTime, parseRatio, ratioColor, ratioColorFor, srcDot } from '../utils/format';
 import { parseSeedTime } from '../utils/parse';
+import { displaySize } from '../utils/units';
 import { scrapeStatus } from '../state';
 
 /** Known canonical fields in display order, with label/colour/formatting. */
@@ -21,21 +22,23 @@ const fmtDuration = (v: string): string => {
 };
 
 export const STAT_ROW_DEFS: StatRowDef[] = [
-  { key: 'uploaded',        label: 'Uploaded',        color: 'green'  },
-  { key: 'downloaded',      label: 'Downloaded',      color: 'purple' },
-  { key: 'buffer',          label: 'Buffer',          color: 'blue'   },
+  // Sizes render through displaySize so the size_units setting can relabel
+  // them; every other surface that prints one of these does the same.
+  { key: 'uploaded',        label: 'Uploaded',        color: 'green',  fmt: displaySize },
+  { key: 'downloaded',      label: 'Downloaded',      color: 'purple', fmt: displaySize },
+  { key: 'buffer',          label: 'Buffer',          color: 'blue',   fmt: displaySize },
   { key: 'ratio',           label: 'Ratio',           color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'required_ratio',  label: 'Required Ratio',  color: 'amber', fmt: v => fmtRatio(parseRatio(v)) },
   { key: 'real_ratio',      label: 'Real Ratio',      color: v => ratioColor(parseRatio(v)), fmt: v => fmtRatio(parseRatio(v)) },
   // Pre-freeleech transfer — the numbers Real Ratio is computed from, so they
   // sit with it and borrow Uploaded/Downloaded's colours.
-  { key: 'real_uploaded',   label: 'Real Uploaded',   color: 'green'  },
-  { key: 'real_downloaded', label: 'Real Downloaded', color: 'purple' },
+  { key: 'real_uploaded',   label: 'Real Uploaded',   color: 'green',  fmt: displaySize },
+  { key: 'real_downloaded', label: 'Real Downloaded', color: 'purple', fmt: displaySize },
   { key: 'bonus_points',    label: 'Bonus Points',    color: 'orange' },
   { key: 'seeding',         label: 'Seeding',         color: 'blue'   },
   { key: 'leeching',        label: 'Leeching',        color: 'amber'  },
   { key: 'hit_and_runs',    label: 'Hit & Runs',      color: v => (parseInt(v) || 0) >= 1 ? 'red' : 'green' },
-  { key: 'seed_size',       label: 'Seed Size',       color: 'teal'   },
+  { key: 'seed_size',       label: 'Seed Size',       color: 'teal',   fmt: displaySize },
   { key: 'avg_seed_time',   label: 'Avg Seed Time',   color: 'pink',  fmt: fmtDuration },
   { key: 'total_seedtime',  label: 'Total Seed Time', color: 'pink',  fmt: fmtDuration },
   { key: 'snatched',        label: 'Snatched',        color: 'amber'  },
