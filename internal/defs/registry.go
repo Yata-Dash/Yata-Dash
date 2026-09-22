@@ -362,6 +362,28 @@ func (r *Registry) MaxLoginGapDays(trackerURL string) int {
 	return td.Rules.MaxLoginGapDays
 }
 
+// LoginImmune reports whether a user in the named group is exempt from the
+// tracker's inactivity policy: the def names the rank immunity starts at
+// (rules.login_immune_from_group) and the user's group sits there or higher
+// on the def's ladder. Unknown groups — the user's or the def's — are not
+// immune: a policy Yata cannot rule out is one it should still warn about.
+func (r *Registry) LoginImmune(trackerURL, userGroup string) bool {
+	td, ok := r.TrackerByURL(trackerURL)
+	if !ok || td.Rules == nil || td.Rules.LoginImmuneFromGroup == "" || userGroup == "" {
+		return false
+	}
+	from, user := -1, -1
+	for i, g := range td.Groups {
+		if strings.EqualFold(g.Name, td.Rules.LoginImmuneFromGroup) {
+			from = i
+		}
+		if strings.EqualFold(g.Name, userGroup) {
+			user = i
+		}
+	}
+	return from >= 0 && user >= from
+}
+
 // GroupAPI returns the group-ladder endpoint spec for a tracker (nil = none).
 // TYPE-level, unlike ExtendedStats and Events: serving the ladder is a
 // property of the platform, so a tracker on a supported platform gets one

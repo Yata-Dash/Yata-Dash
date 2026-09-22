@@ -162,7 +162,7 @@ func detectTrackerType(d *Deps) http.HandlerFunc {
 		if resp.Applied {
 			updated, _ := d.Cfg.Tracker(id)
 			hit := resp.Attempts[len(resp.Attempts)-1] // the loop breaks on the match
-			testResults.Store(id, TrackerTestResult{
+			storeTestResult(d, id, TrackerTestResult{
 				API:      CheckResult{Status: "ok", Fields: hit.Fields},
 				Scrape:   testScrape(d, updated, false),
 				TestedAt: time.Now().Unix(),

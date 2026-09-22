@@ -45,13 +45,14 @@ let _sortAsc = true;
  *  broken", so ascending puts failures at the top. A tracker's rank is that of
  *  its worst check, since one broken channel is what you want to see. */
 function testRank(res: TrackerTestResult | undefined): number {
-  if (!res) return 3; // never tested — after real problems, before healthy
+  if (!res) return 3; // nothing known — after real problems, before healthy
   const rank = (c: CheckResult): number => {
     switch (c.status) {
       case 'fail':           return 0;
       case 'not_configured': return 1;
       case 'blocked':        return 2;
       case 'ok':             return 5;
+      case 'untested':       return 3;
       default:               return 4; // not_applicable / unknown
     }
   };

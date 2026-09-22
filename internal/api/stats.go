@@ -141,6 +141,16 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	oldGroup := mergedString(d, t.ID, "group")
 
 	data, ferr := d.Fetch.Fetch(t)
+	// The Trackers table's status column: this fetch is as much an answer as
+	// a Test would be. Only where a request is actually made — a scrape-only
+	// tracker's empty API layer is a static "N/A" on read, not a success.
+	if d.Reg.APIKind(t.URL, t.Type) != "none" {
+		kind, n := "", len(data)
+		if ferr != nil {
+			kind = ferr.Kind
+		}
+		recordRefreshCheck(d, t.ID, "api", kind, n)
+	}
 	if ferr == nil {
 		lastFetchAt.Store(t.ID, time.Now()) // gate future non-forced fetches
 		_ = d.Stats.SaveAPI(t.ID, data)
@@ -487,7 +497,7 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
 	}
 	result, serr := scrape.Profile(t, spec)
-	recordScrapeAttempt(d, t, serr)
+	recordScrapeAttempt(d, t, serr, len(result))
 	if serr != nil || len(result) == 0 {
 		return
 	}
@@ -512,7 +522,7 @@ func isPreflightKind(kind string) bool {
 // The outcome (ok / error kind) feeds the scrape-health surface: failure
 // streaks and the expired-session-cookie warning, plus the connection-health
 // record shared with the API fetch path.
-func recordScrapeAttempt(d *Deps, t models.Tracker, serr *scrape.Error) {
+func recordScrapeAttempt(d *Deps, t models.Tracker, serr *scrape.Error, fieldsScraped int) {
 	if serr != nil && (serr.Kind == "no_username" || serr.Kind == "no_cookie" || serr.Kind == "no_key") {
 		return // pre-flight failure — no request reached the tracker
 	}
@@ -522,6 +532,7 @@ func recordScrapeAttempt(d *Deps, t models.Tracker, serr *scrape.Error) {
 	}
 	_ = d.DB.RecordScrape(t.ID, time.Now().UTC(), serr == nil, kind)
 	recordConnection(d, t, "scrape", kind)
+	recordRefreshCheck(d, t.ID, "scrape", kind, fieldsScraped)
 }
 
 func toAnyMap(in map[string]string) map[string]any {

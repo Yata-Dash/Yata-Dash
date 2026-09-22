@@ -7,6 +7,7 @@
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { appSettings, trackers } from '../state';
+import { normalizeInput } from '../utils/units';
 import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotifyDestination } from '../types';
 import type { ToastType } from './toast';
 
@@ -754,6 +755,21 @@ function wire(): void {
     el.closest('.ms')?.querySelectorAll<HTMLElement>('.ms-option').forEach(o => {
       o.style.display = !q || (o.dataset['label'] ?? '').includes(q) ? '' : 'none';
     });
+  });
+
+  // A threshold typed against a size or numeric field is rewritten in its
+  // canonical form on leaving the box ("1tb" → "1.00 TB"), or flagged red with
+  // the expected shape as its tooltip — a rule on "1 terabyte" never fires.
+  panel?.addEventListener('focusout', e => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>('.cond-value');
+    const row = input?.closest<HTMLElement>('.cond-row');
+    if (!input || !row || !input.value.trim()) return;
+    const type = fieldDef(row.querySelector<HTMLSelectElement>('.cond-field')?.value ?? '').type;
+    if (type !== 'size' && type !== 'numeric') return;
+    const res = normalizeInput(type === 'size' ? 'size' : 'number', input.value);
+    input.classList.toggle('input-error', !res.ok);
+    input.title = res.ok ? '' : res.error;
+    if (res.ok) input.value = res.value;
   });
 
   panel?.addEventListener('change', e => {

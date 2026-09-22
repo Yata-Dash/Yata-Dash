@@ -202,6 +202,10 @@ type TrackerView struct {
 	// tracker reports a login time, because the policy is worth reading on
 	// its own — it is the number that tells you how often to visit.
 	MaxLoginGapDays int `json:"max_login_gap_days,omitempty"`
+	// LoginImmuneFromGroup is the rank from which that policy stops applying
+	// (a perk on several Gazelle sites); "" = no exemption declared. Whether
+	// THIS account is exempt is the login_immune stat, derived from its group.
+	LoginImmuneFromGroup string `json:"login_immune_from_group,omitempty"`
 	// RuleNote is concise fine print supplied by the tracker definition.
 	RuleNote string `json:"rule_note,omitempty"`
 	// DefApproval is the def's staff-approval status (approved | informal |
@@ -334,6 +338,13 @@ type Settings struct {
 	// DurationFormat controls duration rendering: "ym" (1Y 9M, default) or
 	// "days" (694 days).
 	DurationFormat string `json:"duration_format"`
+	// SizeUnits controls how sizes are labelled: "reported" (default) keeps
+	// each tracker's own label — "379.40 GB" on a TBDev site, "3.77 TiB" on a
+	// UNIT3D one — while "binary" relabels and rescales everything to
+	// KiB/MiB/GiB/TiB. A choice of spelling only: Yata reads GB and GiB
+	// with the same 1024 factor (parse.sizeFactors), because tracker software
+	// computes binary sizes whichever label it prints.
+	SizeUnits string `json:"size_units"`
 
 	// ── Automatic config backups (opt-in) ──────────────────────────────────
 	BackupEnabled   bool   `json:"backup_enabled"`   // off by default

@@ -10,6 +10,7 @@ import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
 import { isPinned, pinList, pinTitle, togglePin as togglePinShared } from '../utils/pins';
 import { getFaviconUrl } from '../utils/parse';
+import { displaySize } from '../utils/units';
 import type {
   PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayReqProgress,
   PathwaySource, PathwayStep, PathwayTarget, PinResult,
@@ -648,7 +649,7 @@ function barOrTextRow(q: PathwayReqProgress, tag: 'li' | 'div', estimated: boole
   // requirement Yata can't see still has to be satisfied on the tracker.
   if (q.unavail) {
     const tip = q.note || UNAVAIL_FALLBACK_TIP[q.unavail];
-    const need = q.need_text ? ` <span class="tgt">/ ${esc(q.need_text)}</span>` : '';
+    const need = q.need_text ? ` <span class="tgt">/ ${esc(displaySize(q.need_text))}</span>` : '';
     return `${open} class="pw-req pw-req--unavail" title="${esc(tip)}">
       <div class="target-header">
         <span class="target-lbl">${esc(q.label)}</span>
@@ -667,7 +668,7 @@ function barOrTextRow(q: PathwayReqProgress, tag: 'li' | 'div', estimated: boole
     return `${open} class="pw-req pw-req-bar${q.met ? ' pw-req--met' : ''}"${title}>
       <div class="target-header">
         <span class="target-lbl">${icon}${esc(q.label)}</span>
-        <span class="target-vals">${esc(q.have_text ?? '')} <span class="tgt">/ ${esc(q.need_text ?? '')}</span>${reqEtaChip(q, estimated)}</span>
+        <span class="target-vals">${esc(displaySize(q.have_text))} <span class="tgt">/ ${esc(displaySize(q.need_text))}</span>${reqEtaChip(q, estimated)}</span>
       </div>
       <div class="progress-track"><div class="progress-fill ${color}" style="width:${pct.toFixed(1)}%"></div></div>
     ${close}`;

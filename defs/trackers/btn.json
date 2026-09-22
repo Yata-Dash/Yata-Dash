@@ -5,7 +5,7 @@
   "abbr": "BTN",
   "url": "https://broadcasthe.net",
   "type": "custom",
-  "last_updated": "2026-07-22",
+  "last_updated": "2026-09-22",
   "scrape": {
     "disable_scraping": true
   },
@@ -39,6 +39,7 @@
   "rules": {
     "min_seed_days_episode": 1,
     "min_seed_days_season": 5,
+    "login_immune_from_group": "Overlord",
     "note": "Ratioless: meet the seed-time rule or a 1:1 torrent ratio within 2 weeks, while seeding at least once every 12 hours. H&R applies from 10% downloaded. Any H&R stops bonus earnings and promotions; more than 15 disables the account."
   },
   "invite_requirements": {

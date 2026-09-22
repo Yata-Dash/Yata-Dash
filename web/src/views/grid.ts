@@ -9,7 +9,8 @@ import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, f
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
-import { accountWarningBadges } from '../utils/account';
+import { displaySize } from '../utils/units';
+import { accountWarningBadges, loginRuleText } from '../utils/account';
 import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
 
@@ -409,13 +410,13 @@ export function renderCard(
         ${perksIconHtml}
       </div>
       <div class="stats-grid">
-        ${stat('Uploaded',      'uploaded',        'green',  esc(strOf(stats, 'uploaded')   || '—'), rTip('uploaded'))}
-        ${stat('Downloaded',    'downloaded',      'purple', esc(strOf(stats, 'downloaded') || '—'), rTip('downloaded'))}
+        ${stat('Uploaded',      'uploaded',        'green',  esc(displaySize(strOf(stats, 'uploaded'))   || '—'), rTip('uploaded'))}
+        ${stat('Downloaded',    'downloaded',      'purple', esc(displaySize(strOf(stats, 'downloaded')) || '—'), rTip('downloaded'))}
         ${stat('Ratio',         'ratio',           rc,       fmtRatio(ratio), minRatioTip)}
         ${stat('Seeding',       'seeding',         'blue',   String(seeding))}
         ${stat('Leeching',      'leeching',        'amber',  String(leeching))}
-        ${stat('Buffer',        'buffer',          'blue',   esc(strOf(stats, 'buffer')     || '—'), rTip('buffer'))}
-        ${stat('Seed Size',     'seed_size',       'teal',   esc(strOf(stats, 'seed_size')  || '—'))}
+        ${stat('Buffer',        'buffer',          'blue',   esc(displaySize(strOf(stats, 'buffer'))     || '—'), rTip('buffer'))}
+        ${stat('Seed Size',     'seed_size',       'teal',   esc(displaySize(strOf(stats, 'seed_size'))  || '—'))}
         ${stat('Avg Seed Time', 'avg_seed_time',   'pink',   ast !== null ? fmtSeedTimeStacked(ast) : '—')}
         ${stat('Bonus',         'bonus_points',    'orange', esc(fmtBonusPoints(bonusRaw) || '—'), bonusTip)}
         ${stat('Total Uploads', 'uploads_approved','green',  esc(totalUploads || '—'), rTip('uploads_approved'))}
@@ -423,7 +424,7 @@ export function renderCard(
         ${stat('H&Rs',          'hit_and_runs',    hnrColor, String(hnr))}
       </div>
       ${cardExtras(targetsHtml, moreHtml)}
-      ${buildRulesLine(tracker, settings)}
+      ${buildRulesLine(tracker, stats, settings)}
     </div>
     <div class="card-footer">
       <span class="card-last-updated"${stats?.manual_entry ? ' title="Yata never contacts this tracker — these are the numbers you typed in"' : ''}>${
@@ -513,7 +514,7 @@ function cardExtras(targetsHtml: string, moreHtml: string): string {
 /** Compact display-only rules line at the bottom of a card (def account-wide
  *  rules: min ratio / min seed time). Follows the Display toggle; the fine
  *  print stays on the tracker's rules page. */
-function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
+function buildRulesLine(tracker: Tracker, stats: TrackerStatsResponse | undefined, settings: AppSettings): string {
   if (settings.show_tracker_rules === false) return '';
   const parts: string[] = [];
   if (tracker.min_ratio && tracker.min_ratio > 0) parts.push(`Ratio ≥ ${tracker.min_ratio}`);
@@ -525,8 +526,8 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
     parts.push(`Seed ≥ ${tracker.min_seed_hours} hours`);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
-  if (tracker.max_login_gap_days && tracker.max_login_gap_days > 0)
-    parts.push(`Login every ${tracker.max_login_gap_days} days`);
+  const loginRule = loginRuleText(tracker, stats);
+  if (loginRule) parts.push(`Login ${loginRule}`);
   if (tracker.rule_note) parts.push(tracker.rule_note);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">
@@ -652,15 +653,15 @@ function targetRowsFor(
   if (targets['uploaded']) {
     const cur = strOf(stats, 'uploaded');
     const curV = parseSize(cur), tgtV = parseSize(targets['uploaded']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Uploaded', cur, targets['uploaded'], (curV / tgtV) * 100, 'green', { etaDays: rateEta(curV, tgtV, rates['uploaded']), ...pacingFor('uploaded', targets['uploaded']) });
-    else miss('Uploaded', targets['uploaded'], 'green');
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Uploaded', displaySize(cur), displaySize(targets['uploaded']), (curV / tgtV) * 100, 'green', { etaDays: rateEta(curV, tgtV, rates['uploaded']), ...pacingFor('uploaded', targets['uploaded']) });
+    else miss('Uploaded', displaySize(targets['uploaded']), 'green');
   }
   // Downloaded
   if (targets['downloaded']) {
     const cur = strOf(stats, 'downloaded');
     const curV = parseSize(cur), tgtV = parseSize(targets['downloaded']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Downloaded', cur, targets['downloaded'], (curV / tgtV) * 100, 'purple', { etaDays: rateEta(curV, tgtV, rates['downloaded']), ...pacingFor('downloaded', targets['downloaded']) });
-    else miss('Downloaded', targets['downloaded'], 'purple');
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Downloaded', displaySize(cur), displaySize(targets['downloaded']), (curV / tgtV) * 100, 'purple', { etaDays: rateEta(curV, tgtV, rates['downloaded']), ...pacingFor('downloaded', targets['downloaded']) });
+    else miss('Downloaded', displaySize(targets['downloaded']), 'purple');
   }
   // Ratio — no projection (can't sensibly project a ratio); pacingFor covers
   // the ratio_info needed-upload figure instead.
@@ -673,8 +674,8 @@ function targetRowsFor(
   if (targets['seed_size']) {
     const cur = strOf(stats, 'seed_size');
     const curV = parseSize(cur), tgtV = parseSize(targets['seed_size']);
-    if (cur && curV !== null && tgtV && tgtV > 0) push('Seed Size', cur, targets['seed_size'], (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates['seed_size']), ...pacingFor('seed_size', targets['seed_size']) });
-    else miss('Seed Size', targets['seed_size'], 'teal');
+    if (cur && curV !== null && tgtV && tgtV > 0) push('Seed Size', displaySize(cur), displaySize(targets['seed_size']), (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates['seed_size']), ...pacingFor('seed_size', targets['seed_size']) });
+    else miss('Seed Size', displaySize(targets['seed_size']), 'teal');
   }
   // Total uploads (uploads_approved from merged fields)
   if (targets['total_uploads']) {
@@ -758,9 +759,9 @@ function targetRowsFor(
       tgtV = isNaN(g) ? null : g;
     }
     if (curStr && curV !== null && tgtV !== null && tgtV > 0) {
-      push(label, curStr, tgt, (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]), ...pacingFor(key, tgt) });
+      push(label, displaySize(curStr), displaySize(tgt), (curV / tgtV) * 100, 'teal', { etaDays: rateEta(curV, tgtV, rates[key]), ...pacingFor(key, tgt) });
     } else {
-      miss(label, tgt, 'teal');
+      miss(label, displaySize(tgt), 'teal');
     }
   }
 

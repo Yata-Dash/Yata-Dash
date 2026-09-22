@@ -4,7 +4,7 @@
 // stored timestamp plus a clock (internal/stats/account.go) and OMITS them
 // whenever it lacks the input. Everything here therefore treats "field absent"
 // as "no deadline known" and shows nothing — never a reassuring zero.
-import type { TrackerStatsResponse } from '../types';
+import type { Tracker, TrackerStatsResponse } from '../types';
 import { esc } from './format';
 
 /** How near a deadline has to be before the badge appears, in days. */
@@ -31,6 +31,22 @@ function num(resp: TrackerStatsResponse | undefined, key: string): number | null
 function str(resp: TrackerStatsResponse | undefined, key: string): string {
   const v = resp?.fields?.[key]?.value;
   return v === null || v === undefined ? '' : String(v);
+}
+
+/** The login rule as one line — "every 90 days" plus, where the def names
+ *  a rank that is exempt, either "you're exempt (Torrent Master)" for this
+ *  account or "Torrent Master and above exempt" for everyone else. The
+ *  exemption is stated even with no gap known: on the four trackers whose
+ *  number has not been checked, "Power User and above exempt" is still the
+ *  useful half of the rule. Empty when there is nothing to say. */
+export function loginRuleText(t: Tracker, resp: TrackerStatsResponse | undefined): string {
+  const gap = t.max_login_gap_days && t.max_login_gap_days > 0 ? `every ${t.max_login_gap_days} days` : '';
+  const from = t.login_immune_from_group ?? '';
+  if (!gap && !from) return '';
+  if (!from) return gap;
+  const immune = resp?.fields?.['login_immune']?.value === true;
+  const exempt = immune ? `you're exempt (${from} and above)` : `${from} and above exempt`;
+  return gap ? `${gap} · ${exempt}` : exempt;
 }
 
 /** "in 5 days" / "today" / "5 days ago" — the badge's countdown. */

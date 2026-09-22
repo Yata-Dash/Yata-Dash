@@ -410,6 +410,18 @@ export function fmtDay(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
+/** "just now" / "12m ago" / "3h ago" / "5d ago" — the age of a row or a
+ *  check. Minute-granular where the day-granular helpers (account deadlines)
+ *  would call twenty minutes ago "today". Past a month, the date. */
+export function fmtAgo(unixSec: number): string {
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - unixSec));
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 2592000) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(unixSec * 1000).toISOString().slice(0, 10);
+}
+
 /** Local date and time for hover text — "2026-07-18 15:55". Seconds are left
  *  off: nothing here is timed that finely, and they only add noise. */
 export function fmtStamp(unixSec: number): string {
