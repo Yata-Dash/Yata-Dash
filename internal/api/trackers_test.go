@@ -204,6 +204,12 @@ func TestValidatePayloadRefusesBadShapes(t *testing.T) {
 		{"target size without a unit", nil, map[string]string{"seed_size": "5"}, `target "seed_size"`},
 		{"target ratio words", nil, map[string]string{"ratio": "high"}, "not a number"},
 		{"target age words", nil, map[string]string{"days": "a while"}, "not an account age"},
+		// ParseFloat/Atoi read these as numbers; none is a target.
+		{"target seconds NaN", nil, map[string]string{"avg_seed": "NaN"}, "not a duration"},
+		{"target seconds Inf", nil, map[string]string{"avg_seed": "+Inf"}, "not a duration"},
+		{"target seconds negative", nil, map[string]string{"avg_seed": "-3600"}, "not a duration"},
+		{"target days zero", nil, map[string]string{"days": "0"}, "not an account age"},
+		{"target days negative", nil, map[string]string{"days": "-30"}, "not an account age"},
 	}
 	for _, c := range cases {
 		p := trackerPayload{}

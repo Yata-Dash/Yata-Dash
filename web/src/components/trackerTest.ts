@@ -17,6 +17,7 @@ export function friendlyDetail(detail?: string): string {
     scrape_only: 'This tracker has no API — profile scrape only',
     no_scrape_support: 'This tracker type can’t be scraped',
     opted_out: 'The tracker operator opted out — Yata no longer contacts this tracker',
+    retired: 'This tracker has shut down — Yata no longer contacts it',
     scrape_disabled: 'The tracker operator disabled scraping',
     api_only: 'API-only mode is on for this tracker',
     // Blocked (rate limits — no request was sent)

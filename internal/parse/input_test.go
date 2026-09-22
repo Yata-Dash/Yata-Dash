@@ -42,6 +42,9 @@ func TestNormalizeDurationInput(t *testing.T) {
 		{"3 monkeys", "", false},
 		{"soon", "", false},
 		{"0", "", false},
+		{"-90", "", false},
+		{"NaN", "", false},
+		{"Inf", "", false},
 		{"", "", false},
 	}
 	for _, c := range cases {

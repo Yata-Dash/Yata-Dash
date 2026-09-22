@@ -5,7 +5,7 @@
   "abbr": "LST",
   "url": "https://lst.gg",
   "type": "unit3d",
-  "last_updated": "2026-09-02",
+  "last_updated": "2026-09-20",
   "approved_by": {
     "name": "kolt343",
     "role": "Owner",
@@ -189,7 +189,7 @@
             "min_seed_size": "6 TiB"
           }
         ],
-        "min_uploads": 5,
+        "min_uploads": 10,
         "min_ratio": 1,
         "min_seedtime": "1M",
         "min_age": "4M"
