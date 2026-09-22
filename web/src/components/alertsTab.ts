@@ -271,8 +271,33 @@ function confirmDeleteHtml(kind: 'dest' | 'rule', idx: number, name: string): st
 
 export async function saveAlerts(): Promise<void> {
   collectFromDOM();
+  // A threshold that is not a size or a number is refused here, not stored:
+  // the engine would read "1 terabyte" as 0 and the rule would be quietly
+  // wrong forever. Only open rule cards have inputs to flag; a collapsed
+  // rule's conditions were checked when it was last edited and saved.
+  if (!flagInvalidThresholds()) {
+    toast('Fix the highlighted value first', 'error');
+    return;
+  }
   const { ok } = await api.saveNotifications({ destinations, rules, digest });
   toast(ok ? 'Alerts saved' : 'Failed to save alerts', ok ? 'success' : 'error');
+}
+
+/** Check every size/numeric condition value in the model against its shape,
+ *  marking the matching input red. Returns whether all passed. */
+function flagInvalidThresholds(): boolean {
+  let ok = true;
+  rules.forEach((r, ri) => {
+    r.conditions.forEach((c, ci) => {
+      const type = fieldDef(toDisplay(c).field).type;
+      if ((type !== 'size' && type !== 'numeric') || !c.value.trim()) return;
+      const res = normalizeInput(type === 'size' ? 'size' : 'number', c.value);
+      const input = document.querySelector<HTMLInputElement>(`.cond-row[data-rule="${ri}"][data-cond="${ci}"] .cond-value`);
+      if (input) { input.classList.toggle('input-error', !res.ok); input.title = res.ok ? '' : res.error; }
+      if (res.ok) c.value = res.value; else ok = false;
+    });
+  });
+  return ok;
 }
 
 export function exportAlerts(): void {

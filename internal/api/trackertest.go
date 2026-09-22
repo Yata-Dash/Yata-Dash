@@ -367,6 +367,11 @@ func apiStatic(d *Deps, t models.Tracker) (CheckResult, bool) {
 	if _, opted := d.Reg.OptOut(t.URL); opted {
 		return CheckResult{Status: "not_applicable", Detail: "opted_out"}, true
 	}
+	// A shut-down tracker is not contacted, so an outcome recorded before it
+	// closed must not go on reading as its status.
+	if _, retired := d.Reg.Retired(t.URL); retired {
+		return CheckResult{Status: "not_applicable", Detail: "retired"}, true
+	}
 	kind := d.Reg.APIKind(t.URL, t.Type)
 	if kind == "none" {
 		return CheckResult{Status: "not_applicable", Detail: "scrape_only"}, true
@@ -400,7 +405,7 @@ func scrapeStatic(d *Deps, t models.Tracker) (CheckResult, bool) {
 		return CheckResult{}, false
 	}
 	switch pol.Reason {
-	case "opted_out", "api_only", "no_scrape_support", "scrape_disabled":
+	case "opted_out", "retired", "api_only", "no_scrape_support", "scrape_disabled":
 		return CheckResult{Status: "not_applicable", Detail: pol.Reason}, true
 	case "no_username", "no_cookie":
 		return CheckResult{Status: "not_configured", Detail: pol.Reason}, true

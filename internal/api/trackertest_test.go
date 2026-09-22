@@ -108,6 +108,27 @@ func TestStatusFallsBackToScrapeLog(t *testing.T) {
 	}
 }
 
+// TestStatusOfRetiredTrackerIsNotApplicable: a shut-down tracker is never
+// contacted, so both channels read N/A — even with an outcome recorded from
+// before it closed, which would otherwise stand as its status for ever.
+func TestStatusOfRetiredTrackerIsNotApplicable(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "tret1", Name: "Aura", URL: "https://aura4k.net", Type: "unit3d",
+		APIKey: "k", SessionCookie: "c", Username: "u", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.DB.RecordCheck(store.Check{TrackerID: "tret1", Channel: "api", At: 1, Status: "ok", Source: "refresh"})
+	_ = d.DB.RecordCheck(store.Check{TrackerID: "tret1", Channel: "scrape", At: 1, Status: "fail", Detail: "timeout", Source: "refresh"})
+	got := currentTestStatus(d)["tret1"]
+	if got.API.Status != "not_applicable" || got.API.Detail != "retired" {
+		t.Errorf("api = %+v", got.API)
+	}
+	if got.Scrape.Status != "not_applicable" || got.Scrape.Detail != "retired" {
+		t.Errorf("scrape = %+v", got.Scrape)
+	}
+}
+
 func mustTracker(t *testing.T, d *Deps, id string) models.Tracker {
 	t.Helper()
 	tr, ok := d.Cfg.Tracker(id)

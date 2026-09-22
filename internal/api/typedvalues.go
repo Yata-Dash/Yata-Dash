@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -131,7 +132,13 @@ func sanitizeTargets(in map[string]string) (map[string]string, error) {
 				return nil, shapeError("target", key, raw, numberShape)
 			}
 		case key == "avg_seed":
-			if _, err := strconv.ParseFloat(v, 64); err != nil {
+			// Stored as seconds. ParseFloat also reads "NaN" and "Inf", which
+			// are numbers to it and nonsense to the pacing code.
+			if secs, err := strconv.ParseFloat(v, 64); err == nil {
+				if math.IsNaN(secs) || math.IsInf(secs, 0) || secs <= 0 {
+					return nil, shapeError("target", key, raw, durationShape)
+				}
+			} else {
 				norm, ok := parse.NormalizeDurationInput(v)
 				if !ok {
 					return nil, shapeError("target", key, raw, durationShape)
@@ -139,7 +146,11 @@ func sanitizeTargets(in map[string]string) (map[string]string, error) {
 				v = strconv.FormatInt(int64(*parse.SeedTimeToSeconds(norm)), 10)
 			}
 		case key == "days":
-			if _, err := strconv.Atoi(v); err != nil {
+			if n, err := strconv.Atoi(v); err == nil {
+				if n <= 0 {
+					return nil, shapeError("target", key, raw, ageShape)
+				}
+			} else {
 				days, ok := ageDays(v)
 				if !ok {
 					return nil, shapeError("target", key, raw, ageShape)

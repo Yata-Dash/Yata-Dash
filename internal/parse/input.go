@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,7 +76,8 @@ func NormalizeDurationInput(s string) (string, bool) {
 		return "", false
 	}
 	if v, err := strconv.ParseFloat(s, 64); err == nil {
-		if v <= 0 {
+		// ParseFloat reads "NaN" and "Inf" too; neither is a duration.
+		if math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 {
 			return "", false
 		}
 		return FormatSeedTime(v), true
