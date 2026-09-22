@@ -6,6 +6,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260921]
+
 ### Added
 
 - **Size units setting** (Settings → Display). *As the tracker reports* keeps
@@ -37,23 +39,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **The Display preview now demonstrates every card toggle**, including the
   goal-pacing line and the trend-rate hover.
 
-### Fixed
-
-- **An ended event no longer lingers on a tracker whose scraping was switched
-  off.** The 48-hour rule from Beta-20260920 only applied when the event list
-  was fetched; a scrape layer nothing rewrites any more still carried
-  "freeleech until Sep 5" weeks later. Ended events now expire on read,
-  whichever layer they came from.
-
-- **A typed seed time no longer drifts on save.** The server read months as
-  30.44 days and years as 365.25 when it stored a value, but printed them as
-  30 and 365, so `3M 6D` came back as `3M 1W 7h 40m 48s`.
-
-## [Beta-20260920]
-
-### Added
-
-- **qui problem counts as alert conditions.** With *Problem counts for alerts*
+  - **qui problem counts as alert conditions.** With *Problem counts for alerts*
   on in the qui settings, each refresh counts unregistered, tracker-down,
   tracker-error and errored torrents per tracker, so a rule like *unregistered
   torrents > 0* fires for the tracker concerned. The weekly digest carries the
@@ -81,11 +67,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **The weekly digest no longer nags about pathway targets you marked "not
   interested".**
 
-- **A rule using a field this build does not know keeps it.** Opening such a
-  rule showed the first field in the list and saved it that way.
-
-- **An event a tracker forgot to take down no longer shows forever.** Aither's
-  events endpoint kept reporting freeleech "until the 5th" ten days on, so the
+- **An event a tracker forgot to take down no longer shows forever.**
+  Some events endpoint kept reporting freeleech after ending, so the
   banner read "Ended" indefinitely. Events more than two days past their end
   are dropped on fetch.
 
