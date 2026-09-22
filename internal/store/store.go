@@ -215,6 +215,18 @@ func (d *DB) migrate() error {
 			created_at   INTEGER NOT NULL,
 			last_used_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		// Last outcome per contact channel (checks.go) — the Trackers table's
+		// status column. A snapshot, replaced on every attempt.
+		`CREATE TABLE IF NOT EXISTS tracker_checks (
+			tracker_id TEXT NOT NULL,
+			channel    TEXT NOT NULL,             -- api | scrape
+			at         INTEGER NOT NULL,          -- unix seconds
+			status     TEXT NOT NULL,             -- ok | fail | not_configured | not_applicable
+			detail     TEXT NOT NULL DEFAULT '',
+			fields     INTEGER NOT NULL DEFAULT 0,
+			source     TEXT NOT NULL DEFAULT '',  -- test | refresh
+			PRIMARY KEY (tracker_id, channel)
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.sql.Exec(s); err != nil {
@@ -421,6 +433,7 @@ func (d *DB) WipeData() error {
 		`DELETE FROM scrape_log`,
 		`DELETE FROM tracker_events`,
 		`DELETE FROM connection_daily`,
+		`DELETE FROM tracker_checks`,
 		`DELETE FROM api_tokens`, // a recovery reset revokes integrations too
 	} {
 		if _, err := d.sql.Exec(q); err != nil {
@@ -439,6 +452,7 @@ func (d *DB) DeleteTracker(trackerID string) error {
 		`DELETE FROM scrape_log WHERE tracker_id = ?`,
 		`DELETE FROM tracker_events WHERE tracker_id = ?`,
 		`DELETE FROM connection_daily WHERE tracker_id = ?`,
+		`DELETE FROM tracker_checks WHERE tracker_id = ?`,
 		`DELETE FROM group_ladders WHERE tracker_id = ?`,
 	} {
 		if _, err := d.sql.Exec(q, trackerID); err != nil {

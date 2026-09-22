@@ -258,3 +258,54 @@ func TestManualLoginDrivesTheCountdownAlone(t *testing.T) {
 		t.Errorf("login_days_remaining = %v, want 59 or 60", got)
 	}
 }
+
+// TestLoginImmunityStopsTheCountdown: a rank that grants inactivity immunity
+// means there is no deadline to count down to — login_days_remaining is
+// omitted (so the seeded warning stays silent) and login_immune says why.
+// The elapsed-days field stays: how long ago you visited is still true.
+// Below the rank nothing changes, and a policy with no exemption declared
+// never sets the flag.
+func TestLoginImmunityStopsTheCountdown(t *testing.T) {
+	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	e := &Engine{}
+	e.AccountPolicy = func(string) AccountPolicy {
+		return AccountPolicy{
+			MaxLoginGapDays: 90,
+			LoginImmune:     func(g string) bool { return g == "Torrent Master" },
+		}
+	}
+	merged := func(group string) models.MergedStats {
+		return models.MergedStats{
+			"group":        {Value: group, Source: models.SourceAPI},
+			FieldLastLogin: {Value: "2026-08-01", Source: models.SourceAPI},
+		}
+	}
+
+	out := merged("Torrent Master")
+	e.deriveAccountFields("x", out, now)
+	if f, ok := out[FieldLoginImmune]; !ok || f.Value != true || f.Source != models.SourceAPI {
+		t.Errorf("login_immune = %+v, want true from the group's source", f)
+	}
+	if _, ok := out[FieldLoginDaysRemaining]; ok {
+		t.Error("an immune account must have no countdown")
+	}
+	if f := out[FieldDaysSinceLogin]; f.Value != 52 {
+		t.Errorf("days_since_login = %v, want 52 — still worth knowing", f.Value)
+	}
+
+	out = merged("Power User")
+	e.deriveAccountFields("x", out, now)
+	if _, ok := out[FieldLoginImmune]; ok {
+		t.Error("a rank below the perk must not be immune")
+	}
+	if f := out[FieldLoginDaysRemaining]; f.Value != 37 {
+		t.Errorf("login_days_remaining = %v, want 37", f.Value)
+	}
+
+	e.AccountPolicy = func(string) AccountPolicy { return AccountPolicy{MaxLoginGapDays: 90} }
+	out = merged("Torrent Master")
+	e.deriveAccountFields("x", out, now)
+	if _, ok := out[FieldLoginImmune]; ok {
+		t.Error("no exemption declared → never immune")
+	}
+}

@@ -14,6 +14,7 @@ import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
 import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
 import { parseAgeDays, parseSeedTime, parseSize } from '../utils/parse';
+import { displaySize, manualShape, normalizeInput, targetShape } from '../utils/units';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { findOptOut, optOutMessage } from '../utils/optout';
 import { defaultGoalDeadline } from '../utils/pacing';
@@ -849,6 +850,12 @@ export function modalRemoveManualRow(key: string): void {
   refreshManualDerived();
 }
 
+/** The reason a 400 gives (a refused typed value names its field), or ''. */
+function serverError(data: unknown): string {
+  const e = (data as { error?: unknown } | undefined)?.error;
+  return typeof e === 'string' ? e : '';
+}
+
 /** Read the rows back into a manual_stats map. Empty inputs are dropped, so
  *  clearing a value removes the stat — the same gesture as removing the row. */
 function collectManualRows(): Record<string, string> {
@@ -1038,8 +1045,32 @@ function chipItemHtml(o: {
       ${o.editExtraHtml ?? ''}
       <button type="button" class="btn btn-ghost btn-sm" data-chip-done title="Done editing">Done</button>
       <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" title="Remove ${esc(o.noun)}" onclick="${o.removeCall}">&times;</button>
+      <span class="chip-item-err" data-chip-err hidden></span>
     </div>
   </div>`;
+}
+
+/** Read a chip's typed value against its shape and show the result in place:
+ *  a readable value is rewritten in its canonical form ("200g" → "200.00 GB",
+ *  "3 months" → "3M"), an unreadable one is flagged under the row. Returns
+ *  whether the value can be kept. An empty value is fine here — it means
+ *  "remove", and setChipEditing handles that. */
+export function normalizeChipInput(item: HTMLElement): boolean {
+  const input = item.querySelector<HTMLInputElement>('[data-chip-input]');
+  const err = item.querySelector<HTMLElement>('[data-chip-err]');
+  if (!input) return true;
+  const raw = input.value.trim();
+  const shape = 'targetKey' in item.dataset
+    ? targetShape(item.dataset['targetKey'] ?? '')
+    : manualShape(item.dataset['manualKey'] ?? '');
+  const res = raw ? normalizeInput(shape, raw) : { ok: true as const, value: '' };
+  input.classList.toggle('input-error', !res.ok);
+  if (err) {
+    err.hidden = res.ok;
+    err.textContent = res.ok ? '' : res.error;
+  }
+  if (res.ok && res.value !== input.value) input.value = res.value;
+  return res.ok;
 }
 
 function targetRowHtml(key: string, value: string, deadline: string, editing = false): string {
@@ -1056,12 +1087,18 @@ function targetRowHtml(key: string, value: string, deadline: string, editing = f
 }
 
 /** Flip one item between its chip and its fields, keeping the chip's text in
- *  step with whatever was typed. Shared by targets and manual stats. */
-function setChipEditing(item: HTMLElement, editing: boolean): void {
+ *  step with whatever was typed. Shared by targets and manual stats. Closing
+ *  first reads the value against its shape; a value that fails stays open
+ *  with the reason under it, and false comes back so a save can stop. */
+function setChipEditing(item: HTMLElement, editing: boolean): boolean {
   const view = item.querySelector<HTMLElement>('.chip-item-view');
   const edit = item.querySelector<HTMLElement>('.chip-item-edit');
-  if (!view || !edit) return;
+  if (!view || !edit) return true;
   if (!editing) {
+    if (!normalizeChipInput(item)) {
+      item.querySelector<HTMLInputElement>('[data-chip-input]')?.focus();
+      return false;
+    }
     const value = item.querySelector<HTMLInputElement>('[data-chip-input]')?.value.trim() ?? '';
     // An empty value is not a target or a stat, and both collectors drop it
     // anyway — better to drop it where the user can see it happen.
@@ -1069,7 +1106,7 @@ function setChipEditing(item: HTMLElement, editing: boolean): void {
       const isTarget = 'targetKey' in item.dataset;
       item.remove();
       if (isTarget) refreshTargetAddSelect(); else { refreshManualAddSelect(); refreshManualDerived(); }
-      return;
+      return true;
     }
     const chip = item.querySelector<HTMLElement>('[data-chip-value]');
     if (chip) chip.textContent = value;
@@ -1088,6 +1125,7 @@ function setChipEditing(item: HTMLElement, editing: boolean): void {
   item.dataset['editing'] = editing ? '1' : '0';
   if (editing) item.querySelector<HTMLInputElement>('[data-chip-input]')?.focus();
   else if ('manualKey' in item.dataset) refreshManualDerived();
+  return true;
 }
 
 /** Edit / Done, delegated on the container so it survives every rebuild.
@@ -1118,14 +1156,26 @@ function wireChipItems(wrap: HTMLElement): void {
     const item = input.closest<HTMLElement>('.chip-item');
     if (item) setChipEditing(item, false);
   });
+  // Leaving the field rewrites what was typed in its canonical form, or says
+  // what was expected — before Done, so the correction is seen while the
+  // value is still in front of the user.
+  wrap.addEventListener('focusout', e => {
+    const input = (e.target as HTMLElement).closest<HTMLElement>('[data-chip-input]');
+    const item = input?.closest<HTMLElement>('.chip-item');
+    if (item) normalizeChipInput(item);
+  });
 }
 
-/** Commit every item still open for editing, in both containers. */
-function closeOpenChipEdits(): void {
+/** Commit every item still open for editing, in both containers. False when
+ *  one holds a value that cannot be kept — it stays open, flagged, and the
+ *  caller must not save. */
+function closeOpenChipEdits(): boolean {
+  let ok = true;
   for (const item of document.querySelectorAll<HTMLElement>('#modal-target-rows .chip-item, #modal-manual-rows .chip-item')) {
     const edit = item.querySelector<HTMLElement>('.chip-item-edit');
-    if (edit && !edit.hidden) setChipEditing(item, false);
+    if (edit && !edit.hidden && !setChipEditing(item, false)) ok = false;
   }
+  return ok;
 }
 
 /** (Re)build the manual rows from a targets map. */
@@ -1713,6 +1763,13 @@ export async function saveTracker(deps: ModalDeps) {
   const optEntry = findOptOut(_defsCache?.opt_outs, url);
   if (optEntry) { deps.toast(optOutMessage(optEntry), 'error'); return; }
 
+  // A target or stat still open with a value that failed its shape: it is
+  // flagged under its row, and the server would refuse it anyway.
+  if (!closeOpenChipEdits()) {
+    deps.toast('Fix the highlighted value first', 'error');
+    return;
+  }
+
   // Build the targets map. Group selected → the group's base requirements
   // from the def (nothing to type); manual → the builder rows. In add mode
   // the section is hidden and targets start empty — set them later from the
@@ -1806,7 +1863,7 @@ export async function saveTracker(deps: ModalDeps) {
   }
 
   if (!isNew) {
-    const { ok } = await api.updateTracker(id, payload);
+    const { ok, status, data } = await api.updateTracker(id, payload);
     if (ok) {
       deps.toast(`${name} updated`, 'success');
       // Saving is not the same as being finished. Editing a tracker is a
@@ -1821,7 +1878,7 @@ export async function saveTracker(deps: ModalDeps) {
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
       await deps.loadTestStatus(); // a pending test (unsaved-value test, see modalTestTracker) may have just been promoted
     }
-    else    { deps.toast('Failed to update tracker', 'error'); }
+    else    { deps.toast(status === 400 && serverError(data) ? serverError(data) : 'Failed to update tracker', 'error'); }
   } else {
     const { ok, status, data } = await api.addTracker(payload);
     if (ok) {
@@ -1835,7 +1892,7 @@ export async function saveTracker(deps: ModalDeps) {
       const entry = (data as unknown as { opt_out?: OptOutEntry }).opt_out;
       deps.toast(entry ? optOutMessage(entry) : 'This tracker has asked not to be supported by Yata', 'error');
     } else {
-      deps.toast('Failed to add tracker', 'error');
+      deps.toast(status === 400 && serverError(data) ? serverError(data) : 'Failed to add tracker', 'error');
     }
   }
 }
@@ -1976,13 +2033,14 @@ const PREVIEW_GROUP: GroupDef = {
 // Event globe used by the preview event banner (matches the detail view).
 const PREVIEW_EVENT_ICON = eventGlobeSvg('flex-shrink:0');
 
-/** Display toggles the preview card can show the effect of. Anything not here
- *  either has no on-card representation (favicon in the browser tab, pathway
- *  options, hover-only behaviour) or is not a card concern at all. */
+/** Display toggles the preview card can show the effect of. The three
+ *  Pathways toggles are the only ones left out: they change the Pathways
+ *  view, and a tracker card has nothing to show for them. Hover-only
+ *  behaviour (trend rate) is demonstrated by hovering the preview's stats. */
 const PREVIEW_TOGGLE_IDS = [
   's-private-track', 's-stat-src-track', 's-favicon-track', 's-target-eta-track',
   's-tracker-rules-track', 's-unread-mail-track', 's-unread-notif-track',
-  's-hnr-highlight-track', 's-goal-chips-track',
+  's-hnr-highlight-track', 's-goal-chips-track', 's-goal-pacing-track', 's-rate-hover-track',
 ];
 
 /** Read the live (possibly-unsaved) Display form state into a settings object
@@ -1997,6 +2055,7 @@ function previewSettings(): AppSettings {
     group_name_style:  radio('s-group-name-style', 'plain'),
     username_style:    radio('s-username-style', 'group'),
     duration_format:   radio('s-duration-format', 'ym'),
+    size_units:        radio('s-size-units', 'reported'),
     private_mode:      on('s-private-track'),
     show_stat_sources: on('s-stat-src-track'),
     // Everything below was settable but invisible here, so the preview could
@@ -2009,6 +2068,8 @@ function previewSettings(): AppSettings {
     show_unread_notifications:  on('s-unread-notif-track'),
     highlight_hnr:              on('s-hnr-highlight-track'),
     show_goal_chips:            on('s-goal-chips-track'),
+    show_goal_pacing:           on('s-goal-pacing-track'),
+    show_rate_hovers:           on('s-rate-hover-track'),
   } as AppSettings;
 }
 
@@ -2039,6 +2100,13 @@ export function renderThemePreview(): void {
   const chip = (kind: 'ontrack' | 'behind', label: string) =>
     s.show_goal_chips === false ? ''
       : ` <span class="goal-chip goal-chip--${kind}">${label}</span>`;
+  // The Detail page's pacing line, under a dated target (goalPacingLine in
+  // views/grid.ts renders the real one); the card stands in for that page.
+  const pacing = (text: string) =>
+    s.show_goal_pacing === false ? '' : `<div class="target-goal-line">${text}</div>`;
+  // Trend rate on hover — a tooltip on the stat, exactly as on a real card.
+  const rate = (text: string) =>
+    s.show_rate_hovers === false ? '' : ` title="${esc(text)}"`;
   const flags =
     (s.show_unread_mail !== false ? '<span class="unread-flag" title="Unread mail"><i class="fas fa-envelope"></i></span>' : '') +
     (s.show_unread_notifications !== false ? '<span class="unread-flag" title="Unread notifications"><i class="fas fa-bell"></i></span>' : '');
@@ -2067,11 +2135,11 @@ export function renderThemePreview(): void {
       <span class="exp-event-ends">ends in 2d 4h</span>
     </div>
     <div class="theme-preview-stats" style="margin-top:10px">
-      <div class="stat-item"><div class="stat-label">Uploaded</div><div class="stat-value green">8.24 TB${dot('api')}</div></div>
+      <div class="stat-item"${rate('≈ 24.6 GiB per day')}><div class="stat-label">Uploaded</div><div class="stat-value green">${displaySize('8.24 TB', s)}${dot('api')}</div></div>
       <div class="stat-item"><div class="stat-label">Ratio</div><div class="stat-value red">2.41${dot('api')}</div></div>
-      <div class="stat-item"><div class="stat-label">Buffer</div><div class="stat-value blue">3.10 TB${dot('scrape')}</div></div>
+      <div class="stat-item"><div class="stat-label">Buffer</div><div class="stat-value blue">${displaySize('3.10 TB', s)}${dot('scrape')}</div></div>
       <div class="stat-item"><div class="stat-label">Avg Seed Time</div><div class="stat-value pink">88d${dot('scrape')}</div></div>
-      <div class="stat-item"><div class="stat-label">Bonus</div><div class="stat-value orange">14,208${dot('api')}</div></div>
+      <div class="stat-item"${rate('≈ 3,423 per day')}><div class="stat-label">Bonus</div><div class="stat-value orange">14,208${dot('api')}</div></div>
       <div class="stat-item"><div class="stat-label">Hit &amp; Runs</div><div class="stat-value ${hnrColor}">2${dot('scrape')}</div></div>
     </div>
     <div class="targets-section" style="margin-top:10px">
@@ -2092,9 +2160,10 @@ export function renderThemePreview(): void {
       <div class="target-row">
         <div class="target-header">
           <span class="target-lbl">Upload target</span>
-          <span class="target-vals">1.8 TB <span class="tgt">/ 10 TB</span>${eta(852)}${chip('behind', 'behind')}</span>
+          <span class="target-vals">${displaySize('1.8 TB', s)} <span class="tgt">/ ${displaySize('10 TB', s)}</span>${eta(852)}${chip('behind', 'behind')}</span>
         </div>
         <div class="progress-track"><div class="progress-fill red" style="width:18%"></div></div>
+        ${pacing(`behind — needs ${esc(displaySize('96.4 GB', s))}/day, doing ${esc(displaySize('24.6 GB', s))}/day`)}
       </div>
     </div>
     ${rulesLine}
@@ -2944,6 +3013,13 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
     r.onchange = renderThemePreview;
   });
 
+  // Size units: the preview's "8.24 TB" becomes "8.24 TiB" as you switch.
+  const sizeUnits = settings.size_units === 'binary' ? 'binary' : 'reported';
+  document.querySelectorAll<HTMLInputElement>('input[name="s-size-units"]').forEach(r => {
+    r.checked = r.value === sizeUnits;
+    r.onchange = renderThemePreview;
+  });
+
   // Every toggle the preview can demonstrate re-renders it on click.
   //
   // Only the radios did this before, so a toggle changed the saved setting and
@@ -3187,6 +3263,7 @@ export async function saveSettings(deps: SettingsDeps) {
     update_check_auto:     (document.getElementById('s-update-auto') as HTMLInputElement | null)?.checked ?? false,
     trust_proxy_headers:   (document.getElementById('s-trust-proxy') as HTMLInputElement | null)?.checked ?? false,
     duration_format:       (document.querySelector<HTMLInputElement>('input[name="s-duration-format"]:checked')?.value ?? 'ym'),
+    size_units:            (document.querySelector<HTMLInputElement>('input[name="s-size-units"]:checked')?.value ?? 'reported'),
     api_only_mode:         isOn('s-api-only-track', false),
     theme:                 _selectedThemeId === 'default' ? '' : _selectedThemeId,
     tracker_name_mode:     (document.querySelector<HTMLInputElement>('input[name="s-name-mode"]:checked')?.value ?? 'name'),
@@ -3301,12 +3378,12 @@ function hide(id: string) { const el = document.getElementById(id); if (el) el.s
 /** [label, value] pairs for a requirements set — drives the chip summary. */
 function requirementPairs(req: GroupRequirements): [string, string][] {
   const pairs: [string, string][] = [];
-  if (req.min_uploaded)     pairs.push(['Uploaded', req.min_uploaded]);
-  if (req.min_downloaded)   pairs.push(['Downloaded', req.min_downloaded]);
-  if (req.min_total_transfer) pairs.push(['Total Transfer', req.min_total_transfer]);
+  if (req.min_uploaded)     pairs.push(['Uploaded', displaySize(req.min_uploaded)]);
+  if (req.min_downloaded)   pairs.push(['Downloaded', displaySize(req.min_downloaded)]);
+  if (req.min_total_transfer) pairs.push(['Total Transfer', displaySize(req.min_total_transfer)]);
   if (req.min_ratio)        pairs.push(['Ratio', String(req.min_ratio)]);
   if (req.min_seedtime)     pairs.push(['Seedtime', req.min_seedtime]);
-  if (req.min_seed_size)    pairs.push(['Seed Size', req.min_seed_size]);
+  if (req.min_seed_size)    pairs.push(['Seed Size', displaySize(req.min_seed_size)]);
   if (req.min_uploads)      pairs.push(['Uploads', String(req.min_uploads)]);
   if (req.min_adoptions)    pairs.push(['Adoptions', String(req.min_adoptions)]);
   if (req.min_bonus_points) pairs.push(['Bonus', req.min_bonus_points.toLocaleString()]);

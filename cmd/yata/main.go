@@ -167,7 +167,10 @@ func main() {
 		if !ok {
 			return stats.AccountPolicy{}
 		}
-		return stats.AccountPolicy{MaxLoginGapDays: reg.MaxLoginGapDays(t.URL)}
+		return stats.AccountPolicy{
+			MaxLoginGapDays: reg.MaxLoginGapDays(t.URL),
+			LoginImmune:     func(group string) bool { return reg.LoginImmune(t.URL, group) },
+		}
 	}
 	deps := &api.Deps{
 		Cfg:     cfg,

@@ -3,7 +3,7 @@
 // edit-tracker panel (detailed result rows). Pure helpers only — the actual
 // test requests live in trackersTab.ts (table) and modals.ts (edit panel).
 import type { CheckResult, TrackerTestResult } from '../types';
-import { esc } from '../utils/format';
+import { esc, fmtAgo, fmtStamp } from '../utils/format';
 
 /** Human-readable explanation for a check's detail code (error or reason). */
 export function friendlyDetail(detail?: string): string {
@@ -17,6 +17,7 @@ export function friendlyDetail(detail?: string): string {
     scrape_only: 'This tracker has no API — profile scrape only',
     no_scrape_support: 'This tracker type can’t be scraped',
     opted_out: 'The tracker operator opted out — Yata no longer contacts this tracker',
+    retired: 'This tracker has shut down — Yata no longer contacts it',
     scrape_disabled: 'The tracker operator disabled scraping',
     api_only: 'API-only mode is on for this tracker',
     // Blocked (rate limits — no request was sent)
@@ -55,22 +56,41 @@ function pillMeta(c: CheckResult): PillMeta {
     // wants time, and the hourglass is not another circle.
     case 'not_configured': return { cls: 'cfg',  icon: 'fa-circle-minus',    word: 'Not set up' };
     case 'blocked':        return { cls: 'wait', icon: 'fa-hourglass-half',  word: 'Rate-limited' };
+    // Nothing recorded and nothing to say statically: the channel would be
+    // tried, and has not been yet.
+    case 'untested':       return { cls: 'na',   icon: 'fa-circle-question', word: 'Not tried yet' };
     default:               return { cls: 'na',   icon: 'fa-minus',         word: 'N/A' };
   }
+}
+
+/** "from the last refresh, 12m ago (2026-09-20 09:52)" — where a recorded
+ *  outcome came from and when. Empty for a static state. */
+function provenance(c: CheckResult): string {
+  if (!c.at) return '';
+  const how = c.source === 'test' ? 'from a Test' : 'from the last refresh';
+  return `${how}, ${fmtAgo(c.at)} (${fmtStamp(c.at)})`;
 }
 
 /** A compact labelled pill ("API ✓" / "Scrape ✗") for the trackers table. */
 function pill(label: string, c: CheckResult): string {
   const m = pillMeta(c);
   const detail = friendlyDetail(c.detail);
-  const title = `${label}: ${m.word}${detail ? ` — ${detail}` : ''}`;
+  const when = provenance(c);
+  const title = `${label}: ${m.word}${detail ? ` — ${detail}` : ''}${when ? ` · ${when}` : ''}`;
   return `<span class="trk-test-pill ${m.cls}" title="${esc(title)}"><i class="fas ${m.icon}"></i>${esc(label)}</span>`;
 }
 
-/** Render the two-pill status indicator shown in the trackers table cell. */
+/** Render the two-pill status indicator shown in the trackers table cell,
+ *  with the age of the newer recorded outcome under it. The result comes
+ *  from Tests and ordinary refreshes alike (and is stored), so this is the
+ *  last thing that happened, not the last time someone pressed Test. */
 export function renderTestPills(res: TrackerTestResult | undefined): string {
-  if (!res) return `<span class="trk-test-untested">Not tested</span>`;
-  return `<span class="trk-test-pills">${pill('API', res.api)}${pill('Scrape', res.scrape)}</span>`;
+  if (!res) return `<span class="trk-test-untested">No contact yet</span>`;
+  const newest = [res.api, res.scrape].filter(c => c.at).sort((a, b) => (b.at ?? 0) - (a.at ?? 0))[0];
+  const when = newest
+    ? `<span class="trk-test-when" title="${esc(provenance(newest))}">${newest.source === 'test' ? 'tested' : 'refreshed'} ${esc(fmtAgo(newest.at ?? 0))}</span>`
+    : '';
+  return `<span class="trk-test-pills">${pill('API', res.api)}${pill('Scrape', res.scrape)}</span>${when}`;
 }
 
 /** A detailed result row ("API — Working / Failed — reason") for the edit panel. */

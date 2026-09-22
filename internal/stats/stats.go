@@ -149,6 +149,9 @@ func (e *Engine) Merged(trackerID string) (models.MergedStats, error) {
 	// drives them identically, and last_login needs no special case in the
 	// merge above.
 	e.deriveAccountFields(trackerID, out, time.Now().UTC())
+	// Time-bound fields expire on read, whichever layer supplied them — a
+	// layer whose source has stopped running is otherwise frozen (events.go).
+	expireStaleEvents(out, time.Now())
 	return out, nil
 }
 

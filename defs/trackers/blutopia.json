@@ -5,7 +5,7 @@
   "abbr": "BLU",
   "url": "https://blutopia.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-21",
+  "last_updated": "2026-09-20",
   "scrape": {
     "disable_scraping": true
   },
@@ -18,6 +18,18 @@
     "note": "BluMaster and higher active groups can send invites when invite privileges are available. Invite privileges remain subject to staff discretion."
   },
   "groups": [
+    {
+      "name": "Leech",
+      "style": { "color": "#96281b", "icon": "fas fa-user-ninja" },
+      "requirements": {
+        "note": "Ratio below 0.4."
+      },
+      "perks": [
+        { "icon": "", "label": "Cannot download" },
+        { "icon": "", "label": "Cannot invite" },
+        { "icon": "", "label": "Cannot make requests" }
+      ]
+    },
     {
       "name": "User",
       "style": { "color": "#c2d7fb", "icon": "fas fa-user" },

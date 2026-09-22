@@ -207,7 +207,7 @@ func runScrape(d *Deps) http.HandlerFunc {
 			KnownUserID:     mergedString(d, t.ID, "user_id"),
 		}
 		result, serr := scrape.Profile(t, spec)
-		recordScrapeAttempt(d, t, serr)
+		recordScrapeAttempt(d, t, serr, len(result))
 		if serr != nil {
 			d.logWarnf("scrape: %s (%s) failed — %s", t.Name, t.ID, serr.Kind)
 			jsonError(w, serr.Kind, upstreamStatus(serr.Status))

@@ -6,11 +6,40 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
-## [Beta-20260920]
+## [Beta-20260921]
 
 ### Added
 
-- **qui problem counts as alert conditions.** With *Problem counts for alerts*
+- **Size units setting** (Settings → Display). *As the tracker reports* keeps
+  each site's own label; *Always GiB / TiB* relabels every size to the binary
+  ladder so a row of stats reads in one unit. A relabel only: Yata has always
+  read GB and GiB with the same 1024 factor, because tracker software computes
+  binary sizes whichever label it prints.
+
+- **Typed sizes, durations and numbers are checked where you type them.**
+  Manual stats, targets and alert thresholds rewrite a readable value in its
+  canonical form on leaving the field — `200g` → `200.00 GB`, `3 months 6
+  days` → `3M 6D` — and refuse one they cannot read, with the shape spelled
+  out. The server refuses the same values, naming the field.
+
+- **The Trackers table's Status column now shows each channel's last real
+  outcome** — from a Test or from an ordinary refresh, with how long ago — and
+  it survives a restart. "Not tested" is gone: a scrape that failed on an
+  expired cookie is the same news as a Test would have been, and a tracker
+  scraped once a day no longer needs a lucky click to show a result. A missing key or
+  an API-only setting still read as *Not set up* / *N/A* from the
+  configuration itself.
+
+- **Rank-based inactivity immunity.** Trackers that exempt higher ranks from
+  their login policy (AnimeBytes, BTN, Redacted, GazelleGames, Anthelion) can
+  say so in their definition; an exempt account gets no login countdown or
+  warning, and the Rules panel reads "you're exempt (Torrent Master and
+  above)".
+
+- **The Display preview now demonstrates every card toggle**, including the
+  goal-pacing line and the trend-rate hover.
+
+  - **qui problem counts as alert conditions.** With *Problem counts for alerts*
   on in the qui settings, each refresh counts unregistered, tracker-down,
   tracker-error and errored torrents per tracker, so a rule like *unregistered
   torrents > 0* fires for the tracker concerned. The weekly digest carries the
@@ -38,11 +67,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **The weekly digest no longer nags about pathway targets you marked "not
   interested".**
 
-- **A rule using a field this build does not know keeps it.** Opening such a
-  rule showed the first field in the list and saved it that way.
-
-- **An event a tracker forgot to take down no longer shows forever.** Aither's
-  events endpoint kept reporting freeleech "until the 5th" ten days on, so the
+- **An event a tracker forgot to take down no longer shows forever.**
+  Some events endpoint kept reporting freeleech after ending, so the
   banner read "Ended" indefinitely. Events more than two days past their end
   are dropped on fetch.
 

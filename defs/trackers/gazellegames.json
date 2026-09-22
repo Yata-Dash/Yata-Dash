@@ -5,7 +5,7 @@
   "abbr": "GGn",
   "url": "https://gazellegames.net",
   "type": "gazelle_games",
-  "last_updated": "2026-07-21",
+  "last_updated": "2026-09-22",
   "api": {
     "api_key_hint": "Profile Settings → API Keys. Create a key with the User permission; it is shown only once."
   },
@@ -13,7 +13,8 @@
     "disable_scraping": true
   },
   "rules": {
-    "min_seed_hours": 80
+    "min_seed_hours": 80,
+    "login_immune_from_group": "Pro Gamer"
   },
   "invite_requirements": {
     "min_class": "Gamer",

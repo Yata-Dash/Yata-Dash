@@ -14,6 +14,7 @@ import type { Tracker, TrackerGroupMap } from '../types';
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { groupRequirementsToTargets } from '../utils/group';
+import { normalizeInput, targetShape } from '../utils/units';
 import { defaultGoalDeadline } from '../utils/pacing';
 import { commonDeadline, fanDeadline, goalDateControlHtml, wireGoalDateUI } from './goalDate';
 import { statsCache, strOf } from '../state';
@@ -79,6 +80,13 @@ function ensureEl(): HTMLDivElement {
     if (!input || input.value) return;
     const joinDate = strOf(statsCache[_trackerId], 'join_date') || undefined;
     input.value = defaultGoalDeadline(currentAgeTargetRaw(), joinDate);
+  });
+  // Leaving a value field rewrites it in canonical form or flags it — the
+  // same treatment as the edit panel's chips.
+  el.addEventListener('focusout', e => {
+    const input = (e.target as HTMLElement).closest<HTMLElement>('[data-target-input]');
+    const row = input?.closest<HTMLElement>('.target-edit-row');
+    if (row) normalizeRow(row);
   });
   wireGoalDateUI(el); // icon-button open/clear/state for every goal control inside
   document.body.appendChild(el);
@@ -241,7 +249,32 @@ function rowHtml(key: string, value: string, deadline: string): string {
     <input class="form-input" type="text" data-target-input placeholder="${esc(spec.placeholder)}" value="${esc(value)}"/>
     ${goalDateControlHtml(key, deadline)}
     <button type="button" class="btn btn-ghost btn-icon btn-sm target-edit-remove" data-remove="${esc(key)}" title="Remove target">&times;</button>
+    <span class="target-edit-err" data-target-err hidden></span>
   </div>`;
+}
+
+/** Read one row's value against its shape, rewriting a readable one in its
+ *  canonical form and flagging an unreadable one under the row. Same rules
+ *  as the edit panel's chips (normalizeChipInput). */
+function normalizeRow(row: HTMLElement): boolean {
+  const input = row.querySelector<HTMLInputElement>('[data-target-input]');
+  const err = row.querySelector<HTMLElement>('[data-target-err]');
+  if (!input) return true;
+  const raw = input.value.trim();
+  const res = raw ? normalizeInput(targetShape(row.dataset['targetKey'] ?? ''), raw) : { ok: true as const, value: '' };
+  input.classList.toggle('input-error', !res.ok);
+  if (err) { err.hidden = res.ok; err.textContent = res.ok ? '' : res.error; }
+  if (res.ok && res.value !== input.value) input.value = res.value;
+  return res.ok;
+}
+
+/** Every row readable — flags the ones that are not. */
+function normalizeAllRows(): boolean {
+  let ok = true;
+  for (const row of document.querySelectorAll<HTMLElement>('#targets-popover-rows [data-target-key]')) {
+    if (!normalizeRow(row)) ok = false;
+  }
+  return ok;
 }
 
 function renderRows(targets: Record<string, string>, deadlines: Record<string, string> = {}): void {
@@ -313,6 +346,10 @@ async function applyTargetsPopover(): Promise<void> {
 
   let payload;
   if (!groupName) {
+    if (!normalizeAllRows()) {
+      _deps.toast('Fix the highlighted value first', 'error');
+      return;
+    }
     // "— manual —": replace targets with the builder rows and clear the group.
     const targets = collectRows();
     const target_deadlines = collectDeadlines();

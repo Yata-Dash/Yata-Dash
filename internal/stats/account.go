@@ -38,6 +38,11 @@ const (
 	// FieldLoginDaysRemaining is how long is LEFT before the tracker acts on
 	// the account, from its declared max_login_gap_days. Negative = overdue.
 	FieldLoginDaysRemaining = "login_days_remaining"
+	// FieldLoginImmune is set (true) when the user's rank exempts them from
+	// the policy — the countdown is then omitted rather than run down to a
+	// warning nobody needs. Only ever true or absent, never false: an absent
+	// field means "not exempt or not known", which alert rules treat alike.
+	FieldLoginImmune = "login_immune"
 	// FieldAPIKeyExpiresAt / FieldAPIKeyExpiryDays are the same pair for a key
 	// with an expiry date.
 	FieldAPIKeyExpiresAt  = "api_key_expires_at"
@@ -50,6 +55,9 @@ const (
 type AccountPolicy struct {
 	// MaxLoginGapDays is the tracker's inactivity deadline; 0 = not known.
 	MaxLoginGapDays int
+	// LoginImmune reports whether a user in the given group is exempt from
+	// that deadline (a rank perk). nil = no exemption is declared.
+	LoginImmune func(group string) bool
 }
 
 // deriveAccountFields adds the days-remaining fields to a merged view.
@@ -61,6 +69,20 @@ type AccountPolicy struct {
 // days_since_login of 0 would read as "logged in today" on all of them, which
 // is both false and exactly backwards.
 func (e *Engine) deriveAccountFields(trackerID string, out models.MergedStats, now time.Time) {
+	var policy AccountPolicy
+	if e.AccountPolicy != nil {
+		policy = e.AccountPolicy(trackerID)
+	}
+	// Rank immunity is a fact about the account whether or not a login time
+	// is known, so it is derived from the group alone — the Rules panel says
+	// "exempt" either way, and the countdown below is skipped.
+	immune := false
+	if g, ok := out["group"]; ok && policy.LoginImmune != nil {
+		if name, _ := g.Value.(string); name != "" && policy.LoginImmune(name) {
+			immune = true
+			out[FieldLoginImmune] = models.StatField{Value: true, Source: g.Source, UpdatedAt: g.UpdatedAt}
+		}
+	}
 	if src, ok := out[FieldLastLogin]; ok {
 		if t, ok := statTime(src.Value); ok {
 			since := wholeDays(now.Sub(t))
@@ -68,12 +90,9 @@ func (e *Engine) deriveAccountFields(trackerID string, out models.MergedStats, n
 			// The deadline needs the tracker's policy, which only a def can
 			// supply. Without one there is nothing to count down to — and
 			// saying so by omission is right: Yata not knowing a policy is not
-			// evidence that the tracker has none.
-			gap := 0
-			if e.AccountPolicy != nil {
-				gap = e.AccountPolicy(trackerID).MaxLoginGapDays
-			}
-			if gap > 0 {
+			// evidence that the tracker has none. An immune account has no
+			// deadline either, and an absent field is how a rule stays quiet.
+			if gap := policy.MaxLoginGapDays; gap > 0 && !immune {
 				deadline := t.AddDate(0, 0, gap)
 				out[FieldLoginDaysRemaining] = derivedFrom(src, wholeDays(deadline.Sub(now)))
 			}

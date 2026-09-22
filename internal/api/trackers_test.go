@@ -140,31 +140,39 @@ func TestToViewIncludesTrackerRuleNote(t *testing.T) {
 
 func strp(s string) *string { return &s }
 
-// TestApplyPayloadSanitizesManualStats: typed-in stats are stored in the same
-// shapes a fetch produces, so nothing downstream can tell a typed number from
-// a fetched one. Sizes get two decimals (as the scrapers already normalise
-// their own readings), durations become the canonical seed-time form, blanks
-// are dropped rather than stored as an answer, and an unrecognised field is
-// kept as typed — the canonical set grows, and refusing a value merely because
-// this list hasn't caught up would lose the user's data.
-func TestApplyPayloadSanitizesManualStats(t *testing.T) {
+// TestValidatePayloadSanitizesManualStats: typed-in stats are stored in the
+// same shapes a fetch produces, so nothing downstream can tell a typed number
+// from a fetched one. Sizes get two decimals and a cased unit, durations
+// become the canonical seed-time form, blanks are dropped rather than stored
+// as an answer, and an unrecognised field is kept as typed — the canonical set
+// grows, and refusing a value merely because this list hasn't caught up would
+// lose the user's data.
+func TestValidatePayloadSanitizesManualStats(t *testing.T) {
 	stats := map[string]string{
 		"uploaded":        " 5.5 tb ",    // size → 2dp, trimmed, unit cased
 		"seed_size":       "800.129 gib", // size → 2dp, "gib" → "GiB"
 		"real_downloaded": "512 b",       // bare byte unit → "B"
+		"downloaded":      "200g",        // a bare letter is a unit too
 		"avg_seed_time":   "90000",       // raw seconds → canonical duration
-		"ratio":           "4.58",        // plain value, untouched
-		"leeching":        "",            // empty → dropped entirely
-		"future_stat":     "7",           // unknown field → kept as typed
+		"total_seedtime":  "2 years 3 months",
+		"ratio":           "4.58", // plain value, untouched
+		"leeching":        "",     // empty → dropped entirely
+		"future_stat":     "7",    // unknown field → kept as typed
+	}
+	p := trackerPayload{ManualStats: &stats}
+	if err := validateTrackerPayload(&p); err != nil {
+		t.Fatalf("validate: %v", err)
 	}
 	tr := &models.Tracker{}
-	applyPayload(tr, trackerPayload{ManualStats: &stats})
+	applyPayload(tr, p)
 
 	want := map[string]string{
 		"uploaded":        "5.50 TB",
 		"seed_size":       "800.13 GiB",
 		"real_downloaded": "512.00 B",
+		"downloaded":      "200.00 GB",
 		"avg_seed_time":   "1D 1h",
+		"total_seedtime":  "2Y 3M",
 		"ratio":           "4.58",
 		"future_stat":     "7",
 	}
@@ -175,6 +183,87 @@ func TestApplyPayloadSanitizesManualStats(t *testing.T) {
 		if got := tr.ManualStats[k]; got != w {
 			t.Errorf("%s = %q, want %q", k, got, w)
 		}
+	}
+}
+
+// TestValidatePayloadRefusesBadShapes: a value that is not the shape its field
+// needs is refused with the field named, and nothing is applied. Before this
+// "This shouldn't be allowed" saved as Real Downloaded and "200" (200 what?)
+// as an upload.
+func TestValidatePayloadRefusesBadShapes(t *testing.T) {
+	cases := []struct {
+		name    string
+		manual  map[string]string
+		targets map[string]string
+		wantErr string
+	}{
+		{"words in a size", map[string]string{"real_downloaded": "This shouldn't be allowed"}, nil, `manual stat "real_downloaded"`},
+		{"size without a unit", map[string]string{"uploaded": "200"}, nil, "not a size"},
+		{"nonsense duration", map[string]string{"avg_seed_time": "3 monkeys"}, nil, "not a duration"},
+		{"words in a ratio", map[string]string{"ratio": "about four"}, nil, "not a number"},
+		{"target size without a unit", nil, map[string]string{"seed_size": "5"}, `target "seed_size"`},
+		{"target ratio words", nil, map[string]string{"ratio": "high"}, "not a number"},
+		{"target age words", nil, map[string]string{"days": "a while"}, "not an account age"},
+		// ParseFloat/Atoi read these as numbers; none is a target.
+		{"target seconds NaN", nil, map[string]string{"avg_seed": "NaN"}, "not a duration"},
+		{"target seconds Inf", nil, map[string]string{"avg_seed": "+Inf"}, "not a duration"},
+		{"target seconds negative", nil, map[string]string{"avg_seed": "-3600"}, "not a duration"},
+		{"target days zero", nil, map[string]string{"days": "0"}, "not an account age"},
+		{"target days negative", nil, map[string]string{"days": "-30"}, "not an account age"},
+	}
+	for _, c := range cases {
+		p := trackerPayload{}
+		if c.manual != nil {
+			m := c.manual
+			p.ManualStats = &m
+		}
+		if c.targets != nil {
+			m := c.targets
+			p.Targets = &m
+		}
+		err := validateTrackerPayload(&p)
+		if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+			t.Errorf("%s: err = %v, want one containing %q", c.name, err, c.wantErr)
+		}
+	}
+}
+
+// TestValidatePayloadCanonicalisesTargets: targets take the same treatment.
+// Sizes are canonical, the seconds/days the form has always sent stay as they
+// are, and a duration or age typed straight into the API is converted to that
+// form rather than kept as text the pacing code cannot read. Requirement
+// counters and unknown keys pass through.
+func TestValidatePayloadCanonicalisesTargets(t *testing.T) {
+	targets := map[string]string{
+		"uploaded":       "1.5 tib",
+		"seed_size":      "5 TB", // a def's decimal label is kept as written
+		"ratio":          "2.0",
+		"avg_seed":       "7776000", // seconds, as the form sends
+		"days":           "1y 6m",   // typed age → days (no minutes in an age)
+		"count:Uploader": "3",       // requirement counter, untouched
+		"something_new":  "whatever",
+	}
+	p := trackerPayload{Targets: &targets}
+	if err := validateTrackerPayload(&p); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	want := map[string]string{
+		"uploaded": "1.50 TiB", "seed_size": "5.00 TB", "ratio": "2.0",
+		"avg_seed": "7776000", "days": "545", "count:Uploader": "3", "something_new": "whatever",
+	}
+	for k, w := range want {
+		if got := (*p.Targets)[k]; got != w {
+			t.Errorf("%s = %q, want %q", k, got, w)
+		}
+	}
+	// A duration typed for avg_seed becomes seconds.
+	targets = map[string]string{"avg_seed": "3M"}
+	p = trackerPayload{Targets: &targets}
+	if err := validateTrackerPayload(&p); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if got := (*p.Targets)["avg_seed"]; got != "7776000" {
+		t.Errorf("avg_seed 3M = %q, want 7776000", got)
 	}
 }
 

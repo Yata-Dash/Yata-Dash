@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
 // demoTracker builds a Type "test" tracker (defs/types/test.json: api.kind
@@ -17,12 +18,124 @@ import (
 // testScrape short-circuits to not_applicable for Type "test". Either way,
 // NO real HTTP request is ever made, so these tests are fully offline and
 // only care about the bookkeeping side effects (config persistence, the
-// testResults/pendingTestResults caches, the scrape log).
+// stored checks / pendingTestResults, the scrape log).
 func demoTracker(id, apiKey string) models.Tracker {
 	return models.Tracker{
 		ID: id, Name: "Demo " + id, URL: "http://demo.local/" + id,
 		Type: "test", APIKey: apiKey, Enabled: true,
 	}
+}
+
+// hasStoredCheck reports whether any channel outcome is recorded for the ID.
+func hasStoredCheck(t *testing.T, d *Deps, id string) bool {
+	t.Helper()
+	all, err := d.DB.Checks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(all[id]) > 0
+}
+
+// TestStatusFollowsRefreshesAndConfiguration: the status column's answer
+// is stored (so it outlives a restart), and an ordinary refresh writes it
+// too — a Test is not the only way to learn a cookie has
+// expired. Static states are worked out on read (a demo tracker's scrape is
+// "N/A" without anyone recording it), and a tracker nothing is known about
+// is absent rather than invented.
+func TestStatusFollowsRefreshesAndConfiguration(t *testing.T) {
+	d := testDeps(t)
+	if err := d.Cfg.AddTracker(demoTracker("tstat1", "k")); err != nil {
+		t.Fatal(err)
+	}
+	// Static only: the scrape channel of a demo tracker is N/A, the API has
+	// not been tried.
+	st := currentTestStatus(d)
+	if got := st["tstat1"]; got.Scrape.Status != "not_applicable" || got.API.Status != "untested" {
+		t.Fatalf("before any attempt: %+v", got)
+	}
+
+	// A refresh records the API outcome (mock data is missing in testDeps,
+	// so it fails — the point is that the failure is now on record).
+	refreshTracker(d, mustTracker(t, d, "tstat1"), true)
+	st = currentTestStatus(d)
+	got := st["tstat1"]
+	if got.API.Status != "fail" || got.API.Source != "refresh" || got.API.At == 0 {
+		t.Fatalf("after a refresh: %+v", got.API)
+	}
+	if got.TestedAt != got.API.At {
+		t.Errorf("tested_at = %d, want the newest channel's time %d", got.TestedAt, got.API.At)
+	}
+
+	// A Test overrides the refresh's record and says so.
+	router := NewRouter(d)
+	if rec := postJSON(t, router, "/api/trackers/tstat1/test", ""); rec.Code != http.StatusOK {
+		t.Fatalf("test: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := currentTestStatus(d)["tstat1"]; got.API.Source != "test" {
+		t.Fatalf("after a Test: %+v", got.API)
+	}
+
+	// The present configuration outranks any past outcome: take the key away
+	// and the channel is "not set up" now, whatever the last attempt said.
+	// (Survival across a reopen is the store's test, checks_test.go.)
+	_ = d.Cfg.UpdateTracker("tstat1", func(tr *models.Tracker) { tr.Type = "unit3d"; tr.APIKey = "" })
+	if got := currentTestStatus(d)["tstat1"]; got.API.Status != "not_configured" || got.API.Detail != "no_key" {
+		t.Fatalf("no key: %+v", got.API)
+	}
+}
+
+// TestStatusFallsBackToScrapeLog: before any row of its own exists, the
+// scrape channel reads the scrape log's last attempt — a daily scraper must
+// not show "Not tried yet" for a day after the upgrade that added the table.
+func TestStatusFallsBackToScrapeLog(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "tlog1", Name: "Log", URL: "http://log.local", Type: "unit3d",
+		APIKey: "k", Username: "u", SessionCookie: "c", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.RecordScrape("tlog1", time.Unix(1_700_000_000, 0), false, "session_expired"); err != nil {
+		t.Fatal(err)
+	}
+	got := currentTestStatus(d)["tlog1"].Scrape
+	if got.Status != "fail" || got.Detail != "session_expired" || got.At != 1_700_000_000 || got.Source != "refresh" {
+		t.Fatalf("scrape from the log: %+v", got)
+	}
+	// A row of its own wins once one exists.
+	_ = d.DB.RecordCheck(store.Check{TrackerID: "tlog1", Channel: "scrape", At: 1_700_000_500, Status: "ok", Fields: 9, Source: "refresh"})
+	if got := currentTestStatus(d)["tlog1"].Scrape; got.Status != "ok" || got.At != 1_700_000_500 {
+		t.Fatalf("stored row should win: %+v", got)
+	}
+}
+
+// TestStatusOfRetiredTrackerIsNotApplicable: a shut-down tracker is never
+// contacted, so both channels read N/A — even with an outcome recorded from
+// before it closed, which would otherwise stand as its status for ever.
+func TestStatusOfRetiredTrackerIsNotApplicable(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "tret1", Name: "Aura", URL: "https://aura4k.net", Type: "unit3d",
+		APIKey: "k", SessionCookie: "c", Username: "u", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.DB.RecordCheck(store.Check{TrackerID: "tret1", Channel: "api", At: 1, Status: "ok", Source: "refresh"})
+	_ = d.DB.RecordCheck(store.Check{TrackerID: "tret1", Channel: "scrape", At: 1, Status: "fail", Detail: "timeout", Source: "refresh"})
+	got := currentTestStatus(d)["tret1"]
+	if got.API.Status != "not_applicable" || got.API.Detail != "retired" {
+		t.Errorf("api = %+v", got.API)
+	}
+	if got.Scrape.Status != "not_applicable" || got.Scrape.Detail != "retired" {
+		t.Errorf("scrape = %+v", got.Scrape)
+	}
+}
+
+func mustTracker(t *testing.T, d *Deps, id string) models.Tracker {
+	t.Helper()
+	tr, ok := d.Cfg.Tracker(id)
+	if !ok {
+		t.Fatalf("tracker %s missing", id)
+	}
+	return tr
 }
 
 func postJSON(t *testing.T, router http.Handler, path, body string) *httptest.ResponseRecorder {
@@ -80,8 +193,8 @@ func TestMatchingCredentialsTestStoresToTestResults(t *testing.T) {
 		t.Fatalf("test: status %d, body %s", rec.Code, rec.Body.String())
 	}
 
-	if _, ok := testResults.Load("tmatch1"); !ok {
-		t.Error("matching-credentials test did not land in testResults")
+	if !hasStoredCheck(t, d, "tmatch1") {
+		t.Error("matching-credentials test was not recorded as the tracker's last outcome")
 	}
 	if _, ok := pendingTestResults.Load("tmatch1"); ok {
 		t.Error("matching-credentials test unexpectedly went pending")
@@ -102,8 +215,8 @@ func TestDifferingCredentialsGoesPendingAndPromotesOnMatchingSave(t *testing.T) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("test: status %d, body %s", rec.Code, rec.Body.String())
 	}
-	if _, ok := testResults.Load("tpend1"); ok {
-		t.Fatal("differing-credentials test landed straight in testResults")
+	if hasStoredCheck(t, d, "tpend1") {
+		t.Fatal("differing-credentials test was recorded as an outcome straight away")
 	}
 	if _, ok := pendingTestResults.Load("tpend1"); !ok {
 		t.Fatal("differing-credentials test did not go pending")
@@ -122,8 +235,8 @@ func TestDifferingCredentialsGoesPendingAndPromotesOnMatchingSave(t *testing.T) 
 	if got.APIKey != "different" {
 		t.Fatalf("save did not persist api_key: %+v", got)
 	}
-	if _, ok := testResults.Load("tpend1"); !ok {
-		t.Error("pending test was not promoted to testResults after a matching save")
+	if !hasStoredCheck(t, d, "tpend1") {
+		t.Error("pending test was not recorded after a matching save")
 	}
 	if _, ok := pendingTestResults.Load("tpend1"); ok {
 		t.Error("pending entry was not cleared after promotion")
@@ -159,7 +272,7 @@ func TestPendingDiscardedOnNonMatchingSave(t *testing.T) {
 	if _, ok := pendingTestResults.Load("tdisc1"); ok {
 		t.Error("pending entry survived a non-matching save")
 	}
-	if _, ok := testResults.Load("tdisc1"); ok {
+	if hasStoredCheck(t, d, "tdisc1") {
 		t.Error("a non-matching save must not promote the stale pending result")
 	}
 }
@@ -187,8 +300,8 @@ func TestAdhocEndpointReturnsResultAndPersistsNothing(t *testing.T) {
 	if len(d.Cfg.Trackers()) != 0 {
 		t.Error("adhoc test persisted a tracker into config")
 	}
-	if _, ok := testResults.Load(adhocTestID); ok {
-		t.Error("adhoc test cached a result under the throwaway ID")
+	if hasStoredCheck(t, d, adhocTestID) {
+		t.Error("adhoc test recorded an outcome under the throwaway ID")
 	}
 	if _, ok := pendingTestResults.Load(adhocTestID); ok {
 		t.Error("adhoc test left a pending entry under the throwaway ID")

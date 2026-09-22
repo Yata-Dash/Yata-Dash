@@ -5,7 +5,7 @@
   "abbr": "ANT",
   "url": "https://anthelion.me",
   "type": "gazelle_antneb",
-  "last_updated": "2026-07-27",
+  "last_updated": "2026-09-22",
   "approved_by": {
     "name": "Alastor",
     "role": "Owner",
@@ -20,7 +20,8 @@
   },
   "rules": {
     "min_ratio": 0.8,
-    "max_login_gap_days": 90
+    "max_login_gap_days": 90,
+    "login_immune_from_group": "Torrent Master"
   },
   "invite_requirements": {
     "min_class": "Power User"
