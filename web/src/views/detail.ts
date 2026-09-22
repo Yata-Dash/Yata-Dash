@@ -10,7 +10,7 @@ import * as api from '../api';
 import { renderChart } from '../components/chart';
 import type { ChartSeries } from '../components/chart';
 import { buildStatRows } from '../components/profile';
-import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, fmtLoginAgo, statDate } from '../utils/account';
+import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, fmtLoginAgo, loginRuleText, statDate } from '../utils/account';
 import { capabilityCard } from '../components/capabilities';
 import { appSettings, fieldOf, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
 import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
@@ -544,8 +544,9 @@ function renderTargetsCol(t: Tracker): void {
   // rather than describing a threshold, so it is shown whether or not the
   // tracker reports a login time — on the trackers that don't, this number is
   // the entire answer to "how often do I need to visit?".
-  if (t.max_login_gap_days && t.max_login_gap_days > 0) {
-    rules.push(`<div class="exp-stat"><span class="exp-stat-label" title="Log in at least this often or the tracker disables or prunes the account">Login Required</span><span class="exp-stat-value">every ${t.max_login_gap_days} days</span></div>`);
+  const loginRule = loginRuleText(t, statsCache[t.id]);
+  if (loginRule) {
+    rules.push(`<div class="exp-stat"><span class="exp-stat-label" title="Log in at least this often or the tracker disables or prunes the account — unless your rank grants inactivity immunity">Login Required</span><span class="exp-stat-value">${esc(loginRule)}</span></div>`);
     // Where you actually stand against that policy, directly beneath it. Only
     // the elapsed time is shown: next to "every 90 days", the exact calendar
     // date answers a question nobody is asking. Muted and smaller because it

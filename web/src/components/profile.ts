@@ -75,7 +75,7 @@ const NON_ROW_FIELDS = new Set([
   // Derived day counts (internal/stats/account.go). They exist so alert rules
   // can compare one number across trackers with different policies; as rows
   // they would just restate the two dated rows above as bare integers.
-  'days_since_login', 'login_days_remaining', 'api_key_expiry_days',
+  'days_since_login', 'login_days_remaining', 'api_key_expiry_days', 'login_immune',
   // Account information, rendered in the Info column instead (see above).
   'last_login', 'api_key_expires_at',
   // The current group's own styling, reported alongside the rank by platforms

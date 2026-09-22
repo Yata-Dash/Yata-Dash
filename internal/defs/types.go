@@ -423,12 +423,17 @@ type TrackerRules struct {
 	// and must stay silent. It does NOT mean the tracker has none, so nothing
 	// may present an absent value as "no deadline".
 	//
-	// Known limitation: several trackers (AnimeBytes, BTN, Redacted,
-	// GazelleGames, Anthelion) grant inactivity immunity as a RANK PERK, so a
-	// user high enough on the ladder is exempt from a policy this field states
-	// site-wide. Yata has no way to express that yet, so those defs are left
-	// unset rather than warning people who cannot be pruned.
+	// Several trackers grant inactivity immunity as a rank perk; see
+	// LoginImmuneFromGroup for how that exemption is expressed.
 	MaxLoginGapDays int `json:"max_login_gap_days,omitempty"`
+	// LoginImmuneFromGroup names the rank from which the inactivity policy
+	// no longer applies — AnimeBytes, BTN, Redacted, GazelleGames and
+	// Anthelion all grant "inactivity immunity" as a perk. A user in that
+	// group or any higher one on the def's ladder gets no login countdown
+	// and no warning, because there is nothing to warn about. The name must
+	// match a group in the def's own list; anything else is ignored, which
+	// fails toward warning rather than toward silence.
+	LoginImmuneFromGroup string `json:"login_immune_from_group,omitempty"`
 	// Note carries concise fine print that cannot be represented by the fixed
 	// thresholds above, such as size-based seed-time formulas and H&R grace.
 	Note string `json:"note,omitempty"`

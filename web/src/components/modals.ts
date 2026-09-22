@@ -2033,13 +2033,14 @@ const PREVIEW_GROUP: GroupDef = {
 // Event globe used by the preview event banner (matches the detail view).
 const PREVIEW_EVENT_ICON = eventGlobeSvg('flex-shrink:0');
 
-/** Display toggles the preview card can show the effect of. Anything not here
- *  either has no on-card representation (favicon in the browser tab, pathway
- *  options, hover-only behaviour) or is not a card concern at all. */
+/** Display toggles the preview card can show the effect of. The three
+ *  Pathways toggles are the only ones left out: they change the Pathways
+ *  view, and a tracker card has nothing to show for them. Hover-only
+ *  behaviour (trend rate) is demonstrated by hovering the preview's stats. */
 const PREVIEW_TOGGLE_IDS = [
   's-private-track', 's-stat-src-track', 's-favicon-track', 's-target-eta-track',
   's-tracker-rules-track', 's-unread-mail-track', 's-unread-notif-track',
-  's-hnr-highlight-track', 's-goal-chips-track',
+  's-hnr-highlight-track', 's-goal-chips-track', 's-goal-pacing-track', 's-rate-hover-track',
 ];
 
 /** Read the live (possibly-unsaved) Display form state into a settings object
@@ -2067,6 +2068,8 @@ function previewSettings(): AppSettings {
     show_unread_notifications:  on('s-unread-notif-track'),
     highlight_hnr:              on('s-hnr-highlight-track'),
     show_goal_chips:            on('s-goal-chips-track'),
+    show_goal_pacing:           on('s-goal-pacing-track'),
+    show_rate_hovers:           on('s-rate-hover-track'),
   } as AppSettings;
 }
 
@@ -2097,6 +2100,13 @@ export function renderThemePreview(): void {
   const chip = (kind: 'ontrack' | 'behind', label: string) =>
     s.show_goal_chips === false ? ''
       : ` <span class="goal-chip goal-chip--${kind}">${label}</span>`;
+  // The Detail page's pacing line, under a dated target (goalPacingLine in
+  // views/grid.ts renders the real one); the card stands in for that page.
+  const pacing = (text: string) =>
+    s.show_goal_pacing === false ? '' : `<div class="target-goal-line">${text}</div>`;
+  // Trend rate on hover — a tooltip on the stat, exactly as on a real card.
+  const rate = (text: string) =>
+    s.show_rate_hovers === false ? '' : ` title="${esc(text)}"`;
   const flags =
     (s.show_unread_mail !== false ? '<span class="unread-flag" title="Unread mail"><i class="fas fa-envelope"></i></span>' : '') +
     (s.show_unread_notifications !== false ? '<span class="unread-flag" title="Unread notifications"><i class="fas fa-bell"></i></span>' : '');
@@ -2125,11 +2135,11 @@ export function renderThemePreview(): void {
       <span class="exp-event-ends">ends in 2d 4h</span>
     </div>
     <div class="theme-preview-stats" style="margin-top:10px">
-      <div class="stat-item"><div class="stat-label">Uploaded</div><div class="stat-value green">${displaySize('8.24 TB', s)}${dot('api')}</div></div>
+      <div class="stat-item"${rate('≈ 24.6 GiB per day')}><div class="stat-label">Uploaded</div><div class="stat-value green">${displaySize('8.24 TB', s)}${dot('api')}</div></div>
       <div class="stat-item"><div class="stat-label">Ratio</div><div class="stat-value red">2.41${dot('api')}</div></div>
       <div class="stat-item"><div class="stat-label">Buffer</div><div class="stat-value blue">${displaySize('3.10 TB', s)}${dot('scrape')}</div></div>
       <div class="stat-item"><div class="stat-label">Avg Seed Time</div><div class="stat-value pink">88d${dot('scrape')}</div></div>
-      <div class="stat-item"><div class="stat-label">Bonus</div><div class="stat-value orange">14,208${dot('api')}</div></div>
+      <div class="stat-item"${rate('≈ 3,423 per day')}><div class="stat-label">Bonus</div><div class="stat-value orange">14,208${dot('api')}</div></div>
       <div class="stat-item"><div class="stat-label">Hit &amp; Runs</div><div class="stat-value ${hnrColor}">2${dot('scrape')}</div></div>
     </div>
     <div class="targets-section" style="margin-top:10px">
@@ -2153,6 +2163,7 @@ export function renderThemePreview(): void {
           <span class="target-vals">${displaySize('1.8 TB', s)} <span class="tgt">/ ${displaySize('10 TB', s)}</span>${eta(852)}${chip('behind', 'behind')}</span>
         </div>
         <div class="progress-track"><div class="progress-fill red" style="width:18%"></div></div>
+        ${pacing(`behind — needs ${esc(displaySize('96.4 GB', s))}/day, doing ${esc(displaySize('24.6 GB', s))}/day`)}
       </div>
     </div>
     ${rulesLine}

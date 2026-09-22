@@ -5,7 +5,7 @@
   "abbr": "AB",
   "url": "https://animebytes.tv",
   "type": "custom",
-  "last_updated": "2026-07-21",
+  "last_updated": "2026-09-22",
   "scrape": {
     "disable_scraping": true
   },
@@ -35,6 +35,7 @@
   "rules": {
     "min_ratio": 0.2,
     "min_seed_hours": 72,
+    "login_immune_from_group": "Power User",
     "note": "Seed time adds 5 hours per GiB over 10 GiB, capped at 21 days. It applies from 10% downloaded; grace is four times the minimum when complete or 7 days when incomplete. Uploaders, connected peers, and torrents with ratio at least 1.0 are exempt. Five H&Rs revoke download privileges."
   },
   "invite_requirements": {

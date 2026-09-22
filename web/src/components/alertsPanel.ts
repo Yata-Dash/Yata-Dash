@@ -7,19 +7,7 @@
 import { deleteAlert, fetchAlerts, markAlertsRead } from '../api';
 import { trackers } from '../state';
 import type { AlertSource, AppAlert } from '../types';
-import { esc } from '../utils/format';
-
-/** "just now" / "12m" / "3h" / "5d" — the age of one row. Local because the
- *  app's other relative-time helpers are day-granularity (account deadlines),
- *  and an alert from twenty minutes ago should not read "today". */
-function fmtAgo(unixSec: number): string {
-  const s = Math.max(0, Math.floor(Date.now() / 1000 - unixSec));
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 2592000) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(unixSec * 1000).toISOString().slice(0, 10);
-}
+import { esc, fmtAgo } from '../utils/format';
 
 /** How many rows a page holds. Retention caps the table at 500, so "load
  *  more" is a rare path rather than the normal way to read the list. */

@@ -20,7 +20,30 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   days` → `3M 6D` — and refuse one they cannot read, with the shape spelled
   out. The server refuses the same values, naming the field.
 
+- **The Trackers table's Status column now shows each channel's last real
+  outcome** — from a Test or from an ordinary refresh, with how long ago — and
+  it survives a restart. "Not tested" is gone: a scrape that failed on an
+  expired cookie is the same news as a Test would have been, and a tracker
+  scraped once a day no longer needs a lucky click to show a result. A missing key or
+  an API-only setting still read as *Not set up* / *N/A* from the
+  configuration itself.
+
+- **Rank-based inactivity immunity.** Trackers that exempt higher ranks from
+  their login policy (AnimeBytes, BTN, Redacted, GazelleGames, Anthelion) can
+  say so in their definition; an exempt account gets no login countdown or
+  warning, and the Rules panel reads "you're exempt (Torrent Master and
+  above)".
+
+- **The Display preview now demonstrates every card toggle**, including the
+  goal-pacing line and the trend-rate hover.
+
 ### Fixed
+
+- **An ended event no longer lingers on a tracker whose scraping was switched
+  off.** The 48-hour rule from Beta-20260920 only applied when the event list
+  was fetched; a scrape layer nothing rewrites any more still carried
+  "freeleech until Sep 5" weeks later. Ended events now expire on read,
+  whichever layer they came from.
 
 - **A typed seed time no longer drifts on save.** The server read months as
   30.44 days and years as 365.25 when it stored a value, but printed them as

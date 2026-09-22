@@ -46,3 +46,27 @@ func TestTrackerRulesCarryLoginGap(t *testing.T) {
 		t.Errorf("max login gap = %d, want 90", rules.MaxLoginGapDays)
 	}
 }
+
+// TestLoginImmuneFollowsTheLadder: immunity starts at the named rank and
+// covers everything above it on the def's own ladder; an unknown group on
+// either side is not immune, because a policy Yata cannot rule out is one it
+// should still warn about.
+func TestLoginImmuneFollowsTheLadder(t *testing.T) {
+	reg, err := Load("../../defs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const url = "https://anthelion.me"
+	cases := map[string]bool{
+		"Torrent Master": true, "Legend": true, "torrent master": true,
+		"Guru": false, "User": false, "": false, "Made Up": false,
+	}
+	for group, want := range cases {
+		if got := reg.LoginImmune(url, group); got != want {
+			t.Errorf("LoginImmune(anthelion, %q) = %v, want %v", group, got, want)
+		}
+	}
+	if reg.LoginImmune("https://aither.cc", "Elite") {
+		t.Error("a def with no exemption declared must not grant one")
+	}
+}

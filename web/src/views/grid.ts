@@ -10,7 +10,7 @@ import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSee
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
 import { displaySize } from '../utils/units';
-import { accountWarningBadges } from '../utils/account';
+import { accountWarningBadges, loginRuleText } from '../utils/account';
 import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
 
@@ -424,7 +424,7 @@ export function renderCard(
         ${stat('H&Rs',          'hit_and_runs',    hnrColor, String(hnr))}
       </div>
       ${cardExtras(targetsHtml, moreHtml)}
-      ${buildRulesLine(tracker, settings)}
+      ${buildRulesLine(tracker, stats, settings)}
     </div>
     <div class="card-footer">
       <span class="card-last-updated"${stats?.manual_entry ? ' title="Yata never contacts this tracker — these are the numbers you typed in"' : ''}>${
@@ -514,7 +514,7 @@ function cardExtras(targetsHtml: string, moreHtml: string): string {
 /** Compact display-only rules line at the bottom of a card (def account-wide
  *  rules: min ratio / min seed time). Follows the Display toggle; the fine
  *  print stays on the tracker's rules page. */
-function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
+function buildRulesLine(tracker: Tracker, stats: TrackerStatsResponse | undefined, settings: AppSettings): string {
   if (settings.show_tracker_rules === false) return '';
   const parts: string[] = [];
   if (tracker.min_ratio && tracker.min_ratio > 0) parts.push(`Ratio ≥ ${tracker.min_ratio}`);
@@ -526,8 +526,8 @@ function buildRulesLine(tracker: Tracker, settings: AppSettings): string {
     parts.push(`Seed ≥ ${tracker.min_seed_hours} hours`);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     parts.push(`Seed ≥ ${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`);
-  if (tracker.max_login_gap_days && tracker.max_login_gap_days > 0)
-    parts.push(`Login every ${tracker.max_login_gap_days} days`);
+  const loginRule = loginRuleText(tracker, stats);
+  if (loginRule) parts.push(`Login ${loginRule}`);
   if (tracker.rule_note) parts.push(tracker.rule_note);
   if (!parts.length) return '';
   return `<div class="card-rules" title="Tracker rules (reference) — full details on the tracker's rules page">

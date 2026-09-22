@@ -1,7 +1,7 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { MANUAL_TYPE, usesAPIKey } from '../types';
-import { jsId, esc, errLabel, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
+import { jsId, esc, errLabel, fieldFreshness, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { displaySize } from '../utils/units';
 import { getSortedTrackers } from '../utils/sort';
@@ -10,7 +10,7 @@ import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { buildStatsPanel } from '../components/profile';
 import { buildTargets, fmtDateTime, makeSdot } from './grid';
 import { eventGlobeSvg } from '../utils/icons';
-import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin } from '../utils/account';
+import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, loginRuleText } from '../utils/account';
 
 interface TableCallbacks {
   onSort: (col: string) => void;
@@ -514,14 +514,16 @@ function buildExpanded(
     infoList.push({ l: 'Scrapes Today', v: `${ss.scrapes_today} / ${ss.effective_max_per_day}` });
   }
 
-  // Unread mail/notification flags (scraped header presence). Only rendered
-  // when the flag was actually scraped — unknown is omitted, never "No".
-  // Each row follows its own Display toggle.
+  // Unread mail/notification flags. Only rendered when the flag was actually
+  // reported — unknown is omitted, never "No". Each row follows its own
+  // Display toggle, and the hover says where the answer came from and when,
+  // read from the field itself rather than assumed.
   const unreadRow = (label: string, field: string, icon: string, enabled: boolean) => {
     if (!enabled) return '';
     const v = strOf(stats, field);
     if (v !== 'true' && v !== 'false') return '';
-    return `<div class="exp-stat">
+    const fresh = fieldFreshness(fieldOf(stats, field));
+    return `<div class="exp-stat"${fresh ? ` title="${esc(fresh)}"` : ''}>
       <span class="exp-stat-label">${label}</span>
       <span class="exp-stat-value">${v === 'true'
         ? `<span class="unread-flag" style="margin-left:0;margin-right:4px"><i class="fas fa-${icon}"></i></span>Yes`
@@ -618,8 +620,8 @@ function buildExpanded(
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_hours} hours`]);
   if (!tracker.min_seed_hours && !tracker.min_seed_days_episode && !tracker.min_seed_days_season && tracker.min_seed_days && tracker.min_seed_days > 0)
     rulesRows.push(['Min Seed Time', `${tracker.min_seed_days} day${tracker.min_seed_days === 1 ? '' : 's'}`]);
-  if (tracker.max_login_gap_days && tracker.max_login_gap_days > 0)
-    rulesRows.push(['Login Required', `every ${tracker.max_login_gap_days} days`]);
+  const loginRule = loginRuleText(tracker, stats);
+  if (loginRule) rulesRows.push(['Login Required', loginRule]);
   if (tracker.rule_note) rulesRows.push(['Details', tracker.rule_note]);
   const rulesHtml = rulesRows.length ? `<div style="margin-top:10px">
       <div class="exp-section-title" title="Reference from the tracker's rules page — full details stay on the tracker">Rules</div>

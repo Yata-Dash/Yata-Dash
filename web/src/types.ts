@@ -65,6 +65,10 @@ export interface Tracker {
   /** Fine print for variable seed-time formulas, grace periods, or H&R rules. */
   /** Tracker's inactivity policy in days (0/absent = none known). */
   max_login_gap_days?: number;
+  /** The rank from which that policy stops applying (a perk); absent = no
+   *  exemption declared. Whether this account is exempt is the login_immune
+   *  stat field. */
+  login_immune_from_group?: string;
   /** The user's own recorded login (RFC3339 UTC); "" = never recorded. */
   last_login_at?: string;
   rule_note?: string;
@@ -176,6 +180,11 @@ export interface CheckResult {
   detail?: string;
   /** Number of fields returned on success. */
   fields?: number;
+  /** When this outcome was recorded (unix seconds) and by what — a Test or
+   *  an ordinary refresh. Absent on a static state (N/A, not set up) and on
+   *  a live test's own response. */
+  at?: number;
+  source?: 'test' | 'refresh' | string;
 }
 
 /** Combined API + scrape test for one tracker. */

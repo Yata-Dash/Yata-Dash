@@ -5,12 +5,15 @@
   "abbr": "RED",
   "url": "https://redacted.sh",
   "type": "gazelle_json",
-  "last_updated": "2026-07-21",
+  "last_updated": "2026-09-22",
   "api": {
     "api_key_hint": "User Settings → API Keys. Grant the read-only User scope."
   },
   "scrape": {
     "disable_scraping": true
+  },
+  "rules": {
+    "login_immune_from_group": "Power User"
   },
   "invite_requirements": {
     "min_class": "Power User"

@@ -202,6 +202,10 @@ type TrackerView struct {
 	// tracker reports a login time, because the policy is worth reading on
 	// its own — it is the number that tells you how often to visit.
 	MaxLoginGapDays int `json:"max_login_gap_days,omitempty"`
+	// LoginImmuneFromGroup is the rank from which that policy stops applying
+	// (a perk on several Gazelle sites); "" = no exemption declared. Whether
+	// THIS account is exempt is the login_immune stat, derived from its group.
+	LoginImmuneFromGroup string `json:"login_immune_from_group,omitempty"`
 	// RuleNote is concise fine print supplied by the tracker definition.
 	RuleNote string `json:"rule_note,omitempty"`
 	// DefApproval is the def's staff-approval status (approved | informal |

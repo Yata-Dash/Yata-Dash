@@ -84,6 +84,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 			v.MinSeedDaysEpisode = td.Rules.MinSeedDaysEpisode
 			v.MinSeedDaysSeason = td.Rules.MinSeedDaysSeason
 			v.MaxLoginGapDays = td.Rules.MaxLoginGapDays
+			v.LoginImmuneFromGroup = td.Rules.LoginImmuneFromGroup
 			v.RuleNote = td.Rules.Note
 		}
 	}
@@ -323,7 +324,7 @@ func updateTracker(d *Deps) http.HandlerFunc {
 		// A pending test result (tested unsaved credentials, see testTracker)
 		// graduates to the official cached result only if what was just saved
 		// matches what was tested — otherwise it's discarded as stale.
-		promoteOrDiscardPendingTest(t)
+		promoteOrDiscardPendingTest(d, t)
 		d.logInfof("tracker: updated %s (%s)", t.Name, t.ID)
 		jsonOK(w, toView(d, t))
 	}
