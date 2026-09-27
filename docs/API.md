@@ -52,7 +52,7 @@ Notes:
 No auth required.
 
 ```json
-{ "version": "Beta-20260711" }
+{ "version": "Beta-20260921" }
 ```
 
 ### `GET /api/summary` — the homelab endpoint
@@ -62,7 +62,7 @@ one-liners, and health.
 
 ```json
 {
-  "version": "Beta-20260711",
+  "version": "Beta-20260921",
   "generated_at": 1783958400,
   "totals": {
     "trackers": 5,
@@ -105,13 +105,46 @@ Field notes:
 
 | Field | Meaning |
 |---|---|
-| `status` | `ok` \| `error` \| `disabled` \| `opted_out` \| `unknown`. `unknown` = not refreshed since Yata started; stats are still the stored last-known values. |
-| `error_kind` | Present when `status` is `error`: `auth_error`, `connection_error`, `parse_error`, … |
-| `uploaded` / `downloaded` / `buffer` / `seed_size` | Display strings exactly as the tracker reports them (`"1.40 TiB"`) — template these directly. |
+| `status` | `ok` \| `error` \| `disabled` \| `opted_out` \| `retired` \| `unknown`. `retired` = the tracker has shut down (stored stats are kept, nothing is fetched). `unknown` = not refreshed since Yata started; stats are still the stored last-known values. |
+| `error_kind` | Present when `status` is `error`: `http_401`, `http_403`, `http_NNN`, `connection_error`, `timeout`, `parse_error`, `api_error`, `no_key`, … the same kinds the Trackers table shows. |
+| `uploaded` / `downloaded` / `buffer` / `seed_size` | Display strings as the tracker reports them (`"1.40 TiB"`, or `"1.40 TB"` on sites that label binary sizes that way) — template these directly. The *Size units* display setting does not apply here. |
 | `*_gib` | The same sizes as numbers, in GiB — use these for math and thresholds. Same conversion the history charts use. |
 | `ratio`, `seeding`, `leeching`, `bonus_points`, `hit_and_runs`, `warnings` | Numbers. A field the tracker doesn't report is omitted. `totals.ratio` is omitted when nothing has been downloaded yet. |
 | `unread_mail` / `unread_notifications` | Booleans, updated by API/scrape — at most one refresh interval stale. |
 | `updated_at` | Unix seconds of the newest stored stat for that tracker; `0` = no data yet. |
+
+### `GET /api/highlights` — what needs attention
+
+The ranked lists for a dashboard card with one card's worth of room: which
+trackers are closest to finishing their targets, and which pathway targets
+you could reach. Kept out of `/api/summary` so that shape stays stable; fetch
+both and fall back to totals-only against an older Yata.
+
+Query: `limit` (default 5, max 25) caps each list; the `*_count` fields are
+the full lengths before capping, so a card can say "5 of 12".
+
+```json
+{
+  "generated_at": 1783958400,
+  "limit": 5,
+  "targets": [
+    { "tracker_id": "71bf71f14e7e02c3", "name": "Hawke-uno", "abbr": "HUNO", "met": 4, "total": 6, "remaining": 2 }
+  ],
+  "target_count": 12,
+  "pathways": [
+    { "name": "Aither", "abbr": "ATH", "routes": 2, "ready_from": 1, "ready": true, "eta_days": 0, "has_unknown": false, "from": "Blutopia" }
+  ],
+  "pathway_count": 7,
+  "pathways_available": true
+}
+```
+
+`targets` is ordered fewest-remaining first (a fully met set ranks first —
+it's the most actionable row); disabled trackers are left out. `pathways`
+lists targets you don't have yet, ready ones first, then by best estimate;
+`eta_days` is a floor when `has_unknown` is true, and targets you've marked
+*not interested* in the Pathways view are excluded. `pathways_available` is
+false when the routes dataset isn't loaded.
 
 ### `GET /api/history/series` — chart data
 
@@ -127,9 +160,13 @@ Query parameters (all optional):
 | `range` | `48h`, `7d`, `14d`, `30d`, `90d`, `365d`, `all` | `30d` |
 | `granularity` | `auto`, `fine`, `daily` | `auto` |
 
-Recorded fields: `uploaded`, `downloaded`, `buffer`, `seed_size` (GiB) ·
-`ratio` · `seeding`, `leeching`, `hit_and_runs`, `bonus_points`,
-`uploads_approved` (count) · `avg_seed_time` (seconds).
+Recorded fields: `uploaded`, `downloaded`, `buffer`, `seed_size`,
+`total_transfer` (GiB) · `ratio` · `seeding`, `leeching`, `hit_and_runs`,
+`bonus_points`, `uploads_approved` (count) · `avg_seed_time` (seconds).
+
+One synthetic field, `uptime` (percent), is available on request only — daily
+connection success per tracker, from the same record the Health card uses —
+and is never included in an unfiltered response.
 
 Granularity `auto` picks fine points (5-minute cadence, kept 14 days) for
 ranges up to 14 days and daily rollups (kept ~2 years by default) beyond.
@@ -160,6 +197,7 @@ Errors are JSON with an `error` key and a matching HTTP status:
 |---|---|---|
 | `401` | `{"error": "unauthorized"}` | Missing/invalid/revoked token (and no login session). |
 | `404` | `{"error": "not_found"}` | Unknown resource. |
+| `400` | `{"error": "…"}` | A bad parameter, e.g. a `limit` that is not a positive integer. |
 | `500` | `{"error": "store_error"}` | Database problem — check Settings → Logs. |
 
 ---
@@ -217,12 +255,13 @@ query on `totals.issues` > 0 in tools that support it).
 
 - Tokens are stored **hashed** (SHA-256) in Yata's database; the plaintext
   exists only in the creation response. `config.json` never contains tokens.
-- Token scope is exactly: `/api/summary`, `/api/history/series` (plus the
-  public `/api/version`). Everything else — trackers, settings, config
-  export, scraping — rejects tokens and requires the login session.
+- Token scope is exactly: `/api/summary`, `/api/highlights`,
+  `/api/history/series` (plus the public `/api/version`). Everything else —
+  trackers, settings, config export, scraping — rejects tokens and requires
+  the login session.
 - Revocation is immediate.
-- A recovery reset (Sign in → "Reset login & erase all data") deletes all
-  tokens along with everything else.
+- Tokens survive `-reset-auth` (which removes only the login account); revoke
+  them from Settings → Integrations if that's not what you want.
 
 Want more endpoints exposed to tokens (or write access for a specific
 integration)? Open an issue — the surface is deliberately small until real

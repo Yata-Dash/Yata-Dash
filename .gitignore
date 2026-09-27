@@ -44,10 +44,10 @@ static/fontawesome/
 
 
 *.md
-# Ships publicly: README + CHANGELOG (CHANGELOG is also read by the release
-# workflow for the GitHub Release notes) + the API reference (linked from the
-# README and the in-app Integrations tab). Other docs/*.md stay internal.
 !/README.md
+!/docs/SECURITY.md
+!/docs/SETUP.md
+!/docs/CONTRIBUTING.md
 !/CHANGELOG.md
 !/docs/API.md
 
