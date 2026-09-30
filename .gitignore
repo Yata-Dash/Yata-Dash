@@ -38,6 +38,7 @@ tools/apiprobe/
 tools/genversions/
 tools/seedtest/
 tools/ladderprobe/
+tools/ptd-import/
 
 # Self-hosted Font Awesome (e.g. Pro) — licensed assets, must NOT ship in the public repo
 static/fontawesome/

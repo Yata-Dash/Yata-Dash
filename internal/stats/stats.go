@@ -287,6 +287,7 @@ var numericExtractors = map[string]func(any) (float64, bool){
 	"leeching":         numeric,
 	"hit_and_runs":     numeric,
 	"bonus_points":     numeric,
+	"seeding_points":   numeric, // NexusPHP's promotion currency (做种积分)
 	"uploads_approved": numeric,
 	"avg_seed_time":    duration,
 }
@@ -408,7 +409,7 @@ func (e *Engine) GrowthRates(trackerID string) map[string]float64 {
 	byFine := groupByField(fine)
 
 	out := map[string]float64{}
-	for _, f := range []string{"uploaded", "downloaded", "seed_size", "bonus_points", "uploads_approved"} {
+	for _, f := range []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"} {
 		// Daily rollups need a ≥1-day span; fine history a ≥3h span.
 		if r, ok := rateFromPoints(byDay[f], 86400); ok {
 			out[f] = r
