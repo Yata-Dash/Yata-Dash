@@ -1002,7 +1002,7 @@ export function buildTargets(
   const emptyHint = (() => {
     if (rows.length || anyOfHtml) return '';
     // A selected class with no stat requirements (uploader/staff/donor
-    // classes, e.g. InfinityHD's "Runesmith" = their uploaders): show the
+    // classes, e.g. a special class like "Internal"): show the
     // def's description so it's clear why there's nothing to work toward.
     if (tracker.target_group) {
       const desc = targetGroupDef?.requirements?.description ?? '';

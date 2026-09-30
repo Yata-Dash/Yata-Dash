@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "key": "nexusphp",
+  "label": "NexusPHP",
+  "last_updated": "2026-09-25",
+  "description": "NexusPHP private tracker (1.9 and later, with the API enabled). Stats come from /api/v1/profile with a personal access token. Older installs, or sites with the API switched off, report nothing — no profile scraping without staff approval.",
+  "notes": "UNTESTED AGAINST A LIVE SITE — written from NexusPHP's own source (github.com/xiaomlove/nexusphp, branch php8, 2026-09-25): routes/api.php, app/Http/Resources/UserResource.php, app/Repositories/UserRepository.php, include/globalfunctions.php. Confirm with tools/apiprobe on the first 1.9+ site someone can reach, and correct the field map here rather than in Go.\n\nEndpoint: GET /api/v1/profile (Sanctum bearer token; the token needs the user:view permission). include_fields[user]=seeding_leeching_data adds seeding/leeching counts and sizes, computed from the peers table — the only source of seeding and seed size in the API.\n\nEnvelope: {ret, msg, data, time, rid}; ret 0 = success. The UserResource is wrapped by Laravel's JsonResource, so the user object is at data.data — the official Python client reads profile.data.data.username, which confirms it.\n\nTwo bonus currencies, both returned and kept apart on purpose: 'bonus' (the seedbonus column, 魔力值 — spendable, Yata's bonus_points) and 'seed_points' (做种积分 — accumulated, never spent). The stock NexusPHP class ladder promotes on seed_points, so mapping it to bonus_points would compare a spendable balance against a promotion threshold and read anyone who shops as under-qualified. seeding_points is its own field; PT-depiler drafts express the requirement as a min_counts row on it.\n\nRatio is computed from the raw byte counts (ratio_from_bytes) rather than read from share_ratio, which get_ratio formats for display. class_text is the site's class name in the request's locale — ladders are matched on it, so a def whose group names are in another language than the site answers in will not find the user's rank. Rate limit: 60 requests a minute per user (RouteServiceProvider), far above Yata's refresh rate.",
+  "api": {
+    "kind": "custom",
+    "api_key_hint": "Control panel → Access Token → create one with the user:view permission (shown once)"
+  },
+  "custom_api": {
+    "path": "/api/v1/profile?include_fields%5Buser%5D=seeding_leeching_data",
+    "auth_method": "api_key_header",
+    "success_field": "ret",
+    "success_value": "0",
+    "field_map": {
+      "data.data.username": "username",
+      "data.data.class_text": "group",
+      "data.data.added": "join_date",
+      "data.data.last_login": "last_login",
+      "data.data.invites": "invites",
+      "data.data.bonus": "bonus_points",
+      "data.data.seed_points": "seeding_points",
+      "data.data.seedtime": "total_seedtime",
+      "data.data.seeding_leeching_data.seeding_count": "seeding",
+      "data.data.seeding_leeching_data.leeching_count": "leeching"
+    },
+    "byte_fields": {
+      "data.data.uploaded": "uploaded",
+      "data.data.downloaded": "downloaded",
+      "data.data.seeding_leeching_data.seeding_size": "seed_size"
+    },
+    "buffer_from_bytes": true,
+    "ratio_from_bytes": true
+  }
+}

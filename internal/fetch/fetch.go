@@ -1172,7 +1172,9 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 			out[canonical] = normalizeCanonicalString(canonical, val)
 		case float64:
 			// Ratio/points fields stay float; other numerics are counts.
-			if canonical == "ratio" || canonical == "bonus_points" || canonical == "fl_tokens" {
+			// seeding_points is NexusPHP's second bonus currency (做种积分),
+			// fractional like bonus_points.
+			if canonical == "ratio" || canonical == "bonus_points" || canonical == "seeding_points" || canonical == "fl_tokens" {
 				out[canonical] = val
 			} else {
 				out[canonical] = int(val)

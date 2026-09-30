@@ -31,7 +31,7 @@ var manualDurationFields = map[string]bool{
 
 var manualNumberFields = map[string]bool{
 	"ratio": true, "real_ratio": true, "required_ratio": true, "bonus_points": true,
-	"seeding": true, "leeching": true, "hit_and_runs": true, "snatched": true,
+	"seeding_points": true, "seeding": true, "leeching": true, "hit_and_runs": true, "snatched": true,
 	"grabbed": true, "upload_snatches": true, "fl_tokens": true, "invites": true,
 	"warnings": true, "uploads_approved": true, "adoptions": true,
 	"requests_filled": true, "forum_posts": true,

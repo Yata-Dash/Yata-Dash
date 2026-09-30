@@ -35,6 +35,9 @@ export const STAT_ROW_DEFS: StatRowDef[] = [
   { key: 'real_uploaded',   label: 'Real Uploaded',   color: 'green',  fmt: displaySize },
   { key: 'real_downloaded', label: 'Real Downloaded', color: 'purple', fmt: displaySize },
   { key: 'bonus_points',    label: 'Bonus Points',    color: 'orange' },
+  // NexusPHP's second currency (做种积分): accumulated, never spent, and what
+  // its class ladder promotes on — so it sits beside bonus, not in its place.
+  { key: 'seeding_points',  label: 'Seeding Points',  color: 'orange' },
   { key: 'seeding',         label: 'Seeding',         color: 'blue'   },
   { key: 'leeching',        label: 'Leeching',        color: 'amber'  },
   { key: 'hit_and_runs',    label: 'Hit & Runs',      color: v => (parseInt(v) || 0) >= 1 ? 'red' : 'green' },

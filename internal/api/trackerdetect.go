@@ -23,9 +23,12 @@ import (
 // detectCandidates are the types worth probing, most common first. "custom"
 // is absent because a custom fetcher needs a path and field map that only a
 // definition can supply — if a tracker needed custom handling it would have a
-// definition already. Scrape-only types are absent because there is nothing
-// to probe.
-var detectCandidates = []string{"unit3d", "gazelle_json", "gazelle_games", gazelleANTNEBType}
+// definition already. A custom-kind PLATFORM type is different: it carries its
+// own endpoint and field map, so it can be probed like any other (nexusphp —
+// the largest family with no bundled defs, where Detect is how a hand-added
+// tracker finds its type). Scrape-only types are absent because there is
+// nothing to probe.
+var detectCandidates = []string{"unit3d", "gazelle_json", "gazelle_games", gazelleANTNEBType, "nexusphp"}
 
 // gazelleANTNEBType is the Anthelion/Nebulance family — one type key that
 // several places key behaviour off (detection, the Gazelle profile layout),

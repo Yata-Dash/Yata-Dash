@@ -75,7 +75,7 @@ const MANUAL_SHAPES: Record<string, ValueShape> = {
   real_uploaded: 'size', real_downloaded: 'size',
   avg_seed_time: 'duration', total_seedtime: 'duration',
   ratio: 'number', real_ratio: 'number', required_ratio: 'number', bonus_points: 'number',
-  seeding: 'number', leeching: 'number', hit_and_runs: 'number', snatched: 'number',
+  seeding_points: 'number', seeding: 'number', leeching: 'number', hit_and_runs: 'number', snatched: 'number',
   grabbed: 'number', upload_snatches: 'number', fl_tokens: 'number', invites: 'number',
   warnings: 'number', uploads_approved: 'number', adoptions: 'number',
   requests_filled: 'number', forum_posts: 'number',
