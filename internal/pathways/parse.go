@@ -9,7 +9,7 @@ import (
 // Req is one parsed requirement token from a route's free-text reqs.
 type Req struct {
 	// Kind: class | age | ratio | uploaded | seed_size | uploads | bonus |
-	// seedtime | none | unknown
+	// seedtime | invite_forum | none | unknown
 	Kind string `json:"kind"`
 	// Classes holds the alternative class names for kind "class"
 	// ("Leviathan or Ship" → ["Leviathan", "Ship"]). Trailing "+" stripped.
@@ -162,6 +162,8 @@ var (
 	// The "+" conjunction must be SPACED: an attached one is part of the
 	// quantity ("10+ uploads") or a class suffix ("Prometheus+").
 	andRe = regexp.MustCompile(`(?i)\s+(?:and|\+)\s+`)
+
+	inviteForumRe = regexp.MustCompile(`(?i)^invite[\s-]*forum(?:\s+access)?$`)
 )
 
 func parseToken(tok string) Req {
@@ -284,6 +286,12 @@ func parseAtom(tok string) Req {
 		if days, ok := ParseDurationDays(m[1]); ok {
 			return Req{Kind: "seedtime", Value: days * 86400, Raw: tok}
 		}
+	}
+	// "Invite forum access": whatever the FROM tracker's own invite forum
+	// demands. Checked before the class catch-all below, which would
+	// otherwise read it as a class no def has.
+	if inviteForumRe.MatchString(tok) {
+		return Req{Kind: "invite_forum", Raw: tok}
 	}
 	// Class token: "Prometheus+", "Pro+", "Leviathan or Ship", "Superfan+".
 	// Heuristic: starts with a letter and is short — treat as class name(s).

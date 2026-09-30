@@ -80,6 +80,8 @@ func TestParseReqs(t *testing.T) {
 		{"Leviathan or Ship, 12 months", []string{"class", "age"}},
 		{"Prometheus+, 1 year, ratio>=1", []string{"class", "age", "ratio"}},
 		{"Superfan+, 6 months", []string{"class", "age"}},
+		{"Invite forum access", []string{"invite_forum"}},
+		{"Invite forum access, 6 months", []string{"invite_forum", "age"}},
 	}
 	for _, tc := range cases {
 		got := ParseReqs(tc.in)
@@ -870,6 +872,34 @@ func TestInviteReqsAddedWhenAbsent(t *testing.T) {
 	}
 	if s.ETADays != 355 {
 		t.Errorf("expected 355 days of account age left, got %v", s.ETADays)
+	}
+}
+
+// TestInviteForumToken: trackerpathways writes "Invite forum access" where it
+// used to write "No requirement". It must never read as a class the def lacks:
+// with def invite rules it IS those rules (so a user who meets them is ready
+// now); without them it is an honest "check on the tracker".
+func TestInviteForumToken(t *testing.T) {
+	d := &Data{Source: SourceInfo{Name: "test"}, Routes: []Route{
+		{From: "Seed", To: "Forum", Reqs: "Invite forum access", Active: true},
+	}}
+	d.index()
+
+	gold := func(string) *defs.InviteReqs { return &defs.InviteReqs{MinClass: "Gold"} }
+	s := stepsByTarget(d, gold)["Forum"]
+	if got := reqLabels(s); len(got) != 1 || got[0] != "Gold" {
+		t.Errorf("with def rules: got rows %q, want [Gold]", got)
+	}
+	if s.ETADays != 0 || s.HasUnknown {
+		t.Errorf("with def rules met: expected ready now, got %+v", s)
+	}
+
+	s = stepsByTarget(d, noInviteReqs)["Forum"]
+	if len(s.Reqs) != 1 || s.Reqs[0].Unavail != "text" || s.Reqs[0].Met || s.Reqs[0].Note == "" {
+		t.Errorf("without def rules: expected one unmet, explained text row, got %+v", s.Reqs)
+	}
+	if !s.HasUnknown {
+		t.Error("without def rules: the step can't be confirmed, so it must not read as ready")
 	}
 }
 

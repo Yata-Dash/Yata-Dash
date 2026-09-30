@@ -409,6 +409,15 @@ func evalRouteReqs(r Route, u UserTracker, firstHop bool, d *Data,
 				}
 				step.Reqs = append(step.Reqs, ReqProgress{Label: q.Raw, ETADays: -1, Note: note})
 				continue
+			case "invite_forum":
+				// The forum's own rules are unknown here, as a class would be:
+				// the typical invite-unlock time is the only floor there is.
+				if uc, ok := d.Unlocks[r.From]; ok && uc.Days > 0 {
+					eta = math.Max(eta, float64(uc.Days))
+				}
+				unknown = true
+				step.Reqs = append(step.Reqs, ReqProgress{Label: q.Raw, ETADays: -1})
+				continue
 			case "none":
 				step.Reqs = append(step.Reqs, ReqProgress{Label: q.Raw, Met: true})
 				continue
@@ -448,6 +457,13 @@ func evalRouteReqs(r Route, u UserTracker, firstHop bool, d *Data,
 				continue // every required class alternative already demands this
 			}
 			otherRows = append(otherRows, statProgress(q, u))
+		case "invite_forum":
+			// Only reached when the FROM tracker's def has no invite rules —
+			// with rules, mergeInviteReqs has already replaced it by them.
+			otherRows = append(otherRows, ReqProgress{
+				Label: q.Raw, ETADays: -1, Unavail: "text",
+				Note: "Yata doesn't know what this tracker's invite forum requires — check on the tracker",
+			})
 		default: // unknown token — preserve verbatim
 			otherRows = append(otherRows, ReqProgress{
 				Label: q.Raw, ETADays: -1, Unavail: "text",
@@ -922,7 +938,14 @@ func mergeInviteReqs(community, def []Req, groups []defs.GroupDef) []Req {
 	if len(def) == 0 {
 		return community
 	}
-	out := append([]Req(nil), community...)
+	// The def's rules ARE the invite forum's requirements, so a community
+	// "Invite forum access" token is replaced by them, not listed beside.
+	out := make([]Req, 0, len(community))
+	for _, q := range community {
+		if q.Kind != "invite_forum" {
+			out = append(out, q)
+		}
+	}
 	var added []Req
 	for _, dq := range def {
 		if dq.Kind == "class" && len(dq.Classes) > 0 {

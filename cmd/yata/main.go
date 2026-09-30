@@ -124,12 +124,15 @@ func main() {
 	defer db.Close()
 
 	// Tighten state written by an earlier version. New files are created
-	// private, but an existing install's database, WAL sidecars and config
-	// backups were world-readable, and those are the ones with a history of
+	// private, but an existing install's config, database, WAL sidecars and
+	// config backups were world-readable, and those are the ones with a history of
 	// credentials in them. Warn rather than fail: a filesystem without Unix
 	// modes is a bad reason to refuse to boot (see package fsperm).
 	if err := store.Harden(*dataPath); err != nil {
 		logger.Warnf("store: could not make the database private: %v", err)
+	}
+	if err := cfg.HardenFile(); err != nil {
+		logger.Warnf("config: could not make the config file private: %v", err)
 	}
 	if err := cfg.HardenBackups(); err != nil {
 		logger.Warnf("config: could not make existing backups private: %v", err)

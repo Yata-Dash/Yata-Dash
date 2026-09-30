@@ -6,6 +6,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260930]
+
 ### Added
 
 - **NexusPHP tracker type** (1.9+ with its API enabled): add any NexusPHP
@@ -18,6 +20,15 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **InfinityHD's definition follows their new class ladder**: after Protostar
   it forks into a seed-size track (Asteroid → Black Hole) and an upload track
   (Spark → Supernova).
+
+### Fixed
+
+- **Pathways read "Invite forum access" as a class no tracker has.** The
+  community data now uses it for about 200 routes, which all showed an
+  unmeasurable class; it now means the tracker's own invite-forum rules where
+  Yata has them, and "check on the tracker" where it doesn't.
+- **An existing `config.json` left readable by other accounts** is now made
+  private at startup, like the database, backups and logs already were.
 
 ### Docs
 

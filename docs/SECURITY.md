@@ -46,7 +46,7 @@ that file is the same as being logged in.
 | `config.json` / *Export config* | **No.** The export is the file byte for byte, credentials included. Exporting asks for your password (and 2FA code) so a borrowed session can't take it. |
 | Automatic backups (`backups/`) | **No** — same content as `config.json`. |
 | `yata.db` | **No.** Contains live login sessions. |
-| `yata.log` | **Yes.** Credentials are stripped before anything is written: URL query strings, the user part of a URL, and API response bodies. A failed API response is logged as its *shape* — field names and types — never the values, because a tracker's user endpoint carries your email and IRC key. Skim it before posting all the same. |
+| `yata.log` | **Yes.** Credentials are stripped before anything is written: URL query strings, the user part of a URL, and API response bodies. A failed API response is logged as its *shape* — field names and types — never the values, because a tracker's user endpoint carries your email and IRC key. The one piece of response text kept is the tracker's own error message ("Unauthenticated."). Skim it before posting all the same. |
 | *Export alerts* (`yata-alerts.json`) | **Yes.** Webhook URLs, tokens and chat IDs are blanked. |
 
 ## Who could get at it
@@ -55,8 +55,9 @@ In order of how likely each is to matter.
 
 **1. Another account on the same machine** — the main one. Seedboxes and home
 servers are shared. Every file Yata writes is owner-only (`0600`, backup
-directory `0700`), and permissions left loose by an older version are
-tightened at startup. *Not covered:* root, and the seedbox operator. If you
+directory `0700`), and files left loose by an older version are tightened at
+startup where the filesystem allows it (Windows and some Docker volumes
+don't). *Not covered:* root, and the seedbox operator. If you
 don't trust the provider, use API-only setups — a leaked API key is a smaller
 loss than a leaked session cookie.
 
