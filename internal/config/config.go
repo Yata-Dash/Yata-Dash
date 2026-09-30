@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/fsperm"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
@@ -640,6 +641,14 @@ func (m *Manager) Reset() error {
 	m.cfg = defaultConfig()
 	m.cfg.Server = server
 	return m.saveLocked()
+}
+
+// HardenFile tightens config.json to 0600. Every save already writes it
+// private (CreateTemp makes the file 0600 and the rename keeps that), but one
+// written by an older version or copied in by hand stays as loose as it
+// arrived until the next save — which may be days away.
+func (m *Manager) HardenFile() error {
+	return fsperm.File(m.path)
 }
 
 // saveLocked writes the config atomically (tmp file + rename).

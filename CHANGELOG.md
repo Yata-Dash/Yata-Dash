@@ -6,6 +6,39 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20260930]
+
+### Added
+
+- **NexusPHP tracker type** (1.9+ with its API enabled): add any NexusPHP
+  tracker by hand with an access token, or let Detect find it. Built from
+  NexusPHP's source and not yet tested against a live site. Its seeding points
+  (做种积分), which the class ladder promotes on, show beside bonus points.
+
+### Changed
+
+- **InfinityHD's definition follows their new class ladder**: after Protostar
+  it forks into a seed-size track (Asteroid → Black Hole) and an upload track
+  (Spark → Supernova).
+
+### Fixed
+
+- **Pathways read "Invite forum access" as a class no tracker has.** The
+  community data now uses it for about 200 routes, which all showed an
+  unmeasurable class; it now means the tracker's own invite-forum rules where
+  Yata has them, and "check on the tracker" where it doesn't.
+- **An existing `config.json` left readable by other accounts** is now made
+  private at startup, like the database, backups and logs already were.
+
+### Docs
+
+- **Three new public docs** — a [setup guide](docs/SETUP.md) (Docker, Linux,
+  Windows, macOS, services, hostnames, reverse and outbound proxies, backups),
+  [CONTRIBUTING.md](docs/CONTRIBUTING.md) and a rewritten
+  [SECURITY.md](docs/SECURITY.md). The README is a third shorter and links to
+  them; the API reference now documents `/api/highlights` and the `retired`
+  status.
+
 ## [Beta-20260921]
 
 ### Added
@@ -39,7 +72,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **The Display preview now demonstrates every card toggle**, including the
   goal-pacing line and the trend-rate hover.
 
-  - **qui problem counts as alert conditions.** With *Problem counts for alerts*
+- **qui problem counts as alert conditions.** With *Problem counts for alerts*
   on in the qui settings, each refresh counts unregistered, tracker-down,
   tracker-error and errored torrents per tracker, so a rule like *unregistered
   torrents > 0* fires for the tracker concerned. The weekly digest carries the
