@@ -5,7 +5,7 @@
   "abbr": "IHD",
   "url": "https://infinityhd.net",
   "type": "unit3d",
-  "last_updated": "2026-09-27",
+  "last_updated": "2026-10-10",
   "approved_by": {
     "name": "Jeditwo",
     "role": "Magician",
@@ -16,7 +16,43 @@
     "min_seed_days": 5,
     "max_login_gap_days": 90
   },
-  "notes": "The ladder forks after Protostar into two tracks, listed interleaved: Gravity (seed size) and Light (uploads, where either seed size or upload volume clears the data gate). Monthly uploads are recorded but not yet evaluated.",
+  "api": {
+    "bool_fields": {
+      "unread_messages": "unread_mail",
+      "unread_notifications": "unread_notifications"
+    }
+  },
+  "api_field_map": {
+    "average_seedtime": "avg_seed_time",
+    "freeleech_tokens": "fl_tokens",
+    "active_warnings": "warnings",
+    "joined_at": "join_date",
+    "seedsize": "seed_size",
+    "uploads": "uploads_approved"
+  },
+  "api_drop_fields": [
+    "uploaded_bytes",
+    "downloaded_bytes",
+    "seedsize_bytes",
+    "average_seedtime_seconds"
+  ],
+  "capabilities": {
+    "api_stats_add": [
+      "active_events",
+      "avg_seed_time",
+      "fl_tokens",
+      "monthly_uploads",
+      "seed_size",
+      "unread_mail",
+      "unread_notifications",
+      "uploads_approved",
+      "warnings"
+    ]
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "notes": "The ladder forks after Protostar into two tracks, listed interleaved: Gravity (seed size) and Light (uploads, where either seed size or upload volume clears the data gate). /api/user (2026-10) reports every stat both tracks promote on, monthly uploads included, so the def is API-only.",
   "groups": [
     {
       "name": "Flicker",

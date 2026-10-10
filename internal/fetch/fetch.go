@@ -147,8 +147,29 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 	if ferr != nil {
 		return nil, ferr
 	}
+	for _, k := range c.Registry.ResolveAPIDropFields(t.URL, t.Type) {
+		delete(data, k)
+	}
 	fieldMap := c.Registry.ResolveAPIFieldMap(t.URL, t.Type)
-	return normalizeStrings(defs.NormalizeAPIFields(fieldMap, data)), nil
+	return dropNested(normalizeStrings(defs.NormalizeAPIFields(fieldMap, data))), nil
+}
+
+// dropNested removes list and object values from a fetcher's output. A stat
+// is a single value: a nested one reaching the stat layer is stored, then
+// listed on the tracker's page as "[object Object]" — which is what an
+// unmapped UNIT3D extra (a list of next ranks) did. active_events is the one
+// structured field Yata reads, and normalizeActiveEvents has already shaped it.
+func dropNested(data map[string]any) map[string]any {
+	for k, v := range data {
+		if k == activeEventsField {
+			continue
+		}
+		switch v.(type) {
+		case []any, map[string]any:
+			delete(data, k)
+		}
+	}
+	return data
 }
 
 // normalizeStrings applies the canonical-string cleanups to every fetcher's

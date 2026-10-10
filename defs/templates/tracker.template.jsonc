@@ -103,6 +103,13 @@
     "seedbonus": "bonus_points"
   },
 
+  // [OPTIONAL] Raw API keys to discard before storage. Any key neither mapped
+  // nor dropped is kept and listed as an extra stat on the tracker's page, so
+  // drop what Yata already has under another name — e.g. a byte-count twin of
+  // a formatted size ("uploaded_bytes" beside "uploaded"). Lists and objects
+  // are always dropped (except active_events); they can't be shown as a stat.
+  "api_drop_fields": [],
+
   // [OPTIONAL] What this tracker can actually report.
   //
   // Yata shows these as capability icons when adding a tracker and in
