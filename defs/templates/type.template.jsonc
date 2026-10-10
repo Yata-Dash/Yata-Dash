@@ -49,6 +49,10 @@
     "seedbonus": "bonus_points"
   },
 
+  // [OPTIONAL] Raw API keys every tracker of this type discards before
+  // storage; merged with each tracker's own api_drop_fields.
+  "api_drop_fields": [],
+
   // [OPTIONAL] The STOCK response for this software — the baseline every
   // tracker of this type inherits. Individual defs then declare only how they
   // differ (api_stats_add / api_stats_omit), so a fork returning one extra
