@@ -4,8 +4,8 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-09-30",
-    "updated": "2026-09"
+    "fetched": "2026-10-10",
+    "updated": "2026-10"
   },
   "abbr": {
     "1PTBA": "1PT",
@@ -485,14 +485,6 @@
       "to": "Dolphin Is Coming",
       "days": 0,
       "reqs": "10 music torrents or 15 other torrents",
-      "active": true,
-      "updated": "Jan 2026"
-    },
-    {
-      "from": "AnimeBytes",
-      "to": "Empornium",
-      "days": 180,
-      "reqs": "6 months",
       "active": true,
       "updated": "Jan 2026"
     },
@@ -2914,6 +2906,14 @@
     },
     {
       "from": "Luminarr",
+      "to": "PeerGarden",
+      "days": 0,
+      "reqs": "Invite forum access",
+      "active": true,
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "Luminarr",
       "to": "ReelFliX",
       "days": 0,
       "reqs": "Invite forum access",
@@ -3474,14 +3474,6 @@
     },
     {
       "from": "Orpheus",
-      "to": "Empornium",
-      "days": 180,
-      "reqs": "6 months",
-      "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Orpheus",
       "to": "ExtremeBits",
       "days": 365,
       "reqs": "1 year",
@@ -3706,14 +3698,6 @@
     },
     {
       "from": "PassThePopcorn",
-      "to": "Empornium",
-      "days": 180,
-      "reqs": "6 months",
-      "active": true,
-      "updated": "Nov 2024"
-    },
-    {
-      "from": "PassThePopcorn",
       "to": "F1Carreras",
       "days": 90,
       "reqs": "3 months",
@@ -3910,7 +3894,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3918,7 +3902,7 @@
       "days": 180,
       "reqs": "ratio\u003e1.0, 6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3926,7 +3910,7 @@
       "days": 180,
       "reqs": "12 months or Elite+, 6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3934,7 +3918,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3942,7 +3926,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3950,15 +3934,15 @@
       "days": 540,
       "reqs": "TM+, 18 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
       "to": "Blutopia",
       "days": 0,
-      "reqs": "PU+, 1 personal \"perfect FLAC\" physical media rip",
+      "reqs": "1 personal \"perfect FLAC\" physical media rip",
       "active": true,
-      "updated": "Jul 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3974,7 +3958,7 @@
       "days": 0,
       "reqs": "Additional profile links (one or two other reputable trackers)",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3982,7 +3966,7 @@
       "days": 360,
       "reqs": "Elite+, 12 months, ratio \u003e 1.5, 100 untrumpable perfect physical media torrents",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3990,7 +3974,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -3998,15 +3982,7 @@
       "days": 365,
       "reqs": "1 year, 10 music torrents",
       "active": true,
-      "updated": "Feb 2026"
-    },
-    {
-      "from": "Redacted",
-      "to": "Empornium",
-      "days": 180,
-      "reqs": "Elite+, 6 months",
-      "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4014,7 +3990,7 @@
       "days": 365,
       "reqs": "1 year",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4022,7 +3998,7 @@
       "days": 90,
       "reqs": "3 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4030,7 +4006,7 @@
       "days": 90,
       "reqs": "3 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4038,7 +4014,7 @@
       "days": 28,
       "reqs": "4 weeks",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4046,7 +4022,7 @@
       "days": 730,
       "reqs": "TM, 2 years, \u003e=50% of uploads are music. Additionally, fulfill 2 of the following 4 criteria: 1) Be seeding 500GiB of MUSIC (neutral leech is excluded), 2) Be seeding 100% of your snatches, 3) Have 500 perfect FLACs, 4) 3 years",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4054,7 +4030,7 @@
       "days": 365,
       "reqs": "3x 1 year old additional profile links",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4062,7 +4038,7 @@
       "days": 0,
       "reqs": "1 additional profile link or ratio proof",
       "active": false,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4070,7 +4046,7 @@
       "days": 90,
       "reqs": "3 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4078,7 +4054,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4086,7 +4062,7 @@
       "days": 365,
       "reqs": "Elite+, 1 year, 10 perfect flacs",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4094,7 +4070,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4102,7 +4078,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4110,7 +4086,7 @@
       "days": 90,
       "reqs": "3 months, 90%+ seeding percentage OR 100GB seedsize",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4126,7 +4102,7 @@
       "days": 730,
       "reqs": "TM, 2 years, \u003e=50% of uploads are music",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4142,7 +4118,7 @@
       "days": 56,
       "reqs": "8 weeks",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4150,7 +4126,7 @@
       "days": 180,
       "reqs": "Elite or high-level PU, 3x 6 months old profile links (including RED)",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4158,7 +4134,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4166,7 +4142,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4174,7 +4150,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4190,7 +4166,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Aug 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4198,7 +4174,7 @@
       "days": 90,
       "reqs": "3 months (13 weeks)",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4206,7 +4182,7 @@
       "days": 180,
       "reqs": "2-3 full tracker profile screenshots (including RED) that meet the following criteria: 180 days, 60GB real upload, real ratio\u003e=1.05",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4222,7 +4198,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "Redacted",
@@ -4230,7 +4206,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Sep 2026"
     },
     {
       "from": "ReelFliX",
@@ -4415,6 +4391,14 @@
       "reqs": "Elite+",
       "active": false,
       "updated": "Apr 2025"
+    },
+    {
+      "from": "TV-Vault",
+      "to": "Periodical",
+      "days": 0,
+      "reqs": "Elite+",
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "TV-Vault",

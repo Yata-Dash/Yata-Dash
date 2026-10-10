@@ -6,6 +6,22 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+## [Beta-20261011]
+
+### Changed
+
+- **InfinityHD is API-only.** Its upgraded API now reports seed size, average
+  seed time, uploads, monthly uploads, join date, warnings, freeleech tokens,
+  unread mail and events, which covers every stat its ladder promotes on.
+- **Definitions can drop API fields** (`api_drop_fields`) that Yata already has
+  under another name, so they stop appearing as extra stats.
+
+### Fixed
+
+- **A list or object in a tracker's API response showed as
+  "[object Object]"** among the tracker's stats. Such values are now dropped
+  before storage.
+
 ## [Beta-20260930]
 
 ### Added
