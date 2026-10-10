@@ -53,6 +53,10 @@ type TypeDef struct {
 	// applied to every response before storage (e.g. "seedbonus" → "bonus_points").
 	APIFieldMap map[string]string `json:"api_field_map,omitempty"`
 
+	// APIDropFields lists raw API keys discarded before storage (see the
+	// tracker-level field of the same name). Merged with the tracker's own.
+	APIDropFields []string `json:"api_drop_fields,omitempty"`
+
 	// GroupAPI declares an endpoint serving the tracker's OWN group ladder,
 	// replacing the hand-written `groups` array in its def. See GroupAPISpec.
 	GroupAPI *GroupAPISpec `json:"group_api,omitempty"`
@@ -227,7 +231,12 @@ type TrackerDef struct {
 	ApprovedBy *DefApproval `json:"approved_by,omitempty"`
 
 	APIFieldMap map[string]string `json:"api_field_map,omitempty"`
-	Scrape      ScrapeSpec        `json:"scrape,omitempty"`
+	// APIDropFields lists raw API keys to discard before storage: values Yata
+	// has no use for, or already has under another name (a byte-count twin of
+	// a formatted size). Unmapped keys are otherwise stored and listed as
+	// extra stats on the tracker's page.
+	APIDropFields []string   `json:"api_drop_fields,omitempty"`
+	Scrape        ScrapeSpec `json:"scrape,omitempty"`
 
 	// API configures the fetch for type kind "custom". Null otherwise.
 	API *CustomAPI `json:"api,omitempty"`

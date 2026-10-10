@@ -2333,6 +2333,7 @@ func unit3dForkRegistry(t *testing.T, baseURL string) *defs.Registry {
 		"url":%q,"type":"unit3d",
 		"api_field_map":{"seeding_size":"seed_size","avg_seedtime":"avg_seed_time",
 			"torrent_uploads_month":"monthly_uploads","total_uploads":"uploads_approved"},
+		"api_drop_fields":["uploaded_bytes"],
 		"api":{"bool_fields":{"unread_pms":"unread_mail","unread_notifications":"unread_notifications"}},
 		"events":{"path":"/api/events/global-free-leech",
 			"active_field":"is_global_free_leech","until_field":"global_free_leech_until"}
@@ -2367,7 +2368,8 @@ func TestFetchUnit3DForkMappings(t *testing.T) {
 				"uploaded":1349769579652,"downloaded":523582134782,"buffer":2850841814348,
 				"seeding_size":17001700882929,"avg_seedtime":5626042,
 				"total_uploads":0,"torrent_uploads_month":0,
-				"unread_pms":0,"unread_notifications":1,"seedbonus":"333304.60"}`)
+				"unread_pms":0,"unread_notifications":1,"seedbonus":"333304.60",
+				"uploaded_bytes":1349769579652,"next_groups":[{"name":"Titan"}],"links":{"self":"/u"}}`)
 		case "/api/events/global-free-leech":
 			fmt.Fprint(w, `{"is_global_free_leech":true,"global_free_leech_until":"09/05/2026 1:00 AM EST"}`)
 		default:
@@ -2402,6 +2404,13 @@ func TestFetchUnit3DForkMappings(t *testing.T) {
 	// The converted count must not linger as a stray stat of its own.
 	if _, ok := data["unread_pms"]; ok {
 		t.Errorf("unread_pms survived conversion: %#v", data["unread_pms"])
+	}
+	// api_drop_fields discards a redundant twin; lists and objects never reach
+	// the stat layer, where they would be listed as "[object Object]".
+	for _, k := range []string{"uploaded_bytes", "next_groups", "links"} {
+		if _, ok := data[k]; ok {
+			t.Errorf("%s should have been dropped: %#v", k, data[k])
+		}
 	}
 	// 1:00 AM EST is 06:00 UTC. Parsing it as a bare timestamp — which is what
 	// time.Parse does with an abbreviation it can't resolve — lands on 01:00

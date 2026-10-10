@@ -140,6 +140,22 @@ func (r *Registry) ResolveAPIFieldMap(trackerURL, typeKey string) map[string]str
 	return merged
 }
 
+// ResolveAPIDropFields merges type-level and tracker-level api_drop_fields.
+func (r *Registry) ResolveAPIDropFields(trackerURL, typeKey string) []string {
+	td, hasDef := r.TrackerByURL(trackerURL)
+	if hasDef && td.Type != "" {
+		typeKey = td.Type
+	}
+	var out []string
+	if tt, ok := r.Type(typeKey); ok {
+		out = append(out, tt.APIDropFields...)
+	}
+	if hasDef {
+		out = append(out, td.APIDropFields...)
+	}
+	return out
+}
+
 // TypeKeyFor resolves which type a tracker actually is: its def's type when it
 // has a def, otherwise the type stored on the tracker itself. Callers that need
 // to key behaviour on a specific tracker FAMILY should use this rather than
