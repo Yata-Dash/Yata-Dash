@@ -43,6 +43,10 @@ docker compose logs -f      # watch what it's doing
 docker compose down         # stop — ./data stays
 ```
 
+If you want to run the container with a custom user, either user `--user=userid:groupid`
+or specify it in the compose by adding: `user: userid:groupid`. Do ensure you gave the
+data directory which is mounted to the host the same owner and group permissions!
+
 You don't need Go, Node or a checkout of the repo; Docker pulls a ready-made
 image. Only `./data` has to persist. Mount `./defs` and `./static/themes` as
 well if you want to edit tracker definitions or drop in custom themes without
