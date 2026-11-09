@@ -12,7 +12,7 @@ import { approvalIcon, approvalWarns, scrapeSanctioned } from '../utils/approval
 import { capabilityRow } from './capabilities';
 import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
-import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
+import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName, safeColor, safeIconClass } from '../utils/format';
 import { parseAgeDays, parseSeedTime, parseSize } from '../utils/parse';
 import { displaySize, manualShape, normalizeInput, targetShape } from '../utils/units';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
@@ -1979,6 +1979,11 @@ let _selectedThemeId: string  = '';   // tracks the live selection in the settin
 // Swatch fallback used when a theme CSS file has no /* swatches: */ comment.
 const SWATCH_FALLBACK: [string, string, string, string] = ['#111', '#222', '#6d56eb', '#a855f7'];
 
+// Swatches are parsed out of a theme file's comments, so a theme dropped into
+// the themes folder decides them. Only a real colour reaches the style
+// attribute; anything else shows as a neutral grey rather than as CSS.
+const swatch = (v: string): string => safeColor(v) || '#888';
+
 function renderThemeGrid(currentThemeId: string) {
   _selectedThemeId = currentThemeId || 'default';
   const container = document.getElementById('s-theme-grid');
@@ -1998,10 +2003,10 @@ function renderThemeGrid(currentThemeId: string) {
       const active = (t.id === _selectedThemeId || (!_selectedThemeId && t.id === 'default')) ? 'active' : '';
       return `
         <div class="theme-option ${active}" data-theme-id="${esc(t.id)}" onclick="selectTheme('${jsId(t.id)}')">
-          <div class="theme-swatch" style="background:${sw[0]}">
-            <div class="theme-swatch-col" style="background:${sw[1]}"></div>
-            <div class="theme-swatch-col" style="background:${sw[2]}"></div>
-            <div class="theme-swatch-col" style="background:${sw[3]}"></div>
+          <div class="theme-swatch" style="background:${esc(swatch(sw[0]))}">
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[1]))}"></div>
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[2]))}"></div>
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[3]))}"></div>
           </div>
           <span class="theme-option-name">${esc(t.name)}</span>
         </div>`;
@@ -3418,11 +3423,12 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
   if (!g) { hintEl.textContent = ''; hintEl.style.display = 'none'; return; }
 
   const req = g.requirements;
-  const color   = g.style?.color   ?? '';
-  const icon    = g.style?.icon    ?? '';
+  // Tracker- and def-supplied — validated before they reach an attribute.
+  const color   = safeColor(g.style?.color);
+  const icon    = safeIconClass(g.style?.icon);
   const sparkle = g.style?.sparkle ?? false;
-  const colorStyle   = color ? ` style="color:${color}"` : '';
-  const iconHtml     = icon  ? `<i class="${icon}" aria-hidden="true"></i> ` : '';
+  const colorStyle   = color ? ` style="color:${esc(color)}"` : '';
+  const iconHtml     = icon  ? `<i class="${esc(icon)}" aria-hidden="true"></i> ` : '';
   // sparkle class goes on the NAME SPAN only, not the outer flex div
   const sparkleAttr  = sparkle ? ' class="group-sparkle"' : '';
 
@@ -3432,7 +3438,7 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
     .filter(p => p.icon)
     .map(p =>
       `<span class="perk-icon-wrap" data-tip="${esc(p.label)}">` +
-      `<i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i>` +
+      `<i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i>` +
       `<span class="perk-tip">${esc(p.label)}</span></span>`
     ).join('');
 

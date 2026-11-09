@@ -1,7 +1,7 @@
 // views/table.ts — sortable tracker table view (reads merged stats fields)
 import type { AppSettings, ColDef, ColPref, HistoryPoint, Tracker, TrackerGroupMap, TrackerStatsResponse } from '../types';
 import { MANUAL_TYPE, usesAPIKey } from '../types';
-import { jsId, esc, errLabel, fieldFreshness, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
+import { jsId, esc, errLabel, fieldFreshness, fmtBonusPoints, fmtBonusPointsExact, fmtRatio, fmtSeedTime, fmtStamp, fmtTrackerName, parseRatio, rateTip, ratioColor, ratioColorFor, safeColor, safeIconClass, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDur, parseSeedTime } from '../utils/parse';
 import { displaySize } from '../utils/units';
 import { getSortedTrackers } from '../utils/sort';
@@ -235,10 +235,10 @@ function buildCell(
       // Perk icons popover on group badge hover
       const perkPopover = (() => {
         if (!userGroupDef?.perks?.length) return '';
-        const iconColor = userGroupDef.style?.color ?? 'var(--text3)';
+        const iconColor = safeColor(userGroupDef.style?.color) || 'var(--text3)';
         const icons = userGroupDef.perks
           .filter(p => p.icon)
-          .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
+          .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
           .join('');
         return icons ? `<span class="card-perk-icons td-perk-icons">${icons}</span>` : '';
       })();
@@ -454,7 +454,7 @@ function buildExpanded(
   // from the last stored fields — never hide previously displayed stats.
   const errorBanner = !stats.ok
     ? `<div style="padding:6px 0 10px;display:flex;align-items:center;gap:10px">`
-    + `<span style="color:var(--red);font-size:13px">${errLabel(stats.error_kind || stats.error || 'error')}${hasFields ? ' — showing last known stats' : ''}</span>`
+    + `<span style="color:var(--red);font-size:13px">${esc(errLabel(stats.error_kind || stats.error || 'error'))}${hasFields ? ' — showing last known stats' : ''}</span>`
     + `<button class="btn btn-ghost btn-sm" onclick="refreshSingle('${jsId(tracker.id)}')">Retry</button></div>`
     : '';
 
@@ -573,18 +573,20 @@ function buildExpanded(
   const currentGroup = strOf(stats, 'group');
   const perksHtml = (() => {
     if (!userGroupDef?.perks?.length) return '';
-    const grouped = settings.group_name_style === 'styled' && userGroupDef.style?.color;
-    const groupColor  = grouped ? userGroupDef.style!.color : undefined;
+    // Tracker- and def-supplied, and it lands in a style attribute, where
+    // esc() alone can't stop an extra declaration — so validated (safeColor).
+    const grouped = settings.group_name_style === 'styled' && safeColor(userGroupDef.style?.color);
+    const groupColor  = grouped || undefined;
     const iconColor   = groupColor ?? 'var(--text3)';
-    const groupIcon   = userGroupDef.style?.icon ?? '';
+    const groupIcon   = safeIconClass(userGroupDef.style?.icon);
     const groupIconHtml = groupIcon ? `<i class="${esc(groupIcon)}" style="margin-right:4px;font-size:10px"></i>` : '';
     const icons = userGroupDef.perks
       .filter(p => p.icon)
-      .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:12px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
+      .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:12px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
       .join('');
     if (!icons) return '';
     return `<div style="margin-top:10px">
-      <div class="exp-section-title" style="margin-bottom:6px">Perks <span style="font-size:10px;color:${groupColor ?? 'var(--text3)'};font-weight:400">${groupIconHtml}${esc(currentGroup)}</span></div>
+      <div class="exp-section-title" style="margin-bottom:6px">Perks <span style="font-size:10px;color:${esc(groupColor ?? 'var(--text3)')};font-weight:400">${groupIconHtml}${esc(currentGroup)}</span></div>
       <span class="card-perk-icons" style="flex-wrap:wrap">${icons}</span>
     </div>`;
   })();

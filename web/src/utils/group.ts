@@ -2,6 +2,7 @@
 
 import type { GroupDef, GroupRequirements, TrackerGroupMap, AppSettings } from '../types';
 import { parseAgeDays, parseSeedTime } from './parse';
+import { esc, safeColor, safeIconClass } from './format';
 
 /**
  * Map a group's BASE requirements to tracker target keys — the same mapping
@@ -67,9 +68,13 @@ export function renderUsername(
   if (!useGroupStyle || !groupDef) {
     return `<span class="${outerClasses}${blurClass}">${escHtml(username)}</span>`;
   }
-  const { color, icon, sparkle } = groupDef.style;
-  const colorStyle = color ? ` style="color:${color}"` : '';
-  const iconHtml = icon ? `<i class="${icon}" aria-hidden="true"></i> ` : '';
+  const { sparkle } = groupDef.style;
+  // color and icon come from tracker responses and def JSON — validated, not
+  // trusted (see safeColor / safeIconClass).
+  const color = safeColor(groupDef.style.color);
+  const icon = safeIconClass(groupDef.style.icon);
+  const colorStyle = color ? ` style="color:${esc(color)}"` : '';
+  const iconHtml = icon ? `<i class="${esc(icon)}" aria-hidden="true"></i> ` : '';
   const sparkleClass = sparkle ? ' group-sparkle' : '';
   // Color on outer, blur on inner content so blur is never overridden
   return `<span class="${outerClasses}${sparkleClass}"${colorStyle}><span class="username-inner${blurClass}">${iconHtml}${escHtml(username)}</span></span>`;
@@ -90,9 +95,13 @@ export function renderGroupBadge(
   if (!styled || !groupDef) {
     return `<span class="${classes}">${escHtml(groupName)}</span>`;
   }
-  const { color, icon, sparkle } = groupDef.style;
-  const colorStyle = color ? ` style="color:${color}"` : '';
-  const iconHtml = icon ? `<i class="${icon}" aria-hidden="true"></i> ` : '';
+  const { sparkle } = groupDef.style;
+  // color and icon come from tracker responses and def JSON — validated, not
+  // trusted (see safeColor / safeIconClass).
+  const color = safeColor(groupDef.style.color);
+  const icon = safeIconClass(groupDef.style.icon);
+  const colorStyle = color ? ` style="color:${esc(color)}"` : '';
+  const iconHtml = icon ? `<i class="${esc(icon)}" aria-hidden="true"></i> ` : '';
   const sparkleClass = sparkle ? ' group-sparkle' : '';
   return `<span class="badge-group-styled ${classes}${sparkleClass}"${colorStyle}>${iconHtml}${escHtml(groupName)}</span>`;
 }

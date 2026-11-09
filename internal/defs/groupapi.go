@@ -3,6 +3,7 @@ package defs
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
@@ -108,13 +109,13 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 		}
 		gd := GroupDef{
 			Name:         name,
-			Style:        GroupStyle{Color: strings.TrimSpace(g.Color), Icon: strings.TrimSpace(g.Icon)},
+			Style:        GroupStyle{Color: SafeColor(g.Color), Icon: SafeIconClass(g.Icon)},
 			Requirements: requirementsFromAPI(g.Reqs, spec.Requirements),
 		}
 		gd.Requirements.Description = strings.TrimSpace(g.Description)
 		for _, p := range g.Perks {
 			if label := strings.TrimSpace(p.Label); label != "" {
-				gd.Perks = append(gd.Perks, GroupPerk{Icon: strings.TrimSpace(p.Icon), Label: label})
+				gd.Perks = append(gd.Perks, GroupPerk{Icon: SafeIconClass(p.Icon), Label: label})
 			}
 		}
 		out = append(out, gd)
@@ -123,6 +124,48 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 		return nil
 	}
 	return out
+}
+
+// Group colours and icons from a tracker's API are rendered by the frontend
+// into a style attribute and a class attribute. Escaping keeps a value inside
+// the attribute but not inside the declaration — `red;background:url(…)` has
+// nothing to escape and still adds a property of its own — so these are
+// allow-lists of shape, applied where a style is built from API data. The
+// frontend applies the same rules (safeColor / safeIconClass in
+// web/src/utils/format.ts); this layer means a hostile value never reaches a
+// response at all, whichever client reads it.
+var (
+	hexColorRe  = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
+	funcColorRe = regexp.MustCompile(`^(?i:rgba?|hsla?)\([\d\s.,%]+\)$`)
+	varColorRe  = regexp.MustCompile(`^var\(--[\w-]+\)$`)
+	wordColorRe = regexp.MustCompile(`^[a-zA-Z]+$`)
+	iconClassRe = regexp.MustCompile(`^[\w\s-]+$`)
+)
+
+// SafeColor returns s trimmed when it is a plain CSS colour — hex, rgb()/
+// rgba()/hsl()/hsla() with numeric arguments, a var(--name) reference or a
+// bare keyword — and "" otherwise.
+func SafeColor(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 64 {
+		return ""
+	}
+	if hexColorRe.MatchString(s) || funcColorRe.MatchString(s) ||
+		varColorRe.MatchString(s) || wordColorRe.MatchString(s) {
+		return s
+	}
+	return ""
+}
+
+// SafeIconClass returns s trimmed when it is a list of class names (word
+// characters, hyphens and spaces only) and "" otherwise. Arbitrary text in a
+// class attribute could borrow Yata's own classes and reshape the page.
+func SafeIconClass(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 60 || !iconClassRe.MatchString(s) {
+		return ""
+	}
+	return s
 }
 
 // requirementsFromAPI converts one rank's thresholds. Order within min_counts

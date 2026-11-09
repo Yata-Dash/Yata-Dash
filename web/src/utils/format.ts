@@ -355,6 +355,38 @@ export function safeUrl(raw: unknown): string {
   }
 }
 
+/**
+ * A CSS colour safe to drop into a style attribute, or '' if it isn't one.
+ *
+ * Group colours come from tracker API responses (the group ladder, a held
+ * group's style) and from definition JSON, so they are data Yata did not write.
+ * esc() stops a value breaking OUT of the attribute but not out of the
+ * declaration: `red;background:url(//evil/)` contains nothing to escape and
+ * still adds a property of its own choosing. So this is an allow-list of
+ * colour shapes, not an escape: hex, rgb()/rgba()/hsl()/hsla() with numeric
+ * arguments only, a custom property reference, or a bare keyword.
+ */
+export function safeColor(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s || s.length > 64) return '';
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s)) return s;
+  if (/^(?:rgba?|hsla?)\([\d\s.,%]+\)$/i.test(s)) return s;
+  if (/^var\(--[\w-]+\)$/.test(s)) return s;
+  if (/^[a-z]+$/i.test(s)) return s;
+  return '';
+}
+
+/**
+ * A class list safe to put in a class attribute, or '' — for Font Awesome
+ * icons a tracker or definition supplies. Class names only: arbitrary text in
+ * a class attribute lets it borrow Yata's own classes and reshape the page.
+ * Callers still esc() the result, so this is the policy and esc() the
+ * belt-and-braces.
+ */
+export function safeIconClass(raw: unknown): string {
+  return String(raw ?? '').replace(/[^\w\s-]/g, '').trim().slice(0, 60);
+}
+
 /** Minimal numeric format — returns null for non-numeric values */
 export function safeNum(val: unknown, decimals = 2): string | null {
   if (val == null || val === '') return null;

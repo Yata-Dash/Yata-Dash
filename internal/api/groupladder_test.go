@@ -227,6 +227,29 @@ func TestLadderStyleBeatsHeldGroupStyle(t *testing.T) {
 	}
 }
 
+// group_color and group_icon come straight from the tracker's /api/user and are
+// rendered into style and class attributes, so a value that is not plainly a
+// colour or a class list must not be copied onto the ladder.
+func TestHeldGroupStyleDropsHostileValues(t *testing.T) {
+	d := testDeps(t)
+	tr := addTraxaryTracker(t, d)
+	td := peergardenDef(t, d)
+	if err := d.DB.SaveGroupLadder(tr.ID, []byte(storedLadder), time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveAPI(tr.ID, map[string]any{
+		"group":       "Seed",
+		"group_color": "red;background:url(//evil.example/x)",
+		"group_icon":  `fa" onmouseover="alert(1)`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := groupsFor(d, td, tr.ID)
+	if got[0].Style.Color != "" || got[0].Style.Icon != "" {
+		t.Errorf("held rank style = %+v, want hostile values dropped", got[0].Style)
+	}
+}
+
 // No style reported (every other traxary tracker, and every rank before the
 // platform serves colours) must leave the ladder exactly as it was.
 func TestHeldGroupStyleAbsentLeavesLadderAlone(t *testing.T) {

@@ -13,7 +13,7 @@ import { buildStatRows } from '../components/profile';
 import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, fmtLoginAgo, loginRuleText, statDate } from '../utils/account';
 import { capabilityCard } from '../components/capabilities';
 import { appSettings, fieldOf, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
-import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
+import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeIconClass, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
 import { buildTargets, fmtDateTime } from './grid';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { eventGlobeSvg } from '../utils/icons';
@@ -365,9 +365,8 @@ function eventBanner(ev: ActiveEvent): string {
   // The tracker's own Font Awesome class when it sent one — the icon is part of
   // how the event is presented on the tracker, so borrowing it keeps the two
   // recognisably the same thing. Falls back to Yata's globe.
-  // Class names only — a tracker supplies this, and letting arbitrary text into
-  // a class attribute lets it borrow Yata's own classes and reshape the page.
-  const iconCls = (ev.icon ?? '').replace(/[^\w\s-]/g, '').trim().slice(0, 60);
+  // Class names only — see safeIconClass.
+  const iconCls = safeIconClass(ev.icon);
   const icon = iconCls
     ? `<i class="${esc(iconCls)}" style="flex-shrink:0"></i>`
     : eventGlobeSvg('flex-shrink:0');

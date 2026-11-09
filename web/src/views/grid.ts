@@ -5,7 +5,7 @@ import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../s
 import { getSortedTrackers } from '../utils/sort';
 import type { SortDir } from '../types';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
+import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeColor, safeIconClass, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -352,7 +352,7 @@ export function renderCard(
     // Error and nothing stored yet — only here may we show an error-only body.
     el.classList.add('error-state');
     body = `<div class="card-body">
-      <div class="card-error-msg">${errLabel(stats.error_kind || stats.error || 'error')}</div>
+      <div class="card-error-msg">${esc(errLabel(stats.error_kind || stats.error || 'error'))}</div>
       <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="refreshSingle('${jsId(tracker.id)}')">Retry</button>
     </div>`;
   } else {
@@ -381,7 +381,7 @@ export function renderCard(
 
     const offlineBanner = !stats.ok
       ? `<div class="card-error-msg" style="padding:6px 10px;font-size:11px">
-          ${errLabel(stats.error_kind || stats.error || 'error')} — showing last known stats
+          ${esc(errLabel(stats.error_kind || stats.error || 'error'))} — showing last known stats
           <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="event.stopPropagation();refreshSingle('${jsId(tracker.id)}')">Retry</button>
         </div>`
       : '';
@@ -539,10 +539,10 @@ function buildRulesLine(tracker: Tracker, stats: TrackerStatsResponse | undefine
 export function buildPerkIcons(groupDef: ReturnType<typeof findGroupDef>, settings: AppSettings): string {
   if (!groupDef?.perks?.length) return '';
   const styled   = (settings.group_name_style || 'plain') === 'styled';
-  const iconColor = styled ? (groupDef.style?.color ?? 'var(--text3)') : 'var(--text3)';
+  const iconColor = (styled && safeColor(groupDef.style?.color)) || 'var(--text3)';
   const icons = groupDef.perks
     .filter(p => p.icon)
-    .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
+    .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
     .join('');
   if (!icons) return '';
   return `<span class="card-perk-icons">${icons}</span>`;
