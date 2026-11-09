@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,6 +178,22 @@ func TestClientIPProxyHeaders(t *testing.T) {
 	r4.Header.Set("X-Forwarded-For", "198.51.100.4, ")
 	if ip := clientIP(d, r4); ip != "172.16.0.2" {
 		t.Fatalf("empty rightmost entry: want the connection address, got %q", ip)
+	}
+	// Only an IP address counts, in its canonical form, so a client cannot
+	// mint a fresh bucket per guess and IPv6 spellings share one.
+	for _, tc := range []struct{ xff, want string }{
+		{"not-an-ip", "172.16.0.2"},
+		{strings.Repeat("a", 4096), "172.16.0.2"},
+		{"2001:DB8:0:0::1", "2001:db8::1"},
+		{"198.51.100.4:51234", "198.51.100.4"},
+		{"[2001:db8::1]:443", "2001:db8::1"},
+	} {
+		rr := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+		rr.RemoteAddr = "172.16.0.2:9999"
+		rr.Header.Set("X-Forwarded-For", tc.xff)
+		if ip := clientIP(d, rr); ip != tc.want {
+			t.Fatalf("X-Forwarded-For %.40q: want %q, got %q", tc.xff, tc.want, ip)
+		}
 	}
 
 	// X-Forwarded-Proto gates the Secure cookie flag the same way.

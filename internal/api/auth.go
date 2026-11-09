@@ -127,12 +127,18 @@ const attemptBusyRetry = time.Second
 // same reason as the last entry: a proxy that adds its own X-Forwarded-For
 // line, rather than appending to the client's, puts it after any the client
 // sent.
+//
+// The entry must parse as an IP address, and its canonical form is the key.
+// Otherwise a client that can reach Yata without going through the proxy could
+// send a fresh string with every guess (or a very long one), and two spellings
+// of the same IPv6 address would land in different lockout buckets. Anything
+// that does not parse falls back to the socket peer.
 func clientIP(d *Deps, r *http.Request) string {
 	if d != nil && d.Cfg != nil && d.Cfg.Settings().TrustProxyHeaders {
 		if xffs := r.Header.Values("X-Forwarded-For"); len(xffs) > 0 {
 			hops := strings.Split(xffs[len(xffs)-1], ",")
-			if last := strings.TrimSpace(hops[len(hops)-1]); last != "" {
-				return last
+			if ip := parseForwardedIP(strings.TrimSpace(hops[len(hops)-1])); ip != nil {
+				return ip.String()
 			}
 		}
 	}
@@ -140,6 +146,20 @@ func clientIP(d *Deps, r *http.Request) string {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+// parseForwardedIP parses one X-Forwarded-For entry. Some proxies append the
+// client's port as well ("198.51.100.4:51234", "[2001:db8::1]:443"), so a
+// host:port form is accepted and the port dropped. Returns nil when the entry
+// is not an IP address.
+func parseForwardedIP(s string) net.IP {
+	if ip := net.ParseIP(s); ip != nil {
+		return ip
+	}
+	if host, _, err := net.SplitHostPort(s); err == nil {
+		return net.ParseIP(host)
+	}
+	return nil
 }
 
 // requestIsHTTPS reports whether the client connection is HTTPS — directly,
