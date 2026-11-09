@@ -37,6 +37,34 @@ type Deps struct {
 	AllowedHosts []string
 }
 
+// compressible lists the response types worth gzipping. Downloads served as
+// text/plain or text/csv (the log file, the history export) are left alone, as
+// is anything a handler has already encoded itself — chi's Compress skips a
+// response that carries a Content-Encoding.
+var compressible = []string{
+	"application/json", "text/html", "text/css",
+	"application/javascript", "text/javascript", "image/svg+xml",
+}
+
+// compressResponses gzips (or deflates) responses for clients that accept it.
+// The dashboard's /api/history/series alone is ~1.8 MB of JSON on every page
+// load, and repetitive JSON shrinks by an order of magnitude.
+//
+// Range requests bypass it: http.FileServer answers them with a 206 whose
+// Content-Range counts bytes of the file as stored, and gzipping that slice
+// would hand the client bytes that match neither the range nor a decodable
+// stream.
+func compressResponses(next http.Handler) http.Handler {
+	compressed := middleware.Compress(5, compressible...)(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		compressed.ServeHTTP(w, r)
+	})
+}
+
 // NewRouter builds the full application router.
 func NewRouter(d *Deps) http.Handler {
 	r := chi.NewRouter()
@@ -46,6 +74,7 @@ func NewRouter(d *Deps) http.Handler {
 	// cannot see it — the browser reports such a request as same-origin.
 	r.Use(hostGuard(d))
 	r.Use(securityHeaders)
+	r.Use(compressResponses)
 	// No CORS headers: the SPA is served from the same origin as the API, so
 	// it never makes a cross-origin request. Emitting "Access-Control-Allow-
 	// Origin: *" would let any website the user visits read an unauthenticated
