@@ -944,6 +944,8 @@
                       <label class="form-label" for="modal-url">Base URL</label>
                       <input class="form-input" type="url" id="modal-url" placeholder="https://tracker.example.org" oninput="window.checkTrackerOptOut?.()"/>
                       <span class="form-hint">Root URL &mdash; no trailing slash</span>
+                      <!-- Edit mode: the saved key/cookie never follow a URL to another host -->
+                      <span class="form-hint" id="modal-url-cred-hint" style="display:none;color:var(--amber)">A different host doesn't get the saved API key or cookie &mdash; saving clears them, so re-enter them below.</span>
                     </div>
                   </div>
                   <!-- Opt-out blocking notice (tracker asked not to be supported) -->

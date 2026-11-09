@@ -20,6 +20,7 @@ import { findOptOut, optOutMessage } from '../utils/optout';
 import { defaultGoalDeadline } from '../utils/pacing';
 import { commonDeadline, fanDeadline, goalDateControlHtml, wireGoalDateUI } from './goalDate';
 import { renderTestDetail } from './trackerTest';
+import { sameOrigin } from './qui';
 import type { ToastType } from './toast';
 import { appSettings, groupDefs, strOf } from '../state';
 
@@ -360,6 +361,23 @@ export function checkTrackerOptOut(): void {
     if (notice) notice.style.display = 'none';
     if (saveBtn) saveBtn.disabled = false;
   }
+  checkUrlCredentialHint(); // same trigger: the URL in the form changed
+}
+
+/** URL the open Edit panel's tracker is saved with ("" in Add mode). */
+let _editStoredUrl = '';
+
+/** Warn, under the URL, that moving the tracker to another host drops its
+ *  saved key and cookie. The server refuses to carry a stored secret to a new
+ *  origin — the URL edit would otherwise be a way to send it anywhere — so a
+ *  save with the fields still masked clears them, and a Test leaves them out.
+ *  Saying so before Save beats a key that silently vanishes. */
+function checkUrlCredentialHint(): void {
+  const hint = document.getElementById('modal-url-cred-hint');
+  if (!hint) return;
+  const url = getVal('modal-url');
+  const masked = getVal('modal-key') === MASKED_KEY || getVal('modal-session-cookie') === MASKED_KEY;
+  hint.style.display = _editStoredUrl && url && masked && !sameOrigin(url, _editStoredUrl) ? '' : 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1321,6 +1339,7 @@ export function openEditModal(
   setVal('modal-tracker-id', t.id);
   setVal('modal-name', t.name);
   setVal('modal-url',  t.url);
+  _editStoredUrl = t.url;
   setVal('modal-username', t.username ?? '');
   setVal('modal-joindate', t.join_date ?? '');
 
@@ -1726,12 +1745,22 @@ function markSaved(): void {
  *  the panel back into the state a fresh open would give it: the mask
  *  sentinel, meaning "unchanged". Without this a second save re-sends the
  *  plaintext, and the panel keeps a secret on screen for as long as it is
- *  left open. */
-function remaskSecrets(): void {
-  for (const id of ['modal-key', 'modal-session-cookie']) {
+ *  left open. `saved` is the server's view of the result: a secret it no
+ *  longer holds (cleared by a move to another host) empties its field rather
+ *  than showing a mask over nothing. */
+function remaskSecrets(saved?: Tracker): void {
+  const fields: [string, boolean | undefined, string][] = [
+    ['modal-key', saved?.has_key, 'Your API token'],
+    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools'],
+  ];
+  for (const [id, stored, emptyPlaceholder] of fields) {
     const el = document.getElementById(id) as HTMLInputElement | null;
-    if (el && el.value) el.value = MASKED_KEY;
+    if (!el) continue;
+    if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
+    else if (el.value) el.value = MASKED_KEY;
   }
+  if (saved) _editStoredUrl = saved.url;
+  checkUrlCredentialHint();
 }
 
 export async function saveTracker(deps: ModalDeps) {
@@ -1872,7 +1901,13 @@ export async function saveTracker(deps: ModalDeps) {
       // to keep a change was to postpone it. Adding a tracker still closes:
       // that one IS finished, and the next thing to do is look at the list.
       markSaved();
-      remaskSecrets();
+      // Masked secrets sent with a URL on another host are cleared, not
+      // carried over (see checkUrlCredentialHint) — say so, it's easy to miss.
+      if (data && ((payload.api_key === MASKED_KEY && !data.has_key)
+        || (cookieVal === MASKED_KEY && !data.has_session))) {
+        deps.toast('The new address is a different host, so the saved key/cookie were cleared — re-enter them', 'warning');
+      }
+      remaskSecrets(data ?? undefined);
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -3292,6 +3327,13 @@ export async function saveSettings(deps: SettingsDeps) {
     // round-trips safely instead of wiping the stored key.
     setVal('s-qui-key', appSettings.qui_api_key ?? '');
     setPlaceholder('s-qui-key', appSettings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
+    // A masked key sent with an address on another host is cleared, never
+    // carried there — the server's rule, so a URL edit can't send the key
+    // anywhere. Say so: the field emptying on its own is easy to miss.
+    if (quiKey === MASKED_KEY && !appSettings.qui_api_key) {
+      deps.toast('The qui address is a different host, so its saved API key was cleared — re-enter it', 'warning');
+      setPlaceholder('s-qui-key', 'Enter the API key for this address');
+    }
     await deps.loadQUIInstances();
     deps.renderQuiBarsWrapper();
     deps.renderTable();
@@ -3345,6 +3387,8 @@ function clearModal() {
     const el = document.getElementById(id) as HTMLInputElement;
     if (el) el.value = '';
   });
+  _editStoredUrl = ''; // Add mode has no saved secrets to warn about
+  hide('modal-url-cred-hint');
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
   _editDeadlines = {};
