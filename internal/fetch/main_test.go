@@ -3,8 +3,6 @@ package fetch
 import (
 	"os"
 	"testing"
-
-	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
 // TestMain relaxes DefBaseURLPolicy for the suite, because httptest servers
@@ -17,7 +15,10 @@ import (
 // this line is ever deleted, the tests break and nobody's security changes;
 // under the old arrangement the failure mode was silent and pointed the other
 // way.
+//
+// Only AllowPrivate is relaxed: the redirect credential guards stay as shipped,
+// so the suite exercises them on def-chosen destinations too.
 func TestMain(m *testing.M) {
-	DefBaseURLPolicy = netguard.Policy{AllowPrivate: true}
+	DefBaseURLPolicy.AllowPrivate = true
 	os.Exit(m.Run())
 }

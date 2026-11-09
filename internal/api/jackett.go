@@ -205,7 +205,7 @@ func jackettList(client *http.Client, base string) ([]jackettListEntry, string, 
 		return nil, "connection_error", http.StatusBadGateway
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, "read_error", http.StatusBadGateway
 	}
@@ -235,8 +235,12 @@ func jackettConfig(client *http.Client, base, id string) []jackettConfigItem {
 	if resp.StatusCode != http.StatusOK {
 		return nil
 	}
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
+	if err != nil {
+		return nil
+	}
 	var items []jackettConfigItem
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+	if err := json.Unmarshal(body, &items); err != nil {
 		return nil
 	}
 	return items

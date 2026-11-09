@@ -12,7 +12,6 @@ package scrape
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -293,7 +292,14 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	if path == "" {
 		path = "/users/{username}"
 	}
-	profileURL := baseURL + strings.ReplaceAll(path, "{username}", t.Username)
+	// Refuse a path that would move the request off the tracker's host before
+	// anything is sent: the session cookie goes with it. Checked on the
+	// template here, and again below once the username or id is substituted,
+	// since either could carry the characters that do it.
+	if _, err := netguard.JoinPath(baseURL, path); err != nil {
+		return nil, serr(http.StatusBadRequest, "bad_profile_path")
+	}
+	profilePath := strings.ReplaceAll(path, "{username}", t.Username)
 
 	// "{id}" profile paths (Gazelle /user.php?id={id}, TBDev-family
 	// /userdetails.php?id={id}): use the id from a previous scrape when known,
@@ -317,7 +323,11 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 			}
 			userID = uid
 		}
-		profileURL = baseURL + strings.ReplaceAll(path, "{id}", userID)
+		profilePath = strings.ReplaceAll(path, "{id}", userID)
+	}
+	profileURL, err := netguard.JoinPath(baseURL, profilePath)
+	if err != nil {
+		return nil, serr(http.StatusBadRequest, "bad_profile_path")
 	}
 
 	req, _ := http.NewRequest(http.MethodGet, profileURL, nil)
@@ -357,7 +367,7 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 		return nil, serr(401, "session_expired")
 	}
 
-	rawHTML, err := io.ReadAll(resp.Body)
+	rawHTML, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, serr(http.StatusInternalServerError, "read_error")
 	}
@@ -408,7 +418,7 @@ func discoverUserID(baseURL, path string, t models.Tracker, identify string) (st
 	if resp.StatusCode != http.StatusOK {
 		return "", serr(resp.StatusCode, fmt.Sprintf("http_%d", resp.StatusCode))
 	}
-	rawHTML, err := io.ReadAll(resp.Body)
+	rawHTML, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return "", serr(http.StatusInternalServerError, "read_error")
 	}

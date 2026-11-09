@@ -237,6 +237,46 @@ func validateType(td TypeDef) error {
 	default:
 		return fmt.Errorf("api.kind must be one of unit3d|gazelle_json|gazelle_games|custom|demo|none, got %q", td.API.Kind)
 	}
+	paths := map[string]string{"scrape.profile_path": td.Scrape.ProfilePath}
+	if td.CustomAPI != nil {
+		paths["custom_api.path"] = td.CustomAPI.Path
+	}
+	if td.GroupAPI != nil {
+		paths["group_api.path"] = td.GroupAPI.Path
+	}
+	return validateDefPaths(paths)
+}
+
+// validateDefPaths checks every def field that is appended to the tracker's
+// URL to build a request.
+//
+// The join is plain concatenation, so the path decides where the request goes
+// unless it begins with exactly one "/": "@evil.example/api/user" after
+// "https://tracker.example" is a request to evil.example (the tracker's name
+// becomes a username), ".evil.example/x" lands on tracker.example.evil.example,
+// and the API key or session cookie travels with it either way. "//" is
+// refused too — harmless after a host, but it is how a URL names a different
+// one, and no tracker endpoint needs it.
+//
+// A rejection, unlike a suspect base_url: such a path is never a typo that
+// still works, so there is nothing to keep loading. fetch and scrape refuse
+// it again at request time (netguard.JoinPath), which is the enforcement;
+// this is what makes the problem visible in the Definitions list.
+func validateDefPaths(paths map[string]string) error {
+	fields := make([]string, 0, len(paths))
+	for f := range paths {
+		fields = append(fields, f)
+	}
+	sort.Strings(fields) // stable error text when several are wrong
+	for _, f := range fields {
+		p := paths[f]
+		if p == "" {
+			continue // optional here; "required" is checked where it applies
+		}
+		if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+			return fmt.Errorf("%s must be a path on the tracker's own site, starting with a single \"/\", got %q", f, p)
+		}
+	}
 	return nil
 }
 
@@ -265,7 +305,17 @@ func validateTracker(td TrackerDef, types map[string]TypeDef) error {
 				"(or a \"custom_api\" block on the type)", td.Type)
 		}
 	}
-	return nil
+	paths := map[string]string{"scrape.profile_path": td.Scrape.ProfilePath}
+	if td.API != nil {
+		paths["api.path"] = td.API.Path
+	}
+	if td.ExtendedStats != nil {
+		paths["extended_stats.path"] = td.ExtendedStats.Path
+	}
+	if td.Events != nil {
+		paths["events.path"] = td.Events.Path
+	}
+	return validateDefPaths(paths)
 }
 
 // validateDefBaseURL checks the one field in a definition that decides where

@@ -76,7 +76,22 @@ type Client struct {
 // The half that CAN arrive from a stranger — a def's api.base_url — is held to
 // DefBaseURLPolicy instead. That split is the point: the restriction lands on
 // the input Yata does not control.
-var TrackerPolicy = netguard.Policy{AllowPrivate: true}
+//
+// Both policies also guard the credential across redirects. net/http drops
+// Authorization and Cookie when a redirect leaves the tracker's domain, but
+// not GazelleGames' X-API-Key, and it replays a JSON-RPC POST body — the API
+// key's other home — on a 307 or 308. The header is dropped and the body
+// replay refused once a redirect leaves the tracker's origin.
+var TrackerPolicy = netguard.Policy{
+	AllowPrivate:      true,
+	CredentialHeaders: trackerCredentialHeaders,
+	PinBodyOrigin:     true,
+}
+
+// trackerCredentialHeaders are the request headers a tracker fetch may carry a
+// credential in that net/http does not already strip on a cross-domain
+// redirect. Authorization and Cookie are absent because Go handles them.
+var trackerCredentialHeaders = []string{"X-API-Key"}
 
 // DefBaseURLPolicy constrains the one case where a DEFINITION, rather than the
 // user, chooses the destination: `api.base_url`, which overrides the URL the
@@ -94,7 +109,10 @@ var TrackerPolicy = netguard.Policy{AllowPrivate: true}
 // can want an address inside the user's house. The URL the USER typed keeps
 // TrackerPolicy — pointing Yata at your own network is your decision to make,
 // and unlike a def it cannot arrive from a stranger.
-var DefBaseURLPolicy = netguard.Policy{}
+var DefBaseURLPolicy = netguard.Policy{
+	CredentialHeaders: trackerCredentialHeaders,
+	PinBodyOrigin:     true,
+}
 
 // NewClient builds a Client with a sane default HTTP timeout.
 func NewClient(reg *defs.Registry, testDataPath string) *Client {
@@ -224,9 +242,15 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	// normalisation below turns the list into the flat banner fields.
 	// Best-effort: a promotion nobody can read is not worth failing a fetch
 	// that otherwise succeeded.
+	//
+	// The def's path is joined through netguard.JoinPath so it can only ever
+	// name a path on the tracker itself — never a different host, which would
+	// receive the API key.
 	if ev := c.Registry.Events(t.URL, t.Type); ev != nil && ev.Path != "" {
-		if evData, eErr := c.getUnit3D(base+ev.Path, t.APIKey, id); eErr == nil {
-			mergeEventEndpoint(data, evData, *ev)
+		if evURL, jErr := netguard.JoinPath(base, ev.Path); jErr == nil {
+			if evData, eErr := c.getUnit3D(evURL, t.APIKey, id); eErr == nil {
+				mergeEventEndpoint(data, evData, *ev)
+			}
 		}
 	}
 	normalizeActiveEvents(data)
@@ -235,8 +259,10 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	// flags, …) here, letting them turn scraping off entirely. Best-effort: a
 	// failure here never fails the whole fetch — the core stats still return.
 	if ext := c.Registry.ExtendedStats(t.URL, t.Type); ext != nil && ext.Path != "" {
-		if extData, eErr := c.getUnit3D(base+ext.Path, t.APIKey, id); eErr == nil {
-			mergeExtended(data, extData, ext.ByteFields)
+		if extURL, jErr := netguard.JoinPath(base, ext.Path); jErr == nil {
+			if extData, eErr := c.getUnit3D(extURL, t.APIKey, id); eErr == nil {
+				mergeExtended(data, extData, ext.ByteFields)
+			}
 		}
 	}
 	return data, nil
@@ -1133,7 +1159,13 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if strings.TrimSpace(api.BaseURL) != "" {
 		baseURL, client = api.BaseURL, c.defBaseClient()
 	}
-	req, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, requestBody)
+	reqURL, err := netguard.JoinPath(baseURL, path)
+	if err != nil {
+		// A path that would move the request to another host is a def bug
+		// (or worse) and reads as one, like a refused base_url.
+		return nil, errf("blocked_destination", err)
+	}
+	req, err := http.NewRequest(method, reqURL, requestBody)
 	if err != nil {
 		return nil, errf("request_error", err)
 	}
@@ -1160,7 +1192,7 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, errf(fmt.Sprintf("http_%d", resp.StatusCode), fmt.Errorf("http %d", resp.StatusCode))
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, errf("read_error", err)
 	}
@@ -1384,7 +1416,7 @@ func (c *Client) getBody(url string, headers map[string]string, identify string)
 	if resp.StatusCode != http.StatusOK {
 		return nil, errf(fmt.Sprintf("http_%d", resp.StatusCode), fmt.Errorf("http %d", resp.StatusCode))
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, errf("read_error", err)
 	}

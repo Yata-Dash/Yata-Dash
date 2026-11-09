@@ -29,7 +29,16 @@ import (
 // something else — plus link-local (cloud metadata) being refused outright.
 // Redirects are re-checked but not pinned: a generic webhook may legitimately
 // redirect, and Discord's CDN does.
-var destinationPolicy = netguard.Policy{AllowPrivate: true}
+//
+// Gotify's app token travels in X-Gotify-Key, a header net/http does not know
+// is a credential, so it would follow such a redirect to any host. It is
+// dropped once a redirect leaves the destination's origin. The body is not
+// pinned: it holds the alert text, not a credential, and refusing a 307 here
+// could break a webhook that legitimately moved.
+var destinationPolicy = netguard.Policy{
+	AllowPrivate:      true,
+	CredentialHeaders: []string{"X-Gotify-Key"},
+}
 
 var httpClient = netguard.Client(15*time.Second, destinationPolicy)
 
