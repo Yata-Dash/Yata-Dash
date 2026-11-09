@@ -192,22 +192,10 @@ func (m *Manager) Import(data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cfg = incoming
-	// Reuse the same defaulting the loader applies.
-	if m.cfg.Server.Host == "" {
-		m.cfg.Server.Host = "0.0.0.0"
-	}
-	if m.cfg.Server.Port == 0 {
-		m.cfg.Server.Port = 8420
-	}
-	if m.cfg.Settings.ScrapeIntervalMinutes < 60 {
-		m.cfg.Settings.ScrapeIntervalMinutes = 60
-	}
-	if m.cfg.Settings.QUIEnabledInstances == nil {
-		m.cfg.Settings.QUIEnabledInstances = []int{}
-	}
-	if m.cfg.Trackers == nil {
-		m.cfg.Trackers = []models.Tracker{}
-	}
-	normalizeBackup(&m.cfg.Settings)
+	// Exactly what the loader does to a file it reads at startup — an export
+	// from an older build needs the same migrations, and running them only on
+	// the next restart left the install half-working until then. Saved
+	// regardless of what it reports: the import itself is the change.
+	m.normalizeLoaded()
 	return m.saveLocked()
 }
