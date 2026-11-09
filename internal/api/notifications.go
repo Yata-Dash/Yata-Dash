@@ -59,6 +59,17 @@ func putNotifications(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		// Range-checked here because digestDueAt has no sensible reading of an
+		// out-of-range schedule — a weekday of 20 used to land the "most recent"
+		// instant in the future, which made the digest due on every tick.
+		if n.Digest.Weekday < 0 || n.Digest.Weekday > 6 {
+			jsonError(w, "digest weekday must be 0 (Sunday) to 6 (Saturday)", http.StatusBadRequest)
+			return
+		}
+		if n.Digest.Hour < 0 || n.Digest.Hour > 23 {
+			jsonError(w, "digest hour must be 0 to 23", http.StatusBadRequest)
+			return
+		}
 		// The editor only ever round-trips destinations/rules — it doesn't know
 		// about seeded_default_rules, so a decode always leaves it false. Carry
 		// the existing value forward: otherwise a user who clears every rule and
@@ -70,12 +81,11 @@ func putNotifications(d *Deps) http.HandlerFunc {
 		// it 0, and 0 means "no batch has run" — every seeded rule the user
 		// has since deleted would come back on the next restart.
 		n.SeedVersion = existing.SeedVersion
-		// Digest LastSentAt/LastReadyTargets are server-maintained (updated only
-		// by config.Manager.UpdateDigestState after a send) — the editor sends
-		// the schedule fields (enabled/weekday/hour/destinations) but never
-		// these, so preserve them exactly like SeededDefaultRules above.
-		n.Digest.LastSentAt = existing.Digest.LastSentAt
-		n.Digest.LastReadyTargets = existing.Digest.LastReadyTargets
+		// Digest LastSentAt/LastReadyTargets are server-maintained too, but they
+		// are NOT copied from `existing` here: a digest sent between that read and
+		// the write below would be overwritten with the older value and go out
+		// again on the next tick. config.Manager.UpdateNotifications carries them
+		// forward under its own lock instead.
 		// Backfill secrets for known destinations arriving with none — this is
 		// how re-importing a share-safe export (URL/token/chat id stripped) into
 		// the same instance keeps its webhooks working.

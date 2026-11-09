@@ -209,5 +209,6 @@ func (m *Manager) Import(data []byte) error {
 		m.cfg.Trackers = []models.Tracker{}
 	}
 	normalizeBackup(&m.cfg.Settings)
+	normalizeDigest(&m.cfg.Notifications.Digest)
 	return m.saveLocked()
 }

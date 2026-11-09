@@ -348,6 +348,16 @@ func normalizeDigest(dig *models.DigestConfig) {
 		dig.Weekday = 1
 		dig.Hour = 9
 	}
+	// Out-of-range values (a hand-edited file or an imported config — the API
+	// rejects them) fall back to the default for that field rather than being
+	// wrapped: there is no reading of "weekday 20" worth guessing at, and left
+	// alone digestDueAt would never see the schedule arrive.
+	if dig.Weekday < 0 || dig.Weekday > 6 {
+		dig.Weekday = 1
+	}
+	if dig.Hour < 0 || dig.Hour > 23 {
+		dig.Hour = 9
+	}
 }
 
 // normalizeBackup applies safe defaults/bounds to the backup settings.
@@ -473,6 +483,12 @@ func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
 	if n.SeedVersion < m.cfg.Notifications.SeedVersion {
 		n.SeedVersion = m.cfg.Notifications.SeedVersion
 	}
+	// The digest's send history belongs to the server (UpdateDigestState), not
+	// to whoever is saving. Taken from the live config under this lock rather
+	// than from the caller's earlier read: a digest sent between that read and
+	// this write would otherwise be rolled back and sent again on the next tick.
+	n.Digest.LastSentAt = m.cfg.Notifications.Digest.LastSentAt
+	n.Digest.LastReadyTargets = append([]string(nil), m.cfg.Notifications.Digest.LastReadyTargets...)
 	m.cfg.Notifications = n
 	return m.saveLocked()
 }

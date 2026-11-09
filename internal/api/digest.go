@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
@@ -50,8 +51,22 @@ func digestDueAt(cfg models.DigestConfig, now time.Time) (time.Time, bool) {
 	if scheduled.After(now) {
 		scheduled = scheduled.AddDate(0, 0, -7)
 	}
+	// Still in the future only when Weekday/Hour are out of range (a weekday of
+	// 20 pushes the instant forward by more than the single week subtracted
+	// above). The API and the config loader both reject or reset such values,
+	// but this is the line that turns one slipping through into a webhook every
+	// 5-minute tick — LastSentAt can never catch up with a future instant — so
+	// it fails safe here too: a schedule that never arrives is never due.
+	if scheduled.After(now) {
+		return scheduled, false
+	}
 	return scheduled, cfg.LastSentAt < scheduled.Unix()
 }
+
+// digestMu serialises digest delivery — the scheduler's due-check-then-send
+// and the "Send now" button. Without it the two can interleave: both read the
+// old LastSentAt, both send, and the user gets the week's digest twice.
+var digestMu sync.Mutex
 
 // RunDigestIfDue sends the weekly digest when it's due (see digestDueAt) —
 // called from its own 5-minute goroutine in cmd/yata/main.go, deliberately
@@ -59,12 +74,16 @@ func digestDueAt(cfg models.DigestConfig, now time.Time) (time.Time, bool) {
 // configurable, so tying the digest to it would either delay delivery by up
 // to that interval or require reasoning about drift.
 func RunDigestIfDue(d *Deps) {
+	// Held across the due check as well as the send, so a "Send now" that
+	// finishes while this tick is waiting is seen as the send it was.
+	digestMu.Lock()
+	defer digestMu.Unlock()
 	now := time.Now()
 	cfg := d.Cfg.Notifications()
 	if _, due := digestDueAt(cfg.Digest, now); !due {
 		return
 	}
-	sentTo, err := deliverDigest(d, now)
+	sentTo, err := deliverDigestLocked(d, now)
 	switch {
 	case err != nil:
 		d.logWarnf("digest: %v", err)
@@ -81,6 +100,13 @@ func RunDigestIfDue(d *Deps) {
 // with a nil error means no destinations resolved (nothing to send to, state
 // left untouched so enabling a destination later still gets the overdue digest).
 func deliverDigest(d *Deps, now time.Time) (sentTo int, err error) {
+	digestMu.Lock()
+	defer digestMu.Unlock()
+	return deliverDigestLocked(d, now)
+}
+
+// deliverDigestLocked is deliverDigest for a caller already holding digestMu.
+func deliverDigestLocked(d *Deps, now time.Time) (sentTo int, err error) {
 	cfg := d.Cfg.Notifications()
 	text, readyNow := buildDigest(d, now)
 	// The digest is webhook-only for now. It resolves through the same

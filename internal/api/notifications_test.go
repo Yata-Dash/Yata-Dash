@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
@@ -58,5 +62,106 @@ func TestPutNotificationsPreservesDigestState(t *testing.T) {
 	// The schedule fields the editor DOES own must still come through untouched.
 	if !got.Enabled || got.Weekday != 3 || got.Hour != 14 {
 		t.Errorf("schedule fields = %+v, want enabled/weekday 3/hour 14 from the PUT body", got)
+	}
+}
+
+// TestPutNotificationsRejectsOutOfRangeDigestSchedule: digestDueAt has no
+// sensible reading of a weekday outside 0-6 or an hour outside 0-23 (a weekday
+// of 20 made the digest due on every tick), so the API refuses them outright
+// rather than storing something the scheduler would misread.
+func TestPutNotificationsRejectsOutOfRangeDigestSchedule(t *testing.T) {
+	cases := []struct {
+		name          string
+		weekday, hour int
+		wantInError   string
+	}{
+		{"weekday too high", 7, 9, "weekday"},
+		{"weekday negative", -1, 9, "weekday"},
+		{"weekday far out", 20, 9, "weekday"},
+		{"hour too high", 1, 24, "hour"},
+		{"hour negative", 1, -1, "hour"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := testDeps(t)
+			before := d.Cfg.Notifications().Digest
+			body, err := json.Marshal(models.NotificationConfig{
+				Digest: models.DigestConfig{Enabled: true, Weekday: c.weekday, Hour: c.hour},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPut, "/api/notifications", bytes.NewReader(body))
+			w := httptest.NewRecorder()
+			putNotifications(d)(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("PUT = %d, want 400; body: %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), c.wantInError) {
+				t.Errorf("error %q does not name the bad field %q", w.Body.String(), c.wantInError)
+			}
+			if got := d.Cfg.Notifications().Digest; got.Enabled != before.Enabled ||
+				got.Weekday != before.Weekday || got.Hour != before.Hour {
+				t.Errorf("rejected PUT still changed the digest: %+v → %+v", before, got)
+			}
+		})
+	}
+
+	// The edges themselves are valid.
+	d := testDeps(t)
+	for _, wh := range [][2]int{{0, 0}, {6, 23}} {
+		body, err := json.Marshal(models.NotificationConfig{
+			Digest: models.DigestConfig{Enabled: true, Weekday: wh[0], Hour: wh[1]},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPut, "/api/notifications", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		putNotifications(d)(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("weekday %d hour %d: PUT = %d, want 200; body: %s", wh[0], wh[1], w.Code, w.Body.String())
+		}
+	}
+}
+
+// TestRunDigestIfDueSendsOnce: overlapping digest runs (the 5-minute tick and
+// "Send now", or a tick that starts while a slow one is still sending) used
+// to each see the digest as due and each send it. Delivery is serialised, so
+// only the first sends and the rest see the LastSentAt it stored.
+func TestRunDigestIfDueSendsOnce(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		// Long enough that unserialised runs would all pass the due check
+		// before the first one finishes sending.
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	d := testDeps(t)
+	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{
+		Destinations: []models.NotifyDestination{{ID: "hook", Name: "hook", Type: "generic", URL: srv.URL, Enabled: true}},
+		// Never sent, so the most recent scheduled instant has always passed.
+		Digest: models.DigestConfig{Enabled: true, Weekday: 1, Hour: 9},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			RunDigestIfDue(d)
+		}()
+	}
+	wg.Wait()
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("digest delivered %d times by overlapping runs, want 1", got)
+	}
+	if d.Cfg.Notifications().Digest.LastSentAt == 0 {
+		t.Error("LastSentAt was not recorded")
 	}
 }
