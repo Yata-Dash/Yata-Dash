@@ -4,7 +4,9 @@
 # amd64 CI runner produce a linux/amd64 + linux/arm64 image quickly.
 
 # ── Stage 1: frontend (arch-independent) ─────────────────────────────────────
-FROM --platform=$BUILDPLATFORM node:20-alpine AS web
+# Node 24 is an LTS line supported until April 2028 (20 reached end-of-life in
+# April 2026). Keep it in step with node-version in the CI and release workflows.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 # `npm ci`, not `npm install`: it installs exactly what the lockfile pins into a
@@ -39,7 +41,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     -o yata ./cmd/yata
 
 # ── Stage 3: runtime ─────────────────────────────────────────────────────────
-FROM alpine:3.21
+# Latest stable Alpine branch; 3.21 left upstream security support in Nov 2026.
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 

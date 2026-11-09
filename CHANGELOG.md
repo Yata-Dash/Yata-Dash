@@ -6,6 +6,12 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Changed
+
+- **Build toolchain refreshed.** The image builds the frontend on Node 24 LTS
+  (Node 20 is end-of-life) and runs on Alpine 3.24; vite and puppeteer-core
+  are updated to releases that clear all open `npm audit` advisories.
+
 ## [Beta-20261011]
 
 ### Changed
