@@ -21,7 +21,12 @@ type DB struct {
 
 // Open opens (creating if needed) the database at path and migrates the schema.
 func Open(path string) (*DB, error) {
-	h, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	// synchronous(NORMAL): under WAL it fsyncs at checkpoints rather than on
+	// every commit. A power cut can lose the last few commits but cannot
+	// corrupt the database — the right trade here, where nearly every write
+	// is a history sample or rollup the next poll rewrites anyway. It is
+	// per-connection, hence in the DSN rather than a one-off PRAGMA.
+	h, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +84,10 @@ func (d *DB) migrate() error {
 			value      REAL NOT NULL,
 			PRIMARY KEY (tracker_id, day, field)
 		)`,
+		// The primary key leads with tracker_id, so it can't serve a day
+		// range on its own: the History view's all-trackers series, the CSV
+		// export and PruneDaily all scanned the whole table without this.
+		`CREATE INDEX IF NOT EXISTS idx_history_daily_day ON history_daily (day)`,
 		// One row per scrape ATTEMPT (success or failure) — the persistent
 		// rate-limit ledger, and since the outcome columns were added, the
 		// scrape-health record (failure streaks / dead-cookie detection).
