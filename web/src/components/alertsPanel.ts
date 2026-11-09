@@ -157,8 +157,16 @@ function toggle(force?: boolean): void {
   }
 }
 
+/** Set once the listeners below are attached. boot() runs again after every
+ *  sign-in (a sign-out, or an expired session, re-shows the login gate), and
+ *  wiring a second time stacked a second click handler on the bell: one click
+ *  toggled the panel open and straight back shut. */
+let wired = false;
+
 /** Wire the panel up once, at startup. */
 export function initAlertsPanel(): void {
+  if (wired) { void refreshAlertCount(); return; }
+  wired = true;
   el('alerts-btn')?.addEventListener('click', e => { e.stopPropagation(); toggle(); });
 
   // Click-away and Escape close it — it overlays the dashboard, so leaving it

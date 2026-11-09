@@ -13,6 +13,7 @@ import { displaySize } from '../utils/units';
 import { accountWarningBadges, loginRuleText } from '../utils/account';
 import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
+import { localStore } from '../utils/storage';
 
 type ReorderFn = (srcId: string, dstId: string) => void;
 
@@ -43,7 +44,7 @@ const GRID_UI_KEY = 'yata.grid.ui';
 function loadGridUI(): GridUIState {
   const dflt: GridUIState = { sort: '', dir: 'asc', hidden: [], evenHeights: false };
   try {
-    const raw = JSON.parse(localStorage.getItem(GRID_UI_KEY) ?? '{}');
+    const raw = JSON.parse(localStore.get(GRID_UI_KEY) ?? '{}');
     return {
       sort: COL_DEFS.some(c => c.key === raw.sort && c.sortable) ? raw.sort : dflt.sort,
       dir: raw.dir === 'desc' ? 'desc' : 'asc',
@@ -58,7 +59,7 @@ function loadGridUI(): GridUIState {
 const gridUI = loadGridUI();
 
 function saveGridUI() {
-  try { localStorage.setItem(GRID_UI_KEY, JSON.stringify(gridUI)); } catch { /* private mode */ }
+  localStore.set(GRID_UI_KEY, JSON.stringify(gridUI));
 }
 
 /** Drag-reorder only means something while the grid is in the user's own
@@ -472,8 +473,12 @@ export function renderCard(
   }
 
   el.innerHTML = header + body;
-  // Re-attach drag/drop listeners after innerHTML wipe (drop targets still needed)
-  attachDragEvents(el, tracker.id, () => {});
+  // The card's own drag/drop listeners were attached once, when renderGrid
+  // created the element, and survive this innerHTML swap. Only the handle is
+  // new, so only the handle is wired here — re-attaching the card listeners on
+  // every render stacked five more per refresh, each dragover sweeping every
+  // card again.
+  wireDragHandle(el);
   // Per-card expand for the collapsed extras. Local to the card and not
   // persisted: it's a peek, not a preference — the next render starts closed.
   const toggle = el.querySelector<HTMLElement>('.card-extra-toggle');
@@ -1054,26 +1059,16 @@ function skelStats(): string {
   <div class="stats-grid">${Array(12).fill('<div class="stat-item"><div class="skeleton" style="height:30px"></div></div>').join('')}</div>`;
 }
 
+/** Card-level drag/drop listeners. Attached ONCE per card element, when
+ *  renderGrid creates it; renderCard only replaces the card's innerHTML, so
+ *  these outlive every re-render. The handle inside is wired per render by
+ *  wireDragHandle. */
 function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): void {
-  // Only start dragging when the pointer is down on the drag handle
   el.draggable = false;
-  const handle = el.querySelector<HTMLElement>('.drag-handle');
-  // Reordering is meaningless while a sort is applied: the drop would either be
-  // discarded on the next render or quietly rewrite an order the user can't
-  // see. The handle stays visible but says why it's inert.
-  if (!customOrderActive()) {
-    if (handle) {
-      handle.classList.add('is-disabled');
-      handle.title = 'Sorted by a column — switch Order to “My order” to drag';
-    }
-    return;
-  }
-  if (handle) {
-    handle.classList.remove('is-disabled');
-    handle.title = 'Drag to reorder';
-    handle.addEventListener('mousedown', () => { el.draggable = true; });
-    handle.addEventListener('mouseleave', () => { if (!dragSrcId) el.draggable = false; });
-  }
+  // Reordering is meaningless while a sort is applied (see wireDragHandle).
+  // Changing the order re-runs renderGrid, which builds fresh card elements, so
+  // a card created under a sort never needs these added later.
+  if (!customOrderActive()) return;
 
   el.addEventListener('dragstart', e => {
     if (!el.draggable) { e.preventDefault(); return; }
@@ -1104,4 +1099,25 @@ function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): vo
     onReorder(dragSrcId, id);
     dragSrcId = null;
   });
+}
+
+/** Wire the drag handle of a freshly rendered card. The handle is part of the
+ *  card's innerHTML, so it is a new element after every renderCard. */
+function wireDragHandle(el: HTMLElement): void {
+  // Only start dragging when the pointer is down on the drag handle
+  el.draggable = false;
+  const handle = el.querySelector<HTMLElement>('.drag-handle');
+  if (!handle) return;
+  // Reordering is meaningless while a sort is applied: the drop would either be
+  // discarded on the next render or quietly rewrite an order the user can't
+  // see. The handle stays visible but says why it's inert.
+  if (!customOrderActive()) {
+    handle.classList.add('is-disabled');
+    handle.title = 'Sorted by a column — switch Order to “My order” to drag';
+    return;
+  }
+  handle.classList.remove('is-disabled');
+  handle.title = 'Drag to reorder';
+  handle.addEventListener('mousedown', () => { el.draggable = true; });
+  handle.addEventListener('mouseleave', () => { if (!dragSrcId) el.draggable = false; });
 }

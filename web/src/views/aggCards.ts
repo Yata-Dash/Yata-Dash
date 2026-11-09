@@ -5,7 +5,7 @@ import { fmtGib, fmtRatio, fmtSeedTime, fmtSignedDelta } from '../utils/format';
 import type { DeltaUnit } from '../utils/format';
 import { parseSize, parseSeedTime } from '../utils/parse';
 import { renderSparkline } from '../components/sparkline';
-import { buildAggSeries } from '../utils/history';
+import { aggDeltas, buildAggSeries } from '../utils/history';
 
 export function renderAggCards(
   trackers: Tracker[],
@@ -43,12 +43,16 @@ export function renderAggCards(
   const agg        = buildAggSeries(historyData);
   const avgSeedTime = totalSeeding > 0 ? weightedSeedSec / totalSeeding : null;
 
-  // 7-day change per card, off the same series buildAggSeries just built —
-  // no separate fetch. null when the series is too thin to diff (a fresh
-  // install, or a stat that hasn't recorded twice in the window yet).
-  const deltaUp    = edgeDelta(agg.up);
-  const deltaDown  = edgeDelta(agg.down);
-  const deltaBuf   = edgeDelta(agg.buffer);
+  // 7-day change per card, off the same history points — no separate fetch.
+  // null when the data is too thin to diff (a fresh install, or a stat that
+  // hasn't recorded twice in the window yet). The summed cards diff each
+  // tracker against itself and add the results, rather than diffing the ends
+  // of the summed series: a tracker added mid-week would otherwise count its
+  // entire total as this week's change (see aggDeltas).
+  const sums       = aggDeltas(historyData);
+  const deltaUp    = sums.up;
+  const deltaDown  = sums.down;
+  const deltaBuf   = sums.buffer;
   // Ratio's delta + sparkline use the POOLED ratio (Σup/Σdown per bucket) —
   // the SAME quantity the big number shows — not buildAggSeries' mean-of-
   // per-tracker-ratios. The two disagree (a pooled 3.60 vs a mean that can

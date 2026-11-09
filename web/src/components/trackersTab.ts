@@ -14,6 +14,7 @@ import { findOptOut } from '../utils/optout';
 import { renderTestPills } from './trackerTest';
 import { capabilityRow } from './capabilities';
 import type { ToastType } from './toast';
+import { localStore } from '../utils/storage';
 
 interface TabDeps {
   loadTrackers: () => Promise<void>;
@@ -466,14 +467,14 @@ export function toggleImportSection(key: ImportKey): void {
   const open = body.style.display === 'none';
   body.style.display = open ? '' : 'none';
   if (chev) chev.classList.toggle('open', open);
-  try { localStorage.setItem(`u3d-import-open-${key}`, open ? '1' : '0'); } catch { /* private mode */ }
+  localStore.set(`u3d-import-open-${key}`, open ? '1' : '0');
 }
 
 /** Restore each import section's remembered open/closed state (idempotent —
  *  called on every trackers-tab render alongside prefillImportCreds). */
 export function restoreImportSections(): void {
   for (const key of Object.keys(IMPORT_SOURCES) as ImportKey[]) {
-    if (localStorage.getItem(`u3d-import-open-${key}`) !== '1') continue;
+    if (localStore.get(`u3d-import-open-${key}`) !== '1') continue;
     const body = document.getElementById(`${key}-body`);
     const chev = document.getElementById(`${key}-chev`);
     if (body) body.style.display = '';

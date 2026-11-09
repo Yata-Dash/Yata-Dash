@@ -26,6 +26,7 @@ import * as tokensTab from './components/tokensTab';
 import { FEATURES } from './config';
 import { initPathways, refreshPinned } from './views/pathways';
 import { setCapsOpen } from './components/capabilities';
+import { localStore, sessionStore } from './utils/storage';
 import type { ColPref, HistoryPoint, ScrapeBlocked, TrackerStatsResponse, ViewMode } from './types';
 
 // modals.ts is loaded dynamically (it's large); store the promise so route
@@ -74,7 +75,7 @@ async function boot() {
   if (FEATURES.history) void import('./views/history').then(m => m.redrawHistory());
   await loadQUIInstances();
   renderQuiBars(state.appSettings, state.quiInstancesMeta);
-  await refreshQuiStats(state.appSettings);
+  await refreshQui();
   scheduleRefresh();
   scheduleQuiRefresh();
   scrapeWhatIsAllowed();
@@ -103,7 +104,7 @@ let _noAccount = false;
 function maybeShowAuthNudge() {
   if (!_noAccount) return;
   if (state.appSettings.hide_login_warning) return;
-  if (sessionStorage.getItem('yata-nudge-dismissed') === '1') return;
+  if (sessionStore.get('yata-nudge-dismissed') === '1') return;
   const el = document.getElementById('auth-nudge');
   if (el) el.style.display = 'flex';
 }
@@ -113,7 +114,7 @@ function hideAuthNudgeEl() {
 }
 /** The × — dismiss for this session only (returns next session). */
 function dismissAuthNudge() {
-  sessionStorage.setItem('yata-nudge-dismissed', '1');
+  sessionStore.set('yata-nudge-dismissed', '1');
   hideAuthNudgeEl();
 }
 /** "Don't warn me again" — persist the opt-out server-side so the banner
@@ -135,7 +136,7 @@ async function dontWarnLogin() {
   const { ok } = await api.saveSettings({ ...state.appSettings, hide_login_warning: !show });
   if (!ok) return;
   state.setAppSettings({ ...state.appSettings, hide_login_warning: !show });
-  sessionStorage.removeItem('yata-nudge-dismissed'); // an explicit choice overrides a session dismiss
+  sessionStore.remove('yata-nudge-dismissed'); // an explicit choice overrides a session dismiss
   if (show) maybeShowAuthNudge(); else hideAuthNudgeEl();
 };
 
@@ -457,7 +458,16 @@ function mergeStatsEntry(id: string, fresh: TrackerStatsResponse) {
   state.setStatsCacheEntry(id, fresh);
 }
 
-async function refreshAllStats(force = false) {
+/** Ticket for refreshAllStats. A forced refresh (the button) can start while a
+ *  poll's request is still out; whichever reply lands last would otherwise
+ *  win, so the poll's older snapshot could overwrite the forced one. Only the
+ *  newest call paints — and it owns the spinner, so a superseded call leaves
+ *  that alone too. */
+let statsSeq = 0;
+
+/** Returns false when a newer refresh superseded this one (nothing painted). */
+async function refreshAllStats(force = false): Promise<boolean> {
+  const seq = ++statsSeq;
   const icon = document.getElementById('refresh-icon');
   const btn  = document.getElementById('refresh-btn') as HTMLButtonElement;
   icon?.classList.add('spinning');
@@ -465,6 +475,7 @@ async function refreshAllStats(force = false) {
   state.trackers.forEach(t => setCardLoading(t.id, true));
 
   const { ok, data } = await api.fetchBulkStats(force);
+  if (seq !== statsSeq) return false;
   if (ok && data) {
     // Merge each entry — never wholesale-replace the cache, so trackers
     // missing from the response (or errored without fields) keep old data.
@@ -486,6 +497,7 @@ async function refreshAllStats(force = false) {
   renderLastRefresh();
   updateSummary();
   renderAggCards(state.trackers, state.statsCache, state.historyData, state.appSettings);
+  return true;
 }
 
 // Relative freshness stamp — "Updated 2m ago" reads faster than a clock
@@ -592,12 +604,15 @@ function trackerLinkOpened(id: string): void {
 // flattens its per-tracker/field tuple series back into the flat
 // {tracker_id, recorded_at, field, value} shape buildAggSeries/trackerSeries
 // already consume, so only the data source changed here.
+let historySeq = 0; // drops a slower, older reply — same reason as statsSeq
 async function loadHistory() {
+  const seq = ++historySeq;
   const { ok, data } = await api.fetchHistorySeries({
     range: '7d',
     fields: ['uploaded', 'downloaded', 'buffer', 'ratio', 'avg_seed_time'],
     granularity: 'fine',
   });
+  if (seq !== historySeq) return;
   if (ok && Array.isArray(data.series)) {
     const flat: HistoryPoint[] = [];
     for (const s of data.series) {
@@ -735,7 +750,7 @@ function applyView(v: ViewMode, rerender: boolean) {
 }
 (window as any).setView = (v: ViewMode) => {
   state.setCurrentView(v);
-  localStorage.setItem('u3d-view', v);
+  localStore.set('u3d-view', v);
   if (isSettingsRoute()) location.hash = '#/'; // leave settings, then show the view
   applyView(v, true);
 };
@@ -903,34 +918,73 @@ function scheduleQuiInstanceLoad() {
 function updateSummary() { /* summary pills removed — agg cards cover totals */ }
 
 // ── Refresh scheduling ────────────────────────────────────────────────────
+/** Full refresh cycles currently running; the poller skips a tick while one
+ *  is (see scheduleRefresh). */
+let cyclesRunning = 0;
+
 async function fullRefreshCycle(force = false) {
-  await refreshAllStats(force);
-  // A refresh is when rules are evaluated, so it is also when the bubble can
-  // become wrong. Reading it only at boot meant an alert raised while the app
-  // sat open showed no count until the next reload — on the one control whose
-  // whole job is to say that something happened.
-  void refreshAlertCount();
-  await loadHistory();
-  await loadScrapeStatus();
-  scrapeWhatIsAllowed();
+  cyclesRunning++;
+  try {
+    // Superseded by a newer cycle (the refresh button pressed mid-poll): that
+    // one does the rest, so this one stops rather than repeating its history
+    // load and firing the same profile scrapes twice.
+    if (!(await refreshAllStats(force))) return;
+    // A refresh is when rules are evaluated, so it is also when the bubble can
+    // become wrong. Reading it only at boot meant an alert raised while the app
+    // sat open showed no count until the next reload — on the one control whose
+    // whole job is to say that something happened.
+    void refreshAlertCount();
+    await loadHistory();
+    await loadScrapeStatus();
+    scrapeWhatIsAllowed();
+  } finally {
+    cyclesRunning--;
+  }
 }
 
 // Both pollers skip a tick while the login gate is up. Belt and braces with
 // stopBackgroundRefresh: that clears the timers when the gate opens, and this
 // covers any path that re-arms them while it is still showing.
+//
+// They also skip a tick while the previous one is still waiting on the server.
+// A poll is a "keep it fresh" nudge, not a request the user is waiting on, so
+// there is nothing to gain from queueing a second behind the first.
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
     if (loginGateOpen()) return;
+    if (cyclesRunning > 0) return;
     void fullRefreshCycle();
   }, refreshMs());
+}
+
+/** The qui stats request in flight, if any. qui polls as often as once a
+ *  second; when qui is slow to answer, firing regardless stacked requests up
+ *  behind each other and let their replies paint in whatever order they
+ *  landed. */
+let quiInFlight: Promise<void> | null = null;
+
+/** Every qui stats refresh goes through here, so at most one is ever out and
+ *  replies can't arrive out of order. A refresh the user caused (a settings
+ *  save, an instance toggled) waits for the one in flight and then runs, so
+ *  what it paints is the last word; the poller passes `poll` and just skips. */
+function refreshQui(poll = false): Promise<void> {
+  if (quiInFlight) {
+    if (poll) return quiInFlight;
+    return quiInFlight.then(() => refreshQui());
+  }
+  const p = refreshQuiStats(state.appSettings)
+    .catch(() => { /* a failed poll just leaves the last numbers up */ })
+    .finally(() => { if (quiInFlight === p) quiInFlight = null; });
+  quiInFlight = p;
+  return p;
 }
 
 function scheduleQuiRefresh() {
   if (quiTimer) clearInterval(quiTimer);
   quiTimer = setInterval(() => {
     if (loginGateOpen()) return;
-    refreshQuiStats(state.appSettings);
+    void refreshQui(true);
   }, quiRefreshMs());
 }
 
@@ -1079,11 +1133,11 @@ function setCardLoading(id: string, loading: boolean) {
 const settingsDeps = () => ({
   loadSettings, loadQUIInstances,
   renderQuiBarsWrapper: () => { renderQuiBars(state.appSettings, state.quiInstancesMeta); },
-  refreshQuiStatsWrapper: () => refreshQuiStats(state.appSettings),
+  refreshQuiStatsWrapper: () => refreshQui(),
   renderQUIInstanceChecklist: async () => { await renderQUIInstanceChecklist(state.appSettings, state.quiInstancesMeta, quiFormOverride()); },
   renderTable,
   renderGrid: () => renderGridFull(),
-  applyQuiInstances: (ids: number[]) => { state.appSettings.qui_enabled_instances = ids; renderQuiBars(state.appSettings, state.quiInstancesMeta); refreshQuiStats(state.appSettings); },
+  applyQuiInstances: (ids: number[]) => { state.appSettings.qui_enabled_instances = ids; renderQuiBars(state.appSettings, state.quiInstancesMeta); void refreshQui(); },
   applyFavicon: (on: boolean) => { state.appSettings.show_favicons = on; renderTable(); renderGridFull(); },
   applyNameMode: (mode: string) => { state.appSettings.tracker_name_mode = mode; renderTable(); renderGridFull(); },
   applyQuiBarsVisible: (on: boolean) => { state.appSettings.qui_bars_visible = on; renderQuiBars(state.appSettings, state.quiInstancesMeta); },

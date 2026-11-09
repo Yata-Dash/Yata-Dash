@@ -6,6 +6,20 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Fixed
+
+- **After signing out and back in, the alerts bell wouldn't open** and a
+  Pathways step or pin button undid itself in the same click.
+- **The "7d" change on the Uploaded, Downloaded and Buffer cards counted a
+  newly added tracker's whole total** as this week's change.
+- **A negative buffer of a tebibyte or more showed in GiB** ("-2048.00 GiB"
+  rather than "-2.00 TiB").
+- **Searching the log for "amp", "lt" or "quot"** mangled lines containing
+  `&`, `<` or `"`.
+- **The dashboard came up blank when the browser blocks site storage.**
+- **A manual refresh during a background one could be overwritten** by the
+  older reply, and a slow qui piled up overlapping requests.
+
 ## [Beta-20261011]
 
 ### Changed
