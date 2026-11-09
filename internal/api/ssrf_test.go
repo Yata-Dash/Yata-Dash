@@ -136,6 +136,7 @@ func TestQUIInstancesKeepsOnlyIntegerIDs(t *testing.T) {
 			{"id":1,"name":"main","connected":true,"host":"http://qb:8080"},
 			{"id":"1\" onfocus=\"alert(1)","name":"evil"},
 			{"id":2.5,"name":"fraction"},
+			{"id":9007199254740993,"name":"past float64 precision"},
 			{"name":"no id"}
 		]`))
 	}))

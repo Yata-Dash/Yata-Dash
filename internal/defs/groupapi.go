@@ -136,7 +136,7 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 // response at all, whichever client reads it.
 var (
 	hexColorRe  = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
-	funcColorRe = regexp.MustCompile(`^(?i:rgba?|hsla?)\([\d\s.,%]+\)$`)
+	funcColorRe = regexp.MustCompile(`^(?i:rgba?|hsla?)\([\d\s.,%/]+\)$`)
 	varColorRe  = regexp.MustCompile(`^var\(--[\w-]+\)$`)
 	wordColorRe = regexp.MustCompile(`^[a-zA-Z]+$`)
 	iconClassRe = regexp.MustCompile(`^[\w\s-]+$`)

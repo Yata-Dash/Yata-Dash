@@ -100,6 +100,20 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
+// The policy has to reach real responses, not just the middleware in
+// isolation: an API reply and the app shell, both through NewRouter.
+func TestRouterSendsCSP(t *testing.T) {
+	router := NewRouter(testDeps(t))
+	const want = "object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
+	for _, path := range []string{"/api/version", "/"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Content-Security-Policy"); got != want {
+			t.Errorf("GET %s: Content-Security-Policy = %q (status %d), want %q", path, got, rec.Code, want)
+		}
+	}
+}
+
 // TestNoNetworkReachableReset: the account+data wipe that used to live at
 // /api/auth/reset is gone for good. It was gated on a code printed to the log
 // file, so anyone handed a log for debugging could erase the instance.

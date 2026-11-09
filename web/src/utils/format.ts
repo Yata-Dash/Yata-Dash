@@ -370,7 +370,7 @@ export function safeColor(raw: unknown): string {
   const s = String(raw ?? '').trim();
   if (!s || s.length > 64) return '';
   if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s)) return s;
-  if (/^(?:rgba?|hsla?)\([\d\s.,%]+\)$/i.test(s)) return s;
+  if (/^(?:rgba?|hsla?)\([\d\s.,%/]+\)$/i.test(s)) return s;
   if (/^var\(--[\w-]+\)$/.test(s)) return s;
   if (/^[a-z]+$/i.test(s)) return s;
   return '';
@@ -384,7 +384,11 @@ export function safeColor(raw: unknown): string {
  * belt-and-braces.
  */
 export function safeIconClass(raw: unknown): string {
-  return String(raw ?? '').replace(/[^\w\s-]/g, '').trim().slice(0, 60);
+  // Rejected, not stripped: removing the odd character from
+  // `fa-star group-sparkle!` would turn a malformed value into a valid class
+  // list. Same rule as defs.SafeIconClass on the server.
+  const s = String(raw ?? '').trim();
+  return s.length <= 60 && /^[\w\s-]+$/.test(s) ? s : '';
 }
 
 /** Minimal numeric format — returns null for non-numeric values */

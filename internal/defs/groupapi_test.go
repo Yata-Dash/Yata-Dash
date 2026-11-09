@@ -183,7 +183,7 @@ func TestLadderFromAPIDropsHostileStyle(t *testing.T) {
 func TestSafeColor(t *testing.T) {
 	for _, ok := range []string{
 		"#abc", "#abcd", "#a8e6a3", "#A8E6A3FF", "rgb(1, 2, 3)", "rgba(1,2,3,.5)",
-		"hsl(120, 50%, 40%)", "HSLA(120,50%,40%,0.3)", "var(--accent)", "rebeccapurple",
+		"hsl(120, 50%, 40%)", "rgb(0 0 0 / 50%)", "HSLA(120,50%,40%,0.3)", "var(--accent)", "rebeccapurple",
 	} {
 		if got := SafeColor(" " + ok + " "); got != ok {
 			t.Errorf("SafeColor(%q) = %q, want it kept", ok, got)

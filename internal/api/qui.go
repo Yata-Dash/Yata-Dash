@@ -87,7 +87,7 @@ func quiInstances(d *Deps) http.HandlerFunc {
 			// string id reach that markup; an instance without a whole-number
 			// id could never be enabled anyway, so it is dropped.
 			id, ok := inst["id"].(float64)
-			if !ok || id != math.Trunc(id) || math.Abs(id) > 1<<53 {
+			if !ok || id != math.Trunc(id) || math.Abs(id) >= 1<<53 {
 				continue
 			}
 			out = append(out, map[string]any{
