@@ -5,7 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
+
+// reopenInterval rate-limits attempts to reopen the active log after an open
+// has failed. A var so tests can shorten it.
+var reopenInterval = 5 * time.Second
 
 // rollingFile is a minimal size-based rotating file writer (no external deps).
 // When the active file would exceed maxBytes it is rotated to "<path>.1",
@@ -17,6 +22,10 @@ type rollingFile struct {
 	maxBackups int
 	f          *os.File
 	size       int64
+	// lastOpen is when open() was last attempted, for reopenInterval.
+	lastOpen time.Time
+	// closed marks a deliberate close(), after which Write must not reopen.
+	closed bool
 }
 
 func newRollingFile(path string, maxBytes int64, maxBackups int) (*rollingFile, error) {
@@ -47,6 +56,7 @@ func (r *rollingFile) hardenExisting() {
 }
 
 func (r *rollingFile) open() error {
+	r.lastOpen = time.Now()
 	// 0600, not 0644: the log records tracker names, usernames and error
 	// details, and on a shared host (seedboxes especially) every other local
 	// account could read it.
@@ -68,10 +78,19 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.f == nil {
-		return len(p), nil
+		// A failed open (disk full, permissions, a log directory briefly
+		// unmounted — usually right after a rotation) used to leave the file
+		// sink dead until restart, silently. Retry, but at most once per
+		// reopenInterval: logging must stay cheap while the problem lasts.
+		if r.closed || time.Since(r.lastOpen) < reopenInterval || r.open() != nil {
+			return len(p), nil
+		}
 	}
 	if r.size+int64(len(p)) > r.maxBytes {
 		_ = r.rotate()
+		if r.f == nil {
+			return len(p), nil // reopen failed; a later Write retries
+		}
 	}
 	n, err := r.f.Write(p)
 	r.size += int64(n)
@@ -117,6 +136,7 @@ func (r *rollingFile) truncate() error {
 func (r *rollingFile) close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.closed = true
 	if r.f != nil {
 		r.f.Close()
 		r.f = nil

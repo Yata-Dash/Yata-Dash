@@ -6,6 +6,10 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Fixed
+
+- **One tracker can no longer crash Yata**: a profile page with certain non-ASCII text panicked the scraper, and any panic in a background refresh now fails only that tracker; the log file also recovers after a failed rotation, and the server times out slow request headers.
+
 ## [Beta-20261011]
 
 ### Changed
