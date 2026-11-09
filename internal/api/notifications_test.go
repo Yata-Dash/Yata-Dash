@@ -165,3 +165,18 @@ func TestRunDigestIfDueSendsOnce(t *testing.T) {
 		t.Error("LastSentAt was not recorded")
 	}
 }
+
+// "Send now" pressed while a scheduled delivery is still sending gets an
+// immediate 409 rather than waiting behind it and then sending the week's
+// digest a second time.
+func TestSendDigestNowDuringDeliveryIsRefused(t *testing.T) {
+	d := testDeps(t)
+	digestMu.Lock() // a delivery in progress
+	defer digestMu.Unlock()
+
+	rec := httptest.NewRecorder()
+	sendDigestNow(d)(rec, httptest.NewRequest(http.MethodPost, "/api/notifications/digest/send", nil))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 while a delivery holds the lock (body %s)", rec.Code, rec.Body.String())
+	}
+}

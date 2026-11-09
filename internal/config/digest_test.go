@@ -98,3 +98,40 @@ func TestUpdateNotificationsKeepsDigestSendHistory(t *testing.T) {
 		t.Errorf("LastSentAt = %d after a forged save, want 1700000000", got)
 	}
 }
+
+// An import that carries no digest send history (a hand-written config, an
+// export from before the digest existed) keeps the live history, so the
+// week's digest is not sent a second time. One that records a send restores
+// its own.
+func TestImportKeepsLiveDigestHistoryWhenMissing(t *testing.T) {
+	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.UpdateDigestState(1700000000, []string{"Aither"}); err != nil {
+		t.Fatal(err)
+	}
+	importDigest := func(digest map[string]any) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{
+			"settings":      map[string]any{},
+			"notifications": map[string]any{"digest": digest},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := m.Import(data); err != nil {
+			t.Fatalf("Import: %v", err)
+		}
+	}
+
+	importDigest(map[string]any{"enabled": true, "weekday": 1, "hour": 9})
+	if got := m.Notifications().Digest.LastSentAt; got != 1700000000 {
+		t.Fatalf("LastSentAt after import without history = %d, want the live 1700000000", got)
+	}
+
+	importDigest(map[string]any{"enabled": true, "weekday": 1, "hour": 9, "last_sent_at": 1600000000})
+	if got := m.Notifications().Digest.LastSentAt; got != 1600000000 {
+		t.Fatalf("LastSentAt after import with history = %d, want the restored 1600000000", got)
+	}
+}

@@ -7,6 +7,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -99,11 +100,22 @@ func RunDigestIfDue(d *Deps) {
 // "Send now" button (sendDigestNow) so both behave identically. sentTo==0
 // with a nil error means no destinations resolved (nothing to send to, state
 // left untouched so enabling a destination later still gets the overdue digest).
+//
+// It does not wait for a delivery already in progress: it reports
+// errDigestInProgress instead. Queuing behind a slow scheduled send would
+// hold the button's request open (a proxy may time it out) and then send the
+// week's digest a second time once the first had finished.
 func deliverDigest(d *Deps, now time.Time) (sentTo int, err error) {
-	digestMu.Lock()
+	if !digestMu.TryLock() {
+		return 0, errDigestInProgress
+	}
 	defer digestMu.Unlock()
 	return deliverDigestLocked(d, now)
 }
+
+// errDigestInProgress is deliverDigest's answer while another delivery holds
+// digestMu.
+var errDigestInProgress = errors.New("a digest is already being sent — try again in a moment")
 
 // deliverDigestLocked is deliverDigest for a caller already holding digestMu.
 func deliverDigestLocked(d *Deps, now time.Time) (sentTo int, err error) {
@@ -568,6 +580,10 @@ func previewDigest(d *Deps) http.HandlerFunc {
 func sendDigestNow(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		sentTo, err := deliverDigest(d, time.Now())
+		if errors.Is(err, errDigestInProgress) {
+			jsonError(w, err.Error(), http.StatusConflict)
+			return
+		}
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusBadGateway)
 			return
