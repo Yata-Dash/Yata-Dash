@@ -866,7 +866,10 @@ async function importConfigFile(input: HTMLInputElement) {
     toast('Config imported — previous config backed up', 'success');
     await loadSettings();
     await loadTrackers();
-    await refreshAllStats(true); // fresh config → force through the guard
+    // The whole cycle, not just the stats: if this supersedes a poll in
+    // flight, that poll stops before its history, scrape-status and allowed
+    // profile-scrape follow-ups, so this one has to do them.
+    await fullRefreshCycle(true); // fresh config → force through the guard
     renderGridFull();
     renderTable();
     if (isSettingsRoute()) await initSettingsPage();

@@ -20,10 +20,21 @@ export type ApiResult<T> = { ok: boolean; status: number; data: T };
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn; }
 
-async function call<T>(path: string, opts: RequestInit = {}): Promise<ApiResult<T>> {
+/** Options for call(). timeoutMs bounds the whole exchange — the response AND
+ *  reading its body — and a request that runs past it settles as a network
+ *  failure (status 0). The pollers rely on it: they skip a tick while their
+ *  last request is in flight, so one that never settled would stop polling
+ *  until the page was reloaded. */
+type CallOpts = RequestInit & { timeoutMs?: number };
+
+async function call<T>(path: string, opts: CallOpts = {}): Promise<ApiResult<T>> {
+  const { timeoutMs, ...init } = opts;
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : undefined;
   try {
-    const res = await fetch(path, { headers: JSON_HEADERS, ...opts });
+    const res = await fetch(path, { headers: JSON_HEADERS, ...init, ...(ctrl ? { signal: ctrl.signal } : {}) });
     const data = await res.json().catch(() => ({}) as T);
+    if (ctrl?.signal.aborted) return { ok: false, status: 0, data: {} as T }; // body read cut short
     // Only Yata's own auth middleware (body {"error":"unauthorized"}) means
     // the session expired — a 401 relayed from a tracker or integration
     // (e.g. an expired TRACKER cookie during a profile scrape) must not
@@ -32,10 +43,20 @@ async function call<T>(path: string, opts: RequestInit = {}): Promise<ApiResult<
         (data as { error?: string })?.error === 'unauthorized') onUnauthorized?.();
     return { ok: res.ok, status: res.status, data: data as T };
   } catch {
-    // Network failure (server unreachable) — callers must keep cached data.
+    // Network failure (server unreachable) or timeout — callers must keep
+    // cached data.
     return { ok: false, status: 0, data: {} as T };
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+// Timeouts for the polled requests (see CallOpts). The bulk stats refresh
+// waits on every tracker — up to 30 s each on the server, eight at a time,
+// plus any scrape fallback — so it gets the most room; a refresh that outlives
+// it still finishes on the server and shows on the next poll.
+const STATS_TIMEOUT_MS = 5 * 60_000;
+const POLL_TIMEOUT_MS  = 60_000;
 
 // ── Auth (single-user basic auth) ──────────────────────────────────────────
 export type AuthResult = {
@@ -210,7 +231,7 @@ export const fetchTestStatus = () =>
 /** force=true (manual refresh button / post-import) bypasses the server's
  *  min-age guard so the API is hit immediately; the auto-poll omits it. */
 export const fetchBulkStats = (force = false) =>
-  call<StatsMap>(`/api/stats${force ? '?force=1' : ''}`);
+  call<StatsMap>(`/api/stats${force ? '?force=1' : ''}`, { timeoutMs: STATS_TIMEOUT_MS });
 
 export const fetchSingleStats = (id: string) =>
   call<TrackerStatsResponse>(`/api/stats/${id}`);
@@ -222,7 +243,7 @@ export const runScrape = (id: string) =>
   call<TrackerStatsResponse>(`/api/scrape/${id}`, { method: 'POST' });
 
 export const fetchScrapeStatus = () =>
-  call<ScrapeStatusMap>('/api/scrape-status');
+  call<ScrapeStatusMap>('/api/scrape-status', { timeoutMs: POLL_TIMEOUT_MS });
 
 // ── History ───────────────────────────────────────────────────────────────
 
@@ -237,7 +258,7 @@ export const fetchHistorySeries = (opts: { trackers?: string[]; fields?: string[
   if (opts.range)            qs.set('range', opts.range);
   if (opts.granularity)      qs.set('granularity', opts.granularity);
   const q = qs.toString();
-  return call<HistorySeriesResponse>(`/api/history/series${q ? `?${q}` : ''}`);
+  return call<HistorySeriesResponse>(`/api/history/series${q ? `?${q}` : ''}`, { timeoutMs: POLL_TIMEOUT_MS });
 };
 
 // ── API tokens (read-only integration tokens) ─────────────────────────────
@@ -335,7 +356,7 @@ export const fetchQUIInstances = (url?: string, key?: string) =>
     '/api/qui/instances', { method: 'POST', body: JSON.stringify({ url: url ?? '', key: key ?? '' }) });
 
 export const fetchQUIStats = (instanceId: number) =>
-  call<Record<string, unknown>>(`/api/qui/stats?id=${instanceId}`);
+  call<Record<string, unknown>>(`/api/qui/stats?id=${instanceId}`, { timeoutMs: POLL_TIMEOUT_MS });
 
 // ── Prowlarr / Jackett imports ────────────────────────────────────────────
 // Both proxy the manager's indexer list; the backend saves the connection
