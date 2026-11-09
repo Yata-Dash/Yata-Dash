@@ -54,29 +54,55 @@ func destLock(dest models.NotifyDestination) *sync.Mutex {
 // the destination type. Sends to the same destination are serialised, and a
 // 429 (rate limited) is retried honouring the service's retry-after.
 func Send(dest models.NotifyDestination, title, message string) error {
-	var (
-		url     string
-		headers map[string]string
-		payload map[string]any
-	)
+	url, headers, payload, err := buildRequest(dest, title, message)
+	if err != nil {
+		return err
+	}
+	mu := destLock(dest)
+	defer mu.Unlock()
+	return postWithRetry(url, headers, payload)
+}
+
+// buildRequest formats one destination's request. Split from Send so the
+// payloads can be asserted without a network round trip (Telegram's URL is
+// fixed, so a test server cannot stand in for it).
+//
+// title and message carry tracker-controlled text — an event banner, a
+// "changed: x → y" value, a tracker name — so each payload has to treat them
+// as plain text rather than as markup the service acts on.
+func buildRequest(dest models.NotifyDestination, title, message string) (url string, headers map[string]string, payload map[string]any, err error) {
 	switch strings.ToLower(dest.Type) {
 	case models.InAppDestinationType:
 		// The notification centre is recorded by the engine, not posted to.
 		// Reaching here means a caller skipped SplitDestinations; say so rather
 		// than failing as a malformed webhook with an empty URL.
-		return fmt.Errorf("the notification centre is not a webhook — record it instead of sending")
+		return "", nil, nil, fmt.Errorf("the notification centre is not a webhook — record it instead of sending")
 	case "discord":
 		url = dest.URL
-		payload = map[string]any{"content": fmt.Sprintf("**%s**\n%s", title, message)}
+		payload = map[string]any{
+			"content": fmt.Sprintf("**%s**\n%s", title, message),
+			// No mentions, ever: an event a tracker names "@everyone" would
+			// otherwise ping the whole server. Yata never means to mention
+			// anyone, so the empty list costs nothing.
+			"allowed_mentions": map[string]any{"parse": []string{}},
+		}
 	case "telegram":
 		if dest.Token == "" || dest.ChatID == "" {
-			return fmt.Errorf("telegram needs a bot token and chat id")
+			return "", nil, nil, fmt.Errorf("telegram needs a bot token and chat id")
 		}
 		url = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", dest.Token)
-		payload = map[string]any{"chat_id": dest.ChatID, "text": fmt.Sprintf("*%s*\n%s", title, message), "parse_mode": "Markdown"}
+		// HTML rather than legacy Markdown, which has no way to escape: one
+		// unbalanced "_" or "*" in a tracker's text made Telegram reject the
+		// message with a 400 and the alert was lost. HTML keeps the bold title
+		// and escapes cleanly.
+		payload = map[string]any{
+			"chat_id":    dest.ChatID,
+			"text":       fmt.Sprintf("<b>%s</b>\n%s", telegramEscape(title), telegramEscape(message)),
+			"parse_mode": "HTML",
+		}
 	case "gotify":
 		if dest.Token == "" {
-			return fmt.Errorf("gotify needs an app token")
+			return "", nil, nil, fmt.Errorf("gotify needs an app token")
 		}
 		url = strings.TrimRight(dest.URL, "/") + "/message"
 		headers = map[string]string{"X-Gotify-Key": dest.Token}
@@ -85,18 +111,21 @@ func Send(dest models.NotifyDestination, title, message string) error {
 		url = dest.URL
 		payload = map[string]any{"title": title, "message": message, "sent_at": time.Now().Unix()}
 	default:
-		return fmt.Errorf("unknown destination type %q", dest.Type)
+		return "", nil, nil, fmt.Errorf("unknown destination type %q", dest.Type)
 	}
-
-	mu := destLock(dest)
-	defer mu.Unlock()
-	return postWithRetry(url, headers, payload)
+	return url, headers, payload, nil
 }
+
+// telegramEscape escapes the three characters Telegram's HTML parse mode
+// requires escaping outside a tag. Deliberately not html.EscapeString: that
+// also turns quotes into entities, which Telegram accepts but which buys
+// nothing in text content.
+var telegramEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace
 
 // chunkSendLimit bounds each message SendChunked hands to Send. Discord hard-
 // caps message bodies at 2000 characters; 1800 leaves headroom for the
 // title Send prepends ("**title**\n...") plus per-type formatting (e.g.
-// Telegram's Markdown wrapping) so no destination's real limit is at risk.
+// Telegram's HTML wrapping and escaping) so no destination's real limit is at risk.
 const chunkSendLimit = 1800
 
 // SendChunked sends a long message to one destination, splitting text on
