@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -555,8 +556,50 @@ func RunRefreshCycle(d *Deps) {
 		if !t.Enabled {
 			continue
 		}
-		_ = refreshTracker(d, t, false) // background loop → guarded
+		_ = safeRefreshTracker(d, t, false) // background loop → guarded
 	}
+}
+
+// safeRefreshTracker is refreshTracker behind a per-tracker recover boundary.
+//
+// The background loop and bulkStats's goroutines run outside the request
+// goroutine that chi's Recoverer protects, so a panic anywhere in one
+// tracker's refresh — a scraper bug tripped by one site's odd HTML, say —
+// would otherwise kill the whole process and every other tracker with it.
+// The boundary is deliberately one tracker wide: that refresh is reported as
+// failed (with its last stored stats, like any other outage) and logged with
+// a stack so the bug can be found, and the caller carries on with the next.
+// Locks taken inside refreshTracker are released by their defers as the
+// panic unwinds, so the tracker is not left wedged for the next cycle.
+func safeRefreshTracker(d *Deps, t models.Tracker, force bool) (resp models.TrackerStatsResponse) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+		d.logErrorf("refresh: %s (%s) panicked — %v\n%s", t.Name, t.ID, p, debug.Stack())
+		resp = models.TrackerStatsResponse{
+			TrackerID: t.ID,
+			FetchedAt: time.Now().Unix(),
+			ErrorKind: "internal_error",
+			Error:     "internal_error",
+		}
+		fillLastStored(d, &resp)
+	}()
+	return refreshTracker(d, t, force)
+}
+
+// fillLastStored adds the tracker's last stored stats to a panic-path
+// response, so the card keeps its numbers as it would through any other
+// failure. It has its own recover because it runs inside safeRefreshTracker's
+// deferred handler: if the store itself is what panicked, a second panic here
+// would escape the boundary. Stale numbers are a bonus, not a requirement.
+func fillLastStored(d *Deps, resp *models.TrackerStatsResponse) {
+	defer func() { _ = recover() }()
+	if merged, err := d.Stats.Merged(resp.TrackerID); err == nil {
+		resp.Fields = merged
+	}
+	resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(resp.TrackerID, models.SourceAPI)
 }
 
 // bulkRefreshConcurrency bounds how many trackers are refreshed at once by the
@@ -588,7 +631,7 @@ func bulkStats(d *Deps) http.HandlerFunc {
 				defer wg.Done()
 				sem <- struct{}{}        // acquire a slot (blocks past the cap)
 				defer func() { <-sem }() // release
-				res := refreshTracker(d, t, force)
+				res := safeRefreshTracker(d, t, force)
 				mu.Lock()
 				results[t.ID] = res
 				mu.Unlock()
