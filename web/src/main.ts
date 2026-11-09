@@ -1155,6 +1155,7 @@ modalsReady.then(m => {
   (window as any).modalOnMaxScrapesChange  = m.modalOnMaxScrapesChange;
   (window as any).selectTheme          = m.selectTheme;
   (window as any).checkTrackerOptOut   = m.checkTrackerOptOut;
+  (window as any).checkUrlCredentialHint = m.checkUrlCredentialHint;
   (window as any).accountSetup          = () => m.accountSetup();
   (window as any).accountChangePassword = () => m.accountChangePassword();
   (window as any).accountDisable        = () => m.accountDisable();

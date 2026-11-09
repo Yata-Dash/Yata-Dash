@@ -363,6 +363,8 @@ export function checkTrackerOptOut(): void {
   }
   checkUrlCredentialHint(); // same trigger: the URL in the form changed
 }
+// The hint also depends on the key and cookie fields: typing a fresh secret is
+// exactly what it asks for, so those inputs re-check it too (index.html).
 
 /** URL the open Edit panel's tracker is saved with ("" in Add mode). */
 let _editStoredUrl = '';
@@ -372,7 +374,7 @@ let _editStoredUrl = '';
  *  origin — the URL edit would otherwise be a way to send it anywhere — so a
  *  save with the fields still masked clears them, and a Test leaves them out.
  *  Saying so before Save beats a key that silently vanishes. */
-function checkUrlCredentialHint(): void {
+export function checkUrlCredentialHint(): void {
   const hint = document.getElementById('modal-url-cred-hint');
   if (!hint) return;
   const url = getVal('modal-url');
