@@ -17,6 +17,14 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
+		// A minimal Content-Security-Policy: no plugins, no <base> rewriting
+		// every relative URL, and the CSP form of X-Frame-Options above.
+		// script-src and style-src are deliberately NOT restricted — the app
+		// shell relies on an inline script and the frontend on inline event
+		// handlers and style attributes, so a strict policy would break the
+		// page. Tightening it (nonces, no unsafe-inline) is a later refactor;
+		// until then esc()/jsId()/safeUrl() are the XSS defence.
+		h.Set("Content-Security-Policy", "object-src 'none'; base-uri 'none'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -71,4 +79,3 @@ func crossSite(r *http.Request) bool {
 	}
 	return !strings.EqualFold(u.Host, r.Host)
 }
-

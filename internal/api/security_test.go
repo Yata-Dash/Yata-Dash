@@ -89,9 +89,10 @@ func TestSecurityHeaders(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	for hdr, want := range map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "SAMEORIGIN",
-		"Referrer-Policy":        "no-referrer",
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "SAMEORIGIN",
+		"Referrer-Policy":         "no-referrer",
+		"Content-Security-Policy": "object-src 'none'; base-uri 'none'; frame-ancestors 'self'",
 	} {
 		if got := rec.Header().Get(hdr); got != want {
 			t.Errorf("%s = %q, want %q", hdr, got, want)
