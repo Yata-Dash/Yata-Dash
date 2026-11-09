@@ -163,6 +163,14 @@ var floatFields = map[string]bool{
 
 var sizeUnitRe = regexp.MustCompile(`(?i)\d\s*(TiB|GiB|MiB|KiB|TB|GB|MB|KB|\bB\b)`)
 
+// isoDateRe and promoTimeRe are static patterns compiled once, rather than
+// on every matching node (the registration-date walk) or every scraped page
+// (the promoTime fallback).
+var (
+	isoDateRe   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
+	promoTimeRe = regexp.MustCompile("promoTime\\s*:\\s*new Date\\([`'\"]([^`'\"]+)[`'\"]\\)")
+)
+
 func validForField(key, v string) bool {
 	if intFields[key] && !containsDigit(v) {
 		return false
@@ -469,7 +477,7 @@ func extractStats(rawHTML string, labels map[string]string, eventTitleClass stri
 		if n.Type == html.ElementNode && n.Data == "time" && hasClass(n, "profile__registration") {
 			if dt := attr(n, "datetime"); dt != "" {
 				datePart := strings.SplitN(dt, " ", 2)[0]
-				if ok, _ := regexp.MatchString(`\d{4}-\d{2}-\d{2}`, datePart); ok {
+				if isoDateRe.MatchString(datePart) {
 					if _, exists := result["join_date"]; !exists {
 						result["join_date"] = datePart
 					}
@@ -807,8 +815,7 @@ func extractEventBanner(rawHTML string, doc *html.Node, result map[string]string
 	}
 
 	// promoTime fallback.
-	rePromo := regexp.MustCompile("promoTime\\s*:\\s*new Date\\([`'\"]([^`'\"]+)[`'\"]\\)")
-	m := rePromo.FindStringSubmatch(rawHTML)
+	m := promoTimeRe.FindStringSubmatch(rawHTML)
 	if m == nil {
 		return
 	}
@@ -942,14 +949,17 @@ var tzOffsets = map[string]int{
 	"UTC": 0, "GMT": 0,
 }
 
+// tzSuffixRe picks a trailing zone abbreviation ("… 3:04 PM EST") off a
+// scraped timestamp. Compiled once rather than on every parseUSDateTime call.
+var tzSuffixRe = regexp.MustCompile(`\b([A-Z]{2,4})\s*$`)
+
 func parseUSDateTime(s string) int64 {
-	tzRe := regexp.MustCompile(`\b([A-Z]{2,4})\s*$`)
 	offset := 0
-	if m := tzRe.FindStringSubmatch(s); m != nil {
+	if m := tzSuffixRe.FindStringSubmatch(s); m != nil {
 		if h, ok := tzOffsets[m[1]]; ok {
 			offset = h
 		}
-		s = strings.TrimSpace(tzRe.ReplaceAllString(s, ""))
+		s = strings.TrimSpace(tzSuffixRe.ReplaceAllString(s, ""))
 	}
 	for _, layout := range []string{
 		"01/02/2006 15:04", "01/02/2006 15:04:05",
