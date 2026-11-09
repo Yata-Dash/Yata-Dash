@@ -8,7 +8,9 @@
 // capture time (hide the "no API key" banners the credential-less demo
 // trackers produce, steady green status dots, synthetic qui bar values) —
 // all data shown is the synthetic demoseed data.
-import puppeteer from '../web/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js';
+// puppeteer-core 25 is ESM-only and dropped the lib/esm/ tree, so the entry
+// point moved up a level. Imported by path because tools/ has no node_modules.
+import puppeteer from '../web/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.argv[2] || 'http://localhost:8425';
@@ -85,7 +87,9 @@ async function polish() {
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
-  headless: 'new',
+  // `true` is the new headless mode; the old 'new' alias is no longer in the
+  // option's type (it still worked only because any truthy value does).
+  headless: true,
   args: [
     '--window-size=1520,980', '--hide-scrollbars',
     '--no-first-run', '--no-default-browser-check',
