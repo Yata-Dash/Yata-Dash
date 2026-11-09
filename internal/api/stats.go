@@ -656,6 +656,8 @@ func singleStats(d *Deps) http.HandlerFunc {
 			jsonOK(w, models.TrackerStatsResponse{TrackerID: t.ID, ErrorKind: "disabled", Error: "disabled"})
 			return
 		}
-		jsonOK(w, refreshTracker(d, t, true))
+		// Same boundary as the bulk path: chi's Recoverer would catch a panic
+		// here too, but as a bare 500 — this keeps the card's stored stats.
+		jsonOK(w, safeRefreshTracker(d, t, true))
 	}
 }

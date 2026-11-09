@@ -3,6 +3,7 @@ package logging
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,48 @@ func TestRollingFileRecoversAfterFailedReopen(t *testing.T) {
 	}
 	if !strings.Contains(string(got), "back") {
 		t.Fatalf("log file = %q, want the post-recovery line", got)
+	}
+	// Both lines lost while the sink was down are accounted for.
+	if !strings.Contains(string(got), "2 log line(s) were dropped") {
+		t.Fatalf("log file = %q, want a note of the 2 dropped lines", got)
+	}
+}
+
+// A reopen can land on a file that already exists — a log directory
+// remounted with an older, world-readable yata.log in it. It must be
+// tightened to 0600 before anything is appended, as at start-up.
+func TestRollingFileReopenHardensExistingFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "yata.log")
+	r, err := newRollingFile(path, 1<<20, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.close()
+	old := reopenInterval
+	t.Cleanup(func() { reopenInterval = old })
+	reopenInterval = 0
+
+	// The sink went down, and the file reappears world-readable.
+	r.f.Close()
+	r.f = nil
+	if err := os.WriteFile(path, []byte("older content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Write([]byte("after reopen\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("reopened log mode = %o, want 600", perm)
 	}
 }
 

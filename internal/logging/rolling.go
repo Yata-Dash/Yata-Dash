@@ -26,6 +26,10 @@ type rollingFile struct {
 	lastOpen time.Time
 	// closed marks a deliberate close(), after which Write must not reopen.
 	closed bool
+	// dropped counts lines lost while the file could not be opened; the
+	// count is written into the log once it reopens, so the gap is visible
+	// in a downloaded log rather than silent.
+	dropped int
 }
 
 func newRollingFile(path string, maxBytes int64, maxBackups int) (*rollingFile, error) {
@@ -82,19 +86,48 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 		// unmounted — usually right after a rotation) used to leave the file
 		// sink dead until restart, silently. Retry, but at most once per
 		// reopenInterval: logging must stay cheap while the problem lasts.
-		if r.closed || time.Since(r.lastOpen) < reopenInterval || r.open() != nil {
+		if r.closed {
 			return len(p), nil
 		}
+		if time.Since(r.lastOpen) < reopenInterval || r.open() != nil {
+			r.dropped++
+			return len(p), nil
+		}
+		// The file came back — possibly a remounted directory holding an
+		// older, looser-permissioned log — so tighten it like at start-up
+		// before anything is appended, then mark the gap.
+		r.hardenExisting()
+		r.noteDropped()
 	}
 	if r.size+int64(len(p)) > r.maxBytes {
-		_ = r.rotate()
-		if r.f == nil {
-			return len(p), nil // reopen failed; a later Write retries
+		if err := r.rotate(); err != nil && r.f == nil {
+			// The file sink is down until a later Write reopens it. Say so
+			// once on stderr — the one sink that does not depend on it —
+			// so an operator watching the console can see the gap begin.
+			fmt.Fprintf(os.Stderr, "yata: cannot reopen log file %s after rotation: %v; retrying every %s\n",
+				r.path, err, reopenInterval)
+			r.dropped++
+			return len(p), nil
 		}
 	}
 	n, err := r.f.Write(p)
 	r.size += int64(n)
 	return n, err
+}
+
+// noteDropped records, in the freshly reopened file, how many lines were lost
+// while it was unavailable. Written straight to the file (not through Write)
+// so it cannot itself trigger a rotation or recurse.
+func (r *rollingFile) noteDropped() {
+	if r.dropped == 0 || r.f == nil {
+		return
+	}
+	line := fmt.Sprintf("%s WRN logging: %d log line(s) were dropped while %s could not be opened\n",
+		time.Now().Format("2006-01-02 15:04:05"), r.dropped, r.path)
+	if n, err := r.f.WriteString(line); err == nil {
+		r.size += int64(n)
+		r.dropped = 0
+	}
 }
 
 // rotate closes the active file, shifts backups (.1→.2, …), moves the current
