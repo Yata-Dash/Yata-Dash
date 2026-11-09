@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -174,5 +175,132 @@ func TestLayerUpdatedAt(t *testing.T) {
 	// Another tracker's layers don't leak in.
 	if ts, _ := db.LayerUpdatedAt("tr-b", "api"); ts != 0 {
 		t.Errorf("tr-b api = %d, want 0", ts)
+	}
+}
+
+// TestFieldEndpointsSinceMatchesFullSeries: the endpoint lookup must give the
+// same two ends as loading the whole window and grouping it by field — it
+// replaced exactly that in the growth-rate path, which reads nothing else.
+func TestFieldEndpointsSinceMatchesFullSeries(t *testing.T) {
+	db := testDB(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	for i := range 40 {
+		at := now.Add(time.Duration(i-39) * 15 * time.Minute)
+		fields := map[string]float64{"uploaded": float64(100 + i), "ratio": float64(i % 7)}
+		if i%3 == 0 {
+			fields["seeding"] = float64(i) // a sparser field
+		}
+		if err := db.AddHistory("tr-a", at, fields); err != nil {
+			t.Fatal(err)
+		}
+		// Another tracker's rows interleave in the index and must not leak in.
+		if err := db.AddHistory("tr-b", at, map[string]float64{"uploaded": -1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A lone point (one sample in the window) collapses to a single point.
+	if err := db.AddHistory("tr-a", now.Add(-time.Hour), map[string]float64{"buffer": 5}); err != nil {
+		t.Fatal(err)
+	}
+	since := now.Add(-5 * time.Hour)
+
+	got, err := db.FieldEndpointsSince("tr-a", []string{"uploaded", "ratio", "seeding", "buffer", "absent"}, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, err := db.TrackerHistorySince("tr-a", since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byField := map[string][]HistoryPoint{}
+	for _, p := range full {
+		byField[p.Field] = append(byField[p.Field], p)
+	}
+	for _, f := range []string{"uploaded", "ratio", "seeding"} {
+		want := byField[f]
+		g := got[f]
+		if len(g) != 2 || g[0] != want[0] || g[1] != want[len(want)-1] {
+			t.Errorf("%s endpoints = %+v, want %+v … %+v", f, g, want[0], want[len(want)-1])
+		}
+	}
+	if b := got["buffer"]; len(b) != 1 || b[0].Value != 5 {
+		t.Errorf("single-sample buffer = %+v, want one point", b)
+	}
+	if _, ok := got["absent"]; ok {
+		t.Error("a field with no points must be absent")
+	}
+}
+
+// TestDailyRecordsSampleTime: each daily row carries when its (latest) value
+// was sampled, not just the UTC-midnight label — and a later write that day
+// moves it along with the value.
+func TestDailyRecordsSampleTime(t *testing.T) {
+	db := testDB(t)
+	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	for _, h := range []int{9, 23} {
+		at := day.Add(time.Duration(h) * time.Hour)
+		if err := db.RecordDaily("tr-a", at, map[string]float64{"uploaded": float64(h)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pts, err := db.DailySamplesSince("tr-a", day)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := day.Add(23 * time.Hour).Unix(); len(pts) != 1 || pts[0].RecordedAt != want || pts[0].Value != 23 {
+		t.Fatalf("DailySamplesSince = %+v, want one point at %d", pts, want)
+	}
+	// The label-stamped view is unchanged for its existing callers.
+	if lbl, _ := db.DailySince("tr-a", day); len(lbl) != 1 || lbl[0].RecordedAt != day.Unix() {
+		t.Errorf("DailySince = %+v, want the midnight label %d", lbl, day.Unix())
+	}
+}
+
+// TestDailySampleTimeBackfill: a database from before history_daily had a
+// sample time gets one on open — from fine history where it still exists,
+// else the end of that day.
+func TestDailySampleTimeBackfill(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -3).Unix()
+	sample := day + 22*3600 + 15*60
+	// Recreate the pre-migration table shape with legacy rows.
+	for _, q := range []string{
+		`DROP TABLE history_daily`,
+		`CREATE TABLE history_daily (tracker_id TEXT NOT NULL, day INTEGER NOT NULL,
+			field TEXT NOT NULL, value REAL NOT NULL, PRIMARY KEY (tracker_id, day, field))`,
+		fmt.Sprintf(`INSERT INTO history_daily VALUES ('x', %d, 'uploaded', 1), ('x', %d, 'ratio', 2)`, day, day),
+		// The day's fine samples for uploaded (plus the next day's first, which
+		// must not count); ratio's have already been pruned.
+		fmt.Sprintf(`INSERT INTO history VALUES ('x', %d, 'uploaded', 0.5), ('x', %d, 'uploaded', 1),
+			('x', %d, 'uploaded', 9)`, day+3600, sample, day+86400),
+	} {
+		if _, err := db.sql.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+
+	db, err = Open(path) // migrate() must add and backfill recorded_at
+	if err != nil {
+		t.Fatalf("reopen after downgrade: %v", err)
+	}
+	defer db.Close()
+	pts, err := db.DailySamplesSince("x", time.Unix(day, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int64{}
+	for _, p := range pts {
+		got[p.Field] = p.RecordedAt
+	}
+	if got["uploaded"] != sample {
+		t.Errorf("uploaded sample time = %d, want the day's last fine point %d", got["uploaded"], sample)
+	}
+	if got["ratio"] != day+86399 {
+		t.Errorf("ratio sample time = %d, want end of day %d", got["ratio"], day+86399)
 	}
 }

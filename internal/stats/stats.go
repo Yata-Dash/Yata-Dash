@@ -402,15 +402,11 @@ const (
 // legitimately shrink (heavy downloading), and a negative rate is exactly what
 // the hover should show; it is never used for ETA projection.
 func (e *Engine) GrowthRates(trackerID string) map[string]float64 {
-	now := time.Now().UTC()
-	daily, _ := e.DB.DailySince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
-	fine, _ := e.DB.TrackerHistorySince(trackerID, now.Add(-rateFineWindowDays*24*time.Hour))
-	byDay := groupByField(daily)
-	byFine := groupByField(fine)
+	byDay, byFine := e.rateHistory(trackerID, growthFineFields)
 
 	out := map[string]float64{}
-	for _, f := range []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"} {
-		// Daily rollups need a ≥1-day span; fine history a ≥3h span.
+	for _, f := range growthFields {
+		// Daily rollups need ≥1 day between samples; fine history ≥3h.
 		if r, ok := rateFromPoints(byDay[f], 86400); ok {
 			out[f] = r
 		} else if r, ok := rateFromPoints(byFine[f], rateFineMinSpanSec); ok {
@@ -434,15 +430,11 @@ type DeclineSignals struct {
 }
 
 // DeclineSignals computes the standing-guard trend signals from the same two
-// history queries GrowthRates uses (one DailySince + one TrackerHistorySince,
-// grouped by field once) so a rule evaluation pass never issues a query per
-// signal.
+// history queries GrowthRates uses (see rateHistory) so a rule evaluation
+// pass never issues a query per signal.
 func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	now := time.Now().UTC()
-	daily, _ := e.DB.DailySince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
-	fine, _ := e.DB.TrackerHistorySince(trackerID, now.Add(-rateFineWindowDays*24*time.Hour))
-	byDay := groupByField(daily)
-	byFine := groupByField(fine)
+	byDay, byFine := e.rateHistory(trackerID, declineFineFields)
 
 	var out DeclineSignals
 	if r, ok := signedRatePerDay(byDay, byFine, "ratio", ratioNoiseFloor); ok {
@@ -453,9 +445,12 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	}
 
 	// Truncate to UTC midnight before subtracting whole days: history_daily
-	// buckets are stored at UTC midnight (see utcDay), so comparing against a
-	// plain "now minus 7×24h" instant would inconsistently include/exclude the
-	// 7-day-old bucket depending on what time of day it is right now.
+	// buckets are UTC days (see utcDay), so comparing against a plain "now
+	// minus 7×24h" instant would inconsistently include/exclude the 7-day-old
+	// bucket depending on what time of day it is right now. The daily points
+	// carry their sample time, which always falls inside their own day, so
+	// filtering them against a midnight cut selects exactly the buckets from
+	// that day on.
 	dropSince := now.Truncate(24*time.Hour).AddDate(0, 0, -dropWindowDays)
 	if p, ok := dropPct(windowed(byDay["seed_size"], dropSince), byFine["seed_size"]); ok {
 		out.SeedSizeDrop7dPct = &p
@@ -464,6 +459,30 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 		out.SeedingDrop7dPct = &p
 	}
 	return out
+}
+
+// growthFields are GrowthRates' one-directional (positive-only) fields;
+// growthFineFields adds its signed buffer entry, and declineFineFields are
+// what DeclineSignals reads. Named so the fine-history lookup asks for
+// exactly the fields the maths will read.
+var (
+	growthFields      = []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"}
+	growthFineFields  = append(append([]string{}, growthFields...), "buffer")
+	declineFineFields = []string{"ratio", "buffer", "seed_size", "seeding"}
+)
+
+// rateHistory loads what GrowthRates and DeclineSignals measure from, grouped
+// by field: the daily rollups over the stable window, stamped with each day's
+// real sample time, and — for the young-tracker fallback — just the oldest
+// and newest fine point of each requested field in the fine window. Every
+// consumer (spanRate, dropPctFromPoints) reads only a series' two ends, so
+// fetching the ends is the same answer as the whole series without loading a
+// week of 15-minute samples per call.
+func (e *Engine) rateHistory(trackerID string, fineFields []string) (byDay, byFine map[string][]store.HistoryPoint) {
+	now := time.Now().UTC()
+	daily, _ := e.DB.DailySamplesSince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
+	byFine, _ = e.DB.FieldEndpointsSince(trackerID, fineFields, now.Add(-rateFineWindowDays*24*time.Hour))
+	return groupByField(daily), byFine
 }
 
 // windowed filters an oldest-first point slice down to those recorded at or

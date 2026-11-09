@@ -239,6 +239,66 @@ func TestDeclineSignalsDropPct(t *testing.T) {
 	})
 }
 
+// TestRatesAcrossMidnightUseRealElapsedTime: daily rollups are labelled with
+// their UTC midnight but hold that day's LAST value, so measuring between
+// labels turned yesterday 23:00 → today 00:30 into a whole day. A tracker
+// growing 100 GiB/day then reported 6.25 GiB/day for its entire second UTC
+// day (inflating ETAs and tripping goal_behind_pace), and a 1.5h dip read as
+// a multi-day seed_size drop.
+func TestRatesAcrossMidnightUseRealElapsedTime(t *testing.T) {
+	midnight := time.Now().UTC().Truncate(24 * time.Hour)
+	// record mirrors Engine.Record: one fine sample plus the daily upsert.
+	record := func(t *testing.T, db *store.DB, at time.Time, fields map[string]float64) {
+		t.Helper()
+		if err := db.AddHistory("t1", at, fields); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.RecordDaily("t1", at, fields); err != nil {
+			t.Fatal(err)
+		}
+	}
+	open := func(t *testing.T) (*store.DB, *Engine) {
+		t.Helper()
+		db, err := store.Open(filepath.Join(t.TempDir(), "mid.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Close() })
+		return db, New(db)
+	}
+
+	t.Run("1.5h straddling midnight is too short to project", func(t *testing.T) {
+		db, e := open(t)
+		record(t, db, midnight.Add(-time.Hour), map[string]float64{"uploaded": 1000})
+		record(t, db, midnight.Add(30*time.Minute), map[string]float64{"uploaded": 1006.25})
+		// Previously 6.25 GiB/day (the midnight labels are a day apart); the
+		// real span is 1.5h, under both the daily and the fine-history floors.
+		if r, ok := e.GrowthRates("t1")["uploaded"]; ok {
+			t.Errorf("uploaded rate = %v over 1.5h of history, want none", r)
+		}
+	})
+
+	t.Run("real rate once the fine floor is cleared", func(t *testing.T) {
+		db, e := open(t)
+		record(t, db, midnight.Add(-time.Hour), map[string]float64{"uploaded": 1000})
+		record(t, db, midnight.Add(30*time.Minute), map[string]float64{"uploaded": 1006.25})
+		record(t, db, midnight.Add(2*time.Hour), map[string]float64{"uploaded": 1012.5})
+		// 12.5 GiB in 3h = 100 GiB/day; the midnight labels said 12.5.
+		if r := e.GrowthRates("t1")["uploaded"]; r < 99.9 || r > 100.1 {
+			t.Errorf("uploaded rate = %v, want 100 GiB/day", r)
+		}
+	})
+
+	t.Run("a 1.5h dip is not a multi-day drop", func(t *testing.T) {
+		db, e := open(t)
+		record(t, db, midnight.Add(-time.Hour), map[string]float64{"seed_size": 100})
+		record(t, db, midnight.Add(30*time.Minute), map[string]float64{"seed_size": 50})
+		if sig := e.DeclineSignals("t1"); sig.SeedSizeDrop7dPct != nil {
+			t.Errorf("seed_size drop = %v over 1.5h, want none (24h span required)", *sig.SeedSizeDrop7dPct)
+		}
+	})
+}
+
 func TestRateFromPointsGuards(t *testing.T) {
 	// Too-short span → no rate.
 	pts := []store.HistoryPoint{

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -72,11 +73,17 @@ func (d *DB) migrate() error {
 		// stable long-term growth rate used for trend projections — a single
 		// slow day can't skew it, and it survives restarts so projections are
 		// available from setup. Tiny: ~1 row/field/day.
+		//
+		// recorded_at is when that latest value was actually sampled. `day`
+		// is only the bucket's label: a rate measured between two midnight
+		// labels mistakes 23:00→00:30 for a whole day, so rate maths uses
+		// this instead (see DailySamplesSince).
 		`CREATE TABLE IF NOT EXISTS history_daily (
-			tracker_id TEXT NOT NULL,
-			day        INTEGER NOT NULL,         -- unix seconds at UTC midnight
-			field      TEXT NOT NULL,
-			value      REAL NOT NULL,
+			tracker_id  TEXT NOT NULL,
+			day         INTEGER NOT NULL,         -- unix seconds at UTC midnight
+			field       TEXT NOT NULL,
+			value       REAL NOT NULL,
+			recorded_at INTEGER NOT NULL DEFAULT 0, -- unix seconds of the value's sample
 			PRIMARY KEY (tracker_id, day, field)
 		)`,
 		// One row per scrape ATTEMPT (success or failure) — the persistent
@@ -263,6 +270,27 @@ func (d *DB) migrate() error {
 		"weak_password":  "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
+	}
+	// history_daily's real sample time arrived after the table shipped.
+	// Pre-migration rows are backfilled from fine history — the daily value
+	// was written alongside a fine sample, so the day's newest fine point IS
+	// its sample time — and, where fine history has already been pruned,
+	// from the end of that day (capped at now, for today's row): a full day's
+	// last value is sampled close to midnight, which is a far better guess
+	// than the label at its start. Only rows still at 0 are touched, so after
+	// the first start this matches nothing.
+	if err := d.addColumns("history_daily", map[string]string{
+		"recorded_at": "INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	if _, err := d.sql.Exec(`UPDATE history_daily SET recorded_at = COALESCE(
+		(SELECT MAX(h.recorded_at) FROM history h
+		  WHERE h.tracker_id = history_daily.tracker_id AND h.field = history_daily.field
+		    AND h.recorded_at >= history_daily.day AND h.recorded_at < history_daily.day + 86400),
+		MIN(history_daily.day + 86399, CAST(strftime('%s', 'now') AS INTEGER)))
+		WHERE recorded_at = 0`); err != nil {
+		return fmt.Errorf("migrate: %w", err)
 	}
 	// An alert may point somewhere — the update notice links to the release.
 	// A column rather than a URL buried in the body, so the panel renders a
@@ -505,7 +533,8 @@ func (d *DB) PruneHistory(before time.Time) error {
 }
 
 // TrackerHistorySince returns one tracker's fine-grained points since `since`,
-// oldest first (used for early growth rates before daily rollups exist).
+// oldest first (the weekly digest's deltas). Growth rates only need each
+// field's two ends and use FieldEndpointsSince instead.
 func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT recorded_at, field, value FROM history WHERE tracker_id = ? AND recorded_at >= ? ORDER BY recorded_at ASC`,
@@ -521,6 +550,47 @@ func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPo
 			return nil, err
 		}
 		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// FieldEndpointsSince returns, per field, the oldest and newest fine points
+// recorded at or after since — oldest first, collapsed to one point when both
+// are the same instant. Rate and drop-% maths only ever reads a series' two
+// ends, so this answers it with two index seeks per field on
+// idx_history_tracker (tracker_id, field, recorded_at) instead of loading and
+// sorting the tracker's whole window. A field with no points is absent.
+func (d *DB) FieldEndpointsSince(trackerID string, fields []string, since time.Time) (map[string][]HistoryPoint, error) {
+	out := map[string][]HistoryPoint{}
+	if len(fields) == 0 {
+		return out, nil
+	}
+	// One statement for every field so a call is one round trip. Each arm is
+	// its own LIMIT 1 subquery: that shape is what lets SQLite seek straight
+	// to the end of the field's index range rather than scan it.
+	const arm = `SELECT * FROM (SELECT field, recorded_at, value FROM history
+		WHERE tracker_id = ? AND field = ? AND recorded_at >= ? ORDER BY recorded_at %s LIMIT 1)`
+	parts := make([]string, 0, 2*len(fields))
+	args := make([]any, 0, 6*len(fields))
+	for _, f := range fields {
+		parts = append(parts, fmt.Sprintf(arm, "ASC"), fmt.Sprintf(arm, "DESC"))
+		args = append(args, trackerID, f, since.Unix(), trackerID, f, since.Unix())
+	}
+	rows, err := d.sql.Query(strings.Join(parts, " UNION ALL "), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// UNION ALL keeps arm order, so each field's oldest row precedes its newest.
+	for rows.Next() {
+		p := HistoryPoint{TrackerID: trackerID}
+		if err := rows.Scan(&p.Field, &p.RecordedAt, &p.Value); err != nil {
+			return nil, err
+		}
+		if pts := out[p.Field]; len(pts) == 1 && pts[0].RecordedAt == p.RecordedAt {
+			continue
+		}
+		out[p.Field] = append(out[p.Field], p)
 	}
 	return out, rows.Err()
 }
@@ -546,14 +616,15 @@ func (d *DB) RecordDaily(trackerID string, at time.Time, fields map[string]float
 		return err
 	}
 	defer tx.Rollback()
-	up, err := tx.Prepare(`INSERT INTO history_daily (tracker_id, day, field, value) VALUES (?, ?, ?, ?)
-		ON CONFLICT(tracker_id, day, field) DO UPDATE SET value = excluded.value`)
+	up, err := tx.Prepare(`INSERT INTO history_daily (tracker_id, day, field, value, recorded_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(tracker_id, day, field) DO UPDATE SET value = excluded.value, recorded_at = excluded.recorded_at`)
 	if err != nil {
 		return err
 	}
 	defer up.Close()
+	ts := at.Unix()
 	for f, v := range fields {
-		if _, err := up.Exec(trackerID, day, f, v); err != nil {
+		if _, err := up.Exec(trackerID, day, f, v, ts); err != nil {
 			return err
 		}
 	}
@@ -565,6 +636,30 @@ func (d *DB) RecordDaily(trackerID string, at time.Time, fields map[string]float
 func (d *DB) DailySince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT day, field, value FROM history_daily WHERE tracker_id = ? AND day >= ? ORDER BY day ASC`,
+		trackerID, utcDay(since))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HistoryPoint
+	for rows.Next() {
+		p := HistoryPoint{TrackerID: trackerID}
+		if err := rows.Scan(&p.RecordedAt, &p.Field, &p.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// DailySamplesSince is DailySince for rate maths: the same rows, but
+// RecordedAt carries when each day's value was actually sampled rather than
+// the day's UTC-midnight label. Each row holds the day's LAST value, so
+// measuring a span between labels is wrong by up to a day — yesterday 23:00
+// to today 00:30 would read as a full day of growth.
+func (d *DB) DailySamplesSince(trackerID string, since time.Time) ([]HistoryPoint, error) {
+	rows, err := d.sql.Query(
+		`SELECT recorded_at, field, value FROM history_daily WHERE tracker_id = ? AND day >= ? ORDER BY day ASC`,
 		trackerID, utcDay(since))
 	if err != nil {
 		return nil, err
