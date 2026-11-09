@@ -302,7 +302,22 @@ func main() {
 			"in Settings → General → Account, or bind to 127.0.0.1.", server.Host)
 	}
 
-	if err := http.ListenAndServe(addr, api.NewRouter(deps)); err != nil {
+	// A bare http.ListenAndServe has no timeouts at all, so a client that
+	// trickles its request headers (slowloris) holds a connection and its
+	// goroutine open indefinitely. ReadHeaderTimeout bounds that, and
+	// IdleTimeout reaps keep-alive connections left open between requests.
+	// ReadTimeout/WriteTimeout stay unset on purpose: they cover the whole
+	// body and response, and legitimate requests run long — GET /api/stats
+	// refreshes every tracker (30 s fetch timeout each, plus any scrape
+	// fallback) before it answers, and the log / history CSV downloads and
+	// config imports scale with the user's data.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           api.NewRouter(deps),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
