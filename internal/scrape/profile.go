@@ -554,11 +554,15 @@ func extractStats(rawHTML string, labels map[string]string, eventTitleClass stri
 				}
 			}
 			origText := strings.TrimSpace(nodeText(n))
-			idx := strings.Index(strings.ToLower(origText), label)
-			if idx == -1 {
+			// The match offset must index origText itself: an offset found
+			// in strings.ToLower(origText) does not, because lowercasing
+			// can change a rune's byte length ("Ⱥ" 2→3, "İ" 2→1), which
+			// sliced the wrong text or panicked out of range.
+			_, end := indexLower(origText, label)
+			if end == -1 {
 				return
 			}
-			remainder := strings.TrimLeft(origText[idx+len(label):], ": ")
+			remainder := strings.TrimLeft(origText[end:], ": ")
 			if remainder == "" || strings.HasPrefix(remainder, "(") {
 				return
 			}
@@ -1044,6 +1048,36 @@ func normText(s string) string {
 }
 
 func collapseSpace(s string) string { return spaceRe.ReplaceAllString(s, " ") }
+
+// indexLower finds lowered (already lowercase, e.g. a label) in s compared
+// case-insensitively, and returns the match's byte span in s itself — or
+// -1, -1. Searching strings.ToLower(s) and slicing s with the result is
+// wrong because lowercasing is not byte-length preserving ("Ⱥ" is 2 bytes,
+// "ⱥ" 3; "İ" is 2, "i" 1; invalid UTF-8 becomes a 3-byte U+FFFD), so this
+// lowercases rune by rune exactly as strings.ToLower does while recording
+// where each lowered byte came from in s.
+func indexLower(s, lowered string) (start, end int) {
+	var lb strings.Builder
+	lb.Grow(len(s))
+	// origAt[i] is the offset in s of the rune that produced lowered byte i;
+	// the trailing entry maps the end of the lowered string to len(s).
+	origAt := make([]int, 0, len(s)+1)
+	for i, r := range s {
+		before := lb.Len()
+		lb.WriteRune(unicode.ToLower(r))
+		for j := before; j < lb.Len(); j++ {
+			origAt = append(origAt, i)
+		}
+	}
+	origAt = append(origAt, len(s))
+	idx := strings.Index(lb.String(), lowered)
+	if idx == -1 {
+		return -1, -1
+	}
+	// A valid UTF-8 needle only matches on rune boundaries, so both ends
+	// map to the start of a whole rune in s (or to len(s)).
+	return origAt[idx], origAt[idx+len(lowered)]
+}
 
 // nbspRe matches non-breaking spaces (regular + narrow), which Go's \s does
 // NOT cover — Unit3D renders sizes as "17.31&nbsp;TiB".
