@@ -164,12 +164,18 @@ var (
 	andRe = regexp.MustCompile(`(?i)\s+(?:and|\+)\s+`)
 
 	inviteForumRe = regexp.MustCompile(`(?i)^invite[\s-]*forum(?:\s+access)?$`)
+
+	// orHigherRe: "X or higher" / "X or above" (see parseToken). classLeadRe
+	// gates parseAtom's class catch-all. Both used to be compiled on every
+	// call, which dominated the cost of evaluating a route.
+	orHigherRe  = regexp.MustCompile(`(?i)\s+or\s+(?:higher|above)\s*$`)
+	classLeadRe = regexp.MustCompile(`^[A-Za-z]`)
 )
 
 func parseToken(tok string) Req {
 	// "X or higher" / "X or above" is the "+" modifier written out, NOT an
 	// alternative — "higher" is not a class name.
-	if m := regexp.MustCompile(`(?i)\s+or\s+(?:higher|above)\s*$`).FindString(tok); m != "" {
+	if m := orHigherRe.FindString(tok); m != "" {
 		q := parseAtom(strings.TrimSuffix(tok, m) + "+")
 		q.Raw = tok
 		return q
@@ -295,10 +301,10 @@ func parseAtom(tok string) Req {
 	}
 	// Class token: "Prometheus+", "Pro+", "Leviathan or Ship", "Superfan+".
 	// Heuristic: starts with a letter and is short — treat as class name(s).
-	if regexp.MustCompile(`^[A-Za-z]`).MatchString(tok) && len(tok) <= 60 {
+	if classLeadRe.MatchString(tok) && len(tok) <= 60 {
 		plus := false
 		var classes []string
-		for _, alt := range regexp.MustCompile(`(?i)\s+or\s+`).Split(tok, -1) {
+		for _, alt := range orRe.Split(tok, -1) { // same pattern as the token grammar's "or"
 			alt = strings.TrimSpace(alt)
 			if strings.HasSuffix(alt, "+") {
 				plus = true

@@ -10,6 +10,7 @@ package pathways
 import (
 	"encoding/json"
 	"os"
+	"slices"
 )
 
 // Route is one invite edge: being on From (meeting Reqs, with Days account
@@ -54,6 +55,11 @@ type Data struct {
 	byFrom map[string][]Route
 	byTo   map[string][]Route
 	names  []string
+	// reqs memoises ParseReqs for every distinct route requirement text, so
+	// a page load evaluating hundreds of routes doesn't re-parse static
+	// strings each time. Built once in index() and only read afterwards, so
+	// concurrent handlers can share it without a lock.
+	reqs map[string][]Req
 }
 
 // Load reads and indexes a routes.json file. A missing file is not an error
@@ -74,6 +80,7 @@ func Load(path string) (*Data, error) {
 func (d *Data) index() {
 	d.byFrom = map[string][]Route{}
 	d.byTo = map[string][]Route{}
+	d.reqs = map[string][]Req{}
 	seen := map[string]bool{}
 	add := func(n string) {
 		if !seen[n] {
@@ -86,7 +93,24 @@ func (d *Data) index() {
 		d.byTo[r.To] = append(d.byTo[r.To], r)
 		add(r.From)
 		add(r.To)
+		if _, ok := d.reqs[r.Reqs]; !ok {
+			d.reqs[r.Reqs] = ParseReqs(r.Reqs)
+		}
 	}
+}
+
+// parsedReqs returns the parsed requirements for a route's text: the copy
+// memoised at load when there is one, otherwise a fresh parse. The memoised
+// slice is shared, so it comes back clipped — an append by the caller then
+// copies instead of writing into the shared backing array. Callers must not
+// modify its elements in place (none do: mergeInviteReqs builds a new slice).
+func (d *Data) parsedReqs(text string) []Req {
+	if d != nil {
+		if q, ok := d.reqs[text]; ok {
+			return slices.Clip(q)
+		}
+	}
+	return ParseReqs(text)
 }
 
 // Names returns every tracker name in the dataset (stable order: first seen).
