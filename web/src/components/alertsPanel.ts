@@ -7,7 +7,7 @@
 import { deleteAlert, fetchAlerts, markAlertsRead } from '../api';
 import { trackers } from '../state';
 import type { AlertSource, AppAlert } from '../types';
-import { esc, fmtAgo } from '../utils/format';
+import { esc, fmtAgo, safeUrl } from '../utils/format';
 
 /** How many rows a page holds. Retention caps the table at 500, so "load
  *  more" is a rare path rather than the normal way to read the list. */
@@ -111,13 +111,15 @@ function row(a: AppAlert): string {
   // out of context, and just noise inside Yata's own panel.
   const heading = a.title.replace(/^Yata alert:\s*/, '') || a.rule_name;
   const where = a.tracker_name || 'Yata';
+  // The link can carry a tracker-derived URL; only http(s) is rendered.
+  const url = safeUrl(a.url);
   return `<div class="alert-row${a.read_at ? '' : ' unread'}" data-id="${a.id}">
     <div class="alert-row-main">
       <div class="alert-row-top">
         <span class="alert-rule">${esc(heading)}</span>
         <span class="alert-when" title="${esc(new Date(a.at * 1000).toLocaleString())}">${esc(fmtAgo(a.at))}</span>
       </div>
-      <div class="alert-body">${esc(a.body)}${a.url ? ` <a class="alert-link link-accent" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}</div>
+      <div class="alert-body">${esc(a.body)}${url ? ` <a class="alert-link link-accent" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}</div>
       <div class="alert-where">${esc(where)}</div>
     </div>
     <button type="button" class="alert-clear" data-clear="${a.id}" title="Clear this alert" aria-label="Clear">&times;</button>

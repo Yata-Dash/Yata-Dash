@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -80,8 +81,17 @@ func quiInstances(d *Deps) http.HandlerFunc {
 		}
 		out := make([]map[string]any, 0, len(instances))
 		for _, inst := range instances {
+			// qui's instance ids are integers, and the settings form stores
+			// them as such (QUIEnabledInstances is []int) and renders them into
+			// an attribute. Passing the upstream value through untyped let a
+			// string id reach that markup; an instance without a whole-number
+			// id could never be enabled anyway, so it is dropped.
+			id, ok := inst["id"].(float64)
+			if !ok || id != math.Trunc(id) || math.Abs(id) > 1<<53 {
+				continue
+			}
 			out = append(out, map[string]any{
-				"id":        inst["id"],
+				"id":        int64(id),
 				"name":      inst["name"],
 				"connected": inst["connected"],
 				"host":      inst["host"],
