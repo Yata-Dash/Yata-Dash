@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -307,5 +308,213 @@ func TestAuthStatusHidesAccountDetail(t *testing.T) {
 		if _, present := body[leak]; present {
 			t.Errorf("%q must not be exposed without a session", leak)
 		}
+	}
+}
+
+// quickAccount configures the account directly in the store, hashed at
+// bcrypt's minimum cost so tests that make many wrong guesses stay fast, and
+// returns a live session for it.
+func quickAccount(t *testing.T, d *Deps, password string) *http.Cookie {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.SetUser("mystery", string(hash)); err != nil {
+		t.Fatal(err)
+	}
+	return quickSession(t, d)
+}
+
+func quickSession(t *testing.T, d *Deps) *http.Cookie {
+	t.Helper()
+	token := newToken()
+	if err := d.DB.CreateSession(token, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	return &http.Cookie{Name: sessionCookie, Value: token}
+}
+
+// TestPasswordCheckingEndpointsShareTheLockout: every endpoint that checks the
+// password counts wrong guesses towards the login lockout. Any one that didn't
+// would be an unlimited oracle for someone holding a session but not the
+// password, beside a login form that stops after five tries.
+func TestPasswordCheckingEndpointsShareTheLockout(t *testing.T) {
+	const pw = "correct horse battery"
+	for _, path := range []string{
+		"/api/auth/password",
+		"/api/auth/disable",
+		"/api/auth/totp/start",
+		"/api/auth/totp/disable",
+		"/api/auth/totp/recovery",
+	} {
+		t.Run(path, func(t *testing.T) {
+			d := testDeps(t)
+			router := NewRouter(d)
+			cookie := quickAccount(t, d, pw)
+
+			var code int
+			var body map[string]any
+			for i := 0; i < maxLoginFailures; i++ {
+				code, body, _ = authPost(t, router, path,
+					authCreds{Password: "wrong password", NewPassword: strings.Repeat("n", minPasswordLen)}, cookie)
+				if i < maxLoginFailures-1 && code != http.StatusUnauthorized {
+					t.Fatalf("wrong guess %d: want 401, got %d %v", i+1, code, body)
+				}
+			}
+			if code != http.StatusTooManyRequests || body["error"] != "locked" {
+				t.Fatalf("guess %d: want 429 locked, got %d %v", maxLoginFailures, code, body)
+			}
+			// Locked now, even for the right password — here and at login.
+			if code, _, _ := authPost(t, router, path, authCreds{Password: pw}, cookie); code != http.StatusTooManyRequests {
+				t.Fatalf("right password while locked out: want 429, got %d", code)
+			}
+			if code, _, _ := authPost(t, router, "/api/auth/login",
+				authCreds{Username: "mystery", Password: pw}, nil); code != http.StatusTooManyRequests {
+				t.Fatalf("login after guessing at %s: want 429 — the lockout is not shared, got %d", path, code)
+			}
+			if u, ok, _ := d.DB.GetUser(); !ok || u.TOTPSecret != "" {
+				t.Fatal("no failed attempt may change the account")
+			}
+		})
+	}
+}
+
+// TestTOTPDisableWrongCodeCountsTowardsLockout: the second factor is guessed
+// under the same limit as the password — a six-digit code is the easier of
+// the two to brute-force.
+func TestTOTPDisableWrongCodeCountsTowardsLockout(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+	const pw = "correct horse battery"
+	cookie := quickAccount(t, d, pw)
+	secret, err := newTOTPSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.SetTOTPSecret(secret, true); err != nil {
+		t.Fatal(err)
+	}
+	var code int
+	for i := 0; i < maxLoginFailures; i++ {
+		code, _, _ = authPost(t, router, "/api/auth/totp/disable", authCreds{Password: pw, Code: "000000"}, cookie)
+	}
+	if code != http.StatusTooManyRequests {
+		t.Fatalf("after %d wrong codes: want 429, got %d", maxLoginFailures, code)
+	}
+	if u, _, _ := d.DB.GetUser(); !u.TOTPEnabled {
+		t.Fatal("2FA must still be on")
+	}
+}
+
+// TestAccountDisableNeedsSecondFactor: removing the account removes 2FA with
+// it, so it must ask for the same proof as turning 2FA off — otherwise it is
+// the way round that check.
+func TestAccountDisableNeedsSecondFactor(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+	const pw = "correct horse battery"
+	cookie := quickAccount(t, d, pw)
+	secret, err := newTOTPSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.SetTOTPSecret(secret, true); err != nil {
+		t.Fatal(err)
+	}
+
+	code, body, _ := authPost(t, router, "/api/auth/disable", authCreds{Password: pw}, cookie)
+	if code != http.StatusUnauthorized || body["error"] != "totp_invalid" {
+		t.Fatalf("disable with the password alone: want 401 totp_invalid, got %d %v", code, body)
+	}
+	if _, ok, _ := d.DB.GetUser(); !ok {
+		t.Fatal("the account must survive a password-only attempt while 2FA is on")
+	}
+	if code, body, _ := authPost(t, router, "/api/auth/disable",
+		authCreds{Password: pw, Code: nextCode(t, secret)}, cookie); code != http.StatusOK {
+		t.Fatalf("disable with both factors: want 200, got %d %v", code, body)
+	}
+	if _, ok, _ := d.DB.GetUser(); ok {
+		t.Fatal("the account should be gone")
+	}
+}
+
+// TestAccountDisableWithout2FANeedsOnlyThePassword: with no second factor to
+// ask for, the password is the whole proof.
+func TestAccountDisableWithout2FANeedsOnlyThePassword(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+	const pw = "correct horse battery"
+	cookie := quickAccount(t, d, pw)
+	if code, body, _ := authPost(t, router, "/api/auth/disable", authCreds{Password: pw}, cookie); code != http.StatusOK {
+		t.Fatalf("want 200, got %d %v", code, body)
+	}
+	if _, ok, _ := d.DB.GetUser(); ok {
+		t.Fatal("the account should be gone")
+	}
+}
+
+// TestEnabling2FASignsOutOtherSessions: every other session got in on the
+// password alone. Turning 2FA on — often because the password is suspected
+// to have leaked — must not leave them signed in past it.
+func TestEnabling2FASignsOutOtherSessions(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+	const pw = "correct horse battery"
+	mine := quickAccount(t, d, pw)
+	other := quickSession(t, d)
+
+	_, _, mine = enrol2FA(t, d, router, pw, mine)
+
+	if ok, _ := d.DB.SessionValid(other.Value, time.Now()); ok {
+		t.Fatal("another session survived 2FA being enabled")
+	}
+	if ok, _ := d.DB.SessionValid(mine.Value, time.Now()); !ok {
+		t.Fatal("the session that enabled 2FA must stay signed in")
+	}
+}
+
+// TestConcurrentSetupHasOneWinner: the "no account yet" check and the write
+// were separate, so two setups racing through could both succeed, the later
+// silently replacing the account the earlier had just been given a session
+// for.
+func TestConcurrentSetupHasOneWinner(t *testing.T) {
+	d := testDeps(t)
+	router := NewRouter(d)
+	const n = 8
+	type result struct {
+		user string
+		code int
+	}
+	results := make(chan result, n)
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			user := fmt.Sprintf("racer%d", i)
+			b, _ := json.Marshal(authCreds{Username: user, Password: strings.Repeat("p", minPasswordLen)})
+			req := httptest.NewRequest(http.MethodPost, "/api/auth/setup", bytes.NewReader(b))
+			rec := httptest.NewRecorder()
+			<-start
+			router.ServeHTTP(rec, req)
+			results <- result{user, rec.Code}
+		}(i)
+	}
+	close(start)
+	var winners []string
+	for i := 0; i < n; i++ {
+		r := <-results
+		switch r.code {
+		case http.StatusOK:
+			winners = append(winners, r.user)
+		case http.StatusConflict:
+		default:
+			t.Errorf("%s: unexpected status %d", r.user, r.code)
+		}
+	}
+	if len(winners) != 1 {
+		t.Fatalf("%d setups succeeded (%v), want exactly one", len(winners), winners)
+	}
+	if u, _, _ := d.DB.GetUser(); u.Username != winners[0] {
+		t.Fatalf("account belongs to %q, but %q was told it had won", u.Username, winners[0])
 	}
 }

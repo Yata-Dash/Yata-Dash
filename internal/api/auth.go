@@ -46,10 +46,16 @@ const lockoutDuration = 15 * time.Minute
 // dummyHash is compared against when the submitted username doesn't match the
 // account, keeping login response timing uniform (no username enumeration).
 // The password below is never accepted — a mismatched username always fails.
-var dummyHash = func() []byte {
-	h, _ := bcrypt.GenerateFromPassword([]byte("yata-timing-equalizer"), bcrypt.DefaultCost)
+//
+// It has to be made at bcryptCost, the cost of a real hash: at bcrypt's
+// default cost of 10 it compared in roughly a quarter of the time, and the
+// difference answered the very question it exists to hide. Built on first use
+// rather than at init, so a binary that never sees a failed login (including
+// every test binary in this package) does not pay for a cost-12 hash at start.
+var dummyHash = sync.OnceValue(func() []byte {
+	h, _ := bcrypt.GenerateFromPassword([]byte("yata-timing-equalizer"), bcryptCost)
 	return h
-}()
+})
 
 func registerAuth(r chi.Router, d *Deps) {
 	// Public — needed before/without a session.
@@ -82,7 +88,11 @@ func validatePassword(pw string) string {
 // ── Login rate limiting (per client IP, in-memory) ───────────────────────────
 
 type attemptState struct {
-	failures    int
+	failures int
+	// inFlight counts attempts admitted but not yet decided. Each holds a slot
+	// against maxLoginFailures for as long as its bcrypt comparison runs —
+	// see reserveAttempt.
+	inFlight    int
 	lockedUntil time.Time
 	lastSeen    time.Time
 }
@@ -92,16 +102,37 @@ var loginLimiter = struct {
 	byIP map[string]*attemptState
 }{byIP: map[string]*attemptState{}}
 
+// attemptBusyRetry is the retry_after given when every attempt an IP has left
+// is already being evaluated. Those resolve within one bcrypt comparison, so
+// the wait is short — unless they all fail, in which case the next request
+// meets the full lockout instead.
+const attemptBusyRetry = time.Second
+
 // clientIP resolves the client address for rate limiting. When the
-// trust_proxy_headers setting is on (reverse-proxy deployments), the first
-// X-Forwarded-For hop is used — otherwise every proxied client would share
-// the proxy's address and one attacker could lock everyone out. Off by
-// default: the header is trivially spoofable when Yata is directly exposed.
+// trust_proxy_headers setting is on (reverse-proxy deployments), the address
+// comes from X-Forwarded-For — otherwise every proxied client would share the
+// proxy's address and one attacker could lock everyone out. Off by default:
+// the header is trivially spoofable when Yata is directly exposed.
+//
+// It is the RIGHTMOST entry that counts, not the first. A proxy appends the
+// address it took the connection from, so the last entry is the one the
+// trusted proxy wrote; everything to its left came from the client and says
+// whatever the client likes. Taking the first entry let an attacker send a
+// fresh address with every guess and never reach the lockout.
+//
+// This assumes exactly one trusted proxy hop in front of Yata. Behind two (a
+// CDN in front of nginx, say) the rightmost entry is the outer proxy's address
+// and every client behind it shares one lockout bucket — which fails towards a
+// shared limit, never towards a bypass. The last header line is read for the
+// same reason as the last entry: a proxy that adds its own X-Forwarded-For
+// line, rather than appending to the client's, puts it after any the client
+// sent.
 func clientIP(d *Deps, r *http.Request) string {
 	if d != nil && d.Cfg != nil && d.Cfg.Settings().TrustProxyHeaders {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
-				return first
+		if xffs := r.Header.Values("X-Forwarded-For"); len(xffs) > 0 {
+			hops := strings.Split(xffs[len(xffs)-1], ",")
+			if last := strings.TrimSpace(hops[len(hops)-1]); last != "" {
+				return last
 			}
 		}
 	}
@@ -122,26 +153,34 @@ func requestIsHTTPS(d *Deps, r *http.Request) bool {
 		strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// loginLocked reports whether the IP is currently locked out, and for how long.
-func loginLocked(ip string, now time.Time) (bool, time.Duration) {
-	loginLimiter.mu.Lock()
-	defer loginLimiter.mu.Unlock()
-	s := loginLimiter.byIP[ip]
-	if s != nil && now.Before(s.lockedUntil) {
-		return true, time.Until(s.lockedUntil)
-	}
-	return false, 0
+// loginAttempt is one admitted guess at the password. It holds its slot in
+// the limiter until it is settled as a failure, a success, or neither.
+type loginAttempt struct {
+	ip      string
+	now     time.Time
+	settled bool
 }
 
-// recordLoginFailure increments the IP's failure count and locks it out once the
-// threshold is reached. Returns the lockout duration when it just locked (else 0).
-func recordLoginFailure(ip string, now time.Time) time.Duration {
+// reserveAttempt admits one password check from ip, or refuses it and says how
+// long to wait. It must run BEFORE the bcrypt comparison.
+//
+// Checking the lockout first and recording the failure afterwards left the
+// ~250 ms comparison between the two, and every request arriving in that gap
+// saw an IP that was not yet locked: sixty guesses sent in parallel were all
+// evaluated against a limit of five. Taking the slot under the same lock as
+// the check closes the gap — failures already counted plus attempts still
+// being evaluated can never exceed maxLoginFailures.
+//
+// The caller must settle the attempt; `defer a.release()` straight after a
+// successful reservation covers every early return.
+func reserveAttempt(ip string, now time.Time) (*loginAttempt, time.Duration) {
 	loginLimiter.mu.Lock()
 	defer loginLimiter.mu.Unlock()
-	// Opportunistic cleanup: drop entries that aren't locked out and haven't
-	// failed in over an hour (their failure count is stale anyway).
+	// Opportunistic cleanup: drop entries that aren't locked out, have nothing
+	// in flight and haven't been seen in over an hour (their failure count is
+	// stale anyway).
 	for k, v := range loginLimiter.byIP {
-		if now.After(v.lockedUntil) && now.Sub(v.lastSeen) > time.Hour {
+		if v.inFlight == 0 && now.After(v.lockedUntil) && now.Sub(v.lastSeen) > time.Hour {
 			delete(loginLimiter.byIP, k)
 		}
 	}
@@ -150,20 +189,62 @@ func recordLoginFailure(ip string, now time.Time) time.Duration {
 		s = &attemptState{}
 		loginLimiter.byIP[ip] = s
 	}
-	s.failures++
-	s.lastSeen = now
-	if s.failures >= maxLoginFailures {
-		s.failures = 0
-		s.lockedUntil = now.Add(lockoutDuration)
-		return lockoutDuration
+	if now.Before(s.lockedUntil) {
+		return nil, s.lockedUntil.Sub(now)
 	}
-	return 0
+	if s.failures+s.inFlight >= maxLoginFailures {
+		return nil, attemptBusyRetry
+	}
+	s.inFlight++
+	s.lastSeen = now
+	return &loginAttempt{ip: ip, now: now}, 0
 }
 
-func clearLoginFailures(ip string) {
+// settle gives the attempt's slot back and applies its outcome to the IP's
+// state. Only the first call counts, so an explicit outcome followed by the
+// deferred release is safe.
+func (a *loginAttempt) settle(apply func(s *attemptState)) {
+	if a.settled {
+		return
+	}
+	a.settled = true
 	loginLimiter.mu.Lock()
-	delete(loginLimiter.byIP, ip)
-	loginLimiter.mu.Unlock()
+	defer loginLimiter.mu.Unlock()
+	s := loginLimiter.byIP[a.ip]
+	if s == nil {
+		return // the limiter was reset from under us (tests do this)
+	}
+	if s.inFlight > 0 {
+		s.inFlight--
+	}
+	apply(s)
+}
+
+// fail records a wrong guess and locks the IP out once the threshold is
+// reached. Returns the lockout duration when this failure locked it (else 0).
+func (a *loginAttempt) fail() time.Duration {
+	var locked time.Duration
+	a.settle(func(s *attemptState) {
+		s.failures++
+		s.lastSeen = a.now
+		if s.failures >= maxLoginFailures {
+			s.failures = 0
+			s.lockedUntil = a.now.Add(lockoutDuration)
+			locked = lockoutDuration
+		}
+	})
+	return locked
+}
+
+// succeed clears the IP's failure count: the account holder proved it.
+func (a *loginAttempt) succeed() {
+	a.settle(func(s *attemptState) { s.failures = 0 })
+}
+
+// release gives the slot back without counting the attempt either way — a
+// store error, or a right password still waiting for its second factor.
+func (a *loginAttempt) release() {
+	a.settle(func(*attemptState) {})
 }
 
 // authState is what the account table says — including the case where it could
@@ -328,8 +409,17 @@ func authSetup(d *Deps) http.HandlerFunc {
 			jsonError(w, "hash_error", http.StatusInternalServerError)
 			return
 		}
-		if err := d.DB.SetUser(c.Username, string(hash)); err != nil {
+		// The check above is advisory: two setups racing through it would both
+		// find no account, and an upsert would let the later one silently
+		// replace the account the earlier one had just been given a session
+		// for. The insert itself is what decides who gets the account.
+		created, err := d.DB.CreateFirstUser(c.Username, string(hash))
+		if err != nil {
 			jsonError(w, "store_error", http.StatusInternalServerError)
+			return
+		}
+		if !created {
+			jsonError(w, "already_configured", http.StatusConflict)
 			return
 		}
 		issueSession(d, w, r)
@@ -342,7 +432,8 @@ func authLogin(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(d, r)
 		now := time.Now()
-		if locked, remain := loginLocked(ip, now); locked {
+		attempt, remain := reserveAttempt(ip, now)
+		if attempt == nil {
 			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
 				"error":       "locked",
 				"retry_after": int(remain.Seconds()) + 1,
@@ -350,6 +441,7 @@ func authLogin(d *Deps) http.HandlerFunc {
 			})
 			return
 		}
+		defer attempt.release()
 		c := decodeCreds(r)
 		u, ok, err := d.DB.GetUser()
 		if err != nil {
@@ -360,13 +452,15 @@ func authLogin(d *Deps) http.HandlerFunc {
 		// username doesn't match — so response timing can't confirm the username.
 		// Usernames are matched case-insensitively (the password stays exact);
 		// the stored username keeps its original case for display.
-		hash := dummyHash
 		userMatch := ok && strings.EqualFold(u.Username, c.Username)
+		var hash []byte
 		if userMatch {
 			hash = []byte(u.PasswordHash)
+		} else {
+			hash = dummyHash()
 		}
 		if bcrypt.CompareHashAndPassword(hash, []byte(c.Password)) != nil || !userMatch {
-			locked := recordLoginFailure(ip, now)
+			locked := attempt.fail()
 			// The submitted username is echoed only when it matches the
 			// account. An unmatched value is whatever was typed into the
 			// field, and the commonest way to get one is a password entered a
@@ -404,7 +498,7 @@ func authLogin(d *Deps) http.HandlerFunc {
 				return
 			}
 			if !okCode {
-				locked := recordLoginFailure(ip, now)
+				locked := attempt.fail()
 				d.logWarnf("auth: failed two-factor attempt for %q from %s", u.Username, ip)
 				if locked > 0 {
 					jsonStatus(w, http.StatusTooManyRequests, map[string]any{
@@ -421,7 +515,7 @@ func authLogin(d *Deps) http.HandlerFunc {
 			}
 		}
 
-		clearLoginFailures(ip)
+		attempt.succeed()
 		// The plaintext is in hand only here, so this is the one place the
 		// stored hash can be brought up to the current cost and the account's
 		// password measured against the current length floor.
@@ -492,13 +586,8 @@ func authChangePassword(d *Deps) http.HandlerFunc {
 			return
 		}
 		c := decodeCreds(r)
-		u, ok, err := d.DB.GetUser()
-		if err != nil || !ok {
-			jsonError(w, "store_error", http.StatusInternalServerError)
-			return
-		}
-		if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(c.Password)) != nil {
-			jsonError(w, "invalid_credentials", http.StatusUnauthorized)
+		u, ok := verifyAccountHolder(d, w, r, c, "password change", false)
+		if !ok {
 			return
 		}
 		if code := validatePassword(c.NewPassword); code != "" {
@@ -522,7 +611,9 @@ func authChangePassword(d *Deps) http.HandlerFunc {
 }
 
 // authDisable removes the account entirely (turns protection off). Requires the
-// current password as confirmation.
+// current password as confirmation, and the second factor when 2FA is on: this
+// removes the second factor along with everything else, so it needs the same
+// proof totpDisable does — otherwise it is the way round that check.
 func authDisable(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !isAuthenticated(d, r) {
@@ -530,13 +621,7 @@ func authDisable(d *Deps) http.HandlerFunc {
 			return
 		}
 		c := decodeCreds(r)
-		u, ok, err := d.DB.GetUser()
-		if err != nil || !ok {
-			jsonError(w, "store_error", http.StatusInternalServerError)
-			return
-		}
-		if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(c.Password)) != nil {
-			jsonError(w, "invalid_credentials", http.StatusUnauthorized)
+		if _, ok := verifyAccountHolder(d, w, r, c, "login protection disable", true); !ok {
 			return
 		}
 		if err := d.DB.DeleteUser(); err != nil {
@@ -553,11 +638,8 @@ func authDisable(d *Deps) http.HandlerFunc {
 // live session alone should not be enough to perform. Returns false having
 // already written the response.
 //
-// Unlike confirmPassword (which guards account settings), this feeds the login
-// lockout. Without that, an endpoint taking a password becomes an oracle with
-// no rate limit at all while /api/auth/login stops after five tries — an
-// attacker who has a session but not the password would simply guess here
-// instead.
+// This feeds the login lockout (see verifyAccountHolder), so an endpoint taking
+// a password cannot become an oracle with no rate limit of its own.
 //
 // On an instance with no account configured there is nothing to prove, and the
 // caller is let through: the whole app is open in that state, so demanding a
@@ -570,51 +652,66 @@ func reauthenticate(d *Deps, w http.ResponseWriter, r *http.Request, what string
 		jsonError(w, "unauthorized", http.StatusUnauthorized)
 		return false
 	}
+	_, ok := verifyAccountHolder(d, w, r, decodeCreds(r), what, true)
+	return ok
+}
+
+// verifyAccountHolder checks the submitted password — and, when secondFactor
+// is set and the account has 2FA on, the second factor too — and returns the
+// account. Returns false having already written the response.
+//
+// Every endpoint that checks the password goes through here, because each one
+// shares the login lockout. Without that, an endpoint taking a password is an
+// oracle with no rate limit at all while /api/auth/login stops after five
+// tries — an attacker who has a session but not the password would simply
+// guess there instead.
+func verifyAccountHolder(d *Deps, w http.ResponseWriter, r *http.Request, c authCreds, what string, secondFactor bool) (store.User, bool) {
 	ip := clientIP(d, r)
 	now := time.Now()
-	if locked, remain := loginLocked(ip, now); locked {
+	attempt, remain := reserveAttempt(ip, now)
+	if attempt == nil {
 		jsonStatus(w, http.StatusTooManyRequests, map[string]any{
 			"error": "locked", "retry_after": int(remain.Seconds()) + 1,
 		})
-		return false
+		return store.User{}, false
 	}
-	c := decodeCreds(r)
+	defer attempt.release()
 	u, ok, err := d.DB.GetUser()
 	if err != nil || !ok {
 		jsonError(w, "store_error", http.StatusInternalServerError)
-		return false
+		return store.User{}, false
 	}
 	// A failure here reports the lockout on the attempt that triggers it, the
 	// same way login does — otherwise the two paths disagree about when the
 	// limit bites and the UI has to explain both.
-	fail := func(errCode string) bool {
-		if locked := recordLoginFailure(ip, now); locked > 0 {
+	fail := func(errCode string) (store.User, bool) {
+		if locked := attempt.fail(); locked > 0 {
 			d.logWarnf("auth: %s locked out %s for %s", what, ip, locked)
 			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
 				"error": "locked", "retry_after": int(locked.Seconds()) + 1,
 			})
-			return false
+			return store.User{}, false
 		}
 		jsonStatus(w, http.StatusUnauthorized, map[string]any{"error": errCode})
-		return false
+		return store.User{}, false
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(c.Password)) != nil {
 		d.logWarnf("auth: %s refused — wrong password from %s", what, ip)
 		return fail("invalid_credentials")
 	}
-	if u.TOTPEnabled {
+	if secondFactor && u.TOTPEnabled {
 		valid, _, err := consumeSecondFactor(d, u, strings.TrimSpace(c.Code), now)
 		if err != nil {
 			jsonError(w, "store_error", http.StatusInternalServerError)
-			return false
+			return store.User{}, false
 		}
 		if !valid {
 			d.logWarnf("auth: %s refused — wrong second factor from %s", what, ip)
 			return fail("totp_invalid")
 		}
 	}
-	clearLoginFailures(ip)
-	return true
+	attempt.succeed()
+	return u, true
 }
 
 // issueSession generates a token, stores it, and sets the session cookie.

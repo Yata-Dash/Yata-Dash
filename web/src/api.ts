@@ -82,8 +82,10 @@ export const authLogout = () =>
 export const authChangePassword = (password: string, new_password: string) =>
   call<AuthResult>('/api/auth/password', { method: 'POST', body: JSON.stringify({ password, new_password }) });
 
-export const authDisable = (password: string) =>
-  call<AuthResult>('/api/auth/disable', { method: 'POST', body: JSON.stringify({ password }) });
+/** `code` is required when the account has 2FA on: removing the account
+ *  removes the second factor with it. */
+export const authDisable = (password: string, code?: string) =>
+  call<AuthResult>('/api/auth/disable', { method: 'POST', body: JSON.stringify({ password, code }) });
 
 // There is no reset endpoint. Recovery is a 2FA recovery code, or running the
 // binary with -reset-auth on the host — see internal/api/auth.go.
