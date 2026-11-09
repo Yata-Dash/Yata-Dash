@@ -241,22 +241,28 @@ func mapUserTrackers(d *Deps) []pathways.UserTracker {
 		if err != nil {
 			continue
 		}
-		gr := d.Stats.GrowthRates(t.ID)
 		u := pathways.UserTracker{
 			TrackerID:   t.ID,
 			PathwayName: pname,
 			Stats:       statsFromMerged(merged),
-			Rates: pathways.Rates{
-				UploadGiB:        gr["uploaded"],
-				DownloadGiB:      gr["downloaded"],
-				TotalTransferGiB: gr["total_transfer"],
-				SeedSizeGiB:      gr["seed_size"],
-				Bonus:            gr["bonus_points"],
-			},
+			Rates:       pathwayRates(d.Stats.GrowthRates(t.ID)),
 		}
 		out = append(out, u)
 	}
 	return out
+}
+
+// pathwayRates picks the growth rates the pathway engine projects with out of
+// a tracker's GrowthRates map. Shared with refreshCycle, which patches one
+// tracker's entry in place and must produce exactly what this would.
+func pathwayRates(gr map[string]float64) pathways.Rates {
+	return pathways.Rates{
+		UploadGiB:        gr["uploaded"],
+		DownloadGiB:      gr["downloaded"],
+		TotalTransferGiB: gr["total_transfer"],
+		SeedSizeGiB:      gr["seed_size"],
+		Bonus:            gr["bonus_points"],
+	}
 }
 
 // pathwayNameFor resolves a configured tracker to its name in the pathway
