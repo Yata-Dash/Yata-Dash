@@ -7,9 +7,7 @@ import (
 	"testing"
 )
 
-// A def path is appended to the tracker URL by concatenation, so one that does
-// not begin with a single "/" can name a different host — and the request
-// carries the tracker's API key or session cookie there.
+// Paths that, concatenated to the tracker URL, would name a different host.
 var hostChangingPaths = []string{
 	"@evil.example/api/user", // https://tracker.example@evil.example/…
 	".evil.example/api/user", // https://tracker.example.evil.example/…
@@ -46,8 +44,7 @@ func TestValidateDefPathsAcceptsRealPaths(t *testing.T) {
 	}
 }
 
-// Every path-bearing field on both def kinds is checked, and a def that fails
-// is skipped and reported, like any other invalid def.
+// Every path field on both def kinds is checked; a failing def is skipped.
 func TestDefsWithHostChangingPathsAreSkipped(t *testing.T) {
 	const goodType = `{"key":"u3","label":"U3","api":{"kind":"unit3d"}}`
 	cases := []struct {

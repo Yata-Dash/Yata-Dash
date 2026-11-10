@@ -9,9 +9,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// Gotify's app token is a custom header, which net/http copies onto every
-// redirect hop. A destination answering with a redirect elsewhere must not
-// pass the token on; one that redirects within itself still gets it.
+// The token is dropped on a cross-origin redirect, kept on a same-origin one.
 func TestGotifyTokenDoesNotFollowACrossOriginRedirect(t *testing.T) {
 	var leaked atomic.Value
 	leaked.Store("")

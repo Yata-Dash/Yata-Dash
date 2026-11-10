@@ -12,9 +12,6 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
-// net/http strips Authorization and Cookie on a cross-domain redirect but
-// copies X-API-Key verbatim, so a GazelleGames tracker answering 302 would
-// hand the user's key to whatever host it named.
 func TestGazelleGamesKeyDoesNotFollowACrossOriginRedirect(t *testing.T) {
 	var leaked atomic.Value
 	leaked.Store("")
@@ -37,8 +34,7 @@ func TestGazelleGamesKeyDoesNotFollowACrossOriginRedirect(t *testing.T) {
 	}
 }
 
-// A JSON-RPC def carries the key in the POST body, which Go replays on a 307
-// or 308. The redirect must be refused before the body is resent.
+// A JSON-RPC key lives in the body; a cross-origin 307/308 must be refused.
 func TestJSONRPCBodyIsNotReplayedToAnotherOrigin(t *testing.T) {
 	var reached atomic.Bool
 	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,8 +76,6 @@ func TestTrackerPoliciesGuardCredentialsAcrossRedirects(t *testing.T) {
 	}
 }
 
-// A tracker answering with an endless (or merely enormous) body must not be
-// read into memory whole.
 func TestOversizedAPIResponseIsRefused(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

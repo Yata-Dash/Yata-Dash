@@ -16,8 +16,7 @@ import (
 // under the old arrangement the failure mode was silent and pointed the other
 // way.
 //
-// Only AllowPrivate is relaxed: the redirect credential guards stay as shipped,
-// so the suite exercises them on def-chosen destinations too.
+// Only AllowPrivate is relaxed; the redirect credential guards stay as shipped.
 func TestMain(m *testing.M) {
 	DefBaseURLPolicy.AllowPrivate = true
 	os.Exit(m.Run())

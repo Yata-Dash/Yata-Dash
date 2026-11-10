@@ -13,10 +13,7 @@ import (
 
 const minimalProfile = `<html><body><time class="profile__registration" datetime="2024-01-02 10:00:00">x</time></body></html>`
 
-// The profile path is appended to the tracker URL, so one that does not begin
-// with "/" can name another host — which then receives the session cookie.
-// Defs are validated at load, but Profile is handed a Spec and enforces the
-// rule itself before sending anything.
+// Profile enforces the path rule itself (it takes a Spec, not a validated def).
 func TestProfileRefusesAPathThatChangesTheHost(t *testing.T) {
 	var hits atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -58,7 +55,6 @@ func TestProfileFetchesAnOrdinaryPath(t *testing.T) {
 	}
 }
 
-// A page past the cap is refused rather than read into memory whole.
 func TestProfileRefusesAnOversizedPage(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(minimalProfile)) //nolint:errcheck

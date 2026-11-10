@@ -9,8 +9,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
-// oversizedServer answers every request with a JSON array just past the
-// response cap — valid JSON, so only the cap can refuse it.
+// oversizedServer serves valid JSON just past the cap, so only the cap refuses it.
 func oversizedServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -34,8 +33,7 @@ func TestQUIFetchRefusesAnOversizedResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("an oversized QUI response was accepted")
 	}
-	// The error is relayed to the browser, so it must carry neither the
-	// destination's content nor the key.
+	// The error reaches the browser: no body content, no key.
 	if strings.Contains(err.Error(), "ZZZZ") || strings.Contains(err.Error(), "qui-key") {
 		t.Errorf("error %q carries body content or the key", err)
 	}

@@ -77,20 +77,16 @@ type Client struct {
 // DefBaseURLPolicy instead. That split is the point: the restriction lands on
 // the input Yata does not control.
 //
-// Both policies also guard the credential across redirects. net/http drops
-// Authorization and Cookie when a redirect leaves the tracker's domain, but
-// not GazelleGames' X-API-Key, and it replays a JSON-RPC POST body — the API
-// key's other home — on a 307 or 308. The header is dropped and the body
-// replay refused once a redirect leaves the tracker's origin.
+// Security: once a redirect leaves the tracker's origin, X-API-Key (which
+// net/http doesn't strip) is dropped and a body replay (JSON-RPC key) refused.
 var TrackerPolicy = netguard.Policy{
 	AllowPrivate:      true,
 	CredentialHeaders: trackerCredentialHeaders,
 	PinBodyOrigin:     true,
 }
 
-// trackerCredentialHeaders are the request headers a tracker fetch may carry a
-// credential in that net/http does not already strip on a cross-domain
-// redirect. Authorization and Cookie are absent because Go handles them.
+// trackerCredentialHeaders are credential headers net/http doesn't strip on a
+// cross-domain redirect (it already handles Authorization and Cookie).
 var trackerCredentialHeaders = []string{"X-API-Key"}
 
 // DefBaseURLPolicy constrains the one case where a DEFINITION, rather than the
@@ -242,10 +238,7 @@ func (c *Client) fetchUnit3D(t models.Tracker) (map[string]any, *Error) {
 	// normalisation below turns the list into the flat banner fields.
 	// Best-effort: a promotion nobody can read is not worth failing a fetch
 	// that otherwise succeeded.
-	//
-	// The def's path is joined through netguard.JoinPath so it can only ever
-	// name a path on the tracker itself — never a different host, which would
-	// receive the API key.
+	// JoinPath keeps the def's path on the tracker's host (API key).
 	if ev := c.Registry.Events(t.URL, t.Type); ev != nil && ev.Path != "" {
 		if evURL, jErr := netguard.JoinPath(base, ev.Path); jErr == nil {
 			if evData, eErr := c.getUnit3D(evURL, t.APIKey, id); eErr == nil {
@@ -1161,8 +1154,6 @@ func (c *Client) fetchCustom(t models.Tracker) (map[string]any, *Error) {
 	}
 	reqURL, err := netguard.JoinPath(baseURL, path)
 	if err != nil {
-		// A path that would move the request to another host is a def bug
-		// (or worse) and reads as one, like a refused base_url.
 		return nil, errf("blocked_destination", err)
 	}
 	req, err := http.NewRequest(method, reqURL, requestBody)

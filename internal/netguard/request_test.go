@@ -14,9 +14,6 @@ import (
 
 // ── JoinPath ────────────────────────────────────────────────────────────────
 
-// A def path is appended to the tracker URL by string concatenation, so a path
-// that does not start with "/" can rewrite the authority — and the request,
-// with the key attached, goes to a host the user never typed.
 func TestJoinPathRefusesPathsThatChangeTheHost(t *testing.T) {
 	for _, path := range []string{
 		"@evil.example/api/user",      // userinfo: host becomes evil.example
@@ -115,9 +112,6 @@ func (r *countingReader) Read(p []byte) (int, error) {
 
 var trackerLike = Policy{AllowPrivate: true, CredentialHeaders: []string{"X-API-Key"}, PinBodyOrigin: true}
 
-// net/http strips Authorization and Cookie on a cross-domain redirect, but not
-// a custom header — so without CredentialHeaders an X-API-Key follows a 302
-// wherever it points.
 func TestCredentialHeaderIsDroppedOnCrossOriginRedirect(t *testing.T) {
 	var leaked string
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,8 +136,7 @@ func TestCredentialHeaderIsDroppedOnCrossOriginRedirect(t *testing.T) {
 	}
 }
 
-// The header must not come back on a later hop that returns to the original
-// origin through a foreign one: that origin chose the final destination.
+// Returning to the original origin via a foreign hop must not restore it.
 func TestCredentialHeaderStaysDroppedForTheRestOfTheChain(t *testing.T) {
 	var gotOnReturn = "unset"
 	mux := http.NewServeMux()
@@ -172,8 +165,6 @@ func TestCredentialHeaderStaysDroppedForTheRestOfTheChain(t *testing.T) {
 	}
 }
 
-// Same-origin redirects keep the key: a tracker that moves its API behind a
-// trailing slash must not suddenly fail authentication.
 func TestCredentialHeaderSurvivesSameOriginRedirect(t *testing.T) {
 	var got string
 	mux := http.NewServeMux()
@@ -198,8 +189,7 @@ func TestCredentialHeaderSurvivesSameOriginRedirect(t *testing.T) {
 	}
 }
 
-// A 307/308 makes Go resend the body, and a JSON-RPC tracker carries its key
-// there. The redirect is refused outright: there is no header to strip.
+// A 307/308 resends the body (a JSON-RPC key), so it is refused cross-origin.
 func TestBodyIsNotReplayedToAnotherOrigin(t *testing.T) {
 	var reached bool
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -252,8 +242,7 @@ func TestBodyReplayWithinTheOriginIsFollowed(t *testing.T) {
 	}
 }
 
-// A 302 turns a POST into a body-less GET, so it carries nothing to protect and
-// is not refused — only the credential headers are dropped.
+// A 302 drops the body, so it is followed (minus credential headers).
 func TestBodylessRedirectToAnotherOriginIsFollowed(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer target.Close()
@@ -269,8 +258,7 @@ func TestBodylessRedirectToAnotherOriginIsFollowed(t *testing.T) {
 	resp.Body.Close()
 }
 
-// The scheme-upgrade allowance, and its limits. Exercised on the redirect hook
-// directly since httptest cannot serve http and https on one host and port pair.
+// Tested on the hook directly: httptest can't serve http and https on one host.
 func TestCredentialOriginAllowsOnlyAPlainHTTPSUpgrade(t *testing.T) {
 	for _, tc := range []struct {
 		from, to string
@@ -297,8 +285,6 @@ func TestCredentialOriginAllowsOnlyAPlainHTTPSUpgrade(t *testing.T) {
 	}
 }
 
-// A policy without CredentialHeaders keeps the old behaviour: other headers
-// are not the hook's business.
 func TestRedirectLeavesHeadersAloneWithoutCredentialHeaders(t *testing.T) {
 	first, _ := http.NewRequest(http.MethodGet, "https://a.example/", nil)
 	next := &http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "https", Host: "b.example"}, Header: http.Header{}}

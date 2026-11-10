@@ -292,10 +292,8 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	if path == "" {
 		path = "/users/{username}"
 	}
-	// Refuse a path that would move the request off the tracker's host before
-	// anything is sent: the session cookie goes with it. Checked on the
-	// template here, and again below once the username or id is substituted,
-	// since either could carry the characters that do it.
+	// Security: the path must stay on the tracker's host (session cookie).
+	// Checked on the template and again after substitution.
 	if _, err := netguard.JoinPath(baseURL, path); err != nil {
 		return nil, serr(http.StatusBadRequest, "bad_profile_path")
 	}

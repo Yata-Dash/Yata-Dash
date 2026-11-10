@@ -247,21 +247,12 @@ func validateType(td TypeDef) error {
 	return validateDefPaths(paths)
 }
 
-// validateDefPaths checks every def field that is appended to the tracker's
-// URL to build a request.
+// validateDefPaths checks every def field appended to the tracker's URL.
 //
-// The join is plain concatenation, so the path decides where the request goes
-// unless it begins with exactly one "/": "@evil.example/api/user" after
-// "https://tracker.example" is a request to evil.example (the tracker's name
-// becomes a username), ".evil.example/x" lands on tracker.example.evil.example,
-// and the API key or session cookie travels with it either way. "//" is
-// refused too — harmless after a host, but it is how a URL names a different
-// one, and no tracker endpoint needs it.
-//
-// A rejection, unlike a suspect base_url: such a path is never a typo that
-// still works, so there is nothing to keep loading. fetch and scrape refuse
-// it again at request time (netguard.JoinPath), which is the enforcement;
-// this is what makes the problem visible in the Definitions list.
+// Security: the join is concatenation, so a path not starting with exactly one
+// "/" (e.g. "@evil.example/x") can send the request, and its credential, to
+// another host. netguard.JoinPath enforces this at request time; this surfaces
+// it in the Definitions list.
 func validateDefPaths(paths map[string]string) error {
 	fields := make([]string, 0, len(paths))
 	for f := range paths {

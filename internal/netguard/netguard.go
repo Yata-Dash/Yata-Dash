@@ -66,21 +66,13 @@ type Policy struct {
 	// destination check alone would allow that hop when AllowPrivate is set.
 	PinOrigin bool
 
-	// CredentialHeaders names request headers that carry a credential Go's
-	// own redirect handling knows nothing about. net/http drops
-	// Authorization and Cookie when a redirect leaves the original domain,
-	// but copies every other header verbatim — so a tracker's X-API-Key, or a
-	// Gotify app token, would follow a 302 to whatever host the response
-	// named. Each header listed here is deleted from any redirect hop that
-	// leaves the original origin (see sameCredentialOrigin), and stays
-	// deleted for the rest of the chain, as Go does for its own list.
+	// CredentialHeaders are credential headers net/http copies across
+	// redirects. They are deleted once a hop leaves the original origin (see
+	// sameCredentialOrigin) and stay deleted for the rest of the chain.
 	CredentialHeaders []string
 
-	// PinBodyOrigin refuses a redirect that would resend the request BODY to
-	// a different origin. Go replays the body on a 307 or 308, and for a
-	// JSON-RPC tracker the body is where the API key lives — there is no
-	// header to strip, so the only safe answer is not to follow. A tracker
-	// API has no legitimate reason to bounce a POST to somebody else's host.
+	// PinBodyOrigin refuses a redirect (307/308) that would resend the body
+	// to a different origin: for JSON-RPC trackers the body holds the API key.
 	PinBodyOrigin bool
 }
 
@@ -348,11 +340,8 @@ func checkRedirect(p Policy) func(*http.Request, []*http.Request) error {
 			return fmt.Errorf("%w: redirect to a different origin (%s)", ErrBlocked, req.URL.Host)
 		}
 		if len(via) > 0 && (p.PinBodyOrigin || len(p.CredentialHeaders) > 0) {
-			// Compared against the FIRST request, which is the origin the
-			// credential was meant for, and across every hop so far: once a
-			// chain has left that origin, nothing it does afterwards makes
-			// the credentials safe to send again — the rule net/http itself
-			// applies to Authorization and Cookie.
+			// Security: compare every hop with the first request; once the
+			// chain has left that origin, credentials are never sent again.
 			left := !sameCredentialOrigin(via[0].URL, req.URL)
 			for _, hop := range via[1:] {
 				left = left || !sameCredentialOrigin(via[0].URL, hop.URL)
@@ -371,13 +360,8 @@ func checkRedirect(p Policy) func(*http.Request, []*http.Request) error {
 }
 
 // sameCredentialOrigin reports whether a redirect from orig to dest may keep
-// the credentials the original request carried. That is the same origin, plus
-// one widening: a plain http→https upgrade on the same host and default ports,
-// which is what a tracker's "always use HTTPS" rule answers to a user who
-// typed http://. Refusing it would break those setups while protecting
-// nothing — the credential reaches the very host it was meant for, now over
-// TLS. The reverse (https→http) is not allowed: that is a downgrade, and
-// whatever sent it gets the credential in clear text.
+// the original credentials: same origin, or an http→https upgrade on the same
+// host and default ports. Never https→http, which would leak them in clear.
 func sameCredentialOrigin(orig, dest *url.URL) bool {
 	if SameOrigin(orig, dest) {
 		return true
@@ -387,9 +371,8 @@ func sameCredentialOrigin(orig, dest *url.URL) bool {
 		port(orig) == "80" && port(dest) == "443"
 }
 
-// hasBody reports whether a redirect hop is about to resend a request body.
-// net/http sets GetBody on the hop only when it replays the original body (a
-// 307 or 308); a 301/302/303 turns a POST into a body-less GET.
+// hasBody reports whether a redirect hop is about to resend a request body
+// (net/http sets GetBody only on a 307/308 replay).
 func hasBody(req *http.Request) bool {
 	return req.GetBody != nil || (req.Body != nil && req.Body != http.NoBody)
 }
