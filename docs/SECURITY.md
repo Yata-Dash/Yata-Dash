@@ -91,7 +91,7 @@ and never runs it or renders it as HTML. Worst case is wrong numbers.
 | Saved credentials only ever sent to the site they were saved for | `internal/api/{qui,prowlarr,jackett}.go` |
 | Cross-site requests blocked | `internal/api/security.go` |
 | Hostname check against DNS rebinding | `internal/api/hostguard.go` |
-| bcrypt passwords (cost 12, 12-character minimum); TOTP with single-use recovery codes; 15-minute lockout after 5 failed attempts | `internal/api/{auth,totp}.go` |
+| bcrypt passwords (cost 12, 12-character minimum); TOTP with single-use recovery codes; 15-minute lockout after 5 failed attempts, shared by every endpoint that checks the password | `internal/api/{auth,totp}.go` |
 | Config export re-asks for your password (and 2FA code) | `internal/api/config.go` |
 | Login fails closed if the account can't be read | `internal/api/auth.go` |
 
@@ -145,7 +145,7 @@ Stated plainly, because a list of protections without this is marketing.
 |---|---|
 | **Only on this machine** | Bind `127.0.0.1`. An account is optional. |
 | **LAN or Docker** | Set up an account. Add 2FA if anything untrusted shares the network. |
-| **Reachable from the internet** | Account + 2FA, behind a reverse proxy with TLS. Turn on *Trust proxy headers* only when a proxy really is in front — it makes `X-Forwarded-For` authoritative for rate limiting. |
+| **Reachable from the internet** | Account + 2FA, behind a reverse proxy with TLS. Turn on *Trust proxy headers* only when a proxy really is in front — it makes `X-Forwarded-For` authoritative for rate limiting. Yata uses the last address in it (the one your proxy added) and assumes a single proxy hop. |
 | **Shared host or seedbox** | File permissions are handled; the operator isn't. Prefer API-only trackers (no session cookies). Watch for the startup warning that permissions couldn't be set. |
 | **Locked out** | Use a recovery code. With none left, stop Yata and run it once with `-reset-auth` on the host — that needs a shell on the machine on purpose, and removes only the account. |
 

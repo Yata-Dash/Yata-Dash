@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,7 +33,14 @@ func TestCrossSiteDetection(t *testing.T) {
 	}{
 		{"sec-fetch cross-site", map[string]string{"Sec-Fetch-Site": "cross-site"}, true},
 		{"sec-fetch same-origin", map[string]string{"Sec-Fetch-Site": "same-origin"}, false},
-		{"sec-fetch same-site", map[string]string{"Sec-Fetch-Site": "same-site"}, false},
+		// same-site proves nothing on its own: Origin must still match.
+		{"sec-fetch same-site, other port", map[string]string{
+			"Sec-Fetch-Site": "same-site", "Origin": "http://yata.local:8080"}, true},
+		{"sec-fetch same-site, sibling subdomain", map[string]string{
+			"Sec-Fetch-Site": "same-site", "Origin": "http://other.yata.local:8420"}, true},
+		{"sec-fetch same-site, matching origin", map[string]string{
+			"Sec-Fetch-Site": "same-site", "Origin": "http://yata.local:8420"}, false},
+		{"sec-fetch same-site, no origin", map[string]string{"Sec-Fetch-Site": "same-site"}, true},
 		{"sec-fetch none (address bar)", map[string]string{"Sec-Fetch-Site": "none"}, false},
 		// Sec-Fetch-Site wins even when Origin looks fine (browser knows best).
 		{"sec-fetch cross-site with matching origin", map[string]string{
@@ -125,13 +133,14 @@ func TestNoNetworkReachableReset(t *testing.T) {
 	}
 }
 
-// TestClientIPProxyHeaders: X-Forwarded-For is honored only when the
-// trust_proxy_headers setting is on.
+// TestClientIPProxyHeaders: X-Forwarded-For is honoured only with
+// trust_proxy_headers on, and only its rightmost entry.
 func TestClientIPProxyHeaders(t *testing.T) {
 	d := testDeps(t)
 	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
 	r.RemoteAddr = "172.16.0.2:9999" // the proxy
-	r.Header.Set("X-Forwarded-For", "198.51.100.4, 172.16.0.2")
+	// The client sent "203.0.113.66"; the proxy appended the address it saw.
+	r.Header.Set("X-Forwarded-For", "203.0.113.66, 198.51.100.4")
 
 	if ip := clientIP(d, r); ip != "172.16.0.2" {
 		t.Fatalf("trust off: want proxy address, got %q", ip)
@@ -142,7 +151,45 @@ func TestClientIPProxyHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ip := clientIP(d, r); ip != "198.51.100.4" {
-		t.Fatalf("trust on: want first X-Forwarded-For hop, got %q", ip)
+		t.Fatalf("trust on: want the rightmost X-Forwarded-For entry, got %q", ip)
+	}
+
+	// Rotating the client-supplied part must not change the bucket.
+	r2 := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	r2.RemoteAddr = "172.16.0.2:9999"
+	r2.Header.Set("X-Forwarded-For", "192.0.2.123, 198.51.100.4")
+	if ip := clientIP(d, r2); ip != "198.51.100.4" {
+		t.Fatalf("a spoofed leading entry changed the client address to %q", ip)
+	}
+	// A proxy that adds its own header line puts it after the client's.
+	r3 := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	r3.RemoteAddr = "172.16.0.2:9999"
+	r3.Header.Add("X-Forwarded-For", "192.0.2.200")
+	r3.Header.Add("X-Forwarded-For", "198.51.100.4")
+	if ip := clientIP(d, r3); ip != "198.51.100.4" {
+		t.Fatalf("multiple header lines: want the last line's entry, got %q", ip)
+	}
+	// A trailing empty entry falls back to the connection address.
+	r4 := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	r4.RemoteAddr = "172.16.0.2:9999"
+	r4.Header.Set("X-Forwarded-For", "198.51.100.4, ")
+	if ip := clientIP(d, r4); ip != "172.16.0.2" {
+		t.Fatalf("empty rightmost entry: want the connection address, got %q", ip)
+	}
+	// Only a valid IP counts, keyed canonically.
+	for _, tc := range []struct{ xff, want string }{
+		{"not-an-ip", "172.16.0.2"},
+		{strings.Repeat("a", 4096), "172.16.0.2"},
+		{"2001:DB8:0:0::1", "2001:db8::1"},
+		{"198.51.100.4:51234", "198.51.100.4"},
+		{"[2001:db8::1]:443", "2001:db8::1"},
+	} {
+		rr := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+		rr.RemoteAddr = "172.16.0.2:9999"
+		rr.Header.Set("X-Forwarded-For", tc.xff)
+		if ip := clientIP(d, rr); ip != tc.want {
+			t.Fatalf("X-Forwarded-For %.40q: want %q, got %q", tc.xff, tc.want, ip)
+		}
 	}
 
 	// X-Forwarded-Proto gates the Secure cookie flag the same way.
@@ -162,17 +209,24 @@ func TestClientIPProxyHeaders(t *testing.T) {
 func TestLimiterEviction(t *testing.T) {
 	resetTestLimiter()
 	now := time.Now()
-	recordLoginFailure("192.0.2.1", now.Add(-2*time.Hour)) // stale, not locked
-	recordLoginFailure("192.0.2.2", now.Add(-10*time.Minute))
+	recordLoginFailure(t, "192.0.2.1", now.Add(-2*time.Hour)) // stale, not locked
+	recordLoginFailure(t, "192.0.2.2", now.Add(-10*time.Minute))
+	// An attempt still being evaluated must never be evicted, however old.
+	inFlight, _ := reserveAttempt("192.0.2.4", now.Add(-2*time.Hour))
+	defer inFlight.release()
 	// Trigger cleanup via a fresh failure from another IP.
-	recordLoginFailure("192.0.2.3", now)
+	recordLoginFailure(t, "192.0.2.3", now)
 
 	loginLimiter.mu.Lock()
 	_, stale := loginLimiter.byIP["192.0.2.1"]
 	_, recent := loginLimiter.byIP["192.0.2.2"]
+	_, held := loginLimiter.byIP["192.0.2.4"]
 	loginLimiter.mu.Unlock()
 	if stale {
 		t.Fatal("entry idle >1h should be evicted")
+	}
+	if !held {
+		t.Fatal("an entry with an attempt in flight must survive cleanup")
 	}
 	if !recent {
 		t.Fatal("recent entry must survive cleanup")

@@ -2297,6 +2297,7 @@ export async function renderAccountSection(): Promise<void> {
     </div>
     <div class="acct-panel" id="s-acct-disable" hidden>
       <input class="form-input" type="password" id="s-acct-disablepw" placeholder="Current password" autocomplete="current-password" style="max-width:220px"/>
+      ${data.totp_enabled ? `<input class="form-input" type="text" id="s-acct-disablecode" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" style="max-width:120px"/>` : ''}
       <button type="button" class="btn btn-danger btn-sm" onclick="accountDisable()">Confirm &mdash; turn login off</button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-acct-disable')">Cancel</button>
     </div>`;
@@ -2573,17 +2574,23 @@ export async function accountChangePassword(): Promise<void> {
   }
 }
 
-/** Disable login protection (remove the account). */
+/** Disable login protection (remove the account). Needs a code when 2FA is on. */
 export async function accountDisable(): Promise<void> {
   acctError('');
   const pw = acctVal('s-acct-disablepw');
+  const needsCode = document.getElementById('s-acct-disablecode') !== null;
+  const code = acctVal('s-acct-disablecode').trim();
   if (!pw) { acctError('Enter your current password to confirm.'); return; }
-  const { ok, data, status } = await api.authDisable(pw);
+  if (needsCode && !code) { acctError('Enter your password and a current code.'); return; }
+  const { ok, data, status } = await api.authDisable(pw, code || undefined);
   if (ok && data.ok) {
     _sd?.toast('Login protection disabled', 'success');
     await renderAccountSection();
   } else {
-    acctError(status === 401 ? 'Current password is incorrect.' : 'Could not disable login protection.');
+    acctError(status === 401 && data.error === 'totp_invalid' ? 'That code is not valid.'
+      : status === 401 ? 'Current password is incorrect.'
+      : status === 429 ? 'Too many failed attempts. Try again later.'
+      : 'Could not disable login protection.');
   }
 }
 
