@@ -6,6 +6,12 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tracker-supplied group colours and icons are validated** before they reach
+  the page, a few more tracker-derived values are escaped, and responses now
+  carry a basic Content-Security-Policy.
+
 ## [Beta-20261011]
 
 ### Changed

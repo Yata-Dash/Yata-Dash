@@ -17,6 +17,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Referrer-Policy", "no-referrer")
+		// script-src/style-src are deliberately unrestricted: the frontend relies
+		// on inline scripts, handlers and styles. esc()/jsId()/safeUrl() are the
+		// XSS defence until that's refactored.
+		h.Set("Content-Security-Policy", "object-src 'none'; base-uri 'none'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -71,4 +75,3 @@ func crossSite(r *http.Request) bool {
 	}
 	return !strings.EqualFold(u.Host, r.Host)
 }
-

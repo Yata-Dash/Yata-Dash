@@ -89,12 +89,26 @@ func TestSecurityHeaders(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	for hdr, want := range map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":        "SAMEORIGIN",
-		"Referrer-Policy":        "no-referrer",
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "SAMEORIGIN",
+		"Referrer-Policy":         "no-referrer",
+		"Content-Security-Policy": "object-src 'none'; base-uri 'none'; frame-ancestors 'self'",
 	} {
 		if got := rec.Header().Get(hdr); got != want {
 			t.Errorf("%s = %q, want %q", hdr, got, want)
+		}
+	}
+}
+
+// The CSP reaches both an API reply and the app shell through NewRouter.
+func TestRouterSendsCSP(t *testing.T) {
+	router := NewRouter(testDeps(t))
+	const want = "object-src 'none'; base-uri 'none'; frame-ancestors 'self'"
+	for _, path := range []string{"/api/version", "/"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("Content-Security-Policy"); got != want {
+			t.Errorf("GET %s: Content-Security-Policy = %q (status %d), want %q", path, got, rec.Code, want)
 		}
 	}
 }
