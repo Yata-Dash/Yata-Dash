@@ -473,11 +473,7 @@ export function renderCard(
   }
 
   el.innerHTML = header + body;
-  // The card's own drag/drop listeners were attached once, when renderGrid
-  // created the element, and survive this innerHTML swap. Only the handle is
-  // new, so only the handle is wired here — re-attaching the card listeners on
-  // every render stacked five more per refresh, each dragover sweeping every
-  // card again.
+  // Card listeners survive the innerHTML swap; only the handle is new. Re-attaching them stacked up.
   wireDragHandle(el);
   // Per-card expand for the collapsed extras. Local to the card and not
   // persisted: it's a peek, not a preference — the next render starts closed.
@@ -1059,15 +1055,10 @@ function skelStats(): string {
   <div class="stats-grid">${Array(12).fill('<div class="stat-item"><div class="skeleton" style="height:30px"></div></div>').join('')}</div>`;
 }
 
-/** Card-level drag/drop listeners. Attached ONCE per card element, when
- *  renderGrid creates it; renderCard only replaces the card's innerHTML, so
- *  these outlive every re-render. The handle inside is wired per render by
- *  wireDragHandle. */
+/** Card-level drag/drop listeners. Attach ONCE, in renderGrid; they outlive re-renders. */
 function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): void {
   el.draggable = false;
-  // Reordering is meaningless while a sort is applied (see wireDragHandle).
-  // Changing the order re-runs renderGrid, which builds fresh card elements, so
-  // a card created under a sort never needs these added later.
+  // No reordering under a sort; changing the order rebuilds cards via renderGrid.
   if (!customOrderActive()) return;
 
   el.addEventListener('dragstart', e => {
@@ -1101,8 +1092,7 @@ function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): vo
   });
 }
 
-/** Wire the drag handle of a freshly rendered card. The handle is part of the
- *  card's innerHTML, so it is a new element after every renderCard. */
+/** Wire the drag handle, which is a new element after every renderCard. */
 function wireDragHandle(el: HTMLElement): void {
   // Only start dragging when the pointer is down on the drag handle
   el.draggable = false;

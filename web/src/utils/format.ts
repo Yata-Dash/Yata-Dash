@@ -26,15 +26,8 @@ export function fmtEtaDays(d: number, format?: string): string {
   return `${days}D`;
 }
 
-/** Format GiB value to a human-readable size string.
- *
- *  The unit is chosen on the magnitude, so a negative value (the aggregate
- *  buffer of a fleet that has downloaded more than it uploaded) reads
- *  "-2.00 TiB" rather than "-2048.00 GiB".
- *
- *  0 stays "—" on purpose: the aggregate cards, the main caller, start their
- *  totals at 0 and have no other way to say "no tracker has reported yet", and
- *  the goal-chip callers only pass values above 0. */
+/** Format GiB value to a human-readable size string. Unit follows magnitude, so negatives
+ *  work. 0 stays "—": the aggregate cards use it for "no tracker has reported yet". */
 export function fmtGib(gib: number): string {
   if (!gib || isNaN(gib)) return '—';
   if (Math.abs(gib) >= 1024) return (gib / 1024).toFixed(2) + ' TiB';

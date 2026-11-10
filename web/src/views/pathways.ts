@@ -268,9 +268,7 @@ export async function initPathways(): Promise<boolean> {
   const btn = document.getElementById('btn-pathways-view');
   if (btn) btn.style.display = '';
   renderDisclosure();
-  // boot() — and so this — runs again after every sign-in. The elements are
-  // static, so a second wiring doubled every handler: a chip expanded and
-  // collapsed in one click, and the pin button pinned then unpinned.
+  // boot() reruns after every sign-in; the elements are static, so wire them once.
   if (!wired) {
     wired = true;
     wireCombo();

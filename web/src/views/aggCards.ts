@@ -43,12 +43,7 @@ export function renderAggCards(
   const agg        = buildAggSeries(historyData);
   const avgSeedTime = totalSeeding > 0 ? weightedSeedSec / totalSeeding : null;
 
-  // 7-day change per card, off the same history points — no separate fetch.
-  // null when the data is too thin to diff (a fresh install, or a stat that
-  // hasn't recorded twice in the window yet). The summed cards diff each
-  // tracker against itself and add the results, rather than diffing the ends
-  // of the summed series: a tracker added mid-week would otherwise count its
-  // entire total as this week's change (see aggDeltas).
+  // 7-day change per card, null when too thin to diff. Summed per tracker (see fieldDelta).
   const sums       = aggDeltas(historyData);
   const deltaUp    = sums.up;
   const deltaDown  = sums.down;

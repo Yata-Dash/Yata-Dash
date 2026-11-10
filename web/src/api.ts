@@ -20,11 +20,8 @@ export type ApiResult<T> = { ok: boolean; status: number; data: T };
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) { onUnauthorized = fn; }
 
-/** Options for call(). timeoutMs bounds the whole exchange — the response AND
- *  reading its body — and a request that runs past it settles as a network
- *  failure (status 0). The pollers rely on it: they skip a tick while their
- *  last request is in flight, so one that never settled would stop polling
- *  until the page was reloaded. */
+/** timeoutMs bounds response and body read; past it the call settles as status 0.
+ *  Pollers skip ticks while a request is in flight, so a hung one would stop polling. */
 type CallOpts = RequestInit & { timeoutMs?: number };
 
 async function call<T>(path: string, opts: CallOpts = {}): Promise<ApiResult<T>> {
@@ -43,18 +40,14 @@ async function call<T>(path: string, opts: CallOpts = {}): Promise<ApiResult<T>>
         (data as { error?: string })?.error === 'unauthorized') onUnauthorized?.();
     return { ok: res.ok, status: res.status, data: data as T };
   } catch {
-    // Network failure (server unreachable) or timeout — callers must keep
-    // cached data.
+    // Network failure or timeout — callers must keep cached data.
     return { ok: false, status: 0, data: {} as T };
   } finally {
     clearTimeout(timer);
   }
 }
 
-// Timeouts for the polled requests (see CallOpts). The bulk stats refresh
-// waits on every tracker — up to 30 s each on the server, eight at a time,
-// plus any scrape fallback — so it gets the most room; a refresh that outlives
-// it still finishes on the server and shows on the next poll.
+// Bulk stats waits on every tracker server-side (30 s each, eight at a time), so it gets the most room.
 const STATS_TIMEOUT_MS = 5 * 60_000;
 const POLL_TIMEOUT_MS  = 60_000;
 

@@ -458,11 +458,8 @@ function mergeStatsEntry(id: string, fresh: TrackerStatsResponse) {
   state.setStatsCacheEntry(id, fresh);
 }
 
-/** Ticket for refreshAllStats. A forced refresh (the button) can start while a
- *  poll's request is still out; whichever reply lands last would otherwise
- *  win, so the poll's older snapshot could overwrite the forced one. Only the
- *  newest call paints — and it owns the spinner, so a superseded call leaves
- *  that alone too. */
+/** Ticket for refreshAllStats: only the newest call paints and owns the spinner, so a
+ *  slow poll can't overwrite a forced refresh. */
 let statsSeq = 0;
 
 /** Returns false when a newer refresh superseded this one (nothing painted). */
@@ -866,9 +863,7 @@ async function importConfigFile(input: HTMLInputElement) {
     toast('Config imported — previous config backed up', 'success');
     await loadSettings();
     await loadTrackers();
-    // The whole cycle, not just the stats: if this supersedes a poll in
-    // flight, that poll stops before its history, scrape-status and allowed
-    // profile-scrape follow-ups, so this one has to do them.
+    // The whole cycle: a superseded poll skips its follow-ups, so this one must do them.
     await fullRefreshCycle(true); // fresh config → force through the guard
     renderGridFull();
     renderTable();
@@ -921,16 +916,13 @@ function scheduleQuiInstanceLoad() {
 function updateSummary() { /* summary pills removed — agg cards cover totals */ }
 
 // ── Refresh scheduling ────────────────────────────────────────────────────
-/** Full refresh cycles currently running; the poller skips a tick while one
- *  is (see scheduleRefresh). */
+/** Full refresh cycles running; the poller skips a tick while any are. */
 let cyclesRunning = 0;
 
 async function fullRefreshCycle(force = false) {
   cyclesRunning++;
   try {
-    // Superseded by a newer cycle (the refresh button pressed mid-poll): that
-    // one does the rest, so this one stops rather than repeating its history
-    // load and firing the same profile scrapes twice.
+    // Superseded by a newer cycle: that one does the rest.
     if (!(await refreshAllStats(force))) return;
     // A refresh is when rules are evaluated, so it is also when the bubble can
     // become wrong. Reading it only at boot meant an alert raised while the app
@@ -948,10 +940,7 @@ async function fullRefreshCycle(force = false) {
 // Both pollers skip a tick while the login gate is up. Belt and braces with
 // stopBackgroundRefresh: that clears the timers when the gate opens, and this
 // covers any path that re-arms them while it is still showing.
-//
-// They also skip a tick while the previous one is still waiting on the server.
-// A poll is a "keep it fresh" nudge, not a request the user is waiting on, so
-// there is nothing to gain from queueing a second behind the first.
+// They also skip a tick while the previous one is still in flight.
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
@@ -961,16 +950,11 @@ function scheduleRefresh() {
   }, refreshMs());
 }
 
-/** The qui stats request in flight, if any. qui polls as often as once a
- *  second; when qui is slow to answer, firing regardless stacked requests up
- *  behind each other and let their replies paint in whatever order they
- *  landed. */
+/** The qui stats request in flight, if any. */
 let quiInFlight: Promise<void> | null = null;
 
-/** Every qui stats refresh goes through here, so at most one is ever out and
- *  replies can't arrive out of order. A refresh the user caused (a settings
- *  save, an instance toggled) waits for the one in flight and then runs, so
- *  what it paints is the last word; the poller passes `poll` and just skips. */
+/** At most one qui stats request out, so replies can't land out of order. User-caused
+ *  refreshes queue behind it; the poller passes `poll` and skips. */
 function refreshQui(poll = false): Promise<void> {
   if (quiInFlight) {
     if (poll) return quiInFlight;

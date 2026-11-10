@@ -44,15 +44,11 @@ function reEscape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Escape a raw message for display, wrapping each case-insensitive match of
- *  q in <mark>. The match runs on the RAW text and each piece is escaped on
- *  its own: searching already-escaped text found the "amp" inside "&amp;" (or
- *  "lt", "quot", "39") and wrapped half an entity, so the line rendered the
- *  entity's text instead of the character. */
+/** Escape raw text, wrapping matches of q in <mark>. Match on the RAW text, then escape
+ *  each piece: searching escaped text could split an entity like "&amp;". */
 function highlight(raw: string, q: string): string {
   if (!q) return esc(raw);
-  // A capturing group makes split() keep the matches: they land at the odd
-  // indices, the text between them at the even ones.
+  // The capturing group keeps matches in split(), at the odd indices.
   return raw.split(new RegExp(`(${reEscape(q)})`, 'gi'))
     .map((part, i) => (i % 2 ? `<mark class="log-hit">${esc(part)}</mark>` : esc(part)))
     .join('');

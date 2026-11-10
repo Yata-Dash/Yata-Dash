@@ -64,16 +64,9 @@ export function buildAggSeries(points: HistoryPoint[]): AggSeries {
 }
 
 /**
- * Window change of a summed field: Σ over trackers of (last − first), each
- * tracker diffed against ITSELF. Null when no tracker has two points to diff.
- *
- * Diffing the ends of the summed series instead (what edgeDelta does to the
- * buildAggSeries output) is wrong whenever the set of trackers changes inside
- * the window: a tracker whose first point falls mid-window is absent from the
- * first bucket and present in the last, so its whole lifetime total lands in
- * the "7d" chip — add a tracker with 40 TiB uploaded and the card claims
- * "+40 TiB · 7d". Per tracker, a newcomer contributes only what it moved
- * after Yata first recorded it.
+ * Window change of a summed field: Σ over trackers of (last − first), each tracker
+ * diffed against ITSELF, so one added mid-window doesn't count its lifetime total.
+ * Null when no tracker has two points.
  */
 export function fieldDelta(points: HistoryPoint[], field: string): number | null {
   const ends = new Map<string, { t0: number; v0: number; t1: number; v1: number; n: number }>();
@@ -95,9 +88,8 @@ export function fieldDelta(points: HistoryPoint[], field: string): number | null
   return any ? sum : null;
 }
 
-/** Window changes for the summed aggregate cards, per tracker (see
- *  fieldDelta). Buffer follows buildAggSeries' rule: recorded buffer points
- *  when there are any, otherwise derived as uploaded − downloaded. */
+/** Per-tracker window changes for the aggregate cards. Buffer falls back to
+ *  uploaded − downloaded when none is recorded, as in buildAggSeries. */
 export function aggDeltas(points: HistoryPoint[]): { up: number | null; down: number | null; buffer: number | null } {
   const up = fieldDelta(points, 'uploaded');
   const down = fieldDelta(points, 'downloaded');

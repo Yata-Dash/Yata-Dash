@@ -157,10 +157,7 @@ function toggle(force?: boolean): void {
   }
 }
 
-/** Set once the listeners below are attached. boot() runs again after every
- *  sign-in (a sign-out, or an expired session, re-shows the login gate), and
- *  wiring a second time stacked a second click handler on the bell: one click
- *  toggled the panel open and straight back shut. */
+/** boot() reruns after every sign-in; wiring twice made one bell click open and shut the panel. */
 let wired = false;
 
 /** Wire the panel up once, at startup. */
