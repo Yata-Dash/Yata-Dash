@@ -1,7 +1,10 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +37,12 @@ func registerStats(r chi.Router, d *Deps) {
 // page reloads) goes through the min-age guard below so those redundant
 // callers coalesce into ~one API call per configured refresh interval.
 func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsResponse {
+	return refreshTrackerInCycle(d, t, force, nil)
+}
+
+// refreshTrackerInCycle is refreshTracker within a multi-tracker pass; cyc
+// (nil for a lone refresh) holds what the pass shares.
+func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCycle) models.TrackerStatsResponse {
 	resp := models.TrackerStatsResponse{
 		TrackerID: t.ID,
 		FetchedAt: time.Now().Unix(),
@@ -115,16 +124,25 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		return resp
 	}
 
-	// Min-age guard — coalesce non-forced callers. If we fetched this tracker's
-	// API successfully within the guard window, skip the network call and serve
-	// the last-stored merged stats instead. Manual (forced) refreshes bypass it.
+	// Held from the guard to the last record, else concurrent callers all pass
+	// the guard, all fetch, and one promotion fires twice. Forced refreshes
+	// take it too, so they read the group the previous refresh stored.
+	mu := lockRefresh(t.ID)
+	defer mu.Unlock()
+
+	// Min-age guard: serve stored stats and the last attempt's outcome (failures
+	// count too, so a down tracker isn't re-hit per poll). Bypassed when forced
+	// or when the connection settings changed, so a corrected key is tried at once.
+	conn := connFingerprint(t)
 	if !force {
 		if v, ok := lastFetchAt.Load(t.ID); ok {
-			if time.Since(v.(time.Time)) < autoRefreshMinAge(d) {
+			last := v.(fetchAttempt)
+			if last.conn == conn && time.Since(last.at) < autoRefreshMinAge(d) {
+				resp.ErrorKind, resp.Error = last.errKind, last.err
 				if merged, err := d.Stats.Merged(t.ID); err == nil {
 					resp.Fields = merged
-					resp.OK = true
-					resp.FetchedAt = v.(time.Time).Unix() // reflect the real last fetch
+					resp.OK = last.errKind == ""
+					resp.FetchedAt = last.at.Unix() // reflect the real last fetch
 					if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
 						resp.Rates = r
 					}
@@ -152,7 +170,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		recordRefreshCheck(d, t.ID, "api", kind, n)
 	}
 	if ferr == nil {
-		lastFetchAt.Store(t.ID, time.Now()) // gate future non-forced fetches
+		lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), conn: conn}) // gate future non-forced fetches
 		_ = d.Stats.SaveAPI(t.ID, data)
 		resp.OK = true
 		logFetchTransition(d, t, "")
@@ -176,6 +194,13 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	} else {
 		resp.ErrorKind = ferr.Kind
 		resp.Error = ferr.Error()
+		// A pre-flight failure sent nothing, so it clears the guard rather than
+		// gate, or an earlier success would keep reporting this tracker as fine.
+		if isPreflightKind(ferr.Kind) {
+			lastFetchAt.Delete(t.ID)
+		} else {
+			lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), conn: conn, errKind: ferr.Kind, err: resp.Error})
+		}
 		logFetchTransition(d, t, ferr.Kind)
 		recordConnection(d, t, "api", ferr.Kind)
 		// API failed — try a policy-respecting scrape fallback for main stats.
@@ -222,7 +247,7 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 		// same values against themselves.
 		if resp.OK {
 			evaluateTrackerTargets(d, t, resp.Fields, trends)
-			evaluateTrackerPins(d, t, resp.Fields, trends)
+			evaluateTrackerPins(d, t, resp.Fields, resp.Rates, trends, cyc)
 		}
 	}
 	return resp
@@ -283,10 +308,12 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 // evaluateTrackerTargets computes the tracker's current target rows (base
 // targets + its target group's min_counts/any_of, see targeteval.go) and
 // feeds them to the alert engine's per-row edge tracker, which fires a
-// target_met event for each row crossing unmet→met. Cheap no-op when the
-// tracker isn't tracking anything.
+// target_met event for each row crossing unmet→met. A targetless tracker
+// still gets an empty pass so the engine forgets old rows; a re-added target
+// must prime, not fire on a stale "unmet".
 func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
 	if len(t.Targets) == 0 && t.TargetGroup == "" {
+		d.Alerts.EvaluateTargets(t, merged, nil, 0, 0, trends)
 		return
 	}
 	var groups []defs.GroupDef
@@ -294,9 +321,6 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 		groups = groupsFor(d, td, t.ID)
 	}
 	rows, met, total := evaluateTargetRows(t, merged, groups)
-	if len(rows) == 0 {
-		return
-	}
 	d.Alerts.EvaluateTargets(t, merged, rows, met, total, trends)
 }
 
@@ -306,7 +330,8 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 // measured from THIS tracker (that is whose numbers just moved) and uses the
 // rest to know what is still pinned. Nothing to do when nothing is pinned,
 // which is the common case and skips the user-tracker mapping entirely.
-func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
+// rates and cyc feed refreshCycle.pinUsers.
+func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, rates map[string]float64, trends notify.TrendContext, cyc *refreshCycle) {
 	pins := d.Cfg.Settings().PathwayPins
 	if len(pins) == 0 || d.Paths == nil {
 		// An empty pass, so the engine forgets every chain: a pin removed and
@@ -314,7 +339,7 @@ func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, t
 		d.Alerts.EvaluatePins(t, merged, nil, trends)
 		return
 	}
-	users := mapUserTrackers(d)
+	users := cyc.pinUsers(d, t, merged, rates)
 	groupsFor, inviteReqsFor := defLookups(d)
 	rows := make([]notify.PinRow, 0, len(pins))
 	for _, pin := range pins {
@@ -333,17 +358,76 @@ func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, t
 	d.Alerts.EvaluatePins(t, merged, rows, trends)
 }
 
+// refreshCycle is state shared by one refresh pass (RunRefreshCycle or a bulk
+// /api/stats request). nil is a lone refresh.
+type refreshCycle struct {
+	mu    sync.Mutex
+	built bool
+	users []pathways.UserTracker
+}
+
+// pinUsers returns mapUserTrackers for pin evaluation after t's refresh. Built
+// once per pass and patched per tracker, since rebuilding per tracker costs N²
+// store reads; within a pass only the refreshed tracker's stats move.
+func (c *refreshCycle) pinUsers(d *Deps, t models.Tracker, merged models.MergedStats, rates map[string]float64) []pathways.UserTracker {
+	if c == nil {
+		return mapUserTrackers(d)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.built {
+		c.users = mapUserTrackers(d)
+		c.built = true
+	} else {
+		for i := range c.users {
+			// Disabled entries carry no stats; guards a mid-pass toggle.
+			if c.users[i].TrackerID == t.ID && !c.users[i].Disabled {
+				c.users[i].Stats = statsFromMerged(merged)
+				c.users[i].Rates = pathwayRates(rates)
+			}
+		}
+	}
+	// A copy, as bulk refreshes run concurrently and patch the shared slice.
+	return slices.Clone(c.users)
+}
+
 // RefreshFloorMinutes is the lowest the automatic API-refresh interval can be
 // set to. The manual refresh button and Tracker Test bypass the interval
 // entirely; this floor only bounds the unattended background cadence.
 const RefreshFloorMinutes = 15
 
-// lastFetchAt records the last SUCCESSFUL API fetch time per tracker. In
-// memory only — a restart clears it, which just means the first cycle after
-// boot refetches everyone (desirable). It powers the min-age guard that keeps
-// the background loop, open dashboards, and page reloads from stacking into
-// many API calls per interval.
-var lastFetchAt sync.Map // trackerID -> time.Time
+// lastFetchAt records each tracker's last API attempt that reached it, for the
+// min-age guard. In memory only; access only under the tracker's refresh lock.
+var lastFetchAt sync.Map // trackerID -> fetchAttempt
+
+// fetchAttempt is one lastFetchAt entry; errKind/err are "" on success. conn
+// ties it to the settings used, so it never gates a refresh with edited ones.
+type fetchAttempt struct {
+	at           time.Time
+	conn         string
+	errKind, err string
+}
+
+// connFingerprint digests the settings an API fetch depends on, so the guard
+// holds no copy of the key or cookie.
+func connFingerprint(t models.Tracker) string {
+	h := sha256.New()
+	for _, s := range []string{t.URL, t.Type, t.APIKey, t.SessionCookie} {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// refreshLocks serialises refreshTracker per tracker (see where it is taken).
+var refreshLocks sync.Map // trackerID → *sync.Mutex
+
+func lockRefresh(trackerID string) *sync.Mutex {
+	m, _ := refreshLocks.LoadOrStore(trackerID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu
+}
 
 // autoRefreshMinAge is the guard window: a shade under the configured refresh
 // interval (90%), so the scheduled tick still fires while off-phase redundant
@@ -551,11 +635,12 @@ func RunRefreshCycle(d *Deps) {
 	// One qui pull feeds every tracker's seedsize fallback for this cycle
 	// (cheap no-op when the mode is off; see quiseed.go).
 	refreshQUI(d)
+	cyc := &refreshCycle{}
 	for _, t := range d.Cfg.Trackers() {
 		if !t.Enabled {
 			continue
 		}
-		_ = refreshTracker(d, t, false) // background loop → guarded
+		_ = refreshTrackerInCycle(d, t, false, cyc) // background loop → guarded
 	}
 }
 
@@ -572,6 +657,7 @@ func bulkStats(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		force := r.URL.Query().Get("force") != ""
 		trackers := d.Cfg.Trackers()
+		cyc := &refreshCycle{}
 		results := make(map[string]models.TrackerStatsResponse, len(trackers))
 		var mu sync.Mutex
 		var wg sync.WaitGroup
@@ -588,7 +674,7 @@ func bulkStats(d *Deps) http.HandlerFunc {
 				defer wg.Done()
 				sem <- struct{}{}        // acquire a slot (blocks past the cap)
 				defer func() { <-sem }() // release
-				res := refreshTracker(d, t, force)
+				res := refreshTrackerInCycle(d, t, force, cyc)
 				mu.Lock()
 				results[t.ID] = res
 				mu.Unlock()

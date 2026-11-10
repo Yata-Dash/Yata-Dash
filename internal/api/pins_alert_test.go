@@ -66,7 +66,7 @@ func TestPinnedPathReadyFiresOnceOnTheTransition(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		evaluateTrackerPins(d, owner, merged, notify.TrendContext{})
+		evaluateTrackerPins(d, owner, merged, nil, notify.TrendContext{}, nil)
 		return decodeAlerts(t, getJSON(t, d, "/api/alerts")).Total
 	}
 
@@ -101,7 +101,7 @@ func TestUnpinningEverythingForgetsPinState(t *testing.T) {
 	// Seed the engine with a remembered "not ready" for a chain.
 	d.Alerts.EvaluatePins(owner, models.MergedStats{}, []notify.PinRow{{Key: "A → B", TrackerID: owner.ID, Ready: false}}, notify.TrendContext{})
 	// No pins in settings → the refresh path must clear it, not skip it.
-	evaluateTrackerPins(d, owner, models.MergedStats{}, notify.TrendContext{})
+	evaluateTrackerPins(d, owner, models.MergedStats{}, nil, notify.TrendContext{}, nil)
 	// Re-pinned and immediately ready: a first sighting primes, never fires.
 	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{Rules: []models.AlertRule{{
 		ID: "r1", Name: "Ready", Enabled: true, Match: "all",
