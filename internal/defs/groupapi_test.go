@@ -198,9 +198,20 @@ func TestSafeColor(t *testing.T) {
 }
 
 func TestSafeIconClass(t *testing.T) {
-	for _, ok := range []string{"fas fa-leaf", "fa-solid fa-seedling", "icon_1"} {
+	for _, ok := range []string{"fas fa-leaf", "fa-solid fa-seedling", "fab fa-discord", "fa fa-2x"} {
 		if got := SafeIconClass(ok); got != ok {
 			t.Errorf("SafeIconClass(%q) = %q, want it kept", ok, got)
+		}
+	}
+	// Non-Font Awesome classes are dropped: they could only match Yata's CSS.
+	for in, want := range map[string]string{
+		"fas fa-upload text-success": "fas fa-upload",
+		"login-overlay":              "",
+		"fa-solid login-overlay":     "fa-solid",
+		"fail icon_1":                "",
+	} {
+		if got := SafeIconClass(in); got != want {
+			t.Errorf("SafeIconClass(%q) = %q, want %q", in, got, want)
 		}
 	}
 	for _, bad := range []string{"", `fa" onclick="x`, "fa<b>", "fa;x", strings.Repeat("a", 61)} {

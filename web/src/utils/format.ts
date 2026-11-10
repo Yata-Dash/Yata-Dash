@@ -371,9 +371,11 @@ export function safeColor(raw: unknown): string {
 
 /** A class list safe for a class attribute (tracker/def icons), or ''. */
 export function safeIconClass(raw: unknown): string {
-  // Rejected, not stripped: stripping could turn a malformed value into a valid one.
+  // A malformed value is rejected, not stripped, so it cannot be cleaned into a valid one.
   const s = String(raw ?? '').trim();
-  return s.length <= 60 && /^[\w\s-]+$/.test(s) ? s : '';
+  if (s.length > 60 || !/^[\w\s-]+$/.test(s)) return '';
+  // Font Awesome tokens only: other classes could pull in Yata's own CSS.
+  return s.split(/\s+/).filter(t => /^(fa|fa[srbldt]|fas[srlt]|fa(-[a-z0-9]+)+)$/.test(t)).join(' ');
 }
 
 /** Minimal numeric format — returns null for non-numeric values */

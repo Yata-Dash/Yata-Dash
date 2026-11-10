@@ -135,6 +135,9 @@ var (
 	varColorRe  = regexp.MustCompile(`^var\(--[\w-]+\)$`)
 	wordColorRe = regexp.MustCompile(`^[a-zA-Z]+$`)
 	iconClassRe = regexp.MustCompile(`^[\w\s-]+$`)
+	// Font Awesome tokens only: any other class (`login-overlay`) would pull in
+	// Yata's own CSS and could cover the page.
+	faTokenRe = regexp.MustCompile(`^(fa|fa[srbldt]|fas[srlt]|fa(-[a-z0-9]+)+)$`)
 )
 
 // SafeColor returns s trimmed if it is a plain CSS colour (hex, numeric
@@ -151,13 +154,21 @@ func SafeColor(s string) string {
 	return ""
 }
 
-// SafeIconClass returns s trimmed if it is a list of class names, else "".
+// SafeIconClass returns the Font Awesome classes in s, or "" if s is not a
+// plain class list. Other classes are dropped (e.g. a tracker's own
+// "text-success"), since they can only match Yata's stylesheet.
 func SafeIconClass(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 60 || !iconClassRe.MatchString(s) {
 		return ""
 	}
-	return s
+	var keep []string
+	for _, tok := range strings.Fields(s) {
+		if faTokenRe.MatchString(tok) {
+			keep = append(keep, tok)
+		}
+	}
+	return strings.Join(keep, " ")
 }
 
 // requirementsFromAPI converts one rank's thresholds. Order within min_counts
