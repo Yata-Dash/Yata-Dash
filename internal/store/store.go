@@ -74,10 +74,8 @@ func (d *DB) migrate() error {
 		// slow day can't skew it, and it survives restarts so projections are
 		// available from setup. Tiny: ~1 row/field/day.
 		//
-		// recorded_at is when that latest value was actually sampled. `day`
-		// is only the bucket's label: a rate measured between two midnight
-		// labels mistakes 23:00→00:30 for a whole day, so rate maths uses
-		// this instead (see DailySamplesSince).
+		// recorded_at is the value's real sample time; rate maths uses it, not
+		// the `day` label (see DailySamplesSince).
 		`CREATE TABLE IF NOT EXISTS history_daily (
 			tracker_id  TEXT NOT NULL,
 			day         INTEGER NOT NULL,         -- unix seconds at UTC midnight
@@ -271,14 +269,9 @@ func (d *DB) migrate() error {
 	}); err != nil {
 		return err
 	}
-	// history_daily's real sample time arrived after the table shipped.
-	// Pre-migration rows are backfilled from fine history — the daily value
-	// was written alongside a fine sample, so the day's newest fine point IS
-	// its sample time — and, where fine history has already been pruned,
-	// from the end of that day (capped at now, for today's row): a full day's
-	// last value is sampled close to midnight, which is a far better guess
-	// than the label at its start. Only rows still at 0 are touched, so after
-	// the first start this matches nothing.
+	// Backfill history_daily.recorded_at: the day's newest fine point is its
+	// sample time; if pruned, use the end of the day (capped at now). Only
+	// rows still at 0 are touched.
 	if err := d.addColumns("history_daily", map[string]string{
 		"recorded_at": "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
@@ -533,8 +526,7 @@ func (d *DB) PruneHistory(before time.Time) error {
 }
 
 // TrackerHistorySince returns one tracker's fine-grained points since `since`,
-// oldest first (the weekly digest's deltas). Growth rates only need each
-// field's two ends and use FieldEndpointsSince instead.
+// oldest first (the weekly digest's deltas).
 func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT recorded_at, field, value FROM history WHERE tracker_id = ? AND recorded_at >= ? ORDER BY recorded_at ASC`,
@@ -555,19 +547,15 @@ func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPo
 }
 
 // FieldEndpointsSince returns, per field, the oldest and newest fine points
-// recorded at or after since — oldest first, collapsed to one point when both
-// are the same instant. Rate and drop-% maths only ever reads a series' two
-// ends, so this answers it with two index seeks per field on
-// idx_history_tracker (tracker_id, field, recorded_at) instead of loading and
-// sorting the tracker's whole window. A field with no points is absent.
+// since `since` (one point if they coincide; absent if none), using two
+// index seeks per field instead of loading the whole window.
 func (d *DB) FieldEndpointsSince(trackerID string, fields []string, since time.Time) (map[string][]HistoryPoint, error) {
 	out := map[string][]HistoryPoint{}
 	if len(fields) == 0 {
 		return out, nil
 	}
-	// One statement for every field so a call is one round trip. Each arm is
-	// its own LIMIT 1 subquery: that shape is what lets SQLite seek straight
-	// to the end of the field's index range rather than scan it.
+	// One round trip. Each arm is its own LIMIT 1 subquery so SQLite seeks to
+	// the end of the index range rather than scanning it.
 	const arm = `SELECT * FROM (SELECT field, recorded_at, value FROM history
 		WHERE tracker_id = ? AND field = ? AND recorded_at >= ? ORDER BY recorded_at %s LIMIT 1)`
 	parts := make([]string, 0, 2*len(fields))
@@ -652,11 +640,8 @@ func (d *DB) DailySince(trackerID string, since time.Time) ([]HistoryPoint, erro
 	return out, rows.Err()
 }
 
-// DailySamplesSince is DailySince for rate maths: the same rows, but
-// RecordedAt carries when each day's value was actually sampled rather than
-// the day's UTC-midnight label. Each row holds the day's LAST value, so
-// measuring a span between labels is wrong by up to a day — yesterday 23:00
-// to today 00:30 would read as a full day of growth.
+// DailySamplesSince is DailySince with RecordedAt set to each value's real
+// sample time, not the midnight label, which can be off by up to a day.
 func (d *DB) DailySamplesSince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT recorded_at, field, value FROM history_daily WHERE tracker_id = ? AND day >= ? ORDER BY day ASC`,

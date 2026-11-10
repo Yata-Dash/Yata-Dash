@@ -178,9 +178,8 @@ func TestLayerUpdatedAt(t *testing.T) {
 	}
 }
 
-// TestFieldEndpointsSinceMatchesFullSeries: the endpoint lookup must give the
-// same two ends as loading the whole window and grouping it by field — it
-// replaced exactly that in the growth-rate path, which reads nothing else.
+// TestFieldEndpointsSinceMatchesFullSeries: the ends match those of the full
+// series grouped by field.
 func TestFieldEndpointsSinceMatchesFullSeries(t *testing.T) {
 	db := testDB(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -231,9 +230,8 @@ func TestFieldEndpointsSinceMatchesFullSeries(t *testing.T) {
 	}
 }
 
-// TestDailyRecordsSampleTime: each daily row carries when its (latest) value
-// was sampled, not just the UTC-midnight label — and a later write that day
-// moves it along with the value.
+// TestDailyRecordsSampleTime: a later write that day moves the sample time
+// along with the value.
 func TestDailyRecordsSampleTime(t *testing.T) {
 	db := testDB(t)
 	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
@@ -256,9 +254,8 @@ func TestDailyRecordsSampleTime(t *testing.T) {
 	}
 }
 
-// TestDailySampleTimeBackfill: a database from before history_daily had a
-// sample time gets one on open — from fine history where it still exists,
-// else the end of that day.
+// TestDailySampleTimeBackfill: legacy rows get a sample time from fine
+// history, else the end of that day.
 func TestDailySampleTimeBackfill(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
 	db, err := Open(path)
@@ -273,8 +270,8 @@ func TestDailySampleTimeBackfill(t *testing.T) {
 		`CREATE TABLE history_daily (tracker_id TEXT NOT NULL, day INTEGER NOT NULL,
 			field TEXT NOT NULL, value REAL NOT NULL, PRIMARY KEY (tracker_id, day, field))`,
 		fmt.Sprintf(`INSERT INTO history_daily VALUES ('x', %d, 'uploaded', 1), ('x', %d, 'ratio', 2)`, day, day),
-		// The day's fine samples for uploaded (plus the next day's first, which
-		// must not count); ratio's have already been pruned.
+		// uploaded's fine samples, plus the next day's first (must not count);
+		// ratio's are pruned.
 		fmt.Sprintf(`INSERT INTO history VALUES ('x', %d, 'uploaded', 0.5), ('x', %d, 'uploaded', 1),
 			('x', %d, 'uploaded', 9)`, day+3600, sample, day+86400),
 	} {

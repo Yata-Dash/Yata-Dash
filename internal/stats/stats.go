@@ -429,9 +429,8 @@ type DeclineSignals struct {
 	SeedingDrop7dPct  *float64 // same for the seeding count
 }
 
-// DeclineSignals computes the standing-guard trend signals from the same two
-// history queries GrowthRates uses (see rateHistory) so a rule evaluation
-// pass never issues a query per signal.
+// DeclineSignals computes the standing-guard trend signals from the same
+// queries GrowthRates uses (see rateHistory), not one query per signal.
 func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	now := time.Now().UTC()
 	byDay, byFine := e.rateHistory(trackerID, declineFineFields)
@@ -445,12 +444,9 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	}
 
 	// Truncate to UTC midnight before subtracting whole days: history_daily
-	// buckets are UTC days (see utcDay), so comparing against a plain "now
-	// minus 7×24h" instant would inconsistently include/exclude the 7-day-old
-	// bucket depending on what time of day it is right now. The daily points
-	// carry their sample time, which always falls inside their own day, so
-	// filtering them against a midnight cut selects exactly the buckets from
-	// that day on.
+	// buckets are UTC days (see utcDay), so a plain "now minus 7×24h" would
+	// include or exclude the 7-day-old bucket depending on the time of day.
+	// Each daily sample time falls inside its own day, so a midnight cut works.
 	dropSince := now.Truncate(24*time.Hour).AddDate(0, 0, -dropWindowDays)
 	if p, ok := dropPct(windowed(byDay["seed_size"], dropSince), byFine["seed_size"]); ok {
 		out.SeedSizeDrop7dPct = &p
@@ -461,23 +457,17 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	return out
 }
 
-// growthFields are GrowthRates' one-directional (positive-only) fields;
-// growthFineFields adds its signed buffer entry, and declineFineFields are
-// what DeclineSignals reads. Named so the fine-history lookup asks for
-// exactly the fields the maths will read.
+// Fields each caller reads, so the fine-history lookup fetches only those.
+// growthFields are positive-only; growthFineFields adds the signed buffer.
 var (
 	growthFields      = []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"}
 	growthFineFields  = append(append([]string{}, growthFields...), "buffer")
 	declineFineFields = []string{"ratio", "buffer", "seed_size", "seeding"}
 )
 
-// rateHistory loads what GrowthRates and DeclineSignals measure from, grouped
-// by field: the daily rollups over the stable window, stamped with each day's
-// real sample time, and — for the young-tracker fallback — just the oldest
-// and newest fine point of each requested field in the fine window. Every
-// consumer (spanRate, dropPctFromPoints) reads only a series' two ends, so
-// fetching the ends is the same answer as the whole series without loading a
-// week of 15-minute samples per call.
+// rateHistory returns, by field, the daily rollups (at real sample times)
+// and just the oldest and newest fine points. The rate maths only reads a
+// series' two ends, so this avoids loading a week of 15-minute samples.
 func (e *Engine) rateHistory(trackerID string, fineFields []string) (byDay, byFine map[string][]store.HistoryPoint) {
 	now := time.Now().UTC()
 	daily, _ := e.DB.DailySamplesSince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))

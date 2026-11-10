@@ -8,18 +8,15 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
-// benchFields mirrors what a real refresh records: the projectable stats plus
-// the rest of the numeric fields that share the history index, so the
-// benchmark's index has the shape a live database does.
+// benchFields mirrors a real refresh, so the history index has a live shape.
 var benchFields = []string{
 	"uploaded", "downloaded", "buffer", "ratio", "seed_size", "seeding",
 	"leeching", "bonus_points", "seeding_points", "uploads_approved",
 	"snatched", "hnr", "freeleech_tokens",
 }
 
-// seedRateBench fills a temp database with a fortnight of 15-minute fine
-// history (the full retention window) plus daily rollups for one tracker —
-// the worst case GrowthRates/DeclineSignals see on every call.
+// seedRateBench fills a full fortnight of 15-minute history plus daily
+// rollups: the worst case for GrowthRates/DeclineSignals.
 func seedRateBench(b *testing.B) *Engine {
 	b.Helper()
 	db, err := store.Open(filepath.Join(b.TempDir(), "bench.db"))
