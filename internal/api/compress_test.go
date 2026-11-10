@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -110,6 +111,9 @@ func TestStaticCompressionAndRanges(t *testing.T) {
 	}
 	if ce := part.Header().Get("Content-Encoding"); ce != "" {
 		t.Fatalf("range response Content-Encoding = %q, want none", ce)
+	}
+	if !slices.Contains(part.Header().Values("Vary"), "Accept-Encoding") {
+		t.Errorf("range response Vary = %q, want Accept-Encoding like the compressed path", part.Header().Values("Vary"))
 	}
 	if !bytes.Equal(part.Body.Bytes(), js[:10]) {
 		t.Fatalf("range body = %q, want %q", part.Body.Bytes(), js[:10])

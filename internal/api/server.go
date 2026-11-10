@@ -48,16 +48,19 @@ var compressible = []string{
 
 // compressResponses gzips (or deflates) responses for clients that accept it.
 // The dashboard's /api/history/series alone is ~1.8 MB of JSON on every page
-// load, and repetitive JSON shrinks by an order of magnitude.
+// load; BenchmarkCompressHistorySeries measures it shrinking about fivefold.
 //
 // Range requests bypass it: http.FileServer answers them with a 206 whose
 // Content-Range counts bytes of the file as stored, and gzipping that slice
 // would hand the client bytes that match neither the range nor a decodable
-// stream.
+// stream. The bypass still adds Vary: Accept-Encoding, as the compressed path
+// does, so a cache never hands this identity response to a client that asked
+// for gzip, or the other way round.
 func compressResponses(next http.Handler) http.Handler {
 	compressed := middleware.Compress(5, compressible...)(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Range") != "" {
+			w.Header().Add("Vary", "Accept-Encoding")
 			next.ServeHTTP(w, r)
 			return
 		}

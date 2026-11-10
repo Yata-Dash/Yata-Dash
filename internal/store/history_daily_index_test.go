@@ -59,9 +59,9 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 }
 
-// TestPragmas: WAL is on (which is what makes synchronous=NORMAL safe — a
-// crash can lose the last commits but never corrupt the database) and
-// synchronous is NORMAL rather than the FULL default.
+// TestPragmas: WAL is on, and synchronous is still FULL — security state
+// (sessions, passwords, API tokens) shares the connection, so a commit must
+// survive a power cut (see Open).
 func TestPragmas(t *testing.T) {
 	db := testDB(t)
 	var mode string
@@ -75,8 +75,8 @@ func TestPragmas(t *testing.T) {
 	if err := db.sql.QueryRow(`PRAGMA synchronous`).Scan(&sync); err != nil {
 		t.Fatal(err)
 	}
-	if sync != 1 { // 0 OFF, 1 NORMAL, 2 FULL, 3 EXTRA
-		t.Errorf("synchronous = %d, want 1 (NORMAL)", sync)
+	if sync != 2 { // 0 OFF, 1 NORMAL, 2 FULL, 3 EXTRA
+		t.Errorf("synchronous = %d, want 2 (FULL)", sync)
 	}
 }
 
@@ -127,8 +127,9 @@ func BenchmarkSeriesDailyAllTrackers(b *testing.B) {
 	}
 }
 
-// BenchmarkAddHistory: one fine-history write (a transaction per call), which
-// is what synchronous=NORMAL speeds up by not fsyncing every commit.
+// BenchmarkAddHistory: one fine-history write (a transaction per call) — the
+// commit cost that synchronous=NORMAL would cut, and why Open keeps FULL
+// anyway.
 func BenchmarkAddHistory(b *testing.B) {
 	db, err := Open(filepath.Join(b.TempDir(), "bench.db"))
 	if err != nil {

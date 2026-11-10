@@ -21,12 +21,13 @@ type DB struct {
 
 // Open opens (creating if needed) the database at path and migrates the schema.
 func Open(path string) (*DB, error) {
-	// synchronous(NORMAL): under WAL it fsyncs at checkpoints rather than on
-	// every commit. A power cut can lose the last few commits but cannot
-	// corrupt the database — the right trade here, where nearly every write
-	// is a history sample or rollup the next poll rewrites anyway. It is
-	// per-connection, hence in the DSN rather than a one-off PRAGMA.
-	h, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
+	// synchronous stays at the FULL default, deliberately. NORMAL would skip
+	// the fsync on each commit under WAL, and a power cut could then roll back
+	// the last few commits. Most writes are history samples the next poll
+	// rewrites, but this one connection also carries password changes,
+	// session deletions and API-token revocations, and losing one of those
+	// would bring a credential the user had revoked back to life.
+	h, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
 	}
