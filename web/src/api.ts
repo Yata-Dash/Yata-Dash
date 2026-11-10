@@ -82,8 +82,7 @@ export const authLogout = () =>
 export const authChangePassword = (password: string, new_password: string) =>
   call<AuthResult>('/api/auth/password', { method: 'POST', body: JSON.stringify({ password, new_password }) });
 
-/** `code` is required when the account has 2FA on: removing the account
- *  removes the second factor with it. */
+/** `code` is required when 2FA is on: removing the account removes it too. */
 export const authDisable = (password: string, code?: string) =>
   call<AuthResult>('/api/auth/disable', { method: 'POST', body: JSON.stringify({ password, code }) });
 

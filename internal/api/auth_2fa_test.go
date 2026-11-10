@@ -311,9 +311,8 @@ func TestAuthStatusHidesAccountDetail(t *testing.T) {
 	}
 }
 
-// quickAccount configures the account directly in the store, hashed at
-// bcrypt's minimum cost so tests that make many wrong guesses stay fast, and
-// returns a live session for it.
+// quickAccount stores an account at bcrypt's minimum cost (fast wrong guesses)
+// and returns a live session for it.
 func quickAccount(t *testing.T, d *Deps, password string) *http.Cookie {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
@@ -335,10 +334,6 @@ func quickSession(t *testing.T, d *Deps) *http.Cookie {
 	return &http.Cookie{Name: sessionCookie, Value: token}
 }
 
-// TestPasswordCheckingEndpointsShareTheLockout: every endpoint that checks the
-// password counts wrong guesses towards the login lockout. Any one that didn't
-// would be an unlimited oracle for someone holding a session but not the
-// password, beside a login form that stops after five tries.
 func TestPasswordCheckingEndpointsShareTheLockout(t *testing.T) {
 	const pw = "correct horse battery"
 	for _, path := range []string{
@@ -380,9 +375,6 @@ func TestPasswordCheckingEndpointsShareTheLockout(t *testing.T) {
 	}
 }
 
-// TestTOTPDisableWrongCodeCountsTowardsLockout: the second factor is guessed
-// under the same limit as the password — a six-digit code is the easier of
-// the two to brute-force.
 func TestTOTPDisableWrongCodeCountsTowardsLockout(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -407,9 +399,7 @@ func TestTOTPDisableWrongCodeCountsTowardsLockout(t *testing.T) {
 	}
 }
 
-// TestAccountDisableNeedsSecondFactor: removing the account removes 2FA with
-// it, so it must ask for the same proof as turning 2FA off — otherwise it is
-// the way round that check.
+// Removing the account removes 2FA, so it needs the same proof as totpDisable.
 func TestAccountDisableNeedsSecondFactor(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -439,8 +429,6 @@ func TestAccountDisableNeedsSecondFactor(t *testing.T) {
 	}
 }
 
-// TestAccountDisableWithout2FANeedsOnlyThePassword: with no second factor to
-// ask for, the password is the whole proof.
 func TestAccountDisableWithout2FANeedsOnlyThePassword(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -454,9 +442,6 @@ func TestAccountDisableWithout2FANeedsOnlyThePassword(t *testing.T) {
 	}
 }
 
-// TestEnabling2FASignsOutOtherSessions: every other session got in on the
-// password alone. Turning 2FA on — often because the password is suspected
-// to have leaked — must not leave them signed in past it.
 func TestEnabling2FASignsOutOtherSessions(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -474,10 +459,7 @@ func TestEnabling2FASignsOutOtherSessions(t *testing.T) {
 	}
 }
 
-// TestConcurrentSetupHasOneWinner: the "no account yet" check and the write
-// were separate, so two setups racing through could both succeed, the later
-// silently replacing the account the earlier had just been given a session
-// for.
+// Racing setups: exactly one creates the account; none overwrites it.
 func TestConcurrentSetupHasOneWinner(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)

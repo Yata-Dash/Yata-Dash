@@ -25,11 +25,8 @@ func requireSession(d *Deps, w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// Enabling, disabling or re-issuing recovery codes are all
-// account-takeover-grade actions, so a borrowed session alone must not be
-// enough to perform them: each re-checks the password through
-// verifyAccountHolder, which also counts wrong guesses towards the login
-// lockout.
+// Enabling, disabling or re-issuing recovery codes are takeover-grade, so a
+// session alone is not enough: each re-checks via verifyAccountHolder.
 
 // totpStart generates a candidate secret and returns everything needed to
 // enrol: the QR image, the otpauth URI behind it, and the grouped secret for
@@ -118,11 +115,8 @@ func totpEnable(d *Deps) http.HandlerFunc {
 		// The enrolment code counts as spent, so it can't immediately be
 		// replayed against the login form.
 		_ = d.DB.SetTOTPLastStep(step)
-		// Every other session was signed in on the password alone. Someone
-		// turning 2FA on is often doing it because they suspect the password
-		// got out, and leaving those sessions alive would leave whoever has it
-		// signed in past the factor meant to keep them out. The caller's own
-		// session stays: it is the one that just proved the second factor.
+		// Security: other sessions got in on the password alone (possibly
+		// leaked), so sign them out; keep the caller's, which proved the factor.
 		var current string
 		if ck, err := r.Cookie(sessionCookie); err == nil {
 			current = ck.Value
@@ -143,8 +137,7 @@ func totpDisable(d *Deps) http.HandlerFunc {
 		if !requireSession(d, w, r) {
 			return
 		}
-		// Both factors are checked under the lockout: a wrong code counts
-		// exactly as a wrong password does.
+		// A wrong code counts towards the lockout like a wrong password.
 		u, ok := verifyAccountHolder(d, w, r, decodeCreds(r), "two-factor disable", true)
 		if !ok {
 			return

@@ -2574,8 +2574,7 @@ export async function accountChangePassword(): Promise<void> {
   }
 }
 
-/** Disable login protection (remove the account). With 2FA on this removes the
- *  second factor too, so — like turning 2FA off — it needs a current code. */
+/** Disable login protection (remove the account). Needs a code when 2FA is on. */
 export async function accountDisable(): Promise<void> {
   acctError('');
   const pw = acctVal('s-acct-disablepw');

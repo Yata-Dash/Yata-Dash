@@ -6,9 +6,7 @@ import (
 	"time"
 )
 
-// TestCreateFirstUserOnlyOnce: first-run setup must not be able to overwrite
-// an account that already exists — that is what SetUser's upsert would do to
-// the loser of two racing setups.
+// TestCreateFirstUserOnlyOnce: it never overwrites an existing account.
 func TestCreateFirstUserOnlyOnce(t *testing.T) {
 	db := testDB(t)
 
@@ -61,7 +59,6 @@ func TestCreateFirstUserConcurrent(t *testing.T) {
 	}
 }
 
-// TestClearSessionsExcept: everything but the named session goes.
 func TestClearSessionsExcept(t *testing.T) {
 	db := testDB(t)
 	exp := time.Now().Add(time.Hour)

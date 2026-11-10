@@ -33,8 +33,7 @@ func TestCrossSiteDetection(t *testing.T) {
 	}{
 		{"sec-fetch cross-site", map[string]string{"Sec-Fetch-Site": "cross-site"}, true},
 		{"sec-fetch same-origin", map[string]string{"Sec-Fetch-Site": "same-origin"}, false},
-		// same-site ignores the port and covers sibling subdomains, so it
-		// proves nothing on its own — Origin must still match the host.
+		// same-site proves nothing on its own: Origin must still match.
 		{"sec-fetch same-site, other port", map[string]string{
 			"Sec-Fetch-Site": "same-site", "Origin": "http://yata.local:8080"}, true},
 		{"sec-fetch same-site, sibling subdomain", map[string]string{
@@ -134,9 +133,8 @@ func TestNoNetworkReachableReset(t *testing.T) {
 	}
 }
 
-// TestClientIPProxyHeaders: X-Forwarded-For is honoured only when the
-// trust_proxy_headers setting is on, and then only the entry the proxy itself
-// appended — the rightmost — counts.
+// TestClientIPProxyHeaders: X-Forwarded-For is honoured only with
+// trust_proxy_headers on, and only its rightmost entry.
 func TestClientIPProxyHeaders(t *testing.T) {
 	d := testDeps(t)
 	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
@@ -156,8 +154,7 @@ func TestClientIPProxyHeaders(t *testing.T) {
 		t.Fatalf("trust on: want the rightmost X-Forwarded-For entry, got %q", ip)
 	}
 
-	// Rotating the client-supplied part must not change the bucket: that is
-	// what let an attacker step round the lockout.
+	// Rotating the client-supplied part must not change the bucket.
 	r2 := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
 	r2.RemoteAddr = "172.16.0.2:9999"
 	r2.Header.Set("X-Forwarded-For", "192.0.2.123, 198.51.100.4")
@@ -179,8 +176,7 @@ func TestClientIPProxyHeaders(t *testing.T) {
 	if ip := clientIP(d, r4); ip != "172.16.0.2" {
 		t.Fatalf("empty rightmost entry: want the connection address, got %q", ip)
 	}
-	// Only an IP address counts, in its canonical form, so a client cannot
-	// mint a fresh bucket per guess and IPv6 spellings share one.
+	// Only a valid IP counts, keyed canonically.
 	for _, tc := range []struct{ xff, want string }{
 		{"not-an-ip", "172.16.0.2"},
 		{strings.Repeat("a", 4096), "172.16.0.2"},

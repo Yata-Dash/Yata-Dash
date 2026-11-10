@@ -58,18 +58,14 @@ func crossSite(r *http.Request) bool {
 	case "same-origin", "none": // none = user-initiated (address bar)
 		return false
 	case "same-site":
-		// "Site" is the registrable domain and ignores the port, so another
-		// app on the same host (yata.lan:8420 vs yata.lan:8080) or a sibling
-		// subdomain is "same-site" — and the SameSite=Lax session cookie
-		// travels with its POSTs. The SPA itself is always same-origin, so
-		// same-site proves nothing; it gets the strict Origin check below.
+		// Security: same-site ignores the port and covers sibling subdomains,
+		// which still get our Lax cookie, so it must pass the Origin check.
 		sameSite = true
 	}
 	// Fallback: browsers have sent Origin on cross-origin writes for over a
 	// decade — compare its host against the request host. "null" (sandboxed
 	// iframe / opaque redirect) never matches and is blocked. No Origin at
-	// all = not a browser write — allow, unless the browser has already said
-	// it came from another origin.
+	// all = not a browser write — allow, unless Sec-Fetch-Site said same-site.
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return sameSite

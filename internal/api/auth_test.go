@@ -58,9 +58,8 @@ func TestLoginUsernameCaseInsensitive(t *testing.T) {
 	}
 }
 
-// recordLoginFailure admits one attempt and settles it as a failure — the
-// sequential path every wrong guess takes. Returns the lockout duration when
-// that failure locked the IP (else 0).
+// recordLoginFailure admits one attempt and fails it; returns the lockout
+// duration if it locked the IP (else 0).
 func recordLoginFailure(t *testing.T, ip string, now time.Time) time.Duration {
 	t.Helper()
 	a, wait := reserveAttempt(ip, now)
@@ -134,9 +133,7 @@ func TestLoginLockout(t *testing.T) {
 	}
 }
 
-// TestLoginAttemptReservation: an attempt holds its slot from admission until
-// it is settled, so attempts being evaluated count against the limit, and one
-// settled as neither a failure nor a success hands its slot back.
+// In-flight attempts count against the limit; release hands the slot back.
 func TestLoginAttemptReservation(t *testing.T) {
 	resetLoginLimiter()
 	ip := "10.0.0.7"
@@ -168,10 +165,7 @@ func TestLoginAttemptReservation(t *testing.T) {
 	}
 }
 
-// TestConcurrentWrongPasswordsAreCapped: wrong guesses sent all at once must
-// not all be evaluated. Checking the lockout before the ~250 ms bcrypt and
-// recording the failure after let every request in that gap through — 48 of
-// 60 parallel guesses were checked against a limit of five.
+// Parallel wrong guesses: at most maxLoginFailures reach bcrypt.
 func TestConcurrentWrongPasswordsAreCapped(t *testing.T) {
 	d := testDeps(t)
 	var out bytes.Buffer
@@ -212,8 +206,7 @@ func TestConcurrentWrongPasswordsAreCapped(t *testing.T) {
 			t.Fatal("a wrong password signed in")
 		}
 	}
-	// Every guess that reached bcrypt logs one failed attempt; refused ones
-	// log nothing.
+	// Only guesses that reached bcrypt log a failed attempt.
 	if evaluated := strings.Count(out.String(), "failed login attempt"); evaluated > maxLoginFailures {
 		t.Fatalf("%d of %d parallel guesses were evaluated, limit is %d", evaluated, guesses, maxLoginFailures)
 	}
@@ -222,9 +215,7 @@ func TestConcurrentWrongPasswordsAreCapped(t *testing.T) {
 	}
 }
 
-// TestDummyHashMatchesRealCost: the hash compared against for an unknown
-// username must cost what a real one does, or the response time tells an
-// attacker whether the username was right.
+// The unknown-username hash must cost the same, or timing reveals the username.
 func TestDummyHashMatchesRealCost(t *testing.T) {
 	cost, err := bcrypt.Cost(dummyHash())
 	if err != nil {

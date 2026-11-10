@@ -52,10 +52,7 @@ func (d *DB) SetUser(username, passwordHash string) error {
 }
 
 // CreateFirstUser creates the account only if none exists, reporting whether
-// it did. First-run setup uses this rather than SetUser: an upsert would let
-// a second setup that raced past the "no account yet" check quietly replace
-// the account the first one had just created. Here the insert itself decides
-// — the single-row primary key admits one winner.
+// it did. Unlike SetUser's upsert, racing setups get exactly one winner.
 func (d *DB) CreateFirstUser(username, passwordHash string) (bool, error) {
 	res, err := d.sql.Exec(
 		`INSERT INTO auth (id, username, password_hash, created_at) VALUES (1, ?, ?, ?)
@@ -211,9 +208,8 @@ func (d *DB) ClearSessions() error {
 	return err
 }
 
-// ClearSessionsExcept removes every session but the one given (e.g. after 2FA
-// is turned on, signing out everything that got in on the password alone).
-// An empty token keeps nothing.
+// ClearSessionsExcept removes every session but the one given. An empty
+// token keeps nothing.
 func (d *DB) ClearSessionsExcept(token string) error {
 	_, err := d.sql.Exec(`DELETE FROM sessions WHERE token != ?`, token)
 	return err
