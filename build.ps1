@@ -19,12 +19,8 @@ if (-not $SkipWeb) {
     Write-Host "==> Building frontend (web/ -> static/dashboard.js)" -ForegroundColor Cyan
     Push-Location (Join-Path $root 'web')
     try {
-        # Install when node_modules is missing OR older than the lockfile. npm
-        # stamps every install in node_modules/.package-lock.json, so a lockfile
-        # changed since (a pull that bumps a dependency) reinstalls instead of
-        # building with stale packages — e.g. tools/screenshots.mjs imports a
-        # path only puppeteer-core 25 ships. `npm ci` installs exactly what the
-        # lockfile pins, as the Dockerfile and CI do.
+        # Reinstall when node_modules is missing or older than the lockfile (npm
+        # stamps installs in node_modules/.package-lock.json), so a bump isn't built stale.
         $stamp = 'node_modules/.package-lock.json'
         if (-not (Test-Path $stamp) -or
             (Get-Item 'package-lock.json').LastWriteTime -gt (Get-Item $stamp).LastWriteTime) {
