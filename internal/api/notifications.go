@@ -59,9 +59,7 @@ func putNotifications(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		// Range-checked here because digestDueAt has no sensible reading of an
-		// out-of-range schedule — a weekday of 20 used to land the "most recent"
-		// instant in the future, which made the digest due on every tick.
+		// digestDueAt has no sensible reading of an out-of-range schedule.
 		if n.Digest.Weekday < 0 || n.Digest.Weekday > 6 {
 			jsonError(w, "digest weekday must be 0 (Sunday) to 6 (Saturday)", http.StatusBadRequest)
 			return
@@ -81,11 +79,8 @@ func putNotifications(d *Deps) http.HandlerFunc {
 		// it 0, and 0 means "no batch has run" — every seeded rule the user
 		// has since deleted would come back on the next restart.
 		n.SeedVersion = existing.SeedVersion
-		// Digest LastSentAt/LastReadyTargets are server-maintained too, but they
-		// are NOT copied from `existing` here: a digest sent between that read and
-		// the write below would be overwritten with the older value and go out
-		// again on the next tick. config.Manager.UpdateNotifications carries them
-		// forward under its own lock instead.
+		// Digest send history is NOT copied from `existing`: that read can be
+		// stale. UpdateNotifications carries it forward under its own lock.
 		// Backfill secrets for known destinations arriving with none — this is
 		// how re-importing a share-safe export (URL/token/chat id stripped) into
 		// the same instance keeps its webhooks working.

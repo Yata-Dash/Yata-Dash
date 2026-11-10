@@ -65,10 +65,6 @@ func TestPutNotificationsPreservesDigestState(t *testing.T) {
 	}
 }
 
-// TestPutNotificationsRejectsOutOfRangeDigestSchedule: digestDueAt has no
-// sensible reading of a weekday outside 0-6 or an hour outside 0-23 (a weekday
-// of 20 made the digest due on every tick), so the API refuses them outright
-// rather than storing something the scheduler would misread.
 func TestPutNotificationsRejectsOutOfRangeDigestSchedule(t *testing.T) {
 	cases := []struct {
 		name          string
@@ -125,16 +121,12 @@ func TestPutNotificationsRejectsOutOfRangeDigestSchedule(t *testing.T) {
 	}
 }
 
-// TestRunDigestIfDueSendsOnce: overlapping digest runs (the 5-minute tick and
-// "Send now", or a tick that starts while a slow one is still sending) used
-// to each see the digest as due and each send it. Delivery is serialised, so
-// only the first sends and the rest see the LastSentAt it stored.
+// Overlapping digest runs deliver the digest only once.
 func TestRunDigestIfDueSendsOnce(t *testing.T) {
 	var hits int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		atomic.AddInt32(&hits, 1)
-		// Long enough that unserialised runs would all pass the due check
-		// before the first one finishes sending.
+		// Long enough for unserialised runs to all pass the due check.
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -143,7 +135,7 @@ func TestRunDigestIfDueSendsOnce(t *testing.T) {
 	d := testDeps(t)
 	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{
 		Destinations: []models.NotifyDestination{{ID: "hook", Name: "hook", Type: "generic", URL: srv.URL, Enabled: true}},
-		// Never sent, so the most recent scheduled instant has always passed.
+		// Never sent, so always due.
 		Digest: models.DigestConfig{Enabled: true, Weekday: 1, Hour: 9},
 	}); err != nil {
 		t.Fatal(err)
@@ -166,9 +158,7 @@ func TestRunDigestIfDueSendsOnce(t *testing.T) {
 	}
 }
 
-// "Send now" pressed while a scheduled delivery is still sending gets an
-// immediate 409 rather than waiting behind it and then sending the week's
-// digest a second time.
+// "Send now" during a delivery gets an immediate 409 instead of queuing.
 func TestSendDigestNowDuringDeliveryIsRefused(t *testing.T) {
 	d := testDeps(t)
 	digestMu.Lock() // a delivery in progress

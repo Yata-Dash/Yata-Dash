@@ -191,10 +191,8 @@ func (m *Manager) Import(data []byte) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// A config written by hand or exported before the digest existed carries
-	// no send history. Taken as-is, a LastSentAt of 0 makes this week's digest
-	// due at once — a second copy if it already went out. Keep the live
-	// history then; a full backup that does record a send restores its own.
+	// An import with no digest send history keeps the live one; a LastSentAt
+	// of 0 would make this week's digest due again at once.
 	if incoming.Notifications.Digest.LastSentAt == 0 {
 		incoming.Notifications.Digest.LastSentAt = m.cfg.Notifications.Digest.LastSentAt
 		if incoming.Notifications.Digest.LastReadyTargets == nil {

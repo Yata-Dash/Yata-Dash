@@ -9,10 +9,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// An out-of-range digest schedule in config.json (hand-edited, or written by
-// an older build that did not check) used to survive load untouched, and a
-// weekday of 20 made the digest due on every 5-minute tick. Each bad field
-// falls back to its default; a valid neighbour is left alone.
+// Each out-of-range field resets to its default; a valid neighbour is kept.
 func TestDigestOutOfRangeResetOnLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	raw := `{
@@ -37,8 +34,6 @@ func TestDigestOutOfRangeResetOnLoad(t *testing.T) {
 	}
 }
 
-// Import replaces the whole config, so it needs the same reset as load —
-// before this it applied none of the digest normalisation at all.
 func TestDigestOutOfRangeResetOnImport(t *testing.T) {
 	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
@@ -62,9 +57,7 @@ func TestDigestOutOfRangeResetOnImport(t *testing.T) {
 	}
 }
 
-// A save built from an earlier read must not roll back a digest sent in the
-// meantime. The send history is the server's, so UpdateNotifications keeps the
-// stored value whatever the caller carries — stale or forged.
+// UpdateNotifications keeps the stored send history over a stale or forged one.
 func TestUpdateNotificationsKeepsDigestSendHistory(t *testing.T) {
 	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
@@ -99,10 +92,7 @@ func TestUpdateNotificationsKeepsDigestSendHistory(t *testing.T) {
 	}
 }
 
-// An import that carries no digest send history (a hand-written config, an
-// export from before the digest existed) keeps the live history, so the
-// week's digest is not sent a second time. One that records a send restores
-// its own.
+// An import without send history keeps the live one; one with history restores it.
 func TestImportKeepsLiveDigestHistoryWhenMissing(t *testing.T) {
 	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {

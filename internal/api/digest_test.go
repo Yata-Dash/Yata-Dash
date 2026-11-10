@@ -77,9 +77,7 @@ func TestDigestDueAt(t *testing.T) {
 			now:     digestAnchor.AddDate(0, 0, 5).Add(12 * time.Hour), // Saturday 12:00
 			wantDue: true, wantScheduled: time.Date(2023, 12, 31, 9, 0, 0, 0, time.UTC), checkScheduled: true,
 		},
-		// Out-of-range schedules land the "most recent" instant in the future,
-		// which LastSentAt can never pass — before the guard these were due on
-		// every tick, a webhook every five minutes.
+		// Out-of-range schedules put the instant in the future: never due.
 		{
 			name: "weekday out of range, already sent just now → not due",
 			cfg: models.DigestConfig{Enabled: true, Weekday: 20, Hour: 9,

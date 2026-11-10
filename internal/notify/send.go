@@ -63,13 +63,9 @@ func Send(dest models.NotifyDestination, title, message string) error {
 	return postWithRetry(url, headers, payload)
 }
 
-// buildRequest formats one destination's request. Split from Send so the
-// payloads can be asserted without a network round trip (Telegram's URL is
-// fixed, so a test server cannot stand in for it).
-//
-// title and message carry tracker-controlled text — an event banner, a
-// "changed: x → y" value, a tracker name — so each payload has to treat them
-// as plain text rather than as markup the service acts on.
+// buildRequest formats one destination's request, split out so tests can check
+// payloads (Telegram's URL is fixed). title and message carry tracker-controlled
+// text, so each payload must treat them as plain text, not markup.
 func buildRequest(dest models.NotifyDestination, title, message string) (url string, headers map[string]string, payload map[string]any, err error) {
 	switch strings.ToLower(dest.Type) {
 	case models.InAppDestinationType:
@@ -81,9 +77,7 @@ func buildRequest(dest models.NotifyDestination, title, message string) (url str
 		url = dest.URL
 		payload = map[string]any{
 			"content": fmt.Sprintf("**%s**\n%s", title, message),
-			// No mentions, ever: an event a tracker names "@everyone" would
-			// otherwise ping the whole server. Yata never means to mention
-			// anyone, so the empty list costs nothing.
+			// No mentions: tracker text saying "@everyone" must not ping the server.
 			"allowed_mentions": map[string]any{"parse": []string{}},
 		}
 	case "telegram":
@@ -91,10 +85,8 @@ func buildRequest(dest models.NotifyDestination, title, message string) (url str
 			return "", nil, nil, fmt.Errorf("telegram needs a bot token and chat id")
 		}
 		url = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", dest.Token)
-		// HTML rather than legacy Markdown, which has no way to escape: one
-		// unbalanced "_" or "*" in a tracker's text made Telegram reject the
-		// message with a 400 and the alert was lost. HTML keeps the bold title
-		// and escapes cleanly.
+		// HTML, not legacy Markdown: Markdown can't be escaped, so a stray "_"
+		// or "*" in tracker text gets the message rejected.
 		payload = map[string]any{
 			"chat_id":    dest.ChatID,
 			"text":       fmt.Sprintf("<b>%s</b>\n%s", telegramEscape(title), telegramEscape(message)),
@@ -116,10 +108,8 @@ func buildRequest(dest models.NotifyDestination, title, message string) (url str
 	return url, headers, payload, nil
 }
 
-// telegramEscape escapes the three characters Telegram's HTML parse mode
-// requires escaping outside a tag. Deliberately not html.EscapeString: that
-// also turns quotes into entities, which Telegram accepts but which buys
-// nothing in text content.
+// telegramEscape escapes the three characters Telegram's HTML mode requires
+// (html.EscapeString would needlessly escape quotes too).
 var telegramEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace
 
 // chunkSendLimit bounds each message SendChunked hands to Send. Discord hard-

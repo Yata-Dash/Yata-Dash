@@ -176,10 +176,7 @@ func TestPrivateDestinationReplyIsNotEchoedAfterRetries(t *testing.T) {
 	}
 }
 
-// Tracker text reaches Discord verbatim, so an event a tracker names
-// "@everyone" pinged the whole server. Every Discord payload — alerts and the
-// digest alike go through Send — now forbids mentions outright. Exercised
-// through a real POST so the wire body is what is checked.
+// Discord payloads forbid mentions; checked on the wire via a real POST.
 func TestDiscordPayloadAllowsNoMentions(t *testing.T) {
 	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,10 +202,6 @@ func TestDiscordPayloadAllowsNoMentions(t *testing.T) {
 	}
 }
 
-// Telegram's legacy Markdown has no escaping, so an unbalanced "_" or "*" in a
-// tracker's text got the message refused with a 400 and the alert was lost.
-// HTML mode with the interpolated text escaped keeps the bold title and
-// cannot be broken by what a tracker says.
 func TestTelegramPayloadEscapesHTML(t *testing.T) {
 	dest := models.NotifyDestination{Type: "telegram", Token: "123:abc", ChatID: "42", Enabled: true}
 	url, _, payload, err := buildRequest(dest, "Yata alert: <Ratio> & co",
