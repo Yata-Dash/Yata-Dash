@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -72,11 +73,15 @@ func (d *DB) migrate() error {
 		// stable long-term growth rate used for trend projections — a single
 		// slow day can't skew it, and it survives restarts so projections are
 		// available from setup. Tiny: ~1 row/field/day.
+		//
+		// recorded_at is the value's real sample time; rate maths uses it, not
+		// the `day` label (see DailySamplesSince).
 		`CREATE TABLE IF NOT EXISTS history_daily (
-			tracker_id TEXT NOT NULL,
-			day        INTEGER NOT NULL,         -- unix seconds at UTC midnight
-			field      TEXT NOT NULL,
-			value      REAL NOT NULL,
+			tracker_id  TEXT NOT NULL,
+			day         INTEGER NOT NULL,         -- unix seconds at UTC midnight
+			field       TEXT NOT NULL,
+			value       REAL NOT NULL,
+			recorded_at INTEGER NOT NULL DEFAULT 0, -- unix seconds of the value's sample
 			PRIMARY KEY (tracker_id, day, field)
 		)`,
 		// One row per scrape ATTEMPT (success or failure) — the persistent
@@ -263,6 +268,22 @@ func (d *DB) migrate() error {
 		"weak_password":  "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
+	}
+	// Backfill history_daily.recorded_at: the day's newest fine point is its
+	// sample time; if pruned, use the end of the day (capped at now). Only
+	// rows still at 0 are touched.
+	if err := d.addColumns("history_daily", map[string]string{
+		"recorded_at": "INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	if _, err := d.sql.Exec(`UPDATE history_daily SET recorded_at = COALESCE(
+		(SELECT MAX(h.recorded_at) FROM history h
+		  WHERE h.tracker_id = history_daily.tracker_id AND h.field = history_daily.field
+		    AND h.recorded_at >= history_daily.day AND h.recorded_at < history_daily.day + 86400),
+		MIN(history_daily.day + 86399, CAST(strftime('%s', 'now') AS INTEGER)))
+		WHERE recorded_at = 0`); err != nil {
+		return fmt.Errorf("migrate: %w", err)
 	}
 	// An alert may point somewhere — the update notice links to the release.
 	// A column rather than a URL buried in the body, so the panel renders a
@@ -505,7 +526,7 @@ func (d *DB) PruneHistory(before time.Time) error {
 }
 
 // TrackerHistorySince returns one tracker's fine-grained points since `since`,
-// oldest first (used for early growth rates before daily rollups exist).
+// oldest first (the weekly digest's deltas).
 func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT recorded_at, field, value FROM history WHERE tracker_id = ? AND recorded_at >= ? ORDER BY recorded_at ASC`,
@@ -521,6 +542,43 @@ func (d *DB) TrackerHistorySince(trackerID string, since time.Time) ([]HistoryPo
 			return nil, err
 		}
 		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// FieldEndpointsSince returns, per field, the oldest and newest fine points
+// since `since` (one point if they coincide; absent if none), using two
+// index seeks per field instead of loading the whole window.
+func (d *DB) FieldEndpointsSince(trackerID string, fields []string, since time.Time) (map[string][]HistoryPoint, error) {
+	out := map[string][]HistoryPoint{}
+	if len(fields) == 0 {
+		return out, nil
+	}
+	// One round trip. Each arm is its own LIMIT 1 subquery so SQLite seeks to
+	// the end of the index range rather than scanning it.
+	const arm = `SELECT * FROM (SELECT field, recorded_at, value FROM history
+		WHERE tracker_id = ? AND field = ? AND recorded_at >= ? ORDER BY recorded_at %s LIMIT 1)`
+	parts := make([]string, 0, 2*len(fields))
+	args := make([]any, 0, 6*len(fields))
+	for _, f := range fields {
+		parts = append(parts, fmt.Sprintf(arm, "ASC"), fmt.Sprintf(arm, "DESC"))
+		args = append(args, trackerID, f, since.Unix(), trackerID, f, since.Unix())
+	}
+	rows, err := d.sql.Query(strings.Join(parts, " UNION ALL "), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// UNION ALL keeps arm order, so each field's oldest row precedes its newest.
+	for rows.Next() {
+		p := HistoryPoint{TrackerID: trackerID}
+		if err := rows.Scan(&p.Field, &p.RecordedAt, &p.Value); err != nil {
+			return nil, err
+		}
+		if pts := out[p.Field]; len(pts) == 1 && pts[0].RecordedAt == p.RecordedAt {
+			continue
+		}
+		out[p.Field] = append(out[p.Field], p)
 	}
 	return out, rows.Err()
 }
@@ -546,14 +604,15 @@ func (d *DB) RecordDaily(trackerID string, at time.Time, fields map[string]float
 		return err
 	}
 	defer tx.Rollback()
-	up, err := tx.Prepare(`INSERT INTO history_daily (tracker_id, day, field, value) VALUES (?, ?, ?, ?)
-		ON CONFLICT(tracker_id, day, field) DO UPDATE SET value = excluded.value`)
+	up, err := tx.Prepare(`INSERT INTO history_daily (tracker_id, day, field, value, recorded_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(tracker_id, day, field) DO UPDATE SET value = excluded.value, recorded_at = excluded.recorded_at`)
 	if err != nil {
 		return err
 	}
 	defer up.Close()
+	ts := at.Unix()
 	for f, v := range fields {
-		if _, err := up.Exec(trackerID, day, f, v); err != nil {
+		if _, err := up.Exec(trackerID, day, f, v, ts); err != nil {
 			return err
 		}
 	}
@@ -565,6 +624,27 @@ func (d *DB) RecordDaily(trackerID string, at time.Time, fields map[string]float
 func (d *DB) DailySince(trackerID string, since time.Time) ([]HistoryPoint, error) {
 	rows, err := d.sql.Query(
 		`SELECT day, field, value FROM history_daily WHERE tracker_id = ? AND day >= ? ORDER BY day ASC`,
+		trackerID, utcDay(since))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HistoryPoint
+	for rows.Next() {
+		p := HistoryPoint{TrackerID: trackerID}
+		if err := rows.Scan(&p.RecordedAt, &p.Field, &p.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// DailySamplesSince is DailySince with RecordedAt set to each value's real
+// sample time, not the midnight label, which can be off by up to a day.
+func (d *DB) DailySamplesSince(trackerID string, since time.Time) ([]HistoryPoint, error) {
+	rows, err := d.sql.Query(
+		`SELECT recorded_at, field, value FROM history_daily WHERE tracker_id = ? AND day >= ? ORDER BY day ASC`,
 		trackerID, utcDay(since))
 	if err != nil {
 		return nil, err
