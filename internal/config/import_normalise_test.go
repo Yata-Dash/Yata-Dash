@@ -9,18 +9,13 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// An import is a load from a different source, so an export from an older
-// build must come out of it exactly as it would from a restart: retired
-// tracker types migrated, the notification centre present — and the starter
-// rules that config had already deleted still deleted.
+// Import applies load migrations without re-seeding rules the config deleted.
 func TestImportAppliesLoadMigrations(t *testing.T) {
 	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Fully seeded (so seeding has nothing left to do), every starter rule
-	// deleted, and a destination list without the centre — the shape that
-	// used to import with alerts recording nowhere.
+	// Fully seeded, all starter rules deleted, and no notification centre.
 	raw := `{
 		"settings": {},
 		"trackers": [{"id":"a","name":"Anthelion","url":"https://anthelion.me","type":"gazelle","enabled":true}],
@@ -55,8 +50,7 @@ func TestImportAppliesLoadMigrations(t *testing.T) {
 	}
 }
 
-// An export from before a seeding batch existed gets that batch on import,
-// as it would on the next restart — and only that batch.
+// An older export gets only the seeding batches it is missing.
 func TestImportOfOlderExportGetsOnlyMissingBatches(t *testing.T) {
 	m, err := Open(filepath.Join(t.TempDir(), "config.json"))
 	if err != nil {
@@ -79,9 +73,7 @@ func TestImportOfOlderExportGetsOnlyMissingBatches(t *testing.T) {
 	}
 }
 
-// A config already at the current seed version never runs the seeding pass,
-// which was the only place the centre was put back. It must still be restored
-// on load, and written back so the repair is not redone on every start.
+// A fully seeded config missing the centre has it restored and written back.
 func TestOpenRestoresCentreOnFullySeededConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	raw := `{

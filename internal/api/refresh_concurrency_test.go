@@ -19,9 +19,8 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 )
 
-// laddered points d at a one-tracker registry whose def lives at baseURL and
-// ranks "User" below "Power User", so a group change there classifies as a
-// promotion and fires the "promoted" event.
+// laddered points d at a one-tracker registry at baseURL where "User" →
+// "Power User" is a promotion.
 func laddered(t *testing.T, d *Deps, baseURL string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -50,9 +49,7 @@ func laddered(t *testing.T, d *Deps, baseURL string) {
 	d.Fetch = fetch.NewClient(reg, "")
 }
 
-// promotedAlerts wires the alert engine with the seeded-style promotion rule
-// (cooldown 0, so a duplicate event is a duplicate alert) and returns a count
-// of the alerts recorded so far.
+// promotedAlerts adds a no-cooldown promotion rule and returns an alert counter.
 func promotedAlerts(t *testing.T, d *Deps) func() int {
 	t.Helper()
 	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{Rules: []models.AlertRule{{
@@ -66,10 +63,7 @@ func promotedAlerts(t *testing.T, d *Deps) func() int {
 	return func() int { return decodeAlerts(t, getJSON(t, d, "/api/alerts")).Total }
 }
 
-// Non-forced refreshes of one tracker arriving together (the background loop
-// and a dashboard poll, or two open tabs) must coalesce into ONE request to
-// the tracker — and so one group_change event and one promotion alert. They
-// used to all pass the min-age guard before any of them recorded its fetch.
+// Concurrent non-forced refreshes make one request, one group_change, one alert.
 func TestConcurrentRefreshesFetchOnce(t *testing.T) {
 	var hits atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,8 +72,7 @@ func TestConcurrentRefreshesFetchOnce(t *testing.T) {
 			return
 		}
 		hits.Add(1)
-		// Long enough that every caller is in flight before the first one
-		// could record anything.
+		// Long enough for every caller to be in flight.
 		time.Sleep(100 * time.Millisecond)
 		fmt.Fprint(w, `{"username":"u","group":"Power User","uploaded":400,"downloaded":100,"ratio":4}`)
 	}))
@@ -150,10 +143,7 @@ func TestConcurrentRefreshesFetchOnce(t *testing.T) {
 	}
 }
 
-// A tracker whose API is down must be rate-limited like a healthy one: every
-// open dashboard's poll used to re-hit it, because only a SUCCESS recorded a
-// fetch time. The guarded answer must still say it failed, and a forced
-// refresh must still try.
+// A failed fetch gates non-forced refreshes, which still report the failure.
 func TestFailedFetchGatesNonForcedRefreshes(t *testing.T) {
 	var hits atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -199,10 +189,7 @@ func TestFailedFetchGatesNonForcedRefreshes(t *testing.T) {
 	}
 }
 
-// Correcting a tracker's credentials after a failed fetch must take effect on
-// the next poll. The guard used to answer with the failure the old key earned
-// until its window ran out — the edit modal forces a refresh, but a direct
-// PUT /api/trackers/{id} does not.
+// A corrected key is tried on the next non-forced poll, not served the old failure.
 func TestConnectionChangeBypassesFailureGuard(t *testing.T) {
 	var hits atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,9 +232,7 @@ func TestConnectionChangeBypassesFailureGuard(t *testing.T) {
 	}
 }
 
-// Removing every target and later adding back one that was met in the
-// meantime is a NEW target, which must prime silently. The engine used to keep
-// the old rows through the targetless passes and fire on the stale "unmet".
+// A target re-added after all were removed, already met, primes silently.
 func TestTargetsClearedThenReaddedDoNotFire(t *testing.T) {
 	d := testDeps(t)
 	if err := d.Cfg.UpdateNotifications(models.NotificationConfig{Rules: []models.AlertRule{{
@@ -295,10 +280,7 @@ func TestTargetsClearedThenReaddedDoNotFire(t *testing.T) {
 	}
 }
 
-// A pass shares one pathway mapping across its trackers rather than rebuilding
-// it per tracker (N² store reads), and must hand every tracker exactly what a
-// fresh mapUserTrackers would at that moment — the refreshed tracker's entry
-// patched in with its new stats and rates.
+// A pass's shared pathway mapping always equals a fresh mapUserTrackers.
 func TestRefreshCyclePinUsersMatchesFreshMapping(t *testing.T) {
 	d := pathDeps(t)
 	a := models.Tracker{ID: "cyc-a", Name: "Aither", URL: "https://aither.cc", Type: "unit3d", Enabled: true}
@@ -334,8 +316,7 @@ func TestRefreshCyclePinUsersMatchesFreshMapping(t *testing.T) {
 	refresh(b, "3.00 TiB") // patches b
 	refresh(a, "4.00 TiB") // patches a again
 
-	// Built once: a change that did not come through this pass is not seen,
-	// which is what proves the mapping is not being rebuilt per tracker.
+	// A change outside the pass is not seen, proving it isn't rebuilt.
 	if err := d.Stats.SaveAPI(b.ID, map[string]any{"uploaded": "9.00 TiB", "downloaded": "500.00 GiB", "ratio": 2.0}); err != nil {
 		t.Fatal(err)
 	}

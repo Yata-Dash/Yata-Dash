@@ -192,10 +192,7 @@ func (m *Manager) Import(data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cfg = incoming
-	// Exactly what the loader does to a file it reads at startup — an export
-	// from an older build needs the same migrations, and running them only on
-	// the next restart left the install half-working until then. Saved
-	// regardless of what it reports: the import itself is the change.
+	// Same migrations as a startup load. Saved regardless: the import is the change.
 	m.normalizeLoaded()
 	return m.saveLocked()
 }

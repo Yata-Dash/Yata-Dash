@@ -7,10 +7,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// warnings is documented in docs/API.md, but it is not a history field, so the
-// numeric snapshot the rest of the summary reads from never carried it and it
-// was omitted for every tracker. Each shape a fetcher or scrape stores must
-// come through, and a tracker that does not report it must still omit it.
+// warnings comes through in every stored shape, and is omitted when unreported.
 func TestSummaryReportsWarnings(t *testing.T) {
 	d := testDeps(t)
 	cases := []struct {

@@ -40,9 +40,8 @@ func refreshTracker(d *Deps, t models.Tracker, force bool) models.TrackerStatsRe
 	return refreshTrackerInCycle(d, t, force, nil)
 }
 
-// refreshTrackerInCycle is refreshTracker as one tracker of a pass over many
-// (the background loop, a bulk /api/stats request): cyc carries what every
-// tracker in that pass can share — see refreshCycle. nil is a lone refresh.
+// refreshTrackerInCycle is refreshTracker within a multi-tracker pass; cyc
+// (nil for a lone refresh) holds what the pass shares.
 func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCycle) models.TrackerStatsResponse {
 	resp := models.TrackerStatsResponse{
 		TrackerID: t.ID,
@@ -125,26 +124,15 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 		return resp
 	}
 
-	// Held from the min-age guard to the last record below. Without it the
-	// guard is a check-then-act: the background loop and a dashboard poll (or
-	// two open tabs) arriving together both find no recent fetch, both hit
-	// the tracker, and both see the group move — two group_change events and
-	// two "promoted" alerts for one promotion. Serialised, the second caller
-	// waits for the first and then finds its fetch inside the guard window.
-	// A forced refresh takes the lock too: it still always fetches, but reads
-	// the group the previous refresh stored, so it cannot replay that one's
-	// promotion either. Same pattern as scrapeLocks, for the same reason.
+	// Held from the guard to the last record, else concurrent callers all pass
+	// the guard, all fetch, and one promotion fires twice. Forced refreshes
+	// take it too, so they read the group the previous refresh stored.
 	mu := lockRefresh(t.ID)
 	defer mu.Unlock()
 
-	// Min-age guard — coalesce non-forced callers. If this tracker's API was
-	// tried within the guard window, skip the network call and serve the
-	// last-stored merged stats instead, with that attempt's outcome: a failed
-	// attempt counts as much as a successful one, or every open dashboard
-	// would re-hit a tracker that is down on every poll. Manual (forced)
-	// refreshes bypass it. So does a change to the connection settings since
-	// that attempt: a corrected key must be tried at once, not answered with
-	// the failure the old key earned until the window runs out.
+	// Min-age guard: serve stored stats and the last attempt's outcome (failures
+	// count too, so a down tracker isn't re-hit per poll). Bypassed when forced
+	// or when the connection settings changed, so a corrected key is tried at once.
 	conn := connFingerprint(t)
 	if !force {
 		if v, ok := lastFetchAt.Load(t.ID); ok {
@@ -206,11 +194,8 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	} else {
 		resp.ErrorKind = ferr.Kind
 		resp.Error = ferr.Error()
-		// A failure that reached the tracker gates the next non-forced fetch
-		// just as a success does. A pre-flight one (no key, no def) sent
-		// nothing, so there is nothing to protect — and it must not leave an
-		// earlier success standing in the guard, which would report this
-		// broken tracker as fine until the window ran out.
+		// A pre-flight failure sent nothing, so it clears the guard rather than
+		// gate, or an earlier success would keep reporting this tracker as fine.
 		if isPreflightKind(ferr.Kind) {
 			lastFetchAt.Delete(t.ID)
 		} else {
@@ -323,14 +308,9 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 // evaluateTrackerTargets computes the tracker's current target rows (base
 // targets + its target group's min_counts/any_of, see targeteval.go) and
 // feeds them to the alert engine's per-row edge tracker, which fires a
-// target_met event for each row crossing unmet→met.
-//
-// A tracker with nothing to track still gets an (empty) pass, never an early
-// return: that is what makes the engine forget its previous rows. Skipped,
-// the old rows survived removing every target, so re-adding one that had
-// been met in the meantime diffed against the stale "unmet" and fired a
-// target_met for a target added already met — the case a new target must
-// prime silently for. Same rule evaluateTrackerPins follows.
+// target_met event for each row crossing unmet→met. A targetless tracker
+// still gets an empty pass so the engine forgets old rows; a re-added target
+// must prime, not fire on a stale "unmet".
 func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
 	if len(t.Targets) == 0 && t.TargetGroup == "" {
 		d.Alerts.EvaluateTargets(t, merged, nil, 0, 0, trends)
@@ -350,9 +330,7 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 // measured from THIS tracker (that is whose numbers just moved) and uses the
 // rest to know what is still pinned. Nothing to do when nothing is pinned,
 // which is the common case and skips the user-tracker mapping entirely.
-//
-// rates is the tracker's GrowthRates as this refresh read them, and cyc the
-// pass it belongs to (nil for a lone refresh): see refreshCycle.pinUsers.
+// rates and cyc feed refreshCycle.pinUsers.
 func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, rates map[string]float64, trends notify.TrendContext, cyc *refreshCycle) {
 	pins := d.Cfg.Settings().PathwayPins
 	if len(pins) == 0 || d.Paths == nil {
@@ -380,27 +358,17 @@ func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, r
 	d.Alerts.EvaluatePins(t, merged, rows, trends)
 }
 
-// refreshCycle is what the trackers refreshed in one pass (a RunRefreshCycle,
-// or one bulk /api/stats request) share. A nil *refreshCycle is a lone refresh
-// and shares nothing.
+// refreshCycle is state shared by one refresh pass (RunRefreshCycle or a bulk
+// /api/stats request). nil is a lone refresh.
 type refreshCycle struct {
 	mu    sync.Mutex
 	built bool
 	users []pathways.UserTracker
 }
 
-// pinUsers is the pathway view of every tracker (mapUserTrackers) for
-// evaluating pins after t's refresh.
-//
-// Built once per pass and then kept current, instead of rebuilt per tracker:
-// mapUserTrackers reads Merged and GrowthRates for EVERY tracker, so calling it
-// from each refresh made a pass over N trackers cost N² of those reads — 400
-// GrowthRates queries for 20 trackers, seconds of single-connection SQLite time
-// that blocked every other request. The answer is unchanged: within a pass the
-// only stats that move are those of the tracker just refreshed, and its entry
-// is overwritten with the same Merged and GrowthRates values mapUserTrackers
-// would have read for it now. (The first call builds from the store after t's
-// refresh, so t's entry is current already.)
+// pinUsers returns mapUserTrackers for pin evaluation after t's refresh. Built
+// once per pass and patched per tracker, since rebuilding per tracker costs N²
+// store reads; within a pass only the refreshed tracker's stats move.
 func (c *refreshCycle) pinUsers(d *Deps, t models.Tracker, merged models.MergedStats, rates map[string]float64) []pathways.UserTracker {
 	if c == nil {
 		return mapUserTrackers(d)
@@ -412,17 +380,14 @@ func (c *refreshCycle) pinUsers(d *Deps, t models.Tracker, merged models.MergedS
 		c.built = true
 	} else {
 		for i := range c.users {
-			// A disabled entry carries no stats by design; refreshed trackers
-			// are enabled, so this only guards against a mid-pass toggle.
+			// Disabled entries carry no stats; guards a mid-pass toggle.
 			if c.users[i].TrackerID == t.ID && !c.users[i].Disabled {
 				c.users[i].Stats = statsFromMerged(merged)
 				c.users[i].Rates = pathwayRates(rates)
 			}
 		}
 	}
-	// A copy, because bulk refreshes run concurrently: entries are replaced
-	// whole under the lock, never mutated, so a copy taken here stays stable
-	// while another tracker's refresh patches the shared slice.
+	// A copy, as bulk refreshes run concurrently and patch the shared slice.
 	return slices.Clone(c.users)
 }
 
@@ -431,30 +396,20 @@ func (c *refreshCycle) pinUsers(d *Deps, t models.Tracker, merged models.MergedS
 // entirely; this floor only bounds the unattended background cadence.
 const RefreshFloorMinutes = 15
 
-// lastFetchAt records the last API fetch attempt per tracker that reached the
-// tracker, successful or not. In memory only — a restart clears it, which just
-// means the first cycle after boot refetches everyone (desirable). It powers
-// the min-age guard that keeps the background loop, open dashboards, and page
-// reloads from stacking into many API calls per interval. Read and written
-// only under the tracker's refresh lock.
+// lastFetchAt records each tracker's last API attempt that reached it, for the
+// min-age guard. In memory only; access only under the tracker's refresh lock.
 var lastFetchAt sync.Map // trackerID -> fetchAttempt
 
-// fetchAttempt is one lastFetchAt entry. errKind/err are "" for a success;
-// for a failure they are what that refresh reported, so a caller served from
-// the guard sees the same outcome rather than a false "ok". conn is the
-// connFingerprint of the settings the attempt was made with; an entry only
-// stands in for a refresh made with the same settings. That also covers a
-// refresh still in flight with the old settings when they are edited: it
-// stores the old fingerprint, so it cannot gate the first refresh after.
+// fetchAttempt is one lastFetchAt entry; errKind/err are "" on success. conn
+// ties it to the settings used, so it never gates a refresh with edited ones.
 type fetchAttempt struct {
 	at           time.Time
 	conn         string
 	errKind, err string
 }
 
-// connFingerprint digests the tracker settings an API fetch depends on. A
-// digest rather than the values, so the guard map holds no second copy of the
-// key or cookie.
+// connFingerprint digests the settings an API fetch depends on, so the guard
+// holds no copy of the key or cookie.
 func connFingerprint(t models.Tracker) string {
 	h := sha256.New()
 	for _, s := range []string{t.URL, t.Type, t.APIKey, t.SessionCookie} {
@@ -464,9 +419,7 @@ func connFingerprint(t models.Tracker) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// refreshLocks serialises refreshTracker per tracker, from the min-age guard
-// through the fetch to the events and alerts it records — see the comment
-// where it is taken.
+// refreshLocks serialises refreshTracker per tracker (see where it is taken).
 var refreshLocks sync.Map // trackerID → *sync.Mutex
 
 func lockRefresh(trackerID string) *sync.Mutex {

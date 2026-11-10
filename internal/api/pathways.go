@@ -252,9 +252,8 @@ func mapUserTrackers(d *Deps) []pathways.UserTracker {
 	return out
 }
 
-// pathwayRates picks the growth rates the pathway engine projects with out of
-// a tracker's GrowthRates map. Shared with refreshCycle, which patches one
-// tracker's entry in place and must produce exactly what this would.
+// pathwayRates maps GrowthRates to pathway rates. Shared with refreshCycle,
+// whose patched entries must match mapUserTrackers exactly.
 func pathwayRates(gr map[string]float64) pathways.Rates {
 	return pathways.Rates{
 		UploadGiB:        gr["uploaded"],

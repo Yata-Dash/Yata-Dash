@@ -57,16 +57,8 @@ func Open(path string) (*Manager, error) {
 	return m, nil
 }
 
-// normalizeLoaded brings a config that has just been read in from outside —
-// the file at startup, or an uploaded export — up to what this build expects,
-// reporting whether anything beyond in-memory defaulting changed (and so
-// whether the file needs writing back).
-//
-// One function for both entry points because an import is just a load from a
-// different source. When Import kept its own partial copy of these steps, an
-// older export came in without its notification centre (alerts recorded
-// nowhere) and with a retired tracker type (the tracker silently stopped
-// collecting) — both only put right by the next restart.
+// normalizeLoaded migrates a config read at startup or imported, reporting
+// whether it needs writing back. Shared so an import matches a restart.
 func (m *Manager) normalizeLoaded() bool {
 	m.applyDefaults()
 	migrated := migrateTrackerTypes(m.cfg.Trackers)
@@ -81,18 +73,14 @@ func (m *Manager) normalizeLoaded() bool {
 	}
 	// Runs once per install per BATCH: seedDefaultAlertRules is a no-op
 	// once the version counter has caught up, so this costs an extra write
-	// only on the first load after a batch is added. The counter is the one
-	// the loaded config carries, so a starter rule deleted in it stays
-	// deleted — only batches that config has never had are applied.
+	// only on the first load after a batch is added. Uses the loaded config's
+	// counter, so starter rules it deleted stay deleted.
 	if m.cfg.Notifications.SeedVersion < seedVersion {
 		seedDefaultAlertRules(&m.cfg.Notifications)
 		migrated = true
 	}
-	// Unconditionally, not just inside seeding: a config already at the
-	// current seed version can still arrive without the centre (edited by
-	// hand, or from a tool that rewrote the destination list), and every rule
-	// would then resolve nowhere. Idempotent, so this costs nothing when it
-	// is present.
+	// Always, not just when seeding: a fully seeded config can still lack the
+	// centre, leaving every rule with nowhere to record.
 	if ensureInAppDestination(&m.cfg.Notifications) {
 		migrated = true
 	}
@@ -177,8 +165,7 @@ func countWebhooks(n *models.NotificationConfig) int {
 	return count
 }
 
-// ensureInAppDestination (described above countWebhooks) reports whether it
-// changed anything, so a load knows to write the repair back.
+// ensureInAppDestination reports whether it changed anything.
 func ensureInAppDestination(n *models.NotificationConfig) bool {
 	for i, d := range n.Destinations {
 		if d.ID == models.InAppDestinationID {
