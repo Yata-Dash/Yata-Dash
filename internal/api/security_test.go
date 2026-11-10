@@ -100,8 +100,7 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 }
 
-// The policy has to reach real responses, not just the middleware in
-// isolation: an API reply and the app shell, both through NewRouter.
+// The CSP reaches both an API reply and the app shell through NewRouter.
 func TestRouterSendsCSP(t *testing.T) {
 	router := NewRouter(testDeps(t))
 	const want = "object-src 'none'; base-uri 'none'; frame-ancestors 'self'"

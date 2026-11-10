@@ -573,8 +573,7 @@ function buildExpanded(
   const currentGroup = strOf(stats, 'group');
   const perksHtml = (() => {
     if (!userGroupDef?.perks?.length) return '';
-    // Tracker- and def-supplied, and it lands in a style attribute, where
-    // esc() alone can't stop an extra declaration — so validated (safeColor).
+    // Tracker-supplied; esc() alone can't stop an extra style declaration.
     const grouped = settings.group_name_style === 'styled' && safeColor(userGroupDef.style?.color);
     const groupColor  = grouped || undefined;
     const iconColor   = groupColor ?? 'var(--text3)';

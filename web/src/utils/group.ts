@@ -69,8 +69,7 @@ export function renderUsername(
     return `<span class="${outerClasses}${blurClass}">${escHtml(username)}</span>`;
   }
   const { sparkle } = groupDef.style;
-  // color and icon come from tracker responses and def JSON — validated, not
-  // trusted (see safeColor / safeIconClass).
+  // Tracker/def-supplied — validated, not trusted.
   const color = safeColor(groupDef.style.color);
   const icon = safeIconClass(groupDef.style.icon);
   const colorStyle = color ? ` style="color:${esc(color)}"` : '';
@@ -96,8 +95,7 @@ export function renderGroupBadge(
     return `<span class="${classes}">${escHtml(groupName)}</span>`;
   }
   const { sparkle } = groupDef.style;
-  // color and icon come from tracker responses and def JSON — validated, not
-  // trusted (see safeColor / safeIconClass).
+  // Tracker/def-supplied — validated, not trusted.
   const color = safeColor(groupDef.style.color);
   const icon = safeIconClass(groupDef.style.icon);
   const colorStyle = color ? ` style="color:${esc(color)}"` : '';

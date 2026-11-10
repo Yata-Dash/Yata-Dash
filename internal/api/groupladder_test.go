@@ -227,9 +227,7 @@ func TestLadderStyleBeatsHeldGroupStyle(t *testing.T) {
 	}
 }
 
-// group_color and group_icon come straight from the tracker's /api/user and are
-// rendered into style and class attributes, so a value that is not plainly a
-// colour or a class list must not be copied onto the ladder.
+// A held group_color/group_icon that isn't plainly a colour or class list is dropped.
 func TestHeldGroupStyleDropsHostileValues(t *testing.T) {
 	d := testDeps(t)
 	tr := addTraxaryTracker(t, d)

@@ -160,9 +160,6 @@ func TestLadderFromAPIReadsStyleWhenServed(t *testing.T) {
 	}
 }
 
-// A tracker's colour and icon land in style and class attributes on the
-// dashboard, so anything that is not plainly a colour or a class list is
-// dropped here rather than trusted to the frontend alone.
 func TestLadderFromAPIDropsHostileStyle(t *testing.T) {
 	const hostile = `{"auto":[{"title":"Seed",` +
 		`"color":"red;background:url(//evil.example/x)",` +

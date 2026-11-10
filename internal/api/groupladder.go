@@ -58,8 +58,7 @@ func applyHeldGroupStyle(d *Deps, trackerID string, groups []defs.GroupDef) []de
 		return groups
 	}
 	held := mergedFieldString(merged, "group")
-	// Tracker-supplied and rendered into style/class attributes, so only a
-	// value of the right shape is kept (see defs.SafeColor).
+	// Tracker-supplied and rendered into style/class attributes (see defs.SafeColor).
 	color := defs.SafeColor(mergedFieldString(merged, "group_color"))
 	icon := defs.SafeIconClass(mergedFieldString(merged, "group_icon"))
 	if held == "" || (color == "" && icon == "") {

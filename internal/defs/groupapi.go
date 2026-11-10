@@ -126,14 +126,9 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 	return out
 }
 
-// Group colours and icons from a tracker's API are rendered by the frontend
-// into a style attribute and a class attribute. Escaping keeps a value inside
-// the attribute but not inside the declaration — `red;background:url(…)` has
-// nothing to escape and still adds a property of its own — so these are
-// allow-lists of shape, applied where a style is built from API data. The
-// frontend applies the same rules (safeColor / safeIconClass in
-// web/src/utils/format.ts); this layer means a hostile value never reaches a
-// response at all, whichever client reads it.
+// Allow-lists of shape, not escapes: `red;background:url(…)` has nothing to
+// escape yet adds its own declaration. Mirrors safeColor/safeIconClass in
+// web/src/utils/format.ts so no client ever receives a hostile value.
 var (
 	hexColorRe  = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
 	funcColorRe = regexp.MustCompile(`^(?i:rgba?|hsla?)\([\d\s.,%/]+\)$`)
@@ -142,9 +137,8 @@ var (
 	iconClassRe = regexp.MustCompile(`^[\w\s-]+$`)
 )
 
-// SafeColor returns s trimmed when it is a plain CSS colour — hex, rgb()/
-// rgba()/hsl()/hsla() with numeric arguments, a var(--name) reference or a
-// bare keyword — and "" otherwise.
+// SafeColor returns s trimmed if it is a plain CSS colour (hex, numeric
+// rgb/hsl[a](), var(--name) or a keyword), else "".
 func SafeColor(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" || len(s) > 64 {
@@ -157,9 +151,7 @@ func SafeColor(s string) string {
 	return ""
 }
 
-// SafeIconClass returns s trimmed when it is a list of class names (word
-// characters, hyphens and spaces only) and "" otherwise. Arbitrary text in a
-// class attribute could borrow Yata's own classes and reshape the page.
+// SafeIconClass returns s trimmed if it is a list of class names, else "".
 func SafeIconClass(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 60 || !iconClassRe.MatchString(s) {

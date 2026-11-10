@@ -125,9 +125,6 @@ func TestQUIAcceptsAnExplicitKeyForAnotherHost(t *testing.T) {
 	}
 }
 
-// The instance id goes into the settings form's markup and into
-// QUIEnabledInstances ([]int), so only a whole-number id is passed on; an
-// instance whose id is anything else is dropped rather than forwarded raw.
 func TestQUIInstancesKeepsOnlyIntegerIDs(t *testing.T) {
 	d := testDeps(t)
 	qui := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

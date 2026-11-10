@@ -1979,9 +1979,7 @@ let _selectedThemeId: string  = '';   // tracks the live selection in the settin
 // Swatch fallback used when a theme CSS file has no /* swatches: */ comment.
 const SWATCH_FALLBACK: [string, string, string, string] = ['#111', '#222', '#6d56eb', '#a855f7'];
 
-// Swatches are parsed out of a theme file's comments, so a theme dropped into
-// the themes folder decides them. Only a real colour reaches the style
-// attribute; anything else shows as a neutral grey rather than as CSS.
+// Swatches come from theme files, so anything not a real colour shows grey.
 const swatch = (v: string): string => safeColor(v) || '#888';
 
 function renderThemeGrid(currentThemeId: string) {

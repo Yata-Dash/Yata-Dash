@@ -81,11 +81,8 @@ func quiInstances(d *Deps) http.HandlerFunc {
 		}
 		out := make([]map[string]any, 0, len(instances))
 		for _, inst := range instances {
-			// qui's instance ids are integers, and the settings form stores
-			// them as such (QUIEnabledInstances is []int) and renders them into
-			// an attribute. Passing the upstream value through untyped let a
-			// string id reach that markup; an instance without a whole-number
-			// id could never be enabled anyway, so it is dropped.
+			// The id is rendered into an attribute and stored as []int, so only
+			// a whole number is passed on; anything else couldn't be enabled anyway.
 			id, ok := inst["id"].(float64)
 			if !ok || id != math.Trunc(id) || math.Abs(id) >= 1<<53 {
 				continue
