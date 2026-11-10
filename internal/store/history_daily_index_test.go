@@ -28,10 +28,8 @@ func queryPlan(t testing.TB, db *DB, q string, args ...any) string {
 	return strings.Join(lines, "; ")
 }
 
-// TestSeriesDailyUnfilteredUsesDayIndex: without a tracker filter the
-// history_daily primary key (tracker_id, day, field) can't serve a day range,
-// so the History view's all-trackers query scanned the whole table. The day
-// index lets it seek.
+// TestSeriesDailyUnfilteredUsesDayIndex: all-trackers day-range queries use
+// the day index, not a full scan.
 func TestSeriesDailyUnfilteredUsesDayIndex(t *testing.T) {
 	db := testDB(t)
 	q, args := seriesQuery(`SELECT tracker_id, day, field, value FROM history_daily`,
@@ -46,8 +44,7 @@ func TestSeriesDailyUnfilteredUsesDayIndex(t *testing.T) {
 	}
 }
 
-// TestMigrateIdempotent: reopening an existing database re-runs every
-// migration, the new index included, without error.
+// TestMigrateIdempotent: reopening re-runs every migration without error.
 func TestMigrateIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.db")
 	for i := 0; i < 2; i++ {
@@ -59,9 +56,7 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 }
 
-// TestPragmas: WAL is on, and synchronous is still FULL — security state
-// (sessions, passwords, API tokens) shares the connection, so a commit must
-// survive a power cut (see Open).
+// TestPragmas: WAL is on and synchronous stays FULL (see Open).
 func TestPragmas(t *testing.T) {
 	db := testDB(t)
 	var mode string
@@ -127,9 +122,7 @@ func BenchmarkSeriesDailyAllTrackers(b *testing.B) {
 	}
 }
 
-// BenchmarkAddHistory: one fine-history write (a transaction per call) — the
-// commit cost that synchronous=NORMAL would cut, and why Open keeps FULL
-// anyway.
+// BenchmarkAddHistory: one fine-history commit under synchronous=FULL.
 func BenchmarkAddHistory(b *testing.B) {
 	db, err := Open(filepath.Join(b.TempDir(), "bench.db"))
 	if err != nil {

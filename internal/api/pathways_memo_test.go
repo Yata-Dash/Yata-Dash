@@ -12,10 +12,8 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
 
-// TestDefLookupsMemoisePerPair: one defLookups pair resolves each name once —
-// the engine calls groupsFor per route, and for a platform-served ladder each
-// call used to re-read group_ladders. A fresh pair (the next request) sees a
-// ladder that arrived in between.
+// TestDefLookupsMemoisePerPair: a pair resolves each name once; a fresh pair
+// sees a ladder that arrived in between.
 func TestDefLookupsMemoisePerPair(t *testing.T) {
 	d := pathDeps(t)
 	tr := addTraxaryTracker(t, d)
@@ -45,8 +43,8 @@ func TestDefLookupsMemoisePerPair(t *testing.T) {
 	}
 }
 
-// BenchmarkDefLookupsPerRoute: one request's worth of groupsFor calls (one per
-// route in the shipped dataset) for a tracker whose ladder is platform-served.
+// BenchmarkDefLookupsPerRoute: one request's groupsFor calls for a
+// platform-served ladder.
 func BenchmarkDefLookupsPerRoute(b *testing.B) {
 	dir := b.TempDir()
 	cfg, err := config.Open(filepath.Join(dir, "config.json"))
@@ -84,8 +82,7 @@ func BenchmarkDefLookupsPerRoute(b *testing.B) {
 	}
 }
 
-// peergardenTracker matches addTraxaryTracker's, for the benchmark (which has
-// no *testing.T to hand it).
+// peergardenTracker matches addTraxaryTracker's, for the benchmark.
 var peergardenTracker = models.Tracker{
 	ID: "pg1", Name: "PeerGarden", URL: "https://peergarden.org",
 	Type: "traxary", APIKey: "x", Enabled: true,

@@ -163,9 +163,6 @@ var floatFields = map[string]bool{
 
 var sizeUnitRe = regexp.MustCompile(`(?i)\d\s*(TiB|GiB|MiB|KiB|TB|GB|MB|KB|\bB\b)`)
 
-// isoDateRe and promoTimeRe are static patterns compiled once, rather than
-// on every matching node (the registration-date walk) or every scraped page
-// (the promoTime fallback).
 var (
 	isoDateRe   = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
 	promoTimeRe = regexp.MustCompile("promoTime\\s*:\\s*new Date\\([`'\"]([^`'\"]+)[`'\"]\\)")
@@ -950,7 +947,7 @@ var tzOffsets = map[string]int{
 }
 
 // tzSuffixRe picks a trailing zone abbreviation ("… 3:04 PM EST") off a
-// scraped timestamp. Compiled once rather than on every parseUSDateTime call.
+// scraped timestamp.
 var tzSuffixRe = regexp.MustCompile(`\b([A-Z]{2,4})\s*$`)
 
 func parseUSDateTime(s string) int64 {

@@ -27,9 +27,7 @@ func gunzip(t *testing.T, b []byte) []byte {
 	return out
 }
 
-// TestJSONResponsesCompressed: an API response is gzipped for a client that
-// asks for it and is byte-for-byte the plain JSON once decoded; a client that
-// doesn't ask gets it uncompressed.
+// TestJSONResponsesCompressed: gzip only when asked, decoding to the plain JSON.
 func TestJSONResponsesCompressed(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -65,11 +63,8 @@ func TestJSONResponsesCompressed(t *testing.T) {
 	}
 }
 
-// TestStaticCompressionAndRanges: the static file server still compresses a
-// whole-file response, but a Range request is answered uncompressed with the
-// exact bytes asked for — a gzipped 206 would match neither the range nor a
-// decodable stream. Plain-text downloads (the log file, the CSV export) are
-// not in the compressible list, so they keep their Content-Length.
+// TestStaticCompressionAndRanges: whole files are gzipped, Range requests and
+// text/plain are not.
 func TestStaticCompressionAndRanges(t *testing.T) {
 	d := testDeps(t)
 	d.BaseDir = t.TempDir()
@@ -128,8 +123,6 @@ func TestStaticCompressionAndRanges(t *testing.T) {
 	}
 }
 
-// TestHistoryCSVNotCompressed: the CSV export is text/csv, outside the
-// compressible list, so it goes out as written.
 func TestHistoryCSVNotCompressed(t *testing.T) {
 	d := testDeps(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/history/export.csv", nil)
@@ -147,10 +140,8 @@ func TestHistoryCSVNotCompressed(t *testing.T) {
 	}
 }
 
-// BenchmarkCompressHistorySeries pushes a /api/history/series-shaped payload
-// (20 trackers × 5 fields × 672 points — a week at 15-minute resolution, about
-// what the dashboard loads) through the middleware and reports the bytes on
-// the wire with and without gzip.
+// BenchmarkCompressHistorySeries: wire bytes for a week-long, 20-tracker
+// /api/history/series payload, with and without gzip.
 func BenchmarkCompressHistorySeries(b *testing.B) {
 	var series []historySeries
 	for tr := 0; tr < 20; tr++ {

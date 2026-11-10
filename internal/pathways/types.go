@@ -55,10 +55,8 @@ type Data struct {
 	byFrom map[string][]Route
 	byTo   map[string][]Route
 	names  []string
-	// reqs memoises ParseReqs for every distinct route requirement text, so
-	// a page load evaluating hundreds of routes doesn't re-parse static
-	// strings each time. Built once in index() and only read afterwards, so
-	// concurrent handlers can share it without a lock.
+	// reqs memoises ParseReqs per route requirement text. Written only in
+	// index(), so concurrent handlers can read it without a lock.
 	reqs map[string][]Req
 }
 
@@ -99,11 +97,9 @@ func (d *Data) index() {
 	}
 }
 
-// parsedReqs returns the parsed requirements for a route's text: the copy
-// memoised at load when there is one, otherwise a fresh parse. The memoised
-// slice is shared, so it comes back clipped — an append by the caller then
-// copies instead of writing into the shared backing array. Callers must not
-// modify its elements in place (none do: mergeInviteReqs builds a new slice).
+// parsedReqs returns the memoised parse of a route's text, else a fresh one.
+// The shared slice comes back clipped so appends copy; callers must not modify
+// its elements in place.
 func (d *Data) parsedReqs(text string) []Req {
 	if d != nil {
 		if q, ok := d.reqs[text]; ok {

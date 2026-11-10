@@ -37,25 +37,17 @@ type Deps struct {
 	AllowedHosts []string
 }
 
-// compressible lists the response types worth gzipping. Downloads served as
-// text/plain or text/csv (the log file, the history export) are left alone, as
-// is anything a handler has already encoded itself — chi's Compress skips a
-// response that carries a Content-Encoding.
+// compressible lists the response types worth gzipping; text/plain and
+// text/csv downloads are deliberately left out.
 var compressible = []string{
 	"application/json", "text/html", "text/css",
 	"application/javascript", "text/javascript", "image/svg+xml",
 }
 
 // compressResponses gzips (or deflates) responses for clients that accept it.
-// The dashboard's /api/history/series alone is ~1.8 MB of JSON on every page
-// load; BenchmarkCompressHistorySeries measures it shrinking about fivefold.
-//
-// Range requests bypass it: http.FileServer answers them with a 206 whose
-// Content-Range counts bytes of the file as stored, and gzipping that slice
-// would hand the client bytes that match neither the range nor a decodable
-// stream. The bypass still adds Vary: Accept-Encoding, as the compressed path
-// does, so a cache never hands this identity response to a client that asked
-// for gzip, or the other way round.
+// Range requests bypass it: a gzipped 206 would match neither the stored
+// byte range nor a decodable stream. The bypass still sets Vary so caches
+// don't mix the two.
 func compressResponses(next http.Handler) http.Handler {
 	compressed := middleware.Compress(5, compressible...)(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

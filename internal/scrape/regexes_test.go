@@ -6,9 +6,8 @@ import (
 	"time"
 )
 
-// TestParseUSDateTimeZoneSuffix pins the trailing-zone handling that uses the
-// package-level tzSuffixRe: a known abbreviation shifts the result by its
-// offset and is stripped before the layouts are tried.
+// TestParseUSDateTimeZoneSuffix: a known zone suffix shifts the result and is
+// stripped.
 func TestParseUSDateTimeZoneSuffix(t *testing.T) {
 	utc := parseUSDateTime("01/02/2026 15:04")
 	if want := time.Date(2026, 1, 2, 15, 4, 0, 0, time.UTC).Unix(); utc != want {
@@ -22,9 +21,8 @@ func TestParseUSDateTimeZoneSuffix(t *testing.T) {
 	}
 }
 
-// TestExtractStatsHoistedPatterns covers the two extractStats paths whose
-// patterns are now compiled once at package level: the registration <time>
-// element and the event banner's promoTime fallback.
+// TestExtractStatsHoistedPatterns covers the registration <time> and
+// promoTime fallback paths.
 func TestExtractStatsHoistedPatterns(t *testing.T) {
 	raw := `<html><body>
 <time class="profile__registration" datetime="2024-05-06 12:00:00">6 May 2024</time>

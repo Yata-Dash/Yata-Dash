@@ -166,8 +166,7 @@ var (
 	inviteForumRe = regexp.MustCompile(`(?i)^invite[\s-]*forum(?:\s+access)?$`)
 
 	// orHigherRe: "X or higher" / "X or above" (see parseToken). classLeadRe
-	// gates parseAtom's class catch-all. Both used to be compiled on every
-	// call, which dominated the cost of evaluating a route.
+	// gates parseAtom's class catch-all.
 	orHigherRe  = regexp.MustCompile(`(?i)\s+or\s+(?:higher|above)\s*$`)
 	classLeadRe = regexp.MustCompile(`^[A-Za-z]`)
 )

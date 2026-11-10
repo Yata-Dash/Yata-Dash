@@ -17,9 +17,8 @@ func loadRealRoutes(tb testing.TB) *Data {
 	return d
 }
 
-// TestParsedReqsMatchesParseReqs: the requirements memoised at load must be
-// exactly what parsing the route text afresh produces, for every route in the
-// shipped dataset — the cache is a pure speed-up.
+// TestParsedReqsMatchesParseReqs: the load-time cache equals a fresh parse for
+// every shipped route.
 func TestParsedReqsMatchesParseReqs(t *testing.T) {
 	d := loadRealRoutes(t)
 	for _, r := range d.Routes {
@@ -37,8 +36,7 @@ func TestParsedReqsMatchesParseReqs(t *testing.T) {
 	}
 }
 
-// TestParsedReqsNotAliased: appending to the slice a caller gets back must
-// not write into the shared, memoised one.
+// TestParsedReqsNotAliased: a caller's append must not touch the shared slice.
 func TestParsedReqsNotAliased(t *testing.T) {
 	d := &Data{Routes: []Route{{From: "A", To: "B", Reqs: "Elite, 6 months", Active: true}}}
 	d.index()
@@ -50,8 +48,8 @@ func TestParsedReqsNotAliased(t *testing.T) {
 	}
 }
 
-// BenchmarkEvalAllRoutes evaluates every route in the shipped dataset once as
-// a first hop — roughly what one pathways page load costs.
+// BenchmarkEvalAllRoutes: every shipped route as a first hop, about one page
+// load.
 func BenchmarkEvalAllRoutes(b *testing.B) {
 	d := loadRealRoutes(b)
 	u := UserTracker{PathwayName: "x", Stats: Stats{AgeDays: 400, Ratio: 2, UploadedGiB: 500}}
@@ -66,8 +64,7 @@ func BenchmarkEvalAllRoutes(b *testing.B) {
 	}
 }
 
-// BenchmarkParseAllReqs parses every route's requirement text once — the
-// one-off cost index() now pays at load.
+// BenchmarkParseAllReqs: the one-off parse cost index() pays at load.
 func BenchmarkParseAllReqs(b *testing.B) {
 	d := loadRealRoutes(b)
 	b.ReportAllocs()

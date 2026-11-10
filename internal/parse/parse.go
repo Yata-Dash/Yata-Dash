@@ -47,11 +47,9 @@ func SizeToGiB(s string) *float64 {
 	return &result
 }
 
-// Seed-time unit patterns, compiled once: SeedTimeToSeconds runs on every
-// Merged snapshot, notify condition and pacing check, and compiling seven
-// regexes per call was the bulk of its cost. Y, W and D match either case; M
-// (months) and m (minutes) are told apart by case, and h and s are lowercase
-// only, exactly as before.
+// Seed-time unit patterns for SeedTimeToSeconds, a hot path. Y, W and D
+// match either case; M (months) and m (minutes) are told apart by case; h and
+// s are lowercase only.
 var (
 	seedYearRe   = regexp.MustCompile(`(?i)([\d.]+)\s*Y`)
 	seedMonthRe  = regexp.MustCompile(`([\d.]+)\s*M`) // uppercase M only

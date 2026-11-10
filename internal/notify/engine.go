@@ -194,12 +194,8 @@ func (e *Engine) Evaluate(t models.Tracker, merged models.MergedStats, reachable
 func (e *Engine) Announce(rules []models.AlertRule, trackers []models.Tracker, mergedFn func(string) models.MergedStats, trendFn func(string) TrendContext) {
 	cfg := e.cfg.Notifications()
 
-	// Gather each in-scope tracker's stats and trend signals once, BEFORE
-	// taking the lock. trendFn is a Merged plus growth-rate and decline
-	// analysis — tens of milliseconds a tracker — and calling it per rule ×
-	// tracker under e.mu held the lock for seconds when several rules were
-	// saved at once, stalling every Evaluate behind it. Neither function
-	// reads engine state, so computing them up front changes no outcome.
+	// Gather each in-scope tracker's stats and trends once, BEFORE taking the
+	// lock: trendFn is slow and would stall Evaluate. Neither reads engine state.
 	type snapshot struct {
 		merged models.MergedStats
 		cur    map[string]string

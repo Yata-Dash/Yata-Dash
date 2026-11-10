@@ -95,15 +95,8 @@ type targetEntry struct {
 }
 
 // defLookups builds the def-resolution callbacks the pathways engine needs.
-//
-// The engine calls them once per route it evaluates — hundreds per request —
-// and resolving a name is not cheap: matchDef scans every def, and for a
-// platform-served ladder groupsForDef walks the configured trackers, reads
-// group_ladders and decodes its JSON. So each pair memoises by name for its
-// own lifetime. Callers build a fresh pair per request (or per evaluation
-// pass), which keeps a ladder fetched in the meantime visible on the next
-// one; the maps are unguarded because the engine calls them from a single
-// goroutine.
+// Each pair memoises by name, so build a fresh pair per request to see newly
+// fetched ladders. The maps are unguarded: the engine calls from one goroutine.
 func defLookups(d *Deps) (func(string) []defs.GroupDef, func(string) *defs.InviteReqs) {
 	type match struct {
 		td defs.TrackerDef

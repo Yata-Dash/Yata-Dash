@@ -21,12 +21,8 @@ type DB struct {
 
 // Open opens (creating if needed) the database at path and migrates the schema.
 func Open(path string) (*DB, error) {
-	// synchronous stays at the FULL default, deliberately. NORMAL would skip
-	// the fsync on each commit under WAL, and a power cut could then roll back
-	// the last few commits. Most writes are history samples the next poll
-	// rewrites, but this one connection also carries password changes,
-	// session deletions and API-token revocations, and losing one of those
-	// would bring a credential the user had revoked back to life.
+	// synchronous stays FULL deliberately: under NORMAL a power cut could roll
+	// back a password change or token revocation, reviving a revoked credential.
 	h, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, err
@@ -85,9 +81,8 @@ func (d *DB) migrate() error {
 			value      REAL NOT NULL,
 			PRIMARY KEY (tracker_id, day, field)
 		)`,
-		// The primary key leads with tracker_id, so it can't serve a day
-		// range on its own: the History view's all-trackers series, the CSV
-		// export and PruneDaily all scanned the whole table without this.
+		// The primary key leads with tracker_id, so all-trackers day-range
+		// queries need this to avoid a full scan.
 		`CREATE INDEX IF NOT EXISTS idx_history_daily_day ON history_daily (day)`,
 		// One row per scrape ATTEMPT (success or failure) — the persistent
 		// rate-limit ledger, and since the outcome columns were added, the

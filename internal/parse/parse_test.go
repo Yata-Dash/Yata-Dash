@@ -2,9 +2,7 @@ package parse
 
 import "testing"
 
-// TestSeedTimeToSeconds pins the unit ladder, including the case rules the
-// precompiled patterns must keep: Y/W/D match either case, but M (months) and
-// m (minutes) are told apart by case, and h and s are lowercase only.
+// TestSeedTimeToSeconds pins the unit ladder and its case rules.
 func TestSeedTimeToSeconds(t *testing.T) {
 	cases := []struct {
 		in   string

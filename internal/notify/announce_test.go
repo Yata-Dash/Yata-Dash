@@ -7,9 +7,8 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// TestAnnounceFiresAlreadyTrueRules: a newly saved rule fires at once for an
-// in-scope tracker that already meets it, records firing state for every
-// in-scope tracker, and leaves disabled and out-of-scope trackers alone.
+// TestAnnounceFiresAlreadyTrueRules: a new rule fires at once where already
+// true and records state only for in-scope, enabled trackers.
 func TestAnnounceFiresAlreadyTrueRules(t *testing.T) {
 	rec := &fakeRecorder{}
 	e := New(staticCfg{models.NotificationConfig{}}, nil)
@@ -61,10 +60,8 @@ func TestAnnounceFiresAlreadyTrueRules(t *testing.T) {
 	}
 }
 
-// TestAnnounceComputesOncePerTrackerOutsideLock: merged stats and trend
-// signals are gathered once per in-scope tracker, however many rules are
-// being announced, and without holding the engine mutex — trendFn is costly
-// and Evaluate must not queue behind it.
+// TestAnnounceComputesOncePerTrackerOutsideLock: stats and trends are computed
+// once per in-scope tracker, without the engine mutex held.
 func TestAnnounceComputesOncePerTrackerOutsideLock(t *testing.T) {
 	e := New(staticCfg{models.NotificationConfig{}}, nil)
 	e.SetRecorder(&fakeRecorder{})
@@ -111,8 +108,7 @@ func TestAnnounceComputesOncePerTrackerOutsideLock(t *testing.T) {
 	}
 }
 
-// BenchmarkAnnounce: five rules over twenty trackers, with a per-call cost on
-// trendFn standing in for Merged + GrowthRates + DeclineSignals.
+// BenchmarkAnnounce: five rules over twenty trackers, with a costly trendFn.
 func BenchmarkAnnounce(b *testing.B) {
 	var rules []models.AlertRule
 	for i := 0; i < 5; i++ {
