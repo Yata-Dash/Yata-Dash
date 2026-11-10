@@ -172,6 +172,9 @@
 
     // Profile page path. "{username}" is replaced with the user's name.
     // Leave out to inherit the type default (unit3d: "/users/{username}").
+    // Must start with a single "/" — like every "path" in a def, it is
+    // appended to the tracker URL, and anything else could change which host
+    // the request (and its session cookie) goes to, so the def is refused.
     "profile_path": "/users/{username}",
 
     // Extra label mappings for this tracker's profile page layout.
@@ -206,6 +209,7 @@
     // Endpoint path appended to the base URL. Use {username} when an API
     // needs the configured tracker username in its query; Yata URL-encodes
     // the value and marks username as required during tracker setup.
+    // Must start with a single "/" (see profile_path above).
     "path": "/api/stats.php?summary",
     // Optional dedicated API origin when it differs from the tracker URL.
     //
@@ -311,6 +315,7 @@
   // End times are parsed from ISO forms and from the US "09/05/2026 1:00 AM
   // EST" shape, with the named zone honoured.
   "events": {
+    // Must start with a single "/" (see profile_path above).
     "path": "/api/events/global-free-leech",
     "active_field": "is_global_free_leech",
     "until_field": "global_free_leech_until",

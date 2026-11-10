@@ -65,6 +65,15 @@ type Policy struct {
 	// I control, which answers 302 to somewhere inside your network" — the
 	// destination check alone would allow that hop when AllowPrivate is set.
 	PinOrigin bool
+
+	// CredentialHeaders are credential headers net/http copies across
+	// redirects. They are deleted once a hop leaves the original origin (see
+	// sameCredentialOrigin) and stay deleted for the rest of the chain.
+	CredentialHeaders []string
+
+	// PinBodyOrigin refuses a redirect (307/308) that would resend the body
+	// to a different origin: for JSON-RPC trackers the body holds the API key.
+	PinBodyOrigin bool
 }
 
 // maxRedirects caps a redirect chain. Go's own default is 10; this is stated
@@ -330,8 +339,42 @@ func checkRedirect(p Policy) func(*http.Request, []*http.Request) error {
 		if p.PinOrigin && len(via) > 0 && !SameOrigin(req.URL, via[0].URL) {
 			return fmt.Errorf("%w: redirect to a different origin (%s)", ErrBlocked, req.URL.Host)
 		}
+		if len(via) > 0 && (p.PinBodyOrigin || len(p.CredentialHeaders) > 0) {
+			// Security: compare every hop with the first request; once the
+			// chain has left that origin, credentials are never sent again.
+			left := !sameCredentialOrigin(via[0].URL, req.URL)
+			for _, hop := range via[1:] {
+				left = left || !sameCredentialOrigin(via[0].URL, hop.URL)
+			}
+			if left {
+				if p.PinBodyOrigin && hasBody(req) {
+					return fmt.Errorf("%w: redirect would resend the request body to a different origin (%s)", ErrBlocked, req.URL.Host)
+				}
+				for _, h := range p.CredentialHeaders {
+					req.Header.Del(h)
+				}
+			}
+		}
 		return nil
 	}
+}
+
+// sameCredentialOrigin reports whether a redirect from orig to dest may keep
+// the original credentials: same origin, or an http→https upgrade on the same
+// host and default ports. Never https→http, which would leak them in clear.
+func sameCredentialOrigin(orig, dest *url.URL) bool {
+	if SameOrigin(orig, dest) {
+		return true
+	}
+	return strings.EqualFold(orig.Scheme, "http") && strings.EqualFold(dest.Scheme, "https") &&
+		strings.EqualFold(orig.Hostname(), dest.Hostname()) &&
+		port(orig) == "80" && port(dest) == "443"
+}
+
+// hasBody reports whether a redirect hop is about to resend a request body
+// (net/http sets GetBody only on a 307/308 replay).
+func hasBody(req *http.Request) bool {
+	return req.GetBody != nil || (req.Body != nil && req.Body != http.NoBody)
 }
 
 // IsBlocked reports whether err came from this package's policy rather than

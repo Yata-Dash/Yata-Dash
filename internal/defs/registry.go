@@ -237,6 +237,37 @@ func validateType(td TypeDef) error {
 	default:
 		return fmt.Errorf("api.kind must be one of unit3d|gazelle_json|gazelle_games|custom|demo|none, got %q", td.API.Kind)
 	}
+	paths := map[string]string{"scrape.profile_path": td.Scrape.ProfilePath}
+	if td.CustomAPI != nil {
+		paths["custom_api.path"] = td.CustomAPI.Path
+	}
+	if td.GroupAPI != nil {
+		paths["group_api.path"] = td.GroupAPI.Path
+	}
+	return validateDefPaths(paths)
+}
+
+// validateDefPaths checks every def field appended to the tracker's URL.
+//
+// Security: the join is concatenation, so a path not starting with exactly one
+// "/" (e.g. "@evil.example/x") can send the request, and its credential, to
+// another host. netguard.JoinPath enforces this at request time; this surfaces
+// it in the Definitions list.
+func validateDefPaths(paths map[string]string) error {
+	fields := make([]string, 0, len(paths))
+	for f := range paths {
+		fields = append(fields, f)
+	}
+	sort.Strings(fields) // stable error text when several are wrong
+	for _, f := range fields {
+		p := paths[f]
+		if p == "" {
+			continue // optional here; "required" is checked where it applies
+		}
+		if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") {
+			return fmt.Errorf("%s must be a path on the tracker's own site, starting with a single \"/\", got %q", f, p)
+		}
+	}
 	return nil
 }
 
@@ -265,7 +296,17 @@ func validateTracker(td TrackerDef, types map[string]TypeDef) error {
 				"(or a \"custom_api\" block on the type)", td.Type)
 		}
 	}
-	return nil
+	paths := map[string]string{"scrape.profile_path": td.Scrape.ProfilePath}
+	if td.API != nil {
+		paths["api.path"] = td.API.Path
+	}
+	if td.ExtendedStats != nil {
+		paths["extended_stats.path"] = td.ExtendedStats.Path
+	}
+	if td.Events != nil {
+		paths["events.path"] = td.Events.Path
+	}
+	return validateDefPaths(paths)
 }
 
 // validateDefBaseURL checks the one field in a definition that decides where

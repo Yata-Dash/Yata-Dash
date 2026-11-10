@@ -208,7 +208,7 @@ func quiFetch(url, apiKey string) ([]byte, int, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, fmt.Errorf("http_%d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}

@@ -6,6 +6,13 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Security
+
+- **Tracker credentials stay on the tracker's own host.** A definition path not
+  starting with a single "/" is refused, since it could send the API key or
+  cookie elsewhere; API keys no longer follow redirects to another host; and
+  responses from trackers and Prowlarr/Jackett/QUI are capped at 8 MiB.
+
 ## [Beta-20261011]
 
 ### Changed

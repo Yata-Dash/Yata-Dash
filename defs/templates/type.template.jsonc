@@ -85,6 +85,10 @@
     //   {username} — the user's name (unit3d style: /users/{username})
     //   {id}       — the numeric user id captured from the API's user_id
     //                field (gazelle style: /user.php?id={id})
+    // Must start with a single "/". This and every other "path" in a def
+    // (custom_api.path, group_api.path) is appended to the tracker URL, so
+    // anything else could change which host receives the request and its
+    // credentials; such a def is refused.
     "profile_path": "/users/{username}",
 
     // Base label map for profile pages of this software:
