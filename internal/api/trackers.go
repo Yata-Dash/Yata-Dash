@@ -12,10 +12,32 @@ import (
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 )
 
 const maskedKey = "••••••••"
+
+// storedSecretFollows reports whether a credential stored for oldURL may stay
+// with newURL: only on the same origin, else "change the URL, leave the key
+// masked" sends the key to any host. An unchanged string always follows, so an
+// unparseable stored URL keeps its key; a changed one fails closed.
+func storedSecretFollows(oldURL, newURL string) bool {
+	oldURL, newURL = strings.TrimSpace(oldURL), strings.TrimSpace(newURL)
+	return oldURL == newURL || netguard.SameOriginStr(oldURL, newURL)
+}
+
+// resolveMaskedSecret keeps the stored secret for a mask only while the URL
+// keeps its origin; any other sent value, "" included, is taken as given.
+func resolveMaskedSecret(sent, stored, newURL, storedURL string) string {
+	if sent != maskedKey {
+		return sent
+	}
+	if storedSecretFollows(storedURL, newURL) {
+		return stored
+	}
+	return ""
+}
 
 func registerTrackers(r chi.Router, d *Deps) {
 	r.Get("/trackers", listTrackers(d))
@@ -414,7 +436,9 @@ func recordLogin(d *Deps) http.HandlerFunc {
 
 // applyPayload merges a payload into a tracker. The masked API key sentinel
 // means "unchanged"; an empty string means "clear it".
+// A move to another origin clears a masked or absent key/cookie.
 func applyPayload(t *models.Tracker, p trackerPayload) {
+	storedURL := t.URL
 	if p.Name != nil {
 		t.Name = strings.TrimSpace(*p.Name)
 	}
@@ -424,11 +448,18 @@ func applyPayload(t *models.Tracker, p trackerPayload) {
 	if p.Type != nil && *p.Type != "" {
 		t.Type = *p.Type
 	}
-	if p.APIKey != nil && *p.APIKey != maskedKey {
+	keepStored := storedSecretFollows(storedURL, t.URL)
+	switch {
+	case p.APIKey != nil && *p.APIKey != maskedKey:
 		t.APIKey = strings.TrimSpace(*p.APIKey)
+	case !keepStored:
+		t.APIKey = ""
 	}
-	if p.SessionCookie != nil && *p.SessionCookie != maskedKey {
+	switch {
+	case p.SessionCookie != nil && *p.SessionCookie != maskedKey:
 		t.SessionCookie = strings.TrimSpace(*p.SessionCookie)
+	case !keepStored:
+		t.SessionCookie = ""
 	}
 	if p.Username != nil {
 		t.Username = strings.TrimSpace(*p.Username)

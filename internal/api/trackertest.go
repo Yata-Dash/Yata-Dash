@@ -72,6 +72,7 @@ var pendingTestResults sync.Map // trackerID → pendingTest
 // pointer + masked-sentinel semantics as trackerPayload/applyPayload
 // (trackers.go): absent field = use the stored value; maskedKey = unchanged;
 // anything else (including "") = the value to test with. NEVER persisted.
+// The stored value is used only on the stored origin.
 type testOverrides struct {
 	APIKey        *string `json:"api_key"`
 	SessionCookie *string `json:"session_cookie"`
@@ -83,18 +84,28 @@ type testOverrides struct {
 // test run. Mirrors applyPayload's masked-sentinel rules for just these four
 // fields — deliberately NOT the full payload, so a stray field in the body
 // can never affect anything but what's being tested.
+// Including the origin rule: a url override on another origin never gets the
+// stored secrets, or a Test could send them to any host.
 func applyTestOverrides(t *models.Tracker, p testOverrides) {
-	if p.APIKey != nil && *p.APIKey != maskedKey {
-		t.APIKey = strings.TrimSpace(*p.APIKey)
+	storedURL := t.URL
+	if p.URL != nil && strings.TrimSpace(*p.URL) != "" {
+		t.URL = strings.TrimRight(strings.TrimSpace(*p.URL), "/")
 	}
-	if p.SessionCookie != nil && *p.SessionCookie != maskedKey {
+	keepStored := storedSecretFollows(storedURL, t.URL)
+	switch {
+	case p.APIKey != nil && *p.APIKey != maskedKey:
+		t.APIKey = strings.TrimSpace(*p.APIKey)
+	case !keepStored:
+		t.APIKey = ""
+	}
+	switch {
+	case p.SessionCookie != nil && *p.SessionCookie != maskedKey:
 		t.SessionCookie = strings.TrimSpace(*p.SessionCookie)
+	case !keepStored:
+		t.SessionCookie = ""
 	}
 	if p.Username != nil {
 		t.Username = strings.TrimSpace(*p.Username)
-	}
-	if p.URL != nil && strings.TrimSpace(*p.URL) != "" {
-		t.URL = strings.TrimRight(strings.TrimSpace(*p.URL), "/")
 	}
 }
 
