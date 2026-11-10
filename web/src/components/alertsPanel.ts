@@ -157,8 +157,13 @@ function toggle(force?: boolean): void {
   }
 }
 
+/** boot() reruns after every sign-in; wiring twice made one bell click open and shut the panel. */
+let wired = false;
+
 /** Wire the panel up once, at startup. */
 export function initAlertsPanel(): void {
+  if (wired) { void refreshAlertCount(); return; }
+  wired = true;
   el('alerts-btn')?.addEventListener('click', e => { e.stopPropagation(); toggle(); });
 
   // Click-away and Escape close it — it overlays the dashboard, so leaving it

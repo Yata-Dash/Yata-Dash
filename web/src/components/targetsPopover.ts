@@ -23,6 +23,7 @@ import {
   buildAvailableTargetSpecs, normalizeTargetValue, targetDisplayValue,
 } from './modals';
 import type { TargetSpec } from './modals';
+import { localStore } from '../utils/storage';
 
 interface PopoverDeps {
   trackers: () => Tracker[];
@@ -49,7 +50,7 @@ export function initTargetsPopover(deps: PopoverDeps): void {
 
 function cachedManual(id: string): Record<string, string> {
   try {
-    const all = JSON.parse(localStorage.getItem(MANUAL_CACHE_KEY) ?? '{}');
+    const all = JSON.parse(localStore.get(MANUAL_CACHE_KEY) ?? '{}');
     const m = all?.[id];
     return m && typeof m === 'object' ? m : {};
   } catch { return {}; }
@@ -57,9 +58,9 @@ function cachedManual(id: string): Record<string, string> {
 
 function cacheManual(id: string, targets: Record<string, string>): void {
   try {
-    const all = JSON.parse(localStorage.getItem(MANUAL_CACHE_KEY) ?? '{}');
+    const all = JSON.parse(localStore.get(MANUAL_CACHE_KEY) ?? '{}');
     all[id] = targets;
-    localStorage.setItem(MANUAL_CACHE_KEY, JSON.stringify(all));
+    localStore.set(MANUAL_CACHE_KEY, JSON.stringify(all));
   } catch { /* private mode */ }
 }
 
