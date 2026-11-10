@@ -191,6 +191,14 @@ func (m *Manager) Import(data []byte) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// An import with no digest send history keeps the live one; a LastSentAt
+	// of 0 would make this week's digest due again at once.
+	if incoming.Notifications.Digest.LastSentAt == 0 {
+		incoming.Notifications.Digest.LastSentAt = m.cfg.Notifications.Digest.LastSentAt
+		if incoming.Notifications.Digest.LastReadyTargets == nil {
+			incoming.Notifications.Digest.LastReadyTargets = append([]string(nil), m.cfg.Notifications.Digest.LastReadyTargets...)
+		}
+	}
 	m.cfg = incoming
 	// Reuse the same defaulting the loader applies.
 	if m.cfg.Server.Host == "" {
@@ -209,5 +217,6 @@ func (m *Manager) Import(data []byte) error {
 		m.cfg.Trackers = []models.Tracker{}
 	}
 	normalizeBackup(&m.cfg.Settings)
+	normalizeDigest(&m.cfg.Notifications.Digest)
 	return m.saveLocked()
 }
