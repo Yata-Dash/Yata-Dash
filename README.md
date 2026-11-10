@@ -116,7 +116,7 @@ services:
 
 **Windows** — download `yata-<version>-windows-amd64.zip` from the [latest release](https://github.com/Yata-Dash/Yata-Dash/releases/latest), extract it, run `yata.exe`.
 
-**From source** — Go 1.23+ and Node 18+, then `make build && ./yata` (or `.\build.ps1 -Run` on Windows).
+**From source** — Go 1.23+ and Node 22.12+, then `make build && ./yata` (or `.\build.ps1 -Run` on Windows).
 
 Yata listens on port 8420 and binds all interfaces by default; `--port` and `--host 127.0.0.1` change that ([all flags](docs/SETUP.md#port-address-and-file-paths)).
 

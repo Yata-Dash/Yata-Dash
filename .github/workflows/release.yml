@@ -72,7 +72,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.ver.outputs.release == 'true'
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
