@@ -561,16 +561,9 @@ func RunRefreshCycle(d *Deps) {
 }
 
 // safeRefreshTracker is refreshTracker behind a per-tracker recover boundary.
-//
-// The background loop and bulkStats's goroutines run outside the request
-// goroutine that chi's Recoverer protects, so a panic anywhere in one
-// tracker's refresh — a scraper bug tripped by one site's odd HTML, say —
-// would otherwise kill the whole process and every other tracker with it.
-// The boundary is deliberately one tracker wide: that refresh is reported as
-// failed (with its last stored stats, like any other outage) and logged with
-// a stack so the bug can be found, and the caller carries on with the next.
-// Locks taken inside refreshTracker are released by their defers as the
-// panic unwinds, so the tracker is not left wedged for the next cycle.
+// The background loop and bulkStats goroutines run outside chi's Recoverer, so
+// one tracker's panic would otherwise kill the process. It is logged with a
+// stack and reported as failed, keeping the last stored stats.
 func safeRefreshTracker(d *Deps, t models.Tracker, force bool) (resp models.TrackerStatsResponse) {
 	defer func() {
 		p := recover()
@@ -589,11 +582,9 @@ func safeRefreshTracker(d *Deps, t models.Tracker, force bool) (resp models.Trac
 	return refreshTracker(d, t, force)
 }
 
-// fillLastStored adds the tracker's last stored stats to a panic-path
-// response, so the card keeps its numbers as it would through any other
-// failure. It has its own recover because it runs inside safeRefreshTracker's
-// deferred handler: if the store itself is what panicked, a second panic here
-// would escape the boundary. Stale numbers are a bonus, not a requirement.
+// fillLastStored adds the tracker's last stored stats to a panic-path response.
+// It recovers on its own: it runs inside safeRefreshTracker's deferred handler,
+// so a second panic (say, from the store) would escape the boundary.
 func fillLastStored(d *Deps, resp *models.TrackerStatsResponse) {
 	defer func() { _ = recover() }()
 	if merged, err := d.Stats.Merged(resp.TrackerID); err == nil {
@@ -656,8 +647,7 @@ func singleStats(d *Deps) http.HandlerFunc {
 			jsonOK(w, models.TrackerStatsResponse{TrackerID: t.ID, ErrorKind: "disabled", Error: "disabled"})
 			return
 		}
-		// Same boundary as the bulk path: chi's Recoverer would catch a panic
-		// here too, but as a bare 500 — this keeps the card's stored stats.
+		// chi's Recoverer would give a bare 500; this keeps the stored stats.
 		jsonOK(w, safeRefreshTracker(d, t, true))
 	}
 }

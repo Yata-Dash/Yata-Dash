@@ -12,9 +12,8 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// panicTransport stands in for a bug anywhere in one tracker's refresh: it
-// panics on the request for panicHost and answers every other host with a
-// 500, recording which hosts were asked.
+// panicTransport panics for panicHost, answers other hosts with a 500 and
+// records which hosts were asked.
 type panicTransport struct {
 	panicHost string
 	mu        sync.Mutex
@@ -42,9 +41,7 @@ func (p *panicTransport) asked(host string) bool {
 	return p.seen[host]
 }
 
-// panicDeps configures two unit3d trackers — the first one panics mid-fetch —
-// with a stored API layer on the panicking one so the stale-data path can be
-// checked too.
+// panicDeps configures two unit3d trackers; the first panics and has stored stats.
 func panicDeps(t *testing.T, prefix string) (*Deps, *panicTransport) {
 	t.Helper()
 	d := testDeps(t)
@@ -64,8 +61,6 @@ func panicDeps(t *testing.T, prefix string) (*Deps, *panicTransport) {
 	return d, pt
 }
 
-// A panic in one tracker's background refresh used to take the whole
-// process down; now it is contained to that tracker and the loop moves on.
 func TestRefreshCyclePanicIsContainedPerTracker(t *testing.T) {
 	d, pt := panicDeps(t, "cycle")
 	RunRefreshCycle(d) // must not panic
@@ -92,7 +87,7 @@ func TestBulkStatsPanicIsContainedPerTracker(t *testing.T) {
 	if !ok || boom.OK || boom.ErrorKind != "internal_error" {
 		t.Fatalf("panicking tracker = %+v, want a failed internal_error result", boom)
 	}
-	// Failed like any other outage: the last stored stats are still served.
+	// The last stored stats are still served.
 	if f, ok := boom.Fields["uploaded"]; !ok || f.Value != "5.00 TiB" {
 		t.Errorf("stored stats lost on panic: %+v", boom.Fields)
 	}

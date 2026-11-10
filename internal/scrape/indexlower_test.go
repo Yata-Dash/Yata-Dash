@@ -2,16 +2,12 @@ package scrape
 
 import "testing"
 
-// Lowercasing can change a rune's byte length, so a label offset found in
-// strings.ToLower(text) used to be applied to the original text: "Ⱥ" (2
-// bytes → 3) pushed the offset past the end and panicked; "İ" (2 → 1)
-// sliced mid-word and stored garbage as the value.
+// Labels are matched correctly when lowercasing changes a rune's byte length.
 func TestExtractFromHTMLLengthChangingLowercase(t *testing.T) {
 	cases := []struct {
 		name, html, want string
 	}{
-		// The original reproducer: the second "total uploaded" sits at the
-		// very end, so the shifted offset ran past len(text).
+		// A label at the very end: a shifted offset would overrun the text.
 		{"growing rune at end", "<span>Total\nUploaded ȺȺ total uploaded</span>", ""},
 		{"growing rune with value", "<span>Total\nUploaded ȺȺȺȺ total uploaded: 5 GiB</span>", "5 GiB"},
 		{"shrinking rune with value", "<span>Total\nUploaded İİİİ total uploaded: 5 GiB</span>", "5 GiB"},

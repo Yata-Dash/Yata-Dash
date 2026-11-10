@@ -302,19 +302,10 @@ func main() {
 			"in Settings → General → Account, or bind to 127.0.0.1.", server.Host)
 	}
 
-	// A bare http.ListenAndServe has no timeouts at all, so a client that
-	// trickles its request (slowloris) holds a connection and its goroutine
-	// open indefinitely. ReadHeaderTimeout bounds the headers and ReadTimeout
-	// the whole request including its body — every request body Yata accepts
-	// is small JSON (the largest, a config import, is kilobytes), so a minute
-	// is generous on any link. IdleTimeout reaps idle keep-alive connections.
-	//
-	// WriteTimeout stays unset on purpose: legitimate responses take long —
-	// GET /api/stats refreshes every tracker (30 s fetch timeout each, plus
-	// any scrape fallback) before it answers. ReadTimeout's deadline outlives
-	// the body read, and when it passes during such a handler Go cancels the
-	// request's context; no handler here reads r.Context(), so that is
-	// harmless — keep it that way, or derive handler contexts elsewhere.
+	// Timeouts stop slowloris clients holding connections open; every request
+	// body is small JSON, so a minute is generous. WriteTimeout stays unset:
+	// GET /api/stats legitimately runs long. ReadTimeout cancels r.Context()
+	// mid-handler, which is harmless only while no handler reads it.
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           api.NewRouter(deps),

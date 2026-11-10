@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// reopenInterval rate-limits attempts to reopen the active log after an open
-// has failed. A var so tests can shorten it.
+// reopenInterval rate-limits reopening the log after a failed open (a var for tests).
 var reopenInterval = 5 * time.Second
 
 // rollingFile is a minimal size-based rotating file writer (no external deps).
@@ -26,9 +25,7 @@ type rollingFile struct {
 	lastOpen time.Time
 	// closed marks a deliberate close(), after which Write must not reopen.
 	closed bool
-	// dropped counts lines lost while the file could not be opened; the
-	// count is written into the log once it reopens, so the gap is visible
-	// in a downloaded log rather than silent.
+	// dropped counts lines lost while the file was down, noted on reopen.
 	dropped int
 }
 
@@ -82,10 +79,8 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.f == nil {
-		// A failed open (disk full, permissions, a log directory briefly
-		// unmounted — usually right after a rotation) used to leave the file
-		// sink dead until restart, silently. Retry, but at most once per
-		// reopenInterval: logging must stay cheap while the problem lasts.
+		// Retry a failed open at most once per reopenInterval, so logging
+		// stays cheap while the problem lasts.
 		if r.closed {
 			return len(p), nil
 		}
@@ -93,17 +88,14 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 			r.dropped++
 			return len(p), nil
 		}
-		// The file came back — possibly a remounted directory holding an
-		// older, looser-permissioned log — so tighten it like at start-up
-		// before anything is appended, then mark the gap.
+		// It may be an older, looser log in a remounted directory: tighten it
+		// before appending, as at start-up.
 		r.hardenExisting()
 		r.noteDropped()
 	}
 	if r.size+int64(len(p)) > r.maxBytes {
 		if err := r.rotate(); err != nil && r.f == nil {
-			// The file sink is down until a later Write reopens it. Say so
-			// once on stderr — the one sink that does not depend on it —
-			// so an operator watching the console can see the gap begin.
+			// Report it once on stderr, the one sink that doesn't need the file.
 			fmt.Fprintf(os.Stderr, "yata: cannot reopen log file %s after rotation: %v; retrying every %s\n",
 				r.path, err, reopenInterval)
 			r.dropped++
@@ -115,9 +107,8 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// noteDropped records, in the freshly reopened file, how many lines were lost
-// while it was unavailable. Written straight to the file (not through Write)
-// so it cannot itself trigger a rotation or recurse.
+// noteDropped logs how many lines were lost while the file was down. It writes
+// to the file directly so it cannot trigger a rotation or recurse.
 func (r *rollingFile) noteDropped() {
 	if r.dropped == 0 || r.f == nil {
 		return

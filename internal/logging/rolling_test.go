@@ -9,10 +9,7 @@ import (
 	"time"
 )
 
-// A rotation whose reopen fails (disk full, permissions) used to leave the
-// file sink nil for the rest of the process's life: every later Write
-// returned early and nothing reached disk again until a restart. Write now
-// retries the open, rate-limited by reopenInterval.
+// A failed reopen after rotation is retried, at most once per reopenInterval.
 func TestRollingFileRecoversAfterFailedReopen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "yata.log")
 	// No backups, so rotate() reopens the same path without renaming it.
@@ -70,9 +67,7 @@ func TestRollingFileRecoversAfterFailedReopen(t *testing.T) {
 	}
 }
 
-// A reopen can land on a file that already exists — a log directory
-// remounted with an older, world-readable yata.log in it. It must be
-// tightened to 0600 before anything is appended, as at start-up.
+// A reopen onto an existing world-readable log tightens it to 0600.
 func TestRollingFileReopenHardensExistingFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX permission bits")
@@ -108,7 +103,6 @@ func TestRollingFileReopenHardensExistingFile(t *testing.T) {
 	}
 }
 
-// A deliberate close must stay closed: the retry is for failures only.
 func TestRollingFileDoesNotReopenAfterClose(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "yata.log")
 	r, err := newRollingFile(path, 1<<20, 1)
