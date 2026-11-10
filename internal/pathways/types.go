@@ -10,6 +10,7 @@ package pathways
 import (
 	"encoding/json"
 	"os"
+	"slices"
 )
 
 // Route is one invite edge: being on From (meeting Reqs, with Days account
@@ -54,6 +55,9 @@ type Data struct {
 	byFrom map[string][]Route
 	byTo   map[string][]Route
 	names  []string
+	// reqs memoises ParseReqs per route requirement text. Written only in
+	// index(), so concurrent handlers can read it without a lock.
+	reqs map[string][]Req
 }
 
 // Load reads and indexes a routes.json file. A missing file is not an error
@@ -74,6 +78,7 @@ func Load(path string) (*Data, error) {
 func (d *Data) index() {
 	d.byFrom = map[string][]Route{}
 	d.byTo = map[string][]Route{}
+	d.reqs = map[string][]Req{}
 	seen := map[string]bool{}
 	add := func(n string) {
 		if !seen[n] {
@@ -86,7 +91,22 @@ func (d *Data) index() {
 		d.byTo[r.To] = append(d.byTo[r.To], r)
 		add(r.From)
 		add(r.To)
+		if _, ok := d.reqs[r.Reqs]; !ok {
+			d.reqs[r.Reqs] = ParseReqs(r.Reqs)
+		}
 	}
+}
+
+// parsedReqs returns the memoised parse of a route's text, else a fresh one.
+// The shared slice comes back clipped so appends copy; callers must not modify
+// its elements in place.
+func (d *Data) parsedReqs(text string) []Req {
+	if d != nil {
+		if q, ok := d.reqs[text]; ok {
+			return slices.Clip(q)
+		}
+	}
+	return ParseReqs(text)
 }
 
 // Names returns every tracker name in the dataset (stable order: first seen).

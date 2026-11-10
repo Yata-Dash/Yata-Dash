@@ -370,7 +370,7 @@ func evalRouteReqs(r Route, u UserTracker, firstHop bool, d *Data,
 		From: r.From, To: r.To, Days: r.Days, ReqsRaw: r.Reqs,
 		Updated: r.Updated, Estimated: !firstHop,
 	}
-	reqs := ParseReqs(r.Reqs)
+	reqs := d.parsedReqs(r.Reqs)
 
 	// Def-level invite requirements of the FROM tracker (e.g. MAM's
 	// class-independent "Power User + 1 TB + 2.0 ratio + 6 months") AUGMENT

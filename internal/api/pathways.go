@@ -95,19 +95,40 @@ type targetEntry struct {
 }
 
 // defLookups builds the def-resolution callbacks the pathways engine needs.
+// Each pair memoises by name, so build a fresh pair per request to see newly
+// fetched ladders. The maps are unguarded: the engine calls from one goroutine.
 func defLookups(d *Deps) (func(string) []defs.GroupDef, func(string) *defs.InviteReqs) {
+	type match struct {
+		td defs.TrackerDef
+		ok bool
+	}
+	matches := map[string]match{}
+	lookup := func(name string) (defs.TrackerDef, bool) {
+		m, seen := matches[name]
+		if !seen {
+			m.td, m.ok = matchDef(d.Reg, d.Paths, name)
+			matches[name] = m
+		}
+		return m.td, m.ok
+	}
+	groups := map[string][]defs.GroupDef{}
 	groupsFor := func(name string) []defs.GroupDef {
-		if td, ok := matchDef(d.Reg, d.Paths, name); ok {
+		if g, seen := groups[name]; seen {
+			return g
+		}
+		var g []defs.GroupDef
+		if td, ok := lookup(name); ok {
 			// groupsForDef, not td.Groups: the ladders the pathway engine asks
 			// for are always the user's OWN trackers (the class you hold on the
 			// site you are coming from), so a platform-served ladder is
 			// available for exactly the cases this is called with.
-			return groupsForDef(d, td)
+			g = groupsForDef(d, td)
 		}
-		return nil
+		groups[name] = g
+		return g
 	}
 	inviteReqsFor := func(name string) *defs.InviteReqs {
-		if td, ok := matchDef(d.Reg, d.Paths, name); ok {
+		if td, ok := lookup(name); ok {
 			return td.InviteRequirements
 		}
 		return nil

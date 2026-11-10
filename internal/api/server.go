@@ -37,6 +37,29 @@ type Deps struct {
 	AllowedHosts []string
 }
 
+// compressible lists the response types worth gzipping; text/plain and
+// text/csv downloads are deliberately left out.
+var compressible = []string{
+	"application/json", "text/html", "text/css",
+	"application/javascript", "text/javascript", "image/svg+xml",
+}
+
+// compressResponses gzips (or deflates) responses for clients that accept it.
+// Range requests bypass it: a gzipped 206 would match neither the stored
+// byte range nor a decodable stream. The bypass still sets Vary so caches
+// don't mix the two.
+func compressResponses(next http.Handler) http.Handler {
+	compressed := middleware.Compress(5, compressible...)(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			w.Header().Add("Vary", "Accept-Encoding")
+			next.ServeHTTP(w, r)
+			return
+		}
+		compressed.ServeHTTP(w, r)
+	})
+}
+
 // NewRouter builds the full application router.
 func NewRouter(d *Deps) http.Handler {
 	r := chi.NewRouter()
@@ -46,6 +69,7 @@ func NewRouter(d *Deps) http.Handler {
 	// cannot see it — the browser reports such a request as same-origin.
 	r.Use(hostGuard(d))
 	r.Use(securityHeaders)
+	r.Use(compressResponses)
 	// No CORS headers: the SPA is served from the same origin as the API, so
 	// it never makes a cross-origin request. Emitting "Access-Control-Allow-
 	// Origin: *" would let any website the user visits read an unauthenticated
