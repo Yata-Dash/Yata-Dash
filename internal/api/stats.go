@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"slices"
 	"strings"
@@ -140,11 +142,14 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	// last-stored merged stats instead, with that attempt's outcome: a failed
 	// attempt counts as much as a successful one, or every open dashboard
 	// would re-hit a tracker that is down on every poll. Manual (forced)
-	// refreshes bypass it.
+	// refreshes bypass it. So does a change to the connection settings since
+	// that attempt: a corrected key must be tried at once, not answered with
+	// the failure the old key earned until the window runs out.
+	conn := connFingerprint(t)
 	if !force {
 		if v, ok := lastFetchAt.Load(t.ID); ok {
 			last := v.(fetchAttempt)
-			if time.Since(last.at) < autoRefreshMinAge(d) {
+			if last.conn == conn && time.Since(last.at) < autoRefreshMinAge(d) {
 				resp.ErrorKind, resp.Error = last.errKind, last.err
 				if merged, err := d.Stats.Merged(t.ID); err == nil {
 					resp.Fields = merged
@@ -177,7 +182,7 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 		recordRefreshCheck(d, t.ID, "api", kind, n)
 	}
 	if ferr == nil {
-		lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now()}) // gate future non-forced fetches
+		lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), conn: conn}) // gate future non-forced fetches
 		_ = d.Stats.SaveAPI(t.ID, data)
 		resp.OK = true
 		logFetchTransition(d, t, "")
@@ -209,7 +214,7 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 		if isPreflightKind(ferr.Kind) {
 			lastFetchAt.Delete(t.ID)
 		} else {
-			lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), errKind: ferr.Kind, err: resp.Error})
+			lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), conn: conn, errKind: ferr.Kind, err: resp.Error})
 		}
 		logFetchTransition(d, t, ferr.Kind)
 		recordConnection(d, t, "api", ferr.Kind)
@@ -436,10 +441,27 @@ var lastFetchAt sync.Map // trackerID -> fetchAttempt
 
 // fetchAttempt is one lastFetchAt entry. errKind/err are "" for a success;
 // for a failure they are what that refresh reported, so a caller served from
-// the guard sees the same outcome rather than a false "ok".
+// the guard sees the same outcome rather than a false "ok". conn is the
+// connFingerprint of the settings the attempt was made with; an entry only
+// stands in for a refresh made with the same settings. That also covers a
+// refresh still in flight with the old settings when they are edited: it
+// stores the old fingerprint, so it cannot gate the first refresh after.
 type fetchAttempt struct {
 	at           time.Time
+	conn         string
 	errKind, err string
+}
+
+// connFingerprint digests the tracker settings an API fetch depends on. A
+// digest rather than the values, so the guard map holds no second copy of the
+// key or cookie.
+func connFingerprint(t models.Tracker) string {
+	h := sha256.New()
+	for _, s := range []string{t.URL, t.Type, t.APIKey, t.SessionCookie} {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // refreshLocks serialises refreshTracker per tracker, from the min-age guard

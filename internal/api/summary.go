@@ -173,9 +173,11 @@ func getSummary(d *Deps) http.HandlerFunc {
 // record (stats.numericExtractors), so anything outside that set never reaches
 // it — which is how warnings came to be documented here but always omitted.
 // Read here rather than added to the history set, which would start writing a
-// new series into every tracker's history just to serve this one field. Same
-// tolerance as the history parser: a number, or a numeric string (thousands
-// commas allowed); anything else counts as "not reported".
+// new series into every tracker's history just to serve this one field. It
+// accepts what the history parser accepts as valid input — a number, or a
+// numeric string (thousands commas allowed) — but is stricter about the rest:
+// unparseable text and non-finite values count as "not reported" here, where
+// the history parser would record zero.
 func summaryCount(merged models.MergedStats, field string) *float64 {
 	f, ok := merged[field]
 	if !ok {

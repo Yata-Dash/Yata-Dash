@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -195,6 +196,52 @@ func TestFailedFetchGatesNonForcedRefreshes(t *testing.T) {
 	}
 	if n := hits.Load(); n != 2 {
 		t.Errorf("forced refresh did not reach the tracker: %d hits, want 2", n)
+	}
+}
+
+// Correcting a tracker's credentials after a failed fetch must take effect on
+// the next poll. The guard used to answer with the failure the old key earned
+// until its window ran out — the edit modal forces a refresh, but a direct
+// PUT /api/trackers/{id} does not.
+func TestConnectionChangeBypassesFailureGuard(t *testing.T) {
+	var hits atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/user" {
+			http.NotFound(w, r)
+			return
+		}
+		hits.Add(1)
+		// However the def sends the key, the old one makes the site fail.
+		if strings.Contains(r.URL.RawQuery+r.Header.Get("Authorization"), "old") {
+			http.Error(w, "down", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, `{"username":"u","group":"User","uploaded":400,"downloaded":100,"ratio":4}`)
+	}))
+	defer ts.Close()
+
+	d := testDeps(t)
+	laddered(t, d, ts.URL)
+	tr := models.Tracker{ID: "conc-rekey", Name: "Ladder", URL: ts.URL, Type: "unit3d", APIKey: "old", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { lastFetchAt.Delete(tr.ID) })
+
+	if r := refreshTracker(d, tr, false); r.OK {
+		t.Fatalf("first refresh should fail: %+v", r)
+	}
+	if r := refreshTracker(d, tr, false); r.OK || hits.Load() != 1 {
+		t.Fatalf("same settings: want the guarded failure and 1 hit, got ok:%v, %d hits", r.OK, hits.Load())
+	}
+
+	tr.APIKey = "new"
+	r := refreshTracker(d, tr, false)
+	if n := hits.Load(); n != 2 {
+		t.Fatalf("a changed key was answered from the guard: %d hits, want 2", n)
+	}
+	if !r.OK {
+		t.Errorf("refresh with the corrected key reported a failure: %q/%q", r.ErrorKind, r.Error)
 	}
 }
 
