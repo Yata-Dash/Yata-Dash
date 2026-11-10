@@ -44,11 +44,9 @@ func putSettings(d *Deps) http.HandlerFunc {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		// Mask sentinel = "keep the stored key". Empty string clears it. The
-		// mask keeps a secret only while its address keeps its origin: sent
-		// with a new host it CLEARS the secret rather than pointing it at
-		// whatever was typed — refreshQUI, below, would send the QUI key there
-		// at once (resolveMaskedSecret). The reply shows the secret as gone.
+		// Mask sentinel = "keep the stored key". Empty string clears it.
+		// With a new origin the mask clears it too: refreshQUI below would
+		// otherwise send the key to whatever host was typed.
 		stored := d.Cfg.Settings()
 		s.QUIAPIKey = resolveMaskedSecret(s.QUIAPIKey, stored.QUIAPIKey, s.QUIURL, stored.QUIURL)
 		s.ProwlarrAPIKey = resolveMaskedSecret(s.ProwlarrAPIKey, stored.ProwlarrAPIKey, s.ProwlarrURL, stored.ProwlarrURL)

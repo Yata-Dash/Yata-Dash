@@ -72,8 +72,7 @@ var pendingTestResults sync.Map // trackerID → pendingTest
 // pointer + masked-sentinel semantics as trackerPayload/applyPayload
 // (trackers.go): absent field = use the stored value; maskedKey = unchanged;
 // anything else (including "") = the value to test with. NEVER persisted.
-// "The stored value" holds only while the url override keeps the stored
-// origin; see applyTestOverrides.
+// The stored value is used only on the stored origin.
 type testOverrides struct {
 	APIKey        *string `json:"api_key"`
 	SessionCookie *string `json:"session_cookie"`
@@ -85,11 +84,8 @@ type testOverrides struct {
 // test run. Mirrors applyPayload's masked-sentinel rules for just these four
 // fields — deliberately NOT the full payload, so a stray field in the body
 // can never affect anything but what's being tested.
-//
-// That includes applyPayload's origin rule: a url override on another origin
-// is tested with only the secrets the body supplies, never the stored ones.
-// Without it, "test an unsaved URL" sends the saved API key and cookie to any
-// host the caller names — the leak quiCredentials closes for QUI.
+// Including the origin rule: a url override on another origin never gets the
+// stored secrets, or a Test could send them to any host.
 func applyTestOverrides(t *models.Tracker, p testOverrides) {
 	storedURL := t.URL
 	if p.URL != nil && strings.TrimSpace(*p.URL) != "" {

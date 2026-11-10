@@ -19,24 +19,16 @@ import (
 const maskedKey = "••••••••"
 
 // storedSecretFollows reports whether a credential stored for oldURL may stay
-// attached when its address becomes newURL. The rule is the one quiCredentials
-// and the indexer imports enforce: a STORED credential only ever travels to
-// the STORED origin. A path or trailing-slash edit keeps it; a new scheme,
-// host or port does not, because otherwise "change the URL, leave the key
-// masked" hands the saved key to whatever host was typed — and the next
-// fetch, test or refresh sends it there.
-//
-// An unchanged string always follows, so a stored URL that no longer parses
-// does not lose its key on an unrelated save; a CHANGED one fails closed.
+// with newURL: only on the same origin, else "change the URL, leave the key
+// masked" sends the key to any host. An unchanged string always follows, so an
+// unparseable stored URL keeps its key; a changed one fails closed.
 func storedSecretFollows(oldURL, newURL string) bool {
 	oldURL, newURL = strings.TrimSpace(oldURL), strings.TrimSpace(newURL)
 	return oldURL == newURL || netguard.SameOriginStr(oldURL, newURL)
 }
 
-// resolveMaskedSecret is the masked-sentinel rule for a secret that belongs to
-// a URL: the mask means "keep the stored value", but only while the URL keeps
-// its origin (storedSecretFollows); across an origin change it means "none".
-// Any other sent value, "" included, is taken as given.
+// resolveMaskedSecret keeps the stored secret for a mask only while the URL
+// keeps its origin; any other sent value, "" included, is taken as given.
 func resolveMaskedSecret(sent, stored, newURL, storedURL string) string {
 	if sent != maskedKey {
 		return sent
@@ -444,11 +436,7 @@ func recordLogin(d *Deps) http.HandlerFunc {
 
 // applyPayload merges a payload into a tracker. The masked API key sentinel
 // means "unchanged"; an empty string means "clear it".
-//
-// A URL that moves to another origin keeps the stored API key and session
-// cookie only if the payload supplies them afresh: a masked or absent secret
-// is CLEARED, never carried to the new host (storedSecretFollows). On create
-// the tracker's URL already is the payload's own, so nothing changes there.
+// A move to another origin clears a masked or absent key/cookie.
 func applyPayload(t *models.Tracker, p trackerPayload) {
 	storedURL := t.URL
 	if p.Name != nil {

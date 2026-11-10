@@ -14,17 +14,10 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 )
 
-// The rule ssrf_test.go covers for the integration test endpoints — a STORED
-// credential only ever travels to the STORED origin — for the paths that
-// change a URL rather than only test one: the tracker Test's url override, a
-// tracker save, and a settings save. A masked (or absent) secret sent with a
-// URL on another origin must never reach that origin: not on this request,
-// and not on the next refresh.
-//
-// Every credential value here is invented.
+// A stored credential only travels to the stored origin, for Test url
+// overrides, tracker saves and settings saves. Every credential is invented.
 
-// secretSink is a host that records everything a request carried — URL,
-// headers, body — so a test can ask whether a secret arrived by any route.
+// secretSink records each request's URL, headers and body.
 type secretSink struct {
 	srv  *httptest.Server
 	mu   sync.Mutex
@@ -62,8 +55,7 @@ const (
 	storedTrackerCookie = "stored-tracker-cookie-invented"
 )
 
-// addSecretTracker saves an undefined UNIT3D tracker at url carrying a stored
-// key and cookie, scraping allowed, so a Test exercises both channels.
+// addSecretTracker saves a tracker with a stored key and cookie, scraping allowed.
 func addSecretTracker(t *testing.T, d *Deps, id, url string) {
 	t.Helper()
 	if err := d.Cfg.AddTracker(models.Tracker{
@@ -104,8 +96,7 @@ func TestTrackerTestWillNotSendStoredSecretsToAnotherHost(t *testing.T) {
 	}
 }
 
-// Supplying a key for the other host is the legitimate case and still works;
-// the stored cookie, left masked, still stays home.
+// A supplied key reaches the other host; the masked stored cookie doesn't.
 func TestTrackerTestUsesAnExplicitKeyForAnotherHost(t *testing.T) {
 	d := testDeps(t)
 	other := newSecretSink(t)
@@ -124,8 +115,6 @@ func TestTrackerTestUsesAnExplicitKeyForAnotherHost(t *testing.T) {
 	}
 }
 
-// A url override on the stored origin — a trailing slash, a path — is still
-// the same tracker, and the masked secrets are the stored ones.
 func TestTrackerTestKeepsStoredSecretsOnTheSameOrigin(t *testing.T) {
 	d := testDeps(t)
 	own := newSecretSink(t)
@@ -156,9 +145,7 @@ func putTracker(t *testing.T, router http.Handler, id, body string) models.Track
 	return v
 }
 
-// Moving a tracker to another host with the secrets left masked clears them:
-// the fetcher would otherwise send them to the new host on the next refresh.
-// The reply says so, which is what the edit panel shows.
+// The reply reflects the cleared secrets, which the edit panel relies on.
 func TestTrackerSaveClearsSecretsWhenTheOriginChanges(t *testing.T) {
 	d := testDeps(t)
 	addSecretTracker(t, d, "tmove1", "http://tracker.invalid")
@@ -193,8 +180,7 @@ func TestTrackerSaveKeepsSecretsOnTheSameOrigin(t *testing.T) {
 	}
 }
 
-// A secret typed with the move is the new host's own, and is kept; the one
-// left masked is not carried over.
+// A typed secret is kept; the masked one is not carried over.
 func TestTrackerSaveTakesAFreshSecretWithTheMove(t *testing.T) {
 	d := testDeps(t)
 	addSecretTracker(t, d, "tmove3", "http://tracker.invalid")
@@ -212,8 +198,6 @@ func TestTrackerSaveTakesAFreshSecretWithTheMove(t *testing.T) {
 	}
 }
 
-// Create runs the same applyPayload: the credentials sent with a new tracker
-// are kept as they always were.
 func TestTrackerCreateKeepsItsCredentials(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
@@ -256,9 +240,6 @@ func storeIntegrationSecrets(t *testing.T, d *Deps) {
 	})
 }
 
-// A settings save that moves an integration to another host with its secret
-// masked clears that secret: refreshQUI fires straight after the save, and
-// the import endpoints use whatever is stored.
 func TestSettingsSaveClearsSecretsWhenTheOriginChanges(t *testing.T) {
 	d := testDeps(t)
 	storeIntegrationSecrets(t, d)
