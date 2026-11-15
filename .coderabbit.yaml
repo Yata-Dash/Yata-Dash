@@ -24,6 +24,10 @@ reviews:
     # Drafts are work in progress — reviewing them wastes the budget on code
     # that is about to change anyway.
     drafts: false
+    # Review PRs into dev, not only the default branch: dev is where each
+    # change is reviewed on its own, before it is promoted to main.
+    base_branches:
+      - dev
     # Skip promotion PRs (dev -> main). Everything in one has already been
     # reviewed at the feature -> dev stage, so re-reviewing the accumulated
     # diff spends the budget on a second, shallower look at the same code.

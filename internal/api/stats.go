@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -555,8 +556,41 @@ func RunRefreshCycle(d *Deps) {
 		if !t.Enabled {
 			continue
 		}
-		_ = refreshTracker(d, t, false) // background loop → guarded
+		_ = safeRefreshTracker(d, t, false) // background loop → guarded
 	}
+}
+
+// safeRefreshTracker is refreshTracker behind a per-tracker recover boundary.
+// The background loop and bulkStats goroutines run outside chi's Recoverer, so
+// one tracker's panic would otherwise kill the process. It is logged with a
+// stack and reported as failed, keeping the last stored stats.
+func safeRefreshTracker(d *Deps, t models.Tracker, force bool) (resp models.TrackerStatsResponse) {
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+		d.logErrorf("refresh: %s (%s) panicked — %v\n%s", t.Name, t.ID, p, debug.Stack())
+		resp = models.TrackerStatsResponse{
+			TrackerID: t.ID,
+			FetchedAt: time.Now().Unix(),
+			ErrorKind: "internal_error",
+			Error:     "internal_error",
+		}
+		fillLastStored(d, &resp)
+	}()
+	return refreshTracker(d, t, force)
+}
+
+// fillLastStored adds the tracker's last stored stats to a panic-path response.
+// It recovers on its own: it runs inside safeRefreshTracker's deferred handler,
+// so a second panic (say, from the store) would escape the boundary.
+func fillLastStored(d *Deps, resp *models.TrackerStatsResponse) {
+	defer func() { _ = recover() }()
+	if merged, err := d.Stats.Merged(resp.TrackerID); err == nil {
+		resp.Fields = merged
+	}
+	resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(resp.TrackerID, models.SourceAPI)
 }
 
 // bulkRefreshConcurrency bounds how many trackers are refreshed at once by the
@@ -588,7 +622,7 @@ func bulkStats(d *Deps) http.HandlerFunc {
 				defer wg.Done()
 				sem <- struct{}{}        // acquire a slot (blocks past the cap)
 				defer func() { <-sem }() // release
-				res := refreshTracker(d, t, force)
+				res := safeRefreshTracker(d, t, force)
 				mu.Lock()
 				results[t.ID] = res
 				mu.Unlock()
@@ -613,6 +647,7 @@ func singleStats(d *Deps) http.HandlerFunc {
 			jsonOK(w, models.TrackerStatsResponse{TrackerID: t.ID, ErrorKind: "disabled", Error: "disabled"})
 			return
 		}
-		jsonOK(w, refreshTracker(d, t, true))
+		// chi's Recoverer would give a bare 500; this keeps the stored stats.
+		jsonOK(w, safeRefreshTracker(d, t, true))
 	}
 }
