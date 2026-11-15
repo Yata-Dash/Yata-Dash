@@ -405,8 +405,30 @@ func TestNoAPITrackerRecordsNoAPIContact(t *testing.T) {
 	if !toView(d, tr).NoAPI {
 		t.Error("tracker view no_api = false, want true")
 	}
-	retired := models.Tracker{ID: "a4k", URL: "https://aura4k.net", Type: "unit3d"}
-	if toView(d, retired).NoAPI {
+
+	// A retired tracker had an API, so it is not "no API". A made-up def.
+	dir := t.TempDir()
+	for _, sub := range []string{"types", "trackers"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	typeJSON, err := os.ReadFile("../../defs/types/unit3d.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "types", "unit3d.json"), typeJSON, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gone := `{"schema_version":1,"key":"gone","name":"Gone","abbr":"GN","url":"https://gone.example",
+		"type":"unit3d","retired":{"date":"2026-01-01","note":"Shut down."}}`
+	if err := os.WriteFile(filepath.Join(dir, "trackers", "gone.json"), []byte(gone), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if d.Reg, err = defs.Load(dir); err != nil {
+		t.Fatal(err)
+	}
+	if toView(d, models.Tracker{ID: "gone", URL: "https://gone.example", Type: "unit3d"}).NoAPI {
 		t.Error("retired tracker view no_api = true, want false — it had an API")
 	}
 }

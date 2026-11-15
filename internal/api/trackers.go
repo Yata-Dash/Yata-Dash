@@ -555,7 +555,7 @@ func syncManualLayer(d *Deps, t models.Tracker) {
 	if t.Type == models.TypeManual {
 		// A tracker switched to manual keeps its old API and scrape layers,
 		// which outrank the typed numbers and would hide every change to them.
-		clearStaleLayers(d, t.ID, models.SourceAPI, models.SourceScrape)
+		clearStaleLayers(d, t.ID, manualStaleSources(d, t)...)
 		if merged, err := d.Stats.Merged(t.ID); err == nil {
 			before = stats.NumericSnapshot(merged)
 		}

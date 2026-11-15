@@ -116,7 +116,7 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 		// the same lie. A tracker that is never contacted has no fetch time,
 		// and 0 is exactly how the UI already renders "never".
 		resp.FetchedAt = 0
-		clearStaleLayers(d, t.ID, models.SourceAPI, models.SourceScrape)
+		clearStaleLayers(d, t.ID, manualStaleSources(d, t)...)
 		if merged, err := d.Stats.Merged(t.ID); err == nil {
 			resp.Fields = merged
 			resp.OK = true
@@ -327,6 +327,18 @@ func hasNewLayerData(d *Deps, trackerID string, merged models.MergedStats) bool 
 // hasNewLayerData). In memory only: after a restart the timestamp check alone
 // applies until the next point is recorded.
 var noAPIRecorded sync.Map // trackerID -> map[string]float64
+
+// manualStaleSources are the layers a hand-kept tracker can't be producing:
+// always the API, and the scrape layer unless its definitions still allow a
+// scrape (the manual type never does; a site's own def could), so a real
+// scrape is never wiped by the refresh.
+func manualStaleSources(d *Deps, t models.Tracker) []models.Source {
+	out := []models.Source{models.SourceAPI}
+	if rs := d.Reg.ResolveScrape(t.URL, t.Type); rs.SkipHTMLScrape || rs.DisableScraping {
+		out = append(out, models.SourceScrape)
+	}
+	return out
+}
 
 // clearStaleLayers empties layers a tracker's current type can't produce, left
 // by an earlier type: an API layer once it has no API, and a scrape layer too
