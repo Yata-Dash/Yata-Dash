@@ -5,7 +5,7 @@
   "abbr": "CBR",
   "url": "https://capybarabr.com",
   "type": "unit3d",
-  "last_updated": "2026-07-24",
+  "last_updated": "2026-11-15",
   "rules": {
     "min_ratio": 1.0,
     "note": "No hit-and-run system; keep your ratio at or above 1.00."
@@ -14,6 +14,7 @@
     "min_class": "Arara"
   },
   "scrape": {
+    "disable_scraping": true,
     "labels": {
       "conta upload (total)": "uploaded",
       "conta download (total)": "downloaded",

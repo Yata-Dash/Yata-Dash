@@ -5,19 +5,14 @@
   "abbr": "SAM",
   "url": "https://samaritano.cc",
   "type": "unit3d",
-  "last_updated": "2026-07-30",
-  "approved_by": {
-    "name": "ØVERLORD",
-    "role": "Owner/Admin",
-    "date": "2026-07-30"
-  },
+  "last_updated": "2026-11-15",
   "rules": {
     "min_ratio": 0.4,
     "min_seed_days": 3,
     "note": "Ratio below 1.00 with a negative buffer demotes the account to Leech."
   },
   "scrape": {
-    "disable_scraping": false,
+    "disable_scraping": true,
     "min_interval_minutes": 180,
     "max_scrapes_per_day": 8,
     "identify": "ua",
