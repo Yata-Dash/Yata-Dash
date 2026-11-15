@@ -28,6 +28,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **Tracker-supplied group colours and icons are validated** before they reach
   the page, a few more tracker-derived values are escaped, and responses now
   carry a basic Content-Security-Policy.
+- **One tracker can no longer crash Yata**: a profile page with certain non-ASCII text panicked the scraper, and any panic in a background refresh now fails only that tracker; the log file also recovers after a failed rotation, and the server times out slow request headers.
 
 ## [Beta-20261011]
 
