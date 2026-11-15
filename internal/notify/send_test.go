@@ -175,3 +175,52 @@ func TestPrivateDestinationReplyIsNotEchoedAfterRetries(t *testing.T) {
 		t.Fatalf("the 429 path echoed a private destination's body: %q", err)
 	}
 }
+
+// Discord payloads forbid mentions; checked on the wire via a real POST.
+func TestDiscordPayloadAllowsNoMentions(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	dest := models.NotifyDestination{Type: "discord", URL: srv.URL, Enabled: true}
+	if err := SendChunked(dest, "Yata alert: Events", "Aither — event: @everyone free leech"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	am, ok := body["allowed_mentions"].(map[string]any)
+	if !ok {
+		t.Fatalf("payload has no allowed_mentions object: %v", body)
+	}
+	parse, ok := am["parse"].([]any)
+	if !ok || len(parse) != 0 {
+		t.Errorf("allowed_mentions.parse = %v, want an empty list", am["parse"])
+	}
+	if c, _ := body["content"].(string); !strings.Contains(c, "@everyone") {
+		t.Errorf("content = %q, want the text delivered unchanged (mentions are disarmed, not stripped)", c)
+	}
+}
+
+func TestTelegramPayloadEscapesHTML(t *testing.T) {
+	dest := models.NotifyDestination{Type: "telegram", Token: "123:abc", ChatID: "42", Enabled: true}
+	url, _, payload, err := buildRequest(dest, "Yata alert: <Ratio> & co",
+		"my_tracker — changed: a*b → <b>x</b> & y_z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if url != "https://api.telegram.org/bot123:abc/sendMessage" {
+		t.Errorf("url = %q", url)
+	}
+	if payload["parse_mode"] != "HTML" {
+		t.Errorf("parse_mode = %v, want HTML", payload["parse_mode"])
+	}
+	want := "<b>Yata alert: &lt;Ratio&gt; &amp; co</b>\n" +
+		"my_tracker — changed: a*b → &lt;b&gt;x&lt;/b&gt; &amp; y_z"
+	if payload["text"] != want {
+		t.Errorf("text =\n  %q\nwant\n  %q", payload["text"], want)
+	}
+	if payload["chat_id"] != "42" {
+		t.Errorf("chat_id = %v", payload["chat_id"])
+	}
+}

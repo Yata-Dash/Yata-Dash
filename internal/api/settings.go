@@ -45,16 +45,12 @@ func putSettings(d *Deps) http.HandlerFunc {
 			return
 		}
 		// Mask sentinel = "keep the stored key". Empty string clears it.
+		// With a new origin the mask clears it too: refreshQUI below would
+		// otherwise send the key to whatever host was typed.
 		stored := d.Cfg.Settings()
-		if s.QUIAPIKey == maskedKey {
-			s.QUIAPIKey = stored.QUIAPIKey
-		}
-		if s.ProwlarrAPIKey == maskedKey {
-			s.ProwlarrAPIKey = stored.ProwlarrAPIKey
-		}
-		if s.JackettAdminPassword == maskedKey {
-			s.JackettAdminPassword = stored.JackettAdminPassword
-		}
+		s.QUIAPIKey = resolveMaskedSecret(s.QUIAPIKey, stored.QUIAPIKey, s.QUIURL, stored.QUIURL)
+		s.ProwlarrAPIKey = resolveMaskedSecret(s.ProwlarrAPIKey, stored.ProwlarrAPIKey, s.ProwlarrURL, stored.ProwlarrURL)
+		s.JackettAdminPassword = resolveMaskedSecret(s.JackettAdminPassword, stored.JackettAdminPassword, s.JackettURL, stored.JackettURL)
 		// UpdateSettings re-checks this; doing it here too is what turns a bad
 		// hostname into a 400 with the reason rather than a 500.
 		cleaned, err := config.CleanAllowedHosts(s.AllowedHosts)

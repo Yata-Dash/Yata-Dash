@@ -7,11 +7,13 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
@@ -50,8 +52,17 @@ func digestDueAt(cfg models.DigestConfig, now time.Time) (time.Time, bool) {
 	if scheduled.After(now) {
 		scheduled = scheduled.AddDate(0, 0, -7)
 	}
+	// Only an out-of-range Weekday/Hour lands here. LastSentAt can never pass a
+	// future instant, so without this it would be due on every tick.
+	if scheduled.After(now) {
+		return scheduled, false
+	}
 	return scheduled, cfg.LastSentAt < scheduled.Unix()
 }
+
+// digestMu serialises digest delivery (scheduler and "Send now") so two runs
+// cannot both read the old LastSentAt and send the digest twice.
+var digestMu sync.Mutex
 
 // RunDigestIfDue sends the weekly digest when it's due (see digestDueAt) —
 // called from its own 5-minute goroutine in cmd/yata/main.go, deliberately
@@ -59,12 +70,15 @@ func digestDueAt(cfg models.DigestConfig, now time.Time) (time.Time, bool) {
 // configurable, so tying the digest to it would either delay delivery by up
 // to that interval or require reasoning about drift.
 func RunDigestIfDue(d *Deps) {
+	// Held across the due check too, so a "Send now" that just finished counts.
+	digestMu.Lock()
+	defer digestMu.Unlock()
 	now := time.Now()
 	cfg := d.Cfg.Notifications()
 	if _, due := digestDueAt(cfg.Digest, now); !due {
 		return
 	}
-	sentTo, err := deliverDigest(d, now)
+	sentTo, err := deliverDigestLocked(d, now)
 	switch {
 	case err != nil:
 		d.logWarnf("digest: %v", err)
@@ -80,7 +94,22 @@ func RunDigestIfDue(d *Deps) {
 // "Send now" button (sendDigestNow) so both behave identically. sentTo==0
 // with a nil error means no destinations resolved (nothing to send to, state
 // left untouched so enabling a destination later still gets the overdue digest).
+//
+// It returns errDigestInProgress rather than queue behind a delivery in
+// progress, which would hold the request open and then send a second copy.
 func deliverDigest(d *Deps, now time.Time) (sentTo int, err error) {
+	if !digestMu.TryLock() {
+		return 0, errDigestInProgress
+	}
+	defer digestMu.Unlock()
+	return deliverDigestLocked(d, now)
+}
+
+// errDigestInProgress means another delivery holds digestMu.
+var errDigestInProgress = errors.New("a digest is already being sent — try again in a moment")
+
+// deliverDigestLocked is deliverDigest for a caller already holding digestMu.
+func deliverDigestLocked(d *Deps, now time.Time) (sentTo int, err error) {
 	cfg := d.Cfg.Notifications()
 	text, readyNow := buildDigest(d, now)
 	// The digest is webhook-only for now. It resolves through the same
@@ -542,6 +571,10 @@ func previewDigest(d *Deps) http.HandlerFunc {
 func sendDigestNow(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		sentTo, err := deliverDigest(d, time.Now())
+		if errors.Is(err, errDigestInProgress) {
+			jsonError(w, err.Error(), http.StatusConflict)
+			return
+		}
 		if err != nil {
 			jsonError(w, err.Error(), http.StatusBadGateway)
 			return

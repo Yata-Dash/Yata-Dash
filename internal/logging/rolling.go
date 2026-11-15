@@ -5,7 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
+
+// reopenInterval rate-limits reopening the log after a failed open (a var for tests).
+var reopenInterval = 5 * time.Second
 
 // rollingFile is a minimal size-based rotating file writer (no external deps).
 // When the active file would exceed maxBytes it is rotated to "<path>.1",
@@ -17,6 +21,12 @@ type rollingFile struct {
 	maxBackups int
 	f          *os.File
 	size       int64
+	// lastOpen is when open() was last attempted, for reopenInterval.
+	lastOpen time.Time
+	// closed marks a deliberate close(), after which Write must not reopen.
+	closed bool
+	// dropped counts lines lost while the file was down, noted on reopen.
+	dropped int
 }
 
 func newRollingFile(path string, maxBytes int64, maxBackups int) (*rollingFile, error) {
@@ -47,6 +57,7 @@ func (r *rollingFile) hardenExisting() {
 }
 
 func (r *rollingFile) open() error {
+	r.lastOpen = time.Now()
 	// 0600, not 0644: the log records tracker names, usernames and error
 	// details, and on a shared host (seedboxes especially) every other local
 	// account could read it.
@@ -68,14 +79,46 @@ func (r *rollingFile) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.f == nil {
-		return len(p), nil
+		// Retry a failed open at most once per reopenInterval, so logging
+		// stays cheap while the problem lasts.
+		if r.closed {
+			return len(p), nil
+		}
+		if time.Since(r.lastOpen) < reopenInterval || r.open() != nil {
+			r.dropped++
+			return len(p), nil
+		}
+		// It may be an older, looser log in a remounted directory: tighten it
+		// before appending, as at start-up.
+		r.hardenExisting()
+		r.noteDropped()
 	}
 	if r.size+int64(len(p)) > r.maxBytes {
-		_ = r.rotate()
+		if err := r.rotate(); err != nil && r.f == nil {
+			// Report it once on stderr, the one sink that doesn't need the file.
+			fmt.Fprintf(os.Stderr, "yata: cannot reopen log file %s after rotation: %v; retrying every %s\n",
+				r.path, err, reopenInterval)
+			r.dropped++
+			return len(p), nil
+		}
 	}
 	n, err := r.f.Write(p)
 	r.size += int64(n)
 	return n, err
+}
+
+// noteDropped logs how many lines were lost while the file was down. It writes
+// to the file directly so it cannot trigger a rotation or recurse.
+func (r *rollingFile) noteDropped() {
+	if r.dropped == 0 || r.f == nil {
+		return
+	}
+	line := fmt.Sprintf("%s WRN logging: %d log line(s) were dropped while %s could not be opened\n",
+		time.Now().Format("2006-01-02 15:04:05"), r.dropped, r.path)
+	if n, err := r.f.WriteString(line); err == nil {
+		r.size += int64(n)
+		r.dropped = 0
+	}
 }
 
 // rotate closes the active file, shifts backups (.1→.2, …), moves the current
@@ -117,6 +160,7 @@ func (r *rollingFile) truncate() error {
 func (r *rollingFile) close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.closed = true
 	if r.f != nil {
 		r.f.Close()
 		r.f = nil

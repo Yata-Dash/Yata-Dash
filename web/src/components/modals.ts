@@ -12,7 +12,7 @@ import { approvalIcon, approvalWarns, scrapeSanctioned } from '../utils/approval
 import { capabilityRow } from './capabilities';
 import { STAT_ROW_DEFS } from './profile';
 import { eventGlobeSvg } from '../utils/icons';
-import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName } from '../utils/format';
+import { jsId, esc, fieldLabel, fmtAgeDays, fmtBytes, fmtEtaDays, fmtSeedTime, fmtTrackerName, safeColor, safeIconClass } from '../utils/format';
 import { parseAgeDays, parseSeedTime, parseSize } from '../utils/parse';
 import { displaySize, manualShape, normalizeInput, targetShape } from '../utils/units';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
@@ -20,6 +20,7 @@ import { findOptOut, optOutMessage } from '../utils/optout';
 import { defaultGoalDeadline } from '../utils/pacing';
 import { commonDeadline, fanDeadline, goalDateControlHtml, wireGoalDateUI } from './goalDate';
 import { renderTestDetail } from './trackerTest';
+import { sameOrigin } from './qui';
 import type { ToastType } from './toast';
 import { appSettings, groupDefs, strOf } from '../state';
 
@@ -360,6 +361,21 @@ export function checkTrackerOptOut(): void {
     if (notice) notice.style.display = 'none';
     if (saveBtn) saveBtn.disabled = false;
   }
+  checkUrlCredentialHint(); // same trigger: the URL in the form changed
+}
+// The key and cookie inputs re-check the hint too (index.html).
+
+/** URL the open Edit panel's tracker is saved with ("" in Add mode). */
+let _editStoredUrl = '';
+
+/** Warn that moving the tracker to another host drops its saved key and
+ *  cookie (the server won't carry them to a new origin). */
+export function checkUrlCredentialHint(): void {
+  const hint = document.getElementById('modal-url-cred-hint');
+  if (!hint) return;
+  const url = getVal('modal-url');
+  const masked = getVal('modal-key') === MASKED_KEY || getVal('modal-session-cookie') === MASKED_KEY;
+  hint.style.display = _editStoredUrl && url && masked && !sameOrigin(url, _editStoredUrl) ? '' : 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1321,6 +1337,7 @@ export function openEditModal(
   setVal('modal-tracker-id', t.id);
   setVal('modal-name', t.name);
   setVal('modal-url',  t.url);
+  _editStoredUrl = t.url;
   setVal('modal-username', t.username ?? '');
   setVal('modal-joindate', t.join_date ?? '');
 
@@ -1726,12 +1743,20 @@ function markSaved(): void {
  *  the panel back into the state a fresh open would give it: the mask
  *  sentinel, meaning "unchanged". Without this a second save re-sends the
  *  plaintext, and the panel keeps a secret on screen for as long as it is
- *  left open. */
-function remaskSecrets(): void {
-  for (const id of ['modal-key', 'modal-session-cookie']) {
+ *  left open. A secret the server no longer holds (`saved`) empties its field. */
+function remaskSecrets(saved?: Tracker): void {
+  const fields: [string, boolean | undefined, string][] = [
+    ['modal-key', saved?.has_key, 'Your API token'],
+    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools'],
+  ];
+  for (const [id, stored, emptyPlaceholder] of fields) {
     const el = document.getElementById(id) as HTMLInputElement | null;
-    if (el && el.value) el.value = MASKED_KEY;
+    if (!el) continue;
+    if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
+    else if (el.value) el.value = MASKED_KEY;
   }
+  if (saved) _editStoredUrl = saved.url;
+  checkUrlCredentialHint();
 }
 
 export async function saveTracker(deps: ModalDeps) {
@@ -1872,7 +1897,12 @@ export async function saveTracker(deps: ModalDeps) {
       // to keep a change was to postpone it. Adding a tracker still closes:
       // that one IS finished, and the next thing to do is look at the list.
       markSaved();
-      remaskSecrets();
+      // A move to another host cleared masked secrets; say so, it's easy to miss.
+      if (data && ((payload.api_key === MASKED_KEY && !data.has_key)
+        || (cookieVal === MASKED_KEY && !data.has_session))) {
+        deps.toast('The new address is a different host, so the saved key/cookie were cleared — re-enter them', 'warning');
+      }
+      remaskSecrets(data ?? undefined);
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -1979,6 +2009,9 @@ let _selectedThemeId: string  = '';   // tracks the live selection in the settin
 // Swatch fallback used when a theme CSS file has no /* swatches: */ comment.
 const SWATCH_FALLBACK: [string, string, string, string] = ['#111', '#222', '#6d56eb', '#a855f7'];
 
+// Swatches come from theme files, so anything not a real colour shows grey.
+const swatch = (v: string): string => safeColor(v) || '#888';
+
 function renderThemeGrid(currentThemeId: string) {
   _selectedThemeId = currentThemeId || 'default';
   const container = document.getElementById('s-theme-grid');
@@ -1998,10 +2031,10 @@ function renderThemeGrid(currentThemeId: string) {
       const active = (t.id === _selectedThemeId || (!_selectedThemeId && t.id === 'default')) ? 'active' : '';
       return `
         <div class="theme-option ${active}" data-theme-id="${esc(t.id)}" onclick="selectTheme('${jsId(t.id)}')">
-          <div class="theme-swatch" style="background:${sw[0]}">
-            <div class="theme-swatch-col" style="background:${sw[1]}"></div>
-            <div class="theme-swatch-col" style="background:${sw[2]}"></div>
-            <div class="theme-swatch-col" style="background:${sw[3]}"></div>
+          <div class="theme-swatch" style="background:${esc(swatch(sw[0]))}">
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[1]))}"></div>
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[2]))}"></div>
+            <div class="theme-swatch-col" style="background:${esc(swatch(sw[3]))}"></div>
           </div>
           <span class="theme-option-name">${esc(t.name)}</span>
         </div>`;
@@ -2297,6 +2330,7 @@ export async function renderAccountSection(): Promise<void> {
     </div>
     <div class="acct-panel" id="s-acct-disable" hidden>
       <input class="form-input" type="password" id="s-acct-disablepw" placeholder="Current password" autocomplete="current-password" style="max-width:220px"/>
+      ${data.totp_enabled ? `<input class="form-input" type="text" id="s-acct-disablecode" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" style="max-width:120px"/>` : ''}
       <button type="button" class="btn btn-danger btn-sm" onclick="accountDisable()">Confirm &mdash; turn login off</button>
       <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAcctPanel('s-acct-disable')">Cancel</button>
     </div>`;
@@ -2573,17 +2607,23 @@ export async function accountChangePassword(): Promise<void> {
   }
 }
 
-/** Disable login protection (remove the account). */
+/** Disable login protection (remove the account). Needs a code when 2FA is on. */
 export async function accountDisable(): Promise<void> {
   acctError('');
   const pw = acctVal('s-acct-disablepw');
+  const needsCode = document.getElementById('s-acct-disablecode') !== null;
+  const code = acctVal('s-acct-disablecode').trim();
   if (!pw) { acctError('Enter your current password to confirm.'); return; }
-  const { ok, data, status } = await api.authDisable(pw);
+  if (needsCode && !code) { acctError('Enter your password and a current code.'); return; }
+  const { ok, data, status } = await api.authDisable(pw, code || undefined);
   if (ok && data.ok) {
     _sd?.toast('Login protection disabled', 'success');
     await renderAccountSection();
   } else {
-    acctError(status === 401 ? 'Current password is incorrect.' : 'Could not disable login protection.');
+    acctError(status === 401 && data.error === 'totp_invalid' ? 'That code is not valid.'
+      : status === 401 ? 'Current password is incorrect.'
+      : status === 429 ? 'Too many failed attempts. Try again later.'
+      : 'Could not disable login protection.');
   }
 }
 
@@ -3292,6 +3332,11 @@ export async function saveSettings(deps: SettingsDeps) {
     // round-trips safely instead of wiping the stored key.
     setVal('s-qui-key', appSettings.qui_api_key ?? '');
     setPlaceholder('s-qui-key', appSettings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
+    // A move to another host cleared the masked key; say so, it's easy to miss.
+    if (quiKey === MASKED_KEY && !appSettings.qui_api_key) {
+      deps.toast('The qui address is a different host, so its saved API key was cleared — re-enter it', 'warning');
+      setPlaceholder('s-qui-key', 'Enter the API key for this address');
+    }
     await deps.loadQUIInstances();
     deps.renderQuiBarsWrapper();
     deps.renderTable();
@@ -3345,6 +3390,8 @@ function clearModal() {
     const el = document.getElementById(id) as HTMLInputElement;
     if (el) el.value = '';
   });
+  _editStoredUrl = ''; // Add mode has no saved secrets to warn about
+  hide('modal-url-cred-hint');
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
   _editDeadlines = {};
@@ -3418,11 +3465,12 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
   if (!g) { hintEl.textContent = ''; hintEl.style.display = 'none'; return; }
 
   const req = g.requirements;
-  const color   = g.style?.color   ?? '';
-  const icon    = g.style?.icon    ?? '';
+  // Tracker- and def-supplied — validated before they reach an attribute.
+  const color   = safeColor(g.style?.color);
+  const icon    = safeIconClass(g.style?.icon);
   const sparkle = g.style?.sparkle ?? false;
-  const colorStyle   = color ? ` style="color:${color}"` : '';
-  const iconHtml     = icon  ? `<i class="${icon}" aria-hidden="true"></i> ` : '';
+  const colorStyle   = color ? ` style="color:${esc(color)}"` : '';
+  const iconHtml     = icon  ? `<i class="${esc(icon)}" aria-hidden="true"></i> ` : '';
   // sparkle class goes on the NAME SPAN only, not the outer flex div
   const sparkleAttr  = sparkle ? ' class="group-sparkle"' : '';
 
@@ -3432,7 +3480,7 @@ function renderGroupHint(trackerKey: string, groupName: string): void {
     .filter(p => p.icon)
     .map(p =>
       `<span class="perk-icon-wrap" data-tip="${esc(p.label)}">` +
-      `<i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i>` +
+      `<i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i>` +
       `<span class="perk-tip">${esc(p.label)}</span></span>`
     ).join('');
 
