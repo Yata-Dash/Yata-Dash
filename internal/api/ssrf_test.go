@@ -125,6 +125,38 @@ func TestQUIAcceptsAnExplicitKeyForAnotherHost(t *testing.T) {
 	}
 }
 
+func TestQUIInstancesKeepsOnlyIntegerIDs(t *testing.T) {
+	d := testDeps(t)
+	qui := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"id":1,"name":"main","connected":true,"host":"http://qb:8080"},
+			{"id":"1\" onfocus=\"alert(1)","name":"evil"},
+			{"id":2.5,"name":"fraction"},
+			{"id":9007199254740993,"name":"past float64 precision"},
+			{"name":"no id"}
+		]`))
+	}))
+	t.Cleanup(qui.Close)
+	router := NewRouter(d)
+
+	b, _ := json.Marshal(map[string]string{"url": qui.URL, "key": "caller-supplied-key"})
+	req := httptest.NewRequest(http.MethodPost, "/api/qui/instances", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v (body %s)", err, rec.Body.String())
+	}
+	if len(out) != 1 || out[0]["id"] != float64(1) || out[0]["name"] != "main" {
+		t.Errorf("instances = %v, want only the integer-id instance", out)
+	}
+}
+
 // The CSRF shape of the original bug: a safe method skips the cross-site
 // check, and a top-level navigation still carries the session cookie.
 func TestQUIInstancesRejectsGET(t *testing.T) {

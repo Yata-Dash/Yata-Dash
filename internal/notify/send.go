@@ -29,7 +29,13 @@ import (
 // something else — plus link-local (cloud metadata) being refused outright.
 // Redirects are re-checked but not pinned: a generic webhook may legitimately
 // redirect, and Discord's CDN does.
-var destinationPolicy = netguard.Policy{AllowPrivate: true}
+//
+// Security: X-Gotify-Key (unknown to net/http) is dropped once a redirect
+// leaves the origin. The body isn't pinned: it holds no credential.
+var destinationPolicy = netguard.Policy{
+	AllowPrivate:      true,
+	CredentialHeaders: []string{"X-Gotify-Key"},
+}
 
 var httpClient = netguard.Client(15*time.Second, destinationPolicy)
 
