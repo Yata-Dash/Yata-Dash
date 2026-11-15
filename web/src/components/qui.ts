@@ -164,7 +164,7 @@ export async function refreshQuiStats(settings: AppSettings): Promise<void> {
 
 /** Same origin, tolerating the half-typed URLs this runs against on every
  *  keystroke — an unparseable value is not the stored one. */
-function sameOrigin(a: string, b: string): boolean {
+export function sameOrigin(a: string, b: string): boolean {
   if (!a || !b) return false;
   try { return new URL(a).origin === new URL(b).origin; } catch { return a === b; }
 }

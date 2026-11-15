@@ -944,6 +944,8 @@
                       <label class="form-label" for="modal-url">Base URL</label>
                       <input class="form-input" type="url" id="modal-url" placeholder="https://tracker.example.org" oninput="window.checkTrackerOptOut?.()"/>
                       <span class="form-hint">Root URL &mdash; no trailing slash</span>
+                      <!-- Edit mode: the saved key/cookie never follow a URL to another host -->
+                      <span class="form-hint" id="modal-url-cred-hint" style="display:none;color:var(--amber)">A different host doesn't get the saved API key or cookie &mdash; saving clears them, so re-enter them below.</span>
                     </div>
                   </div>
                   <!-- Opt-out blocking notice (tracker asked not to be supported) -->
@@ -986,7 +988,7 @@
                   </div>
                   <div class="form-group" id="modal-key-group">
                     <label class="form-label" id="modal-key-label">API Key</label>
-                    <input class="form-input" type="password" id="modal-key" placeholder="Your API token"/>
+                    <input class="form-input" type="password" id="modal-key" placeholder="Your API token" oninput="window.checkUrlCredentialHint?.()"/>
                     <span class="form-hint" id="modal-key-hint">Profile → API Token settings</span>
                   </div>
                   <!-- Add mode, no def: nobody has asked this tracker's staff
@@ -1001,7 +1003,7 @@
                   </div>
                   <div class="form-group" id="modal-session-cookie-group">
                     <label class="form-label" id="modal-session-cookie-label">Session Cookie <span class="opt">(optional — for extended profile stats)</span></label>
-                    <input class="form-input" type="password" id="modal-session-cookie" placeholder="Paste cookie string from browser DevTools"/>
+                    <input class="form-input" type="password" id="modal-session-cookie" placeholder="Paste cookie string from browser DevTools" oninput="window.checkUrlCredentialHint?.()"/>
                     <span class="form-hint" id="modal-session-cookie-hint">
                       Log in to the tracker → DevTools (F12) → Console → Type <em>document.cookie</em> → copy all cookies <br>-or-
                       use the <em>Cookie-Editor</em> extension Export button → Header String
