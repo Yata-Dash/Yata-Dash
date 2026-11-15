@@ -6,8 +6,47 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Security
+
+- **Tracker credentials stay on the tracker's own host.** A definition path not
+  starting with a single "/" is refused, since it could send the API key or
+  cookie elsewhere; API keys no longer follow redirects to another host; and
+  responses from trackers and Prowlarr/Jackett/QUI are capped at 8 MiB.
+- **A saved key or cookie no longer follows a URL to another host.** Changing
+  a tracker's URL, or the qui, Prowlarr or Jackett address, to a different
+  host, port or scheme now clears the saved key, cookie or password unless a
+  new one is entered with it, and a tracker Test against an unsaved address
+  uses only what is typed. Path and trailing-slash edits keep them as before.
+
+### Changed
+
+- **Faster page loads.** Responses are now gzip-compressed (the history chart
+  data shrinks about fivefold), and the pathways pages no longer re-read every
+  route's requirements on each view.
+
 ### Fixed
 
+- **Login protection is harder to get round.** Every password prompt now
+  counts towards the five-attempt lockout, parallel guesses can no longer
+  slip past it, a spoofed `X-Forwarded-For` no longer resets it, and removing
+  the account asks for your 2FA code when 2FA is on. Turning 2FA on signs out
+  every other session.
+- **Tracker-supplied group colours and icons are validated** before they reach
+  the page, a few more tracker-derived values are escaped, and responses now
+  carry a basic Content-Security-Policy.
+- **One tracker can no longer crash Yata**: a profile page with certain non-ASCII text panicked the scraper, and any panic in a background refresh now fails only that tracker; the log file also recovers after a failed rotation, and the server times out slow request headers.
+- **The weekly digest could repeat.** An out-of-range day or hour (from a
+  hand-edited or imported config) sent it every five minutes, and a digest
+  sent while Alerts were being saved, or alongside *Send now*, could go out
+  twice. Out-of-range schedules are now refused or reset to Monday 09:00.
+- **A tracker's text could ping a whole Discord server or lose a Telegram
+  alert.** Discord messages no longer allow mentions, so an event named
+  `@everyone` stays text; Telegram messages are escaped, so a stray `_` or `*`
+  no longer gets them rejected.
+- **Growth rates measured across UTC midnight were too low** (a tracker on its
+  second day could read 6.25 GiB/day instead of 100), inflating target ETAs
+  and raising false "behind pace" and seed-size drop alerts. Rates now use
+  when each value was actually recorded, and are much cheaper to compute.
 - **After signing out and back in, the alerts bell wouldn't open** and a
   Pathways step or pin button undid itself in the same click.
 - **The "7d" change on the Uploaded, Downloaded and Buffer cards counted a
@@ -35,6 +74,11 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **A list or object in a tracker's API response showed as
   "[object Object]"** among the tracker's stats. Such values are now dropped
   before storage.
+
+### Docs
+
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: a map of the code, the refresh
+  path from tracker API to screen, and where each feature lives.
 
 ## [Beta-20260930]
 

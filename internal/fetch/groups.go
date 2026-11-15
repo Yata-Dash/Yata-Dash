@@ -2,7 +2,6 @@ package fetch
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -68,7 +67,11 @@ func (c *Client) FetchGroups(t models.Tracker) ([]byte, *Error) {
 	if strings.TrimSpace(api.BaseURL) != "" {
 		baseURL, client = api.BaseURL, c.defBaseClient()
 	}
-	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+spec.Path, nil)
+	reqURL, err := netguard.JoinPath(baseURL, spec.Path)
+	if err != nil {
+		return nil, errf("blocked_destination", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, errf("request_error", err)
 	}
@@ -91,7 +94,7 @@ func (c *Client) FetchGroups(t models.Tracker) ([]byte, *Error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, errf(fmt.Sprintf("http_%d", resp.StatusCode), fmt.Errorf("http %d", resp.StatusCode))
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, errf("read_error", err)
 	}

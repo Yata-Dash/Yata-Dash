@@ -47,6 +47,19 @@ func SizeToGiB(s string) *float64 {
 	return &result
 }
 
+// Seed-time unit patterns for SeedTimeToSeconds, a hot path. Y, W and D
+// match either case; M (months) and m (minutes) are told apart by case; h and
+// s are lowercase only.
+var (
+	seedYearRe   = regexp.MustCompile(`(?i)([\d.]+)\s*Y`)
+	seedMonthRe  = regexp.MustCompile(`([\d.]+)\s*M`) // uppercase M only
+	seedWeekRe   = regexp.MustCompile(`(?i)([\d.]+)\s*W`)
+	seedDayRe    = regexp.MustCompile(`(?i)([\d.]+)\s*D`)
+	seedHourRe   = regexp.MustCompile(`([\d.]+)\s*h`)
+	seedMinuteRe = regexp.MustCompile(`([\d.]+)\s*m`) // lowercase m only
+	seedSecondRe = regexp.MustCompile(`([\d.]+)\s*s`)
+)
+
 // SeedTimeToSeconds parses a seed time string (e.g. "3M 6D 22h 23m 13s") to seconds.
 // Returns nil for empty/invalid input.
 // Also accepts a plain integer/float as raw seconds.
@@ -62,12 +75,7 @@ func SeedTimeToSeconds(s string) *float64 {
 		}
 		return nil
 	}
-	grp := func(pattern string, flags ...string) float64 {
-		p := pattern
-		if len(flags) > 0 && flags[0] == "i" {
-			p = "(?i)" + p
-		}
-		re := regexp.MustCompile(p)
+	grp := func(re *regexp.Regexp) float64 {
 		m := re.FindStringSubmatch(s)
 		if m == nil {
 			return 0
@@ -78,13 +86,13 @@ func SeedTimeToSeconds(s string) *float64 {
 	// 365-day years and 30-day months, the same ladder FormatSeedTime
 	// prints and utils/parse.ts reads: with 365.25 and 30.44 here, a typed
 	// "3M 6D" came back from its own round trip as "3M 1W 7h 40m 48s".
-	total := grp(`([\d.]+)\s*Y`, "i")*365*86400 +
-		grp(`([\d.]+)\s*M`)*30*86400 + // uppercase M only
-		grp(`([\d.]+)\s*W`, "i")*7*86400 +
-		grp(`([\d.]+)\s*D`, "i")*86400 +
-		grp(`([\d.]+)\s*h`)*3600 +
-		grp(`([\d.]+)\s*m`)*60 + // lowercase m only
-		grp(`([\d.]+)\s*s`)
+	total := grp(seedYearRe)*365*86400 +
+		grp(seedMonthRe)*30*86400 +
+		grp(seedWeekRe)*7*86400 +
+		grp(seedDayRe)*86400 +
+		grp(seedHourRe)*3600 +
+		grp(seedMinuteRe)*60 +
+		grp(seedSecondRe)
 
 	if total <= 0 {
 		return nil

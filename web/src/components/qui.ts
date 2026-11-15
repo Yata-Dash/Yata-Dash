@@ -164,7 +164,7 @@ export async function refreshQuiStats(settings: AppSettings): Promise<void> {
 
 /** Same origin, tolerating the half-typed URLs this runs against on every
  *  keystroke — an unparseable value is not the stored one. */
-function sameOrigin(a: string, b: string): boolean {
+export function sameOrigin(a: string, b: string): boolean {
   if (!a || !b) return false;
   try { return new URL(a).origin === new URL(b).origin; } catch { return a === b; }
 }
@@ -226,7 +226,7 @@ export async function renderQUIInstanceChecklist(
       ? '<span class="sdot green" style="width:6px;height:6px;flex-shrink:0"></span>'
       : '<span class="sdot red" style="width:6px;height:6px;flex-shrink:0"></span>';
     return `<label class="qui-inst-row">
-      <input type="checkbox" class="qui-inst-toggle" value="${inst.id}" ${checked} onchange="onQuiInstanceToggle()">
+      <input type="checkbox" class="qui-inst-toggle" value="${esc(String(inst.id))}" ${checked} onchange="onQuiInstanceToggle()">
       ${dot}
       <span class="qui-inst-label">${esc(inst.name || 'Instance ' + inst.id)}</span>
       <span class="qui-inst-host">${esc(inst.host || 'id:' + inst.id)}</span>
