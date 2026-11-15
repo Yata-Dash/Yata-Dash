@@ -51,19 +51,24 @@ func blockCrossSite(d *Deps) func(http.Handler) http.Handler {
 // crossSite reports whether the request originated from another site.
 func crossSite(r *http.Request) bool {
 	// Modern browsers label every request; trust that first.
+	sameSite := false
 	switch strings.ToLower(r.Header.Get("Sec-Fetch-Site")) {
 	case "cross-site":
 		return true
-	case "same-origin", "same-site", "none": // none = user-initiated (address bar)
+	case "same-origin", "none": // none = user-initiated (address bar)
 		return false
+	case "same-site":
+		// Security: same-site ignores the port and covers sibling subdomains,
+		// which still get our Lax cookie, so it must pass the Origin check.
+		sameSite = true
 	}
 	// Fallback: browsers have sent Origin on cross-origin writes for over a
 	// decade — compare its host against the request host. "null" (sandboxed
 	// iframe / opaque redirect) never matches and is blocked. No Origin at
-	// all = not a browser write — allow.
+	// all = not a browser write — allow, unless Sec-Fetch-Site said same-site.
 	origin := r.Header.Get("Origin")
 	if origin == "" {
-		return false
+		return sameSite
 	}
 	u, err := url.Parse(origin)
 	if err != nil || u.Host == "" {
@@ -71,4 +76,3 @@ func crossSite(r *http.Request) bool {
 	}
 	return !strings.EqualFold(u.Host, r.Host)
 }
-

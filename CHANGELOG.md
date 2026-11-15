@@ -18,6 +18,14 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   new one is entered with it, and a tracker Test against an unsaved address
   uses only what is typed. Path and trailing-slash edits keep them as before.
 
+### Fixed
+
+- **Login protection is harder to get round.** Every password prompt now
+  counts towards the five-attempt lockout, parallel guesses can no longer
+  slip past it, a spoofed `X-Forwarded-For` no longer resets it, and removing
+  the account asks for your 2FA code when 2FA is on. Turning 2FA on signs out
+  every other session.
+
 ## [Beta-20261011]
 
 ### Changed
