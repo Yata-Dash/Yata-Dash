@@ -7,13 +7,13 @@
 //   localStorage.setItem('yata.features.history', '0'); location.reload();
 //
 // Remove the key (or set '1') to return to the shipped default.
+import { localStore } from './utils/storage';
 
 function lsFlagDefault(key: string, dflt: boolean): boolean {
-  try {
-    const v = localStorage.getItem(key);
-    if (v === '1') return true;
-    if (v === '0') return false;
-  } catch { /* storage blocked (private mode) → fall through to default */ }
+  // Storage blocked (private mode) reads as unset → the default.
+  const v = localStore.get(key);
+  if (v === '1') return true;
+  if (v === '0') return false;
   return dflt;
 }
 

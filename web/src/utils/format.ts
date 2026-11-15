@@ -26,10 +26,11 @@ export function fmtEtaDays(d: number, format?: string): string {
   return `${days}D`;
 }
 
-/** Format GiB value to a human-readable size string */
+/** Format GiB value to a human-readable size string. Unit follows magnitude, so negatives
+ *  work. 0 stays "—": the aggregate cards use it for "no tracker has reported yet". */
 export function fmtGib(gib: number): string {
   if (!gib || isNaN(gib)) return '—';
-  if (gib >= 1024) return (gib / 1024).toFixed(2) + ' TiB';
+  if (Math.abs(gib) >= 1024) return (gib / 1024).toFixed(2) + ' TiB';
   return gib.toFixed(2) + ' GiB';
 }
 
