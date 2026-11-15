@@ -5,11 +5,11 @@ yata.exe~
 static/dashboard.js
 web/dist/
 dist/
-dev.ps1
 
 # Editor / tooling
 .claude/
 .vscode/
+.idea/
 
 # User data — never commit credentials or local databases
 config.json
@@ -17,6 +17,17 @@ config.json
 *.db-wal
 *.db-shm
 data/
+.env
+.env.*
+
+# Local test instance (throwaway config and database) and local-only tools
+/test/
+/tools/local/
+*_local_test.go
+
+# Local notes, never committed
+*.local.md
+CLAUDE.local.md
 
 # Rolling log files (may contain paths/usernames — never commit)
 yata.log.*
@@ -28,30 +39,11 @@ backups/
 # Node
 web/node_modules/
 
-# Dev-only saved tracker pages (large, contain personal profile data)
+# Saved tracker pages (contain personal profile data)
 reference/
-
-# Dev tools
-internal/scrape/profile_test.go
-tools/scrapetest/
-tools/apiprobe/
-tools/genversions/
-tools/seedtest/
-tools/ladderprobe/
-tools/ptd-import/
 
 # Self-hosted Font Awesome (e.g. Pro) — licensed assets, must NOT ship in the public repo
 static/fontawesome/
-
-
-*.md
-!/README.md
-!/docs/SECURITY.md
-!/docs/SETUP.md
-!/docs/CONTRIBUTING.md
-!/CHANGELOG.md
-!/docs/API.md
-!/docs/ARCHITECTURE.md
 
 # OS noise
 .DS_Store
