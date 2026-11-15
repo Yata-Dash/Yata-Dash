@@ -4,6 +4,7 @@ import type {
   SortDir, StatField, StatsMap, Tracker, TrackerGroupMap, TrackerStatsResponse,
   ViewMode,
 } from './types';
+import { localStore } from './utils/storage';
 
 // ── Column definitions ────────────────────────────────────────────────────
 // To add a new column: add an entry here, a buildCell case in views/table.ts
@@ -76,11 +77,11 @@ export let groupDefs: TrackerGroupMap = {};
 export let quiInstancesMeta: QUIInstanceMeta[] = [];
 export let scrapeStatus: ScrapeStatusMap = {};
 
-export let currentView: ViewMode = (localStorage.getItem('u3d-view') as ViewMode) || 'grid';
+export let currentView: ViewMode = (localStore.get('u3d-view') as ViewMode) || 'grid';
 export let expandedRows = new Set<string>();
 // Detail-table sort persists across reloads (same treatment as the view mode).
-export let sortCol = localStorage.getItem('u3d-sort-col') ?? '';
-export let sortDir: SortDir = (localStorage.getItem('u3d-sort-dir') as SortDir) || 'asc';
+export let sortCol = localStore.get('u3d-sort-col') ?? '';
+export let sortDir: SortDir = (localStore.get('u3d-sort-dir') as SortDir) || 'asc';
 export let pendingDelete: string | null = null;
 export let modalEnabled = true;
 
@@ -97,8 +98,8 @@ export function setCurrentView(v: ViewMode) { currentView = v; }
 export function toggleExpanded(id: string) {
   if (expandedRows.has(id)) expandedRows.delete(id); else expandedRows.add(id);
 }
-export function setSortCol(col: string) { sortCol = col; try { localStorage.setItem('u3d-sort-col', col); } catch { /* private mode */ } }
-export function setSortDir(d: SortDir) { sortDir = d; try { localStorage.setItem('u3d-sort-dir', d); } catch { /* private mode */ } }
+export function setSortCol(col: string) { sortCol = col; localStore.set('u3d-sort-col', col); }
+export function setSortDir(d: SortDir) { sortDir = d; localStore.set('u3d-sort-dir', d); }
 export function setPendingDelete(id: string | null) { pendingDelete = id; }
 export function setModalEnabled(v: boolean) { modalEnabled = v; }
 
@@ -140,7 +141,7 @@ function defaultColPrefs(): ColPref[] {
 
 export function loadColPrefs(): ColPref[] {
   try {
-    const saved = JSON.parse(localStorage.getItem('u3d-cols') || 'null') as ColPref[] | null;
+    const saved = JSON.parse(localStore.get('u3d-cols') || 'null') as ColPref[] | null;
     if (!saved) return defaultColPrefs();
     const savedKeys = saved.map(c => c.key);
     const merged = saved.filter(c => COL_DEFS.some(d => d.key === c.key));
@@ -152,7 +153,7 @@ export function loadColPrefs(): ColPref[] {
 }
 
 export function saveColPrefs(prefs: ColPref[]) {
-  localStorage.setItem('u3d-cols', JSON.stringify(prefs));
+  localStore.set('u3d-cols', JSON.stringify(prefs));
 }
 
 export function getVisibleCols(prefs: ColPref[]): ColDef[] {
@@ -175,7 +176,7 @@ const ORDER_KEY = 'u3d-order';
 /** Apply the locally saved drag-reorder order to a tracker list. */
 export function applySavedOrder(list: Tracker[]): Tracker[] {
   try {
-    const order = JSON.parse(localStorage.getItem(ORDER_KEY) || 'null') as string[] | null;
+    const order = JSON.parse(localStore.get(ORDER_KEY) || 'null') as string[] | null;
     if (!order) return list;
     const pos = new Map(order.map((id, i) => [id, i]));
     return [...list].sort((a, b) =>
@@ -184,7 +185,7 @@ export function applySavedOrder(list: Tracker[]): Tracker[] {
 }
 
 export function saveOrder(ids: string[]) {
-  localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+  localStore.set(ORDER_KEY, JSON.stringify(ids));
 }
 
 /**

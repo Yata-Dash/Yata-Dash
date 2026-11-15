@@ -48,6 +48,9 @@ rather serve everything from the Go binary.
 
 ## Repo layout
 
+How the pieces fit together, and the refresh path from tracker API to screen:
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
 ```
 cmd/yata/            entry point (flags, env, startup)
 internal/

@@ -5,7 +5,7 @@ import { appSettings, COL_DEFS, fieldOf, numOf, scrapeStatus, strOf } from '../s
 import { getSortedTrackers } from '../utils/sort';
 import type { SortDir } from '../types';
 import { eventGlobeSvg, unavailEyeSvg } from '../utils/icons';
-import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
+import { jsId, esc, errLabel, fieldLabel, fmtBonusPoints, fmtBonusPointsExact, fmtDay, fmtDueDate, fmtEtaDays, fmtGib, fmtGoalRate, fmtRatio, fmtSeedTime, fmtSeedTimeStacked, fmtTrackerName, parseRatio, rateTip, ratioColorFor, safeColor, safeIconClass, safeUrl, srcDot, unreadFlagsHtml } from '../utils/format';
 import { getFaviconUrl, memberDays, memberDur, parseAgeDays, parseSize, parseSeedTime } from '../utils/parse';
 import { findGroupDef, groupRequirementsToTargets, renderGroupBadge, renderUsername } from '../utils/group';
 import { computeGoalPacing } from '../utils/pacing';
@@ -13,6 +13,7 @@ import { displaySize } from '../utils/units';
 import { accountWarningBadges, loginRuleText } from '../utils/account';
 import type { Pacing } from '../utils/pacing';
 import { buildStatRows, buildScrapeRefreshBtn } from '../components/profile';
+import { localStore } from '../utils/storage';
 
 type ReorderFn = (srcId: string, dstId: string) => void;
 
@@ -43,7 +44,7 @@ const GRID_UI_KEY = 'yata.grid.ui';
 function loadGridUI(): GridUIState {
   const dflt: GridUIState = { sort: '', dir: 'asc', hidden: [], evenHeights: false };
   try {
-    const raw = JSON.parse(localStorage.getItem(GRID_UI_KEY) ?? '{}');
+    const raw = JSON.parse(localStore.get(GRID_UI_KEY) ?? '{}');
     return {
       sort: COL_DEFS.some(c => c.key === raw.sort && c.sortable) ? raw.sort : dflt.sort,
       dir: raw.dir === 'desc' ? 'desc' : 'asc',
@@ -58,7 +59,7 @@ function loadGridUI(): GridUIState {
 const gridUI = loadGridUI();
 
 function saveGridUI() {
-  try { localStorage.setItem(GRID_UI_KEY, JSON.stringify(gridUI)); } catch { /* private mode */ }
+  localStore.set(GRID_UI_KEY, JSON.stringify(gridUI));
 }
 
 /** Drag-reorder only means something while the grid is in the user's own
@@ -352,7 +353,7 @@ export function renderCard(
     // Error and nothing stored yet — only here may we show an error-only body.
     el.classList.add('error-state');
     body = `<div class="card-body">
-      <div class="card-error-msg">${errLabel(stats.error_kind || stats.error || 'error')}</div>
+      <div class="card-error-msg">${esc(errLabel(stats.error_kind || stats.error || 'error'))}</div>
       <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onclick="refreshSingle('${jsId(tracker.id)}')">Retry</button>
     </div>`;
   } else {
@@ -381,7 +382,7 @@ export function renderCard(
 
     const offlineBanner = !stats.ok
       ? `<div class="card-error-msg" style="padding:6px 10px;font-size:11px">
-          ${errLabel(stats.error_kind || stats.error || 'error')} — showing last known stats
+          ${esc(errLabel(stats.error_kind || stats.error || 'error'))} — showing last known stats
           <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="event.stopPropagation();refreshSingle('${jsId(tracker.id)}')">Retry</button>
         </div>`
       : '';
@@ -472,8 +473,8 @@ export function renderCard(
   }
 
   el.innerHTML = header + body;
-  // Re-attach drag/drop listeners after innerHTML wipe (drop targets still needed)
-  attachDragEvents(el, tracker.id, () => {});
+  // Card listeners survive the innerHTML swap; only the handle is new. Re-attaching them stacked up.
+  wireDragHandle(el);
   // Per-card expand for the collapsed extras. Local to the card and not
   // persisted: it's a peek, not a preference — the next render starts closed.
   const toggle = el.querySelector<HTMLElement>('.card-extra-toggle');
@@ -539,10 +540,10 @@ function buildRulesLine(tracker: Tracker, stats: TrackerStatsResponse | undefine
 export function buildPerkIcons(groupDef: ReturnType<typeof findGroupDef>, settings: AppSettings): string {
   if (!groupDef?.perks?.length) return '';
   const styled   = (settings.group_name_style || 'plain') === 'styled';
-  const iconColor = styled ? (groupDef.style?.color ?? 'var(--text3)') : 'var(--text3)';
+  const iconColor = (styled && safeColor(groupDef.style?.color)) || 'var(--text3)';
   const icons = groupDef.perks
     .filter(p => p.icon)
-    .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(p.icon)}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
+    .map(p => `<span class="perk-icon-wrap" data-tip="${esc(p.label)}"><i class="${esc(safeIconClass(p.icon))}" style="color:${esc(iconColor)};font-size:11px;opacity:.85"></i><span class="perk-tip">${esc(p.label)}</span></span>`)
     .join('');
   if (!icons) return '';
   return `<span class="card-perk-icons">${icons}</span>`;
@@ -1054,26 +1055,11 @@ function skelStats(): string {
   <div class="stats-grid">${Array(12).fill('<div class="stat-item"><div class="skeleton" style="height:30px"></div></div>').join('')}</div>`;
 }
 
+/** Card-level drag/drop listeners. Attach ONCE, in renderGrid; they outlive re-renders. */
 function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): void {
-  // Only start dragging when the pointer is down on the drag handle
   el.draggable = false;
-  const handle = el.querySelector<HTMLElement>('.drag-handle');
-  // Reordering is meaningless while a sort is applied: the drop would either be
-  // discarded on the next render or quietly rewrite an order the user can't
-  // see. The handle stays visible but says why it's inert.
-  if (!customOrderActive()) {
-    if (handle) {
-      handle.classList.add('is-disabled');
-      handle.title = 'Sorted by a column — switch Order to “My order” to drag';
-    }
-    return;
-  }
-  if (handle) {
-    handle.classList.remove('is-disabled');
-    handle.title = 'Drag to reorder';
-    handle.addEventListener('mousedown', () => { el.draggable = true; });
-    handle.addEventListener('mouseleave', () => { if (!dragSrcId) el.draggable = false; });
-  }
+  // No reordering under a sort; changing the order rebuilds cards via renderGrid.
+  if (!customOrderActive()) return;
 
   el.addEventListener('dragstart', e => {
     if (!el.draggable) { e.preventDefault(); return; }
@@ -1104,4 +1090,24 @@ function attachDragEvents(el: HTMLElement, id: string, onReorder: ReorderFn): vo
     onReorder(dragSrcId, id);
     dragSrcId = null;
   });
+}
+
+/** Wire the drag handle, which is a new element after every renderCard. */
+function wireDragHandle(el: HTMLElement): void {
+  // Only start dragging when the pointer is down on the drag handle
+  el.draggable = false;
+  const handle = el.querySelector<HTMLElement>('.drag-handle');
+  if (!handle) return;
+  // Reordering is meaningless while a sort is applied: the drop would either be
+  // discarded on the next render or quietly rewrite an order the user can't
+  // see. The handle stays visible but says why it's inert.
+  if (!customOrderActive()) {
+    handle.classList.add('is-disabled');
+    handle.title = 'Sorted by a column — switch Order to “My order” to drag';
+    return;
+  }
+  handle.classList.remove('is-disabled');
+  handle.title = 'Drag to reorder';
+  handle.addEventListener('mousedown', () => { el.draggable = true; });
+  handle.addEventListener('mouseleave', () => { if (!dragSrcId) el.draggable = false; });
 }

@@ -13,7 +13,7 @@ import { buildStatRows } from '../components/profile';
 import { accountWarningBadges, fmtKeyExpiry, fmtLastLogin, fmtLoginAgo, loginRuleText, statDate } from '../utils/account';
 import { capabilityCard } from '../components/capabilities';
 import { appSettings, fieldOf, groupDefs, numOf, statsCache, strOf, trackers } from '../state';
-import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
+import { jsId, connectionEventText, esc, fieldLabel, fmtDay, fmtEtaDays, fmtStamp, safeIconClass, safeUrl, fmtTrackerName, isConnectionKind, unreadFlagsHtml } from '../utils/format';
 import { buildTargets, fmtDateTime } from './grid';
 import { findGroupDef, renderGroupBadge, renderUsername } from '../utils/group';
 import { eventGlobeSvg } from '../utils/icons';
@@ -24,6 +24,7 @@ import {
 import type { HistoryRangeKey, SeriesUnit } from '../utils/series';
 import type { ActiveEvent, HistoryEvent, HistorySeriesResponse, PathwayStep, Tracker, TrackerStatsResponse } from '../types';
 import { isPinned, pinTitle, togglePin } from '../utils/pins';
+import { localStore } from '../utils/storage';
 
 // ── State (not persisted except the per-tracker chart picks) ────────────────
 
@@ -54,22 +55,22 @@ const TARGET_KEY_TO_METRIC: Record<string, string> = {
 const ALL_METRIC_KEYS = HISTORY_METRICS.map(m => m.key);
 
 let trackerId: string | null = null;
-let range: HistoryRangeKey = (localStorage.getItem(RANGE_KEY) as HistoryRangeKey) || '90d';
-let projection = localStorage.getItem(PROJECTION_KEY) === '1';
-let deltas = localStorage.getItem(DELTAS_KEY) !== '0'; // default ON
+let range: HistoryRangeKey = (localStore.get(RANGE_KEY) as HistoryRangeKey) || '90d';
+let projection = localStore.get(PROJECTION_KEY) === '1';
+let deltas = localStore.get(DELTAS_KEY) !== '0'; // default ON
 let lastResp: HistorySeriesResponse | null = null;
 let lastRoutes: PathwayStep[] | null = null; // null = pathways unavailable
 let fetchSeq = 0;
 let menuCloserWired = false; // document-level close handler, wired once
 
 function savedMetricsMap(): Record<string, string[]> {
-  try { return JSON.parse(localStorage.getItem(METRICS_KEY) ?? '{}'); } catch { return {}; }
+  try { return JSON.parse(localStore.get(METRICS_KEY) ?? '{}'); } catch { return {}; }
 }
 
 function saveMetrics(id: string, keys: string[]) {
   const map = savedMetricsMap();
   map[id] = keys;
-  try { localStorage.setItem(METRICS_KEY, JSON.stringify(map)); } catch { /* private mode */ }
+  localStore.set(METRICS_KEY, JSON.stringify(map));
 }
 
 /** Charts a tracker's Detail page will show at once.
@@ -140,7 +141,7 @@ export function closeTrackerDetail(): void {
   if (root) { root.style.display = 'none'; root.innerHTML = ''; }
   // Restore the persisted dashboard view.
   (window as unknown as { setView: (v: string) => void }).setView(
-    localStorage.getItem('u3d-view') || 'grid');
+    localStore.get('u3d-view') || 'grid');
 }
 
 /** Called from main.ts after tracker/stat reloads so an open page stays live.
@@ -365,9 +366,8 @@ function eventBanner(ev: ActiveEvent): string {
   // The tracker's own Font Awesome class when it sent one — the icon is part of
   // how the event is presented on the tracker, so borrowing it keeps the two
   // recognisably the same thing. Falls back to Yata's globe.
-  // Class names only — a tracker supplies this, and letting arbitrary text into
-  // a class attribute lets it borrow Yata's own classes and reshape the page.
-  const iconCls = (ev.icon ?? '').replace(/[^\w\s-]/g, '').trim().slice(0, 60);
+  // Class names only — see safeIconClass.
+  const iconCls = safeIconClass(ev.icon);
   const icon = iconCls
     ? `<i class="${esc(iconCls)}" style="flex-shrink:0"></i>`
     : eventGlobeSvg('flex-shrink:0');
@@ -789,7 +789,7 @@ function wireControls(t: Tracker): void {
   document.querySelectorAll<HTMLElement>('#view-detail [data-range]').forEach(btn => {
     btn.onclick = () => {
       range = btn.dataset['range'] as HistoryRangeKey;
-      try { localStorage.setItem(RANGE_KEY, range); } catch { /* private mode */ }
+      localStore.set(RANGE_KEY, range);
       render();
       void loadData();
     };
@@ -800,7 +800,7 @@ function wireControls(t: Tracker): void {
   const deltasBtn = document.getElementById('detail-deltas-btn');
   if (deltasBtn) deltasBtn.onclick = () => {
     deltas = !deltas;
-    try { localStorage.setItem(DELTAS_KEY, deltas ? '1' : '0'); } catch { /* private mode */ }
+    localStore.set(DELTAS_KEY, deltas ? '1' : '0');
     deltasBtn.classList.toggle('active', deltas);
     renderStats(t);
   };
@@ -809,7 +809,7 @@ function wireControls(t: Tracker): void {
   const projBtn = document.getElementById('detail-projection-btn');
   if (projBtn) projBtn.onclick = () => {
     projection = !projection;
-    try { localStorage.setItem(PROJECTION_KEY, projection ? '1' : '0'); } catch { /* private mode */ }
+    localStore.set(PROJECTION_KEY, projection ? '1' : '0');
     projBtn.classList.toggle('active', projection);
     drawCharts();
   };
