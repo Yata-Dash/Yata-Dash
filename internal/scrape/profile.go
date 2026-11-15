@@ -12,7 +12,6 @@ package scrape
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -293,7 +292,12 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	if path == "" {
 		path = "/users/{username}"
 	}
-	profileURL := baseURL + strings.ReplaceAll(path, "{username}", t.Username)
+	// Security: the path must stay on the tracker's host (session cookie).
+	// Checked on the template and again after substitution.
+	if _, err := netguard.JoinPath(baseURL, path); err != nil {
+		return nil, serr(http.StatusBadRequest, "bad_profile_path")
+	}
+	profilePath := strings.ReplaceAll(path, "{username}", t.Username)
 
 	// "{id}" profile paths (Gazelle /user.php?id={id}, TBDev-family
 	// /userdetails.php?id={id}): use the id from a previous scrape when known,
@@ -317,7 +321,11 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 			}
 			userID = uid
 		}
-		profileURL = baseURL + strings.ReplaceAll(path, "{id}", userID)
+		profilePath = strings.ReplaceAll(path, "{id}", userID)
+	}
+	profileURL, err := netguard.JoinPath(baseURL, profilePath)
+	if err != nil {
+		return nil, serr(http.StatusBadRequest, "bad_profile_path")
 	}
 
 	req, _ := http.NewRequest(http.MethodGet, profileURL, nil)
@@ -357,7 +365,7 @@ func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 		return nil, serr(401, "session_expired")
 	}
 
-	rawHTML, err := io.ReadAll(resp.Body)
+	rawHTML, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return nil, serr(http.StatusInternalServerError, "read_error")
 	}
@@ -408,7 +416,7 @@ func discoverUserID(baseURL, path string, t models.Tracker, identify string) (st
 	if resp.StatusCode != http.StatusOK {
 		return "", serr(resp.StatusCode, fmt.Sprintf("http_%d", resp.StatusCode))
 	}
-	rawHTML, err := io.ReadAll(resp.Body)
+	rawHTML, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 	if err != nil {
 		return "", serr(http.StatusInternalServerError, "read_error")
 	}
@@ -554,11 +562,13 @@ func extractStats(rawHTML string, labels map[string]string, eventTitleClass stri
 				}
 			}
 			origText := strings.TrimSpace(nodeText(n))
-			idx := strings.Index(strings.ToLower(origText), label)
-			if idx == -1 {
+			// Not strings.ToLower: its offsets don't index origText, as
+			// lowercasing can change a rune's byte length.
+			_, end := indexLower(origText, label)
+			if end == -1 {
 				return
 			}
-			remainder := strings.TrimLeft(origText[idx+len(label):], ": ")
+			remainder := strings.TrimLeft(origText[end:], ": ")
 			if remainder == "" || strings.HasPrefix(remainder, "(") {
 				return
 			}
@@ -1044,6 +1054,30 @@ func normText(s string) string {
 }
 
 func collapseSpace(s string) string { return spaceRe.ReplaceAllString(s, " ") }
+
+// indexLower finds lowered (already lowercase) in s case-insensitively and
+// returns the match's byte span in s, or -1, -1. Lowercasing can change byte
+// lengths ("Ⱥ" 2→3, "İ" 2→1, invalid UTF-8 → U+FFFD), so offsets are mapped back.
+func indexLower(s, lowered string) (start, end int) {
+	var lb strings.Builder
+	lb.Grow(len(s))
+	// origAt[i] is the offset in s of lowered byte i's rune, plus a final len(s).
+	origAt := make([]int, 0, len(s)+1)
+	for i, r := range s {
+		before := lb.Len()
+		lb.WriteRune(unicode.ToLower(r))
+		for j := before; j < lb.Len(); j++ {
+			origAt = append(origAt, i)
+		}
+	}
+	origAt = append(origAt, len(s))
+	idx := strings.Index(lb.String(), lowered)
+	if idx == -1 {
+		return -1, -1
+	}
+	// A valid UTF-8 needle matches only on rune boundaries, so both ends map cleanly.
+	return origAt[idx], origAt[idx+len(lowered)]
+}
 
 // nbspRe matches non-breaking spaces (regular + narrow), which Go's \s does
 // NOT cover — Unit3D renders sizes as "17.31&nbsp;TiB".

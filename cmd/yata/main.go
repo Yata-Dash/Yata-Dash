@@ -302,7 +302,18 @@ func main() {
 			"in Settings → General → Account, or bind to 127.0.0.1.", server.Host)
 	}
 
-	if err := http.ListenAndServe(addr, api.NewRouter(deps)); err != nil {
+	// Timeouts stop slowloris clients holding connections open; every request
+	// body is small JSON, so a minute is generous. WriteTimeout stays unset:
+	// GET /api/stats legitimately runs long. ReadTimeout cancels r.Context()
+	// mid-handler, which is harmless only while no handler reads it.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           api.NewRouter(deps),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

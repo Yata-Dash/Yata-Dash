@@ -160,6 +160,67 @@ func TestLadderFromAPIReadsStyleWhenServed(t *testing.T) {
 	}
 }
 
+func TestLadderFromAPIDropsHostileStyle(t *testing.T) {
+	const hostile = `{"auto":[{"title":"Seed",` +
+		`"color":"red;background:url(//evil.example/x)",` +
+		`"icon":"fa\" onmouseover=\"alert(1)",` +
+		`"perks":[{"icon":"<img src=x>","label":"Perk"}],"requirements":[]}]}`
+	got := LadderFromAPI([]byte(hostile), traxarySpec())
+	if len(got) != 1 {
+		t.Fatalf("ladder = %+v, want the one rank kept", got)
+	}
+	if got[0].Style.Color != "" || got[0].Style.Icon != "" {
+		t.Errorf("style = %+v, want both dropped", got[0].Style)
+	}
+	if len(got[0].Perks) != 1 || got[0].Perks[0].Icon != "" || got[0].Perks[0].Label != "Perk" {
+		t.Errorf("perks = %+v, want the label kept and the icon dropped", got[0].Perks)
+	}
+}
+
+func TestSafeColor(t *testing.T) {
+	for _, ok := range []string{
+		"#abc", "#abcd", "#a8e6a3", "#A8E6A3FF", "rgb(1, 2, 3)", "rgba(1,2,3,.5)",
+		"hsl(120, 50%, 40%)", "rgb(0 0 0 / 50%)", "HSLA(120,50%,40%,0.3)", "var(--accent)", "rebeccapurple",
+	} {
+		if got := SafeColor(" " + ok + " "); got != ok {
+			t.Errorf("SafeColor(%q) = %q, want it kept", ok, got)
+		}
+	}
+	for _, bad := range []string{
+		"", "#ab", "#abcde", "red;background:url(x)", "rgb(1,2,3);color:red",
+		"url(//evil)", "expression(alert(1))", "var(--x);a:b", `red" onclick="x`,
+		"light-blue", "rgb(calc(1))",
+	} {
+		if got := SafeColor(bad); got != "" {
+			t.Errorf("SafeColor(%q) = %q, want empty", bad, got)
+		}
+	}
+}
+
+func TestSafeIconClass(t *testing.T) {
+	for _, ok := range []string{"fas fa-leaf", "fa-solid fa-seedling", "fab fa-discord", "fa fa-2x"} {
+		if got := SafeIconClass(ok); got != ok {
+			t.Errorf("SafeIconClass(%q) = %q, want it kept", ok, got)
+		}
+	}
+	// Non-Font Awesome classes are dropped: they could only match Yata's CSS.
+	for in, want := range map[string]string{
+		"fas fa-upload text-success": "fas fa-upload",
+		"login-overlay":              "",
+		"fa-solid login-overlay":     "fa-solid",
+		"fail icon_1":                "",
+	} {
+		if got := SafeIconClass(in); got != want {
+			t.Errorf("SafeIconClass(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, bad := range []string{"", `fa" onclick="x`, "fa<b>", "fa;x", strings.Repeat("a", 61)} {
+		if got := SafeIconClass(bad); got != "" {
+			t.Errorf("SafeIconClass(%q) = %q, want empty", bad, got)
+		}
+	}
+}
+
 // The per-user verdict must not reach storage: it flips as the user climbs, so
 // hashing it would file a fresh "the tracker changed its rules" revision every
 // time they crossed a threshold.
