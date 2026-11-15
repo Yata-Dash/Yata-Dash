@@ -11,6 +11,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/defs"
 	"github.com/Yata-Dash/Yata-Dash/internal/fetch"
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 	"github.com/Yata-Dash/Yata-Dash/internal/stats"
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
@@ -439,6 +440,126 @@ func TestNoAPIClearsStaleAPILayer(t *testing.T) {
 	}
 	if ev, _ := d.DB.LatestEventDetail(tr.ID, connectionKind("api")); ev != "" {
 		t.Errorf("api connection event = %q, want none", ev)
+	}
+}
+
+// TestNoAPIGuardKeyedToConnection: a recent no-API pass is reused only while
+// the connection settings match; after a change the next refresh runs again
+// and clears an API layer stored in between.
+func TestNoAPIGuardKeyedToConnection(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "so3", Name: "Switching", URL: "https://switching.example", Type: "scrape_only", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	refreshTracker(d, tr, true) // a pass, within the guard window from now on
+
+	tr.APIKey = "changed"
+	if err := d.Stats.SaveAPI(tr.ID, map[string]any{"uploaded": "1.00 TiB"}); err != nil {
+		t.Fatal(err)
+	}
+	lastFetchAt.Store(tr.ID, fetchAttempt{at: time.Now(), conn: connFingerprint(tr)})
+	resp := refreshTracker(d, tr, false) // not forced: only the changed settings get it past the guard
+	if _, ok := resp.Fields["uploaded"]; ok {
+		t.Errorf("uploaded = %v, want the API layer cleared", resp.Fields["uploaded"])
+	}
+	if _, ok := lastFetchAt.Load(tr.ID); ok {
+		t.Error("lastFetchAt kept after its API layer was cleared")
+	}
+}
+
+// TestManualClearsStaleLayers: a tracker switched to manual keeps its old API
+// and scrape layers, which outrank the typed numbers. They are cleared, so the
+// typed values show and a changed one is recorded.
+func TestManualClearsStaleLayers(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "mn1", Name: "Now Manual", URL: "https://nowmanual.example", Type: models.TypeManual, Enabled: true,
+		ManualStats: map[string]string{"uploaded": "2.00 TiB"}}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveAPI(tr.ID, map[string]any{"uploaded": "9.00 TiB"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"ratio": "4.0"}); err != nil {
+		t.Fatal(err)
+	}
+
+	syncManualLayer(d, tr)
+	merged, err := d.Stats.Merged(tr.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := merged["uploaded"]; got.Value != "2.00 TiB" || got.Source != models.SourceManual {
+		t.Errorf("uploaded = %v from %v, want the typed 2.00 TiB", got.Value, got.Source)
+	}
+	if _, ok := merged["ratio"]; ok {
+		t.Errorf("ratio = %v, want the stale scrape layer cleared", merged["ratio"])
+	}
+	if last, _ := d.DB.LatestHistoryAt(tr.ID); last == 0 {
+		t.Error("no history recorded, though the shown numbers changed")
+	}
+}
+
+// TestNoAPIHistorySameSecond: a scrape stored in the same second as the last
+// history point has an equal timestamp; a changed value still counts as new.
+func TestNoAPIHistorySameSecond(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "so4", Name: "Same Second", URL: "https://samesecond.example", Type: "scrape_only", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"ratio": "1.0"}); err != nil {
+		t.Fatal(err)
+	}
+	refreshTracker(d, tr, true) // records the first point
+	last, err := d.DB.LatestHistoryAt(tr.ID)
+	if err != nil || last == 0 {
+		t.Fatalf("first point not recorded (%d, %v)", last, err)
+	}
+
+	if err := d.DB.ReplaceLayer(tr.ID, string(models.SourceScrape), map[string]any{"ratio": "2.0"}, time.Unix(last, 0)); err != nil {
+		t.Fatal(err)
+	}
+	merged, err := d.Stats.Merged(tr.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasNewLayerData(d, tr.ID, merged) {
+		t.Error("a changed value in the same second was not seen as new")
+	}
+	d.DB.ReplaceLayer(tr.ID, string(models.SourceScrape), map[string]any{"ratio": "1.0"}, time.Unix(last, 0))
+	if merged, _ = d.Stats.Merged(tr.ID); hasNewLayerData(d, tr.ID, merged) {
+		t.Error("an unchanged value in the same second was seen as new")
+	}
+}
+
+// TestGroupChangeRecordedOnce: a refresh and a scrape bringing the same change
+// at once record one event between them.
+func TestGroupChangeRecordedOnce(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "gc1", Name: "Racing", URL: "https://racing.example", Type: "scrape_only", Enabled: true}
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			recordGroupChange(d, tr, models.MergedStats{}, "User", "Power User", notify.TrendContext{})
+		}()
+	}
+	wg.Wait()
+	evs, err := d.DB.EventsSince([]string{tr.ID}, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, e := range evs {
+		if e.Kind == "group_change" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d group_change events, want 1", n)
 	}
 }
 

@@ -245,7 +245,9 @@ func runScrape(d *Deps) http.HandlerFunc {
 // only ever arrives this way, never recorded a promotion.
 func saveScrapeResult(d *Deps, t models.Tracker, result map[string]string) (models.MergedStats, error) {
 	oldGroup := mergedString(d, t.ID, "group")
-	_ = d.Stats.SaveScrape(t.ID, toAnyMap(result))
+	if err := d.Stats.SaveScrape(t.ID, toAnyMap(result)); err != nil {
+		return nil, err
+	}
 	merged, err := d.Stats.Merged(t.ID)
 	if err != nil {
 		return nil, err
