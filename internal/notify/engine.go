@@ -193,6 +193,32 @@ func (e *Engine) Evaluate(t models.Tracker, merged models.MergedStats, reachable
 // evaluation won't re-fire the same already-true condition.
 func (e *Engine) Announce(rules []models.AlertRule, trackers []models.Tracker, mergedFn func(string) models.MergedStats, trendFn func(string) TrendContext) {
 	cfg := e.cfg.Notifications()
+
+	// Gather each in-scope tracker's stats and trends once, BEFORE taking the
+	// lock: trendFn is slow and would stall Evaluate. Neither reads engine state.
+	type snapshot struct {
+		merged models.MergedStats
+		cur    map[string]string
+		trends TrendContext
+	}
+	snaps := map[string]snapshot{}
+	for _, t := range trackers {
+		if !t.Enabled {
+			continue
+		}
+		if _, done := snaps[t.ID]; done {
+			continue
+		}
+		for _, rule := range rules {
+			if !rule.Enabled || len(rule.Conditions) == 0 || !rule.Matches(t.ID) {
+				continue
+			}
+			merged := mergedFn(t.ID)
+			snaps[t.ID] = snapshot{merged: merged, cur: rawValues(merged), trends: trendFn(t.ID)}
+			break
+		}
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, rule := range rules {
@@ -203,17 +229,15 @@ func (e *Engine) Announce(rules []models.AlertRule, trackers []models.Tracker, m
 			if !t.Enabled || !rule.Matches(t.ID) {
 				continue
 			}
-			merged := mergedFn(t.ID)
-			cur := rawValues(merged)
+			s := snaps[t.ID]
 			prev := e.prevVals[t.ID]
 			if prev == nil {
 				prev = map[string]string{}
 			}
-			trends := trendFn(t.ID)
-			matched := evalRule(rule, merged, cur, prev, true, trends)
+			matched := evalRule(rule, s.merged, s.cur, prev, true, s.trends)
 			key := rule.ID + "|" + t.ID
 			if matched && !e.firing[key] {
-				e.fire(cfg, rule, t, merged, cur, prev, true, trends, key)
+				e.fire(cfg, rule, t, s.merged, s.cur, prev, true, s.trends, key)
 			}
 			// Record state but DON'T mark the tracker primed — let normal
 			// priming baseline the OTHER (existing) rules silently.

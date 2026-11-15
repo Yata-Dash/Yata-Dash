@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Two-factor enrolment. The flow is deliberately two-stage — start, then
@@ -27,21 +25,8 @@ func requireSession(d *Deps, w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// confirmPassword re-checks the account password. Enabling, disabling or
-// re-issuing recovery codes are all account-takeover-grade actions, so a
-// borrowed session alone must not be enough to perform them.
-func confirmPassword(d *Deps, w http.ResponseWriter, password string) (bool, bool) {
-	u, ok, err := d.DB.GetUser()
-	if err != nil || !ok {
-		jsonError(w, "store_error", http.StatusInternalServerError)
-		return false, false
-	}
-	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
-		jsonError(w, "invalid_credentials", http.StatusUnauthorized)
-		return false, false
-	}
-	return true, u.TOTPEnabled
-}
+// Enabling, disabling or re-issuing recovery codes are takeover-grade, so a
+// session alone is not enough: each re-checks via verifyAccountHolder.
 
 // totpStart generates a candidate secret and returns everything needed to
 // enrol: the QR image, the otpauth URI behind it, and the grouped secret for
@@ -52,18 +37,12 @@ func totpStart(d *Deps) http.HandlerFunc {
 		if !requireSession(d, w, r) {
 			return
 		}
-		c := decodeCreds(r)
-		okPw, alreadyOn := confirmPassword(d, w, c.Password)
-		if !okPw {
+		u, ok := verifyAccountHolder(d, w, r, decodeCreds(r), "two-factor setup", false)
+		if !ok {
 			return
 		}
-		if alreadyOn {
+		if u.TOTPEnabled {
 			jsonError(w, "totp_already_enabled", http.StatusConflict)
-			return
-		}
-		u, _, err := d.DB.GetUser()
-		if err != nil {
-			jsonError(w, "store_error", http.StatusInternalServerError)
 			return
 		}
 		secret, err := newTOTPSecret()
@@ -136,6 +115,15 @@ func totpEnable(d *Deps) http.HandlerFunc {
 		// The enrolment code counts as spent, so it can't immediately be
 		// replayed against the login form.
 		_ = d.DB.SetTOTPLastStep(step)
+		// Security: other sessions got in on the password alone (possibly
+		// leaked), so sign them out; keep the caller's, which proved the factor.
+		var current string
+		if ck, err := r.Cookie(sessionCookie); err == nil {
+			current = ck.Value
+		}
+		if err := d.DB.ClearSessionsExcept(current); err != nil {
+			d.logWarnf("auth: could not sign out other sessions after enabling 2FA: %v", err)
+		}
 		d.logInfof("auth: two-factor authentication enabled for %q", u.Username)
 		jsonOK(w, map[string]any{"ok": true, "recovery_codes": codes})
 	}
@@ -149,27 +137,13 @@ func totpDisable(d *Deps) http.HandlerFunc {
 		if !requireSession(d, w, r) {
 			return
 		}
-		c := decodeCreds(r)
-		okPw, enabled := confirmPassword(d, w, c.Password)
-		if !okPw {
+		// A wrong code counts towards the lockout like a wrong password.
+		u, ok := verifyAccountHolder(d, w, r, decodeCreds(r), "two-factor disable", true)
+		if !ok {
 			return
 		}
-		if !enabled {
+		if !u.TOTPEnabled {
 			jsonError(w, "totp_not_enabled", http.StatusBadRequest)
-			return
-		}
-		u, _, err := d.DB.GetUser()
-		if err != nil {
-			jsonError(w, "store_error", http.StatusInternalServerError)
-			return
-		}
-		valid, _, err := consumeSecondFactor(d, u, strings.TrimSpace(c.Code), time.Now())
-		if err != nil {
-			jsonError(w, "store_error", http.StatusInternalServerError)
-			return
-		}
-		if !valid {
-			jsonStatus(w, http.StatusUnauthorized, map[string]any{"error": "totp_invalid"})
 			return
 		}
 		if err := d.DB.DisableTOTP(); err != nil {
@@ -188,12 +162,11 @@ func totpRegenerateRecovery(d *Deps) http.HandlerFunc {
 		if !requireSession(d, w, r) {
 			return
 		}
-		c := decodeCreds(r)
-		okPw, enabled := confirmPassword(d, w, c.Password)
-		if !okPw {
+		u, ok := verifyAccountHolder(d, w, r, decodeCreds(r), "recovery code regeneration", false)
+		if !ok {
 			return
 		}
-		if !enabled {
+		if !u.TOTPEnabled {
 			jsonError(w, "totp_not_enabled", http.StatusBadRequest)
 			return
 		}

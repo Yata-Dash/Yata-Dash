@@ -29,7 +29,7 @@ approved it in `approved_by`. Without it, leave the def API-only. Trackers on
 
 ## Building and running
 
-Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 18+](https://nodejs.org/).
+Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 22.12+](https://nodejs.org/).
 
 ```bash
 make build && ./yata        # Linux / macOS — builds the frontend, then the binary
@@ -47,6 +47,9 @@ cd web && npm run dev       # Vite on :5173, proxying /api to the backend
 rather serve everything from the Go binary.
 
 ## Repo layout
+
+How the pieces fit together, and the refresh path from tracker API to screen:
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 cmd/yata/            entry point (flags, env, startup)

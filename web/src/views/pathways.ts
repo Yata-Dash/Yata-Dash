@@ -11,6 +11,7 @@ import { unavailEyeSvg } from '../utils/icons';
 import { isPinned, pinList, pinTitle, togglePin as togglePinShared } from '../utils/pins';
 import { getFaviconUrl } from '../utils/parse';
 import { displaySize } from '../utils/units';
+import { localStore } from '../utils/storage';
 import type {
   PathwayClassEval, PathwayPath, PathwayPathsResponse, PathwayReqProgress,
   PathwaySource, PathwayStep, PathwayTarget, PinResult,
@@ -27,10 +28,11 @@ let lastResult: PathwayPathsResponse | null = null;
 let expandedSteps = new Set<string>(); // "pathIdx:stepIdx"
 let pathsSeq = 0; // guards out-of-order responses when switching targets fast
 let listFilter: 'all' | 'met' | 'fav' =
-  (localStorage.getItem(FILTER_KEY) as 'all' | 'met' | 'fav') || 'all';
+  (localStore.get(FILTER_KEY) as 'all' | 'met' | 'fav') || 'all';
 let lastComboFilter = ''; // the text filter of the currently rendered list
 let lastPinned: PinResult[] = []; // last /pinned answer, re-rendered on expand/collapse
 let pinnedSeq = 0; // guards out-of-order /pinned responses (view switch vs. a pin/unpin)
+let wired = false; // combo + body listeners attached (once — see initPathways)
 
 // ── Favourites / not-interested (server-side settings, survive browsers) ──
 
@@ -266,12 +268,16 @@ export async function initPathways(): Promise<boolean> {
   const btn = document.getElementById('btn-pathways-view');
   if (btn) btn.style.display = '';
   renderDisclosure();
-  wireCombo();
-  wireBody();
+  // boot() reruns after every sign-in; the elements are static, so wire them once.
+  if (!wired) {
+    wired = true;
+    wireCombo();
+    wireBody();
+  }
   void refreshPinned();
 
   // Restore the last selection (persisted like the view choice).
-  const saved = localStorage.getItem(TARGET_KEY) ?? '';
+  const saved = localStore.get(TARGET_KEY) ?? '';
   if (saved && targets.some(t => t.name === saved)) void selectTarget(saved);
   return true;
 }
@@ -319,7 +325,7 @@ function wireCombo() {
     const chip = (e.target as HTMLElement).closest<HTMLElement>('.pw-chip-filter');
     if (chip?.dataset['filter']) {
       listFilter = chip.dataset['filter'] as typeof listFilter;
-      localStorage.setItem(FILTER_KEY, listFilter);
+      localStore.set(FILTER_KEY, listFilter);
       renderComboList(lastComboFilter);
       return;
     }
@@ -395,7 +401,7 @@ function renderComboList(filter: string) {
 
 async function selectTarget(name: string) {
   selected = name;
-  localStorage.setItem(TARGET_KEY, name);
+  localStore.set(TARGET_KEY, name);
   const input = comboInput();
   if (input) input.value = name;
   expandedSteps = new Set();

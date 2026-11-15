@@ -26,10 +26,11 @@ export function fmtEtaDays(d: number, format?: string): string {
   return `${days}D`;
 }
 
-/** Format GiB value to a human-readable size string */
+/** Format GiB value to a human-readable size string. Unit follows magnitude, so negatives
+ *  work. 0 stays "—": the aggregate cards use it for "no tracker has reported yet". */
 export function fmtGib(gib: number): string {
   if (!gib || isNaN(gib)) return '—';
-  if (gib >= 1024) return (gib / 1024).toFixed(2) + ' TiB';
+  if (Math.abs(gib) >= 1024) return (gib / 1024).toFixed(2) + ' TiB';
   return gib.toFixed(2) + ' GiB';
 }
 
@@ -353,6 +354,29 @@ export function safeUrl(raw: unknown): string {
   } catch {
     return ''; // not absolute, or not parseable at all
   }
+}
+
+/**
+ * A CSS colour safe for a style attribute, or ''. An allow-list, not an escape:
+ * `red;background:url(//evil/)` has nothing for esc() to catch.
+ */
+export function safeColor(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s || s.length > 64) return '';
+  if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s)) return s;
+  if (/^(?:rgba?|hsla?)\([\d\s.,%/]+\)$/i.test(s)) return s;
+  if (/^var\(--[\w-]+\)$/.test(s)) return s;
+  if (/^[a-z]+$/i.test(s)) return s;
+  return '';
+}
+
+/** A class list safe for a class attribute (tracker/def icons), or ''. */
+export function safeIconClass(raw: unknown): string {
+  // A malformed value is rejected, not stripped, so it cannot be cleaned into a valid one.
+  const s = String(raw ?? '').trim();
+  if (s.length > 60 || !/^[\w\s-]+$/.test(s)) return '';
+  // Font Awesome tokens only: other classes could pull in Yata's own CSS.
+  return s.split(/\s+/).filter(t => /^(fa|fa[srbldt]|fas[srlt]|fa(-[a-z0-9]+)+)$/.test(t)).join(' ');
 }
 
 /** Minimal numeric format — returns null for non-numeric values */
