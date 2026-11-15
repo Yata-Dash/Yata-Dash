@@ -7,9 +7,13 @@ package api
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/stats"
 	"github.com/Yata-Dash/Yata-Dash/internal/version"
 )
@@ -118,7 +122,7 @@ func getSummary(d *Deps) http.HandlerFunc {
 				st.Leeching = num("leeching")
 				st.BonusPoints = num("bonus_points")
 				st.HitAndRuns = num("hit_and_runs")
-				st.Warnings = num("warnings")
+				st.Warnings = summaryCount(merged, "warnings")
 				st.UnreadMail = str("unread_mail") == "true"
 				st.UnreadNotifications = str("unread_notifications") == "true"
 				for _, f := range merged {
@@ -162,6 +166,35 @@ func getSummary(d *Deps) http.HandlerFunc {
 			"trackers":     out,
 		})
 	}
+}
+
+// summaryCount reads a count from the merged view for a non-history field,
+// which NumericSnapshot never carries. Unparseable or non-finite values are
+// "not reported" (nil), not zero.
+func summaryCount(merged models.MergedStats, field string) *float64 {
+	f, ok := merged[field]
+	if !ok {
+		return nil
+	}
+	var n float64
+	switch v := f.Value.(type) {
+	case float64:
+		n = v
+	case int:
+		n = float64(v)
+	case string:
+		p, err := strconv.ParseFloat(strings.ReplaceAll(strings.TrimSpace(v), ",", ""), 64)
+		if err != nil {
+			return nil
+		}
+		n = p
+	default:
+		return nil
+	}
+	if math.IsInf(n, 0) || math.IsNaN(n) {
+		return nil
+	}
+	return &n
 }
 
 // trackerStatus derives the health one-liner from the refresh loop's last

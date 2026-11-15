@@ -48,31 +48,43 @@ func Open(path string) (*Manager, error) {
 		if err := json.Unmarshal(data, &m.cfg); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
-		m.applyDefaults()
-		migrated := migrateTrackerTypes(m.cfg.Trackers)
-		// A hostname stored before the check tightened would fail validation on
-		// the way back in, and UpdateSettings validates the WHOLE settings
-		// object — so one bad entry from an older build would block every
-		// unrelated settings change, with no way to remove it from the page it
-		// was blocking. Dropping it on load costs nothing (it could never have
-		// matched a real request) and unsticks the install.
-		if dropped := pruneAllowedHosts(&m.cfg.Settings); dropped {
-			migrated = true
-		}
-		// Runs once per install per BATCH: seedDefaultAlertRules is a no-op
-		// once the version counter has caught up, so this costs an extra write
-		// only on the first load after a batch is added.
-		if m.cfg.Notifications.SeedVersion < seedVersion {
-			seedDefaultAlertRules(&m.cfg.Notifications)
-			migrated = true
-		}
-		if migrated {
+		if migrated := m.normalizeLoaded(); migrated {
 			if err := m.saveLocked(); err != nil {
 				return nil, fmt.Errorf("save config after migration: %w", err)
 			}
 		}
 	}
 	return m, nil
+}
+
+// normalizeLoaded migrates a config read at startup or imported, reporting
+// whether it needs writing back. Shared so an import matches a restart.
+func (m *Manager) normalizeLoaded() bool {
+	m.applyDefaults()
+	migrated := migrateTrackerTypes(m.cfg.Trackers)
+	// A hostname stored before the check tightened would fail validation on
+	// the way back in, and UpdateSettings validates the WHOLE settings
+	// object — so one bad entry from an older build would block every
+	// unrelated settings change, with no way to remove it from the page it
+	// was blocking. Dropping it on load costs nothing (it could never have
+	// matched a real request) and unsticks the install.
+	if dropped := pruneAllowedHosts(&m.cfg.Settings); dropped {
+		migrated = true
+	}
+	// Runs once per install per BATCH: seedDefaultAlertRules is a no-op
+	// once the version counter has caught up, so this costs an extra write
+	// only on the first load after a batch is added. Uses the loaded config's
+	// counter, so starter rules it deleted stay deleted.
+	if m.cfg.Notifications.SeedVersion < seedVersion {
+		seedDefaultAlertRules(&m.cfg.Notifications)
+		migrated = true
+	}
+	// Always, not just when seeding: a fully seeded config can still lack the
+	// centre, leaving every rule with nowhere to record.
+	if ensureInAppDestination(&m.cfg.Notifications) {
+		migrated = true
+	}
+	return migrated
 }
 
 // renamedTrackerTypes maps retired type keys to their replacements, for
@@ -153,14 +165,20 @@ func countWebhooks(n *models.NotificationConfig) int {
 	return count
 }
 
-func ensureInAppDestination(n *models.NotificationConfig) {
+// ensureInAppDestination reports whether it changed anything.
+func ensureInAppDestination(n *models.NotificationConfig) bool {
 	for i, d := range n.Destinations {
 		if d.ID == models.InAppDestinationID {
-			n.Destinations[i].Type = models.InAppDestinationType
-			if n.Destinations[i].Name == "" {
-				n.Destinations[i].Name = "Notification centre"
+			changed := false
+			if d.Type != models.InAppDestinationType {
+				n.Destinations[i].Type = models.InAppDestinationType
+				changed = true
 			}
-			return
+			if d.Name == "" {
+				n.Destinations[i].Name = "Notification centre"
+				changed = true
+			}
+			return changed
 		}
 	}
 	// Prepended: it is the destination that always exists, and the one a new
@@ -171,6 +189,7 @@ func ensureInAppDestination(n *models.NotificationConfig) {
 		Type:    models.InAppDestinationType,
 		Enabled: true,
 	}}, n.Destinations...)
+	return true
 }
 
 func seedDefaultAlertRules(n *models.NotificationConfig) {

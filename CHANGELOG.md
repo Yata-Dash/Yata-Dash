@@ -61,6 +61,16 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **The dashboard came up blank when the browser blocks site storage.**
 - **A manual refresh during a background one could be overwritten** by the
   older reply, and a slow qui piled up overlapping requests.
+- **One promotion could alert twice**, and a tracker that was down was
+  re-contacted by every open tab's poll: refreshes of the same tracker now
+  wait for each other, and a failed fetch counts towards the refresh interval
+  like a successful one (the refresh button still always fetches).
+- **A target added already met could fire "target met"** after all of a
+  tracker's targets had been removed and one re-added.
+- **Pinned paths slowed every refresh cycle** with many trackers.
+- **`/api/summary` never reported `warnings`.**
+- **Importing an older config** could leave alerts with nowhere to record and
+  a renamed tracker type not collecting until the next restart.
 
 ## [Beta-20261011]
 
