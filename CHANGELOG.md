@@ -18,6 +18,12 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   new one is entered with it, and a tracker Test against an unsaved address
   uses only what is typed. Path and trailing-slash edits keep them as before.
 
+### Changed
+
+- **Faster page loads.** Responses are now gzip-compressed (the history chart
+  data shrinks about fivefold), and the pathways pages no longer re-read every
+  route's requirements on each view.
+
 ### Fixed
 
 - **Login protection is harder to get round.** Every password prompt now
