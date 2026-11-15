@@ -184,6 +184,12 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	oldGroup := mergedString(d, t.ID, "group")
 
 	if noAPI {
+		// A tracker moved to a no-API type keeps whatever API layer its old type
+		// stored, and the merge would keep showing those numbers as API values.
+		// Clear it once; nothing is recorded, since nothing was contacted.
+		if d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI) > 0 {
+			_ = d.Stats.SaveAPI(t.ID, map[string]any{})
+		}
 		lastPassAt.Store(t.ID, time.Now())
 		resp.OK = true
 	} else {

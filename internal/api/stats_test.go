@@ -410,6 +410,38 @@ func TestNoAPITrackerRecordsNoAPIContact(t *testing.T) {
 	}
 }
 
+// TestNoAPIClearsStaleAPILayer: a tracker switched to a no-API type keeps the
+// API layer its old type stored. The refresh clears it, so those numbers stop
+// showing as API values, without recording any contact.
+func TestNoAPIClearsStaleAPILayer(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "so2", Name: "Was API", URL: "https://wasapi.example", Type: "scrape_only", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	// Left over from when the tracker had an API.
+	if err := d.Stats.SaveAPI(tr.ID, map[string]any{"uploaded": "9.00 TiB", "ratio": "4.2"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"ratio": "3.1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := refreshTracker(d, tr, true)
+	if got := resp.Fields["ratio"]; got.Value != "3.1" || got.Source != models.SourceScrape {
+		t.Errorf("ratio = %v from %v, want the scraped 3.1", got.Value, got.Source)
+	}
+	if _, ok := resp.Fields["uploaded"]; ok {
+		t.Errorf("uploaded = %v, want gone with the stale API layer", resp.Fields["uploaded"])
+	}
+	if at := d.Stats.LayerUpdatedAt(tr.ID, models.SourceAPI); at != 0 || resp.APIUpdatedAt != 0 {
+		t.Errorf("API layer updated_at = %d, response %d, want 0", at, resp.APIUpdatedAt)
+	}
+	if ev, _ := d.DB.LatestEventDetail(tr.ID, connectionKind("api")); ev != "" {
+		t.Errorf("api connection event = %q, want none", ev)
+	}
+}
+
 // TestNoAPIHistoryOnlyForNewData: a scrape-only tracker's refresh fetches
 // nothing, so it records history only when a scrape has landed since the
 // last point, not once per pass with the same values restamped.
