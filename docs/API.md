@@ -69,6 +69,7 @@ one-liners, and health.
     "enabled": 5,
     "ok": 4,
     "issues": 1,
+    "no_api": 0,
     "uploaded_gib": 10543.2,
     "downloaded_gib": 2811.7,
     "buffer_gib": 7731.5,
