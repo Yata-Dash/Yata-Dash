@@ -37,6 +37,10 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   alert.** Discord messages no longer allow mentions, so an event named
   `@everyone` stays text; Telegram messages are escaped, so a stray `_` or `*`
   no longer gets them rejected.
+- **Growth rates measured across UTC midnight were too low** (a tracker on its
+  second day could read 6.25 GiB/day instead of 100), inflating target ETAs
+  and raising false "behind pace" and seed-size drop alerts. Rates now use
+  when each value was actually recorded, and are much cheaper to compute.
 
 ## [Beta-20261011]
 

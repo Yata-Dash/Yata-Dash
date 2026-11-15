@@ -402,15 +402,11 @@ const (
 // legitimately shrink (heavy downloading), and a negative rate is exactly what
 // the hover should show; it is never used for ETA projection.
 func (e *Engine) GrowthRates(trackerID string) map[string]float64 {
-	now := time.Now().UTC()
-	daily, _ := e.DB.DailySince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
-	fine, _ := e.DB.TrackerHistorySince(trackerID, now.Add(-rateFineWindowDays*24*time.Hour))
-	byDay := groupByField(daily)
-	byFine := groupByField(fine)
+	byDay, byFine := e.rateHistory(trackerID, growthFineFields)
 
 	out := map[string]float64{}
-	for _, f := range []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"} {
-		// Daily rollups need a ≥1-day span; fine history a ≥3h span.
+	for _, f := range growthFields {
+		// Daily rollups need ≥1 day between samples; fine history ≥3h.
 		if r, ok := rateFromPoints(byDay[f], 86400); ok {
 			out[f] = r
 		} else if r, ok := rateFromPoints(byFine[f], rateFineMinSpanSec); ok {
@@ -433,16 +429,11 @@ type DeclineSignals struct {
 	SeedingDrop7dPct  *float64 // same for the seeding count
 }
 
-// DeclineSignals computes the standing-guard trend signals from the same two
-// history queries GrowthRates uses (one DailySince + one TrackerHistorySince,
-// grouped by field once) so a rule evaluation pass never issues a query per
-// signal.
+// DeclineSignals computes the standing-guard trend signals from the same
+// queries GrowthRates uses (see rateHistory), not one query per signal.
 func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	now := time.Now().UTC()
-	daily, _ := e.DB.DailySince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
-	fine, _ := e.DB.TrackerHistorySince(trackerID, now.Add(-rateFineWindowDays*24*time.Hour))
-	byDay := groupByField(daily)
-	byFine := groupByField(fine)
+	byDay, byFine := e.rateHistory(trackerID, declineFineFields)
 
 	var out DeclineSignals
 	if r, ok := signedRatePerDay(byDay, byFine, "ratio", ratioNoiseFloor); ok {
@@ -453,9 +444,9 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 	}
 
 	// Truncate to UTC midnight before subtracting whole days: history_daily
-	// buckets are stored at UTC midnight (see utcDay), so comparing against a
-	// plain "now minus 7×24h" instant would inconsistently include/exclude the
-	// 7-day-old bucket depending on what time of day it is right now.
+	// buckets are UTC days (see utcDay), so a plain "now minus 7×24h" would
+	// include or exclude the 7-day-old bucket depending on the time of day.
+	// Each daily sample time falls inside its own day, so a midnight cut works.
 	dropSince := now.Truncate(24*time.Hour).AddDate(0, 0, -dropWindowDays)
 	if p, ok := dropPct(windowed(byDay["seed_size"], dropSince), byFine["seed_size"]); ok {
 		out.SeedSizeDrop7dPct = &p
@@ -464,6 +455,24 @@ func (e *Engine) DeclineSignals(trackerID string) DeclineSignals {
 		out.SeedingDrop7dPct = &p
 	}
 	return out
+}
+
+// Fields each caller reads, so the fine-history lookup fetches only those.
+// growthFields are positive-only; growthFineFields adds the signed buffer.
+var (
+	growthFields      = []string{"uploaded", "downloaded", "seed_size", "bonus_points", "seeding_points", "uploads_approved"}
+	growthFineFields  = append(append([]string{}, growthFields...), "buffer")
+	declineFineFields = []string{"ratio", "buffer", "seed_size", "seeding"}
+)
+
+// rateHistory returns, by field, the daily rollups (at real sample times)
+// and just the oldest and newest fine points. The rate maths only reads a
+// series' two ends, so this avoids loading a week of 15-minute samples.
+func (e *Engine) rateHistory(trackerID string, fineFields []string) (byDay, byFine map[string][]store.HistoryPoint) {
+	now := time.Now().UTC()
+	daily, _ := e.DB.DailySamplesSince(trackerID, now.AddDate(0, 0, -rateDailyWindowDays))
+	byFine, _ = e.DB.FieldEndpointsSince(trackerID, fineFields, now.Add(-rateFineWindowDays*24*time.Hour))
+	return groupByField(daily), byFine
 }
 
 // windowed filters an oldest-first point slice down to those recorded at or
