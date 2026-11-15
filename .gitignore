@@ -51,6 +51,7 @@ static/fontawesome/
 !/docs/CONTRIBUTING.md
 !/CHANGELOG.md
 !/docs/API.md
+!/docs/ARCHITECTURE.md
 
 # OS noise
 .DS_Store
