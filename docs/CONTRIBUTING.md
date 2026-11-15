@@ -4,6 +4,9 @@ Bug reports, tracker definitions and code are all welcome. This is the short
 guide to the repo; the rules that matter most are the security ones at the
 end.
 
+**Open pull requests against `dev`, not `main`.** GitHub picks `main` by
+default; change the base branch when you open the PR.
+
 ## Reporting a problem
 
 Open an issue with the **three versions** from Settings → General (app,
@@ -87,7 +90,8 @@ checked in the browser where it can't.
 feature branch  --PR-->  dev  --PR-->  main  --tag-->  release
 ```
 
-Review happens at feature → dev, one focused change per PR, squash-merged.
+Branch from `dev` and open your PR against `dev`. Review happens at
+feature → dev, one focused change per PR, squash-merged.
 dev → main is a promotion of code that has already been reviewed. Releases are
 date-stamped (`Beta-YYYYMMDD`), cut from main by the release workflow, and
 their notes come from `CHANGELOG.md` — so add a line under *Unreleased* with
