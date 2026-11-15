@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -80,8 +81,14 @@ func quiInstances(d *Deps) http.HandlerFunc {
 		}
 		out := make([]map[string]any, 0, len(instances))
 		for _, inst := range instances {
+			// The id is rendered into an attribute and stored as []int, so only
+			// a whole number is passed on; anything else couldn't be enabled anyway.
+			id, ok := inst["id"].(float64)
+			if !ok || id != math.Trunc(id) || math.Abs(id) >= 1<<53 {
+				continue
+			}
 			out = append(out, map[string]any{
-				"id":        inst["id"],
+				"id":        int64(id),
 				"name":      inst["name"],
 				"connected": inst["connected"],
 				"host":      inst["host"],
