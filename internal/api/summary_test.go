@@ -61,3 +61,32 @@ func TestSummaryReportsWarnings(t *testing.T) {
 }
 
 func ptrFloat(f float64) *float64 { return &f }
+
+// Trackers with no API are counted in totals.no_api, not ok or issues, so a
+// consumer comparing ok against enabled can tell them apart from failures.
+func TestSummaryCountsNoAPITrackers(t *testing.T) {
+	d := testDeps(t)
+	for _, tr := range []models.Tracker{
+		{ID: "na1", Name: "Scrape Only", URL: "https://scrapeonly.invalid", Type: "scrape_only", Enabled: true},
+		{ID: "na2", Name: "Hand Kept", URL: "https://handkept.invalid", Type: models.TypeManual, Enabled: true},
+		{ID: "na3", Name: "Off", URL: "https://off.invalid", Type: "scrape_only", Enabled: false},
+	} {
+		if err := d.Cfg.AddTracker(tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out struct {
+		Totals struct {
+			Enabled int `json:"enabled"`
+			OK      int `json:"ok"`
+			Issues  int `json:"issues"`
+			NoAPI   int `json:"no_api"`
+		} `json:"totals"`
+	}
+	if err := json.Unmarshal([]byte(getJSON(t, d, "/api/summary")), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Totals; got.Enabled != 2 || got.NoAPI != 2 || got.OK != 0 || got.Issues != 0 {
+		t.Errorf("totals = %+v, want enabled 2, no_api 2, ok 0, issues 0", got)
+	}
+}

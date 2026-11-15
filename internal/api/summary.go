@@ -64,6 +64,7 @@ type summaryTotals struct {
 	Enabled  int `json:"enabled"`
 	OK       int `json:"ok"`     // enabled trackers whose status is ok; no_api counts in neither this nor Issues
 	Issues   int `json:"issues"` // enabled trackers whose status is error
+	NoAPI    int `json:"no_api"` // enabled trackers whose status is no_api, so ok + no_api = enabled when all is well
 
 	UploadedGiB   float64  `json:"uploaded_gib"`
 	DownloadedGiB float64  `json:"downloaded_gib"`
@@ -140,6 +141,8 @@ func getSummary(d *Deps) http.HandlerFunc {
 					totals.OK++
 				case "error":
 					totals.Issues++
+				case "no_api":
+					totals.NoAPI++
 				}
 			}
 			if st.UploadedGiB != nil {

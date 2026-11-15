@@ -106,7 +106,7 @@ Field notes:
 | Field | Meaning |
 |---|---|
 | `status` | `ok` \| `error` \| `disabled` \| `opted_out` \| `retired` \| `no_api` \| `unknown`. Reports on the API only. `retired` = the tracker has shut down (stored stats are kept, nothing is fetched). `no_api` = the tracker's type has no API: scrape-only, hand-entered, or not yet given a type. `unknown` = not refreshed since Yata started; stats are still the stored last-known values. |
-| `totals.ok` / `totals.issues` | Enabled trackers whose `status` is `ok` / `error`. `no_api` trackers count in neither, so `ok` can be below `enabled` with nothing wrong. |
+| `totals.ok` / `totals.issues` / `totals.no_api` | Enabled trackers whose `status` is `ok` / `error` / `no_api`. `ok` can be below `enabled` with nothing wrong: compare `ok + no_api` with `enabled`. |
 | `error_kind` | Present when `status` is `error`: `http_401`, `http_403`, `http_NNN`, `connection_error`, `timeout`, `parse_error`, `api_error`, `no_key`, … the same kinds the Trackers table shows. |
 | `uploaded` / `downloaded` / `buffer` / `seed_size` | Display strings as the tracker reports them (`"1.40 TiB"`, or `"1.40 TB"` on sites that label binary sizes that way) — template these directly. The *Size units* display setting does not apply here. |
 | `*_gib` | The same sizes as numbers, in GiB — use these for math and thresholds. Same conversion the history charts use. |
