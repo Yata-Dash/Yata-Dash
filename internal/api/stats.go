@@ -98,8 +98,9 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	// API-updated time on a tracker with no API, so the card would claim
 	// contact that never happened.
 	//
-	// History still runs: each save is a real datapoint, and charting them is
-	// how a hand-maintained tracker builds a trend at all.
+	// History is not recorded here but when the numbers are saved (see
+	// syncManualLayer): a refresh learns nothing new, and stamping the typed
+	// values with the refresh time invents a flat run the rates then average.
 	if d.Reg.APIKind(t.URL, t.Type) == "none" && t.Type == models.TypeManual {
 		// FetchedAt defaults to "now" because for every other tracker it means
 		// "when this refresh ran". Nothing ran here, so leaving it stamped a
@@ -116,7 +117,6 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 		if merged, err := d.Stats.Merged(t.ID); err == nil {
 			resp.Fields = merged
 			resp.OK = true
-			_ = d.Stats.RecordHistory(t.ID, merged)
 			if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
 				resp.Rates = r
 			}
@@ -131,11 +131,35 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	mu := lockRefresh(t.ID)
 	defer mu.Unlock()
 
+	// No API at all (scrape-only, "unknown" and placeholder types): the fetcher
+	// returns an empty map without sending anything, so treating that as a
+	// successful fetch would record a connection that never happened — the same
+	// dishonesty the manual branch avoids. The stats are whatever the other
+	// layers (scrape, qui, manual) hold; there is no fetch time to report.
+	noAPI := d.Reg.APIKind(t.URL, t.Type) == "none"
+	if noAPI {
+		resp.FetchedAt = 0
+	}
+
 	// Min-age guard: serve stored stats and the last attempt's outcome (failures
 	// count too, so a down tracker isn't re-hit per poll). Bypassed when forced
 	// or when the connection settings changed, so a corrected key is tried at once.
+	// A no-API tracker is gated on its last pass instead, so open dashboards
+	// coalesce the same way without it ever claiming a fetch.
 	conn := connFingerprint(t)
-	if !force {
+	if !force && noAPI {
+		if v, ok := lastPassAt.Load(t.ID); ok && time.Since(v.(time.Time)) < autoRefreshMinAge(d) {
+			if merged, err := d.Stats.Merged(t.ID); err == nil {
+				resp.Fields = merged
+				resp.OK = true
+				if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
+					resp.Rates = r
+				}
+			}
+			return resp
+		}
+	}
+	if !force && !noAPI {
 		if v, ok := lastFetchAt.Load(t.ID); ok {
 			last := v.(fetchAttempt)
 			if last.conn == conn && time.Since(last.at) < autoRefreshMinAge(d) {
@@ -159,17 +183,69 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	// restarts and only fires on a real transition.
 	oldGroup := mergedString(d, t.ID, "group")
 
+	if noAPI {
+		lastPassAt.Store(t.ID, time.Now())
+		resp.OK = true
+	} else {
+		fetchAPI(d, t, conn, &resp)
+	}
+
+	merged, err := d.Stats.Merged(t.ID)
+	if err == nil {
+		resp.Fields = merged
+		if resp.OK && (!noAPI || hasNewLayerData(d, t.ID)) {
+			_ = d.Stats.RecordHistory(t.ID, merged)
+		}
+		// Growth rates (daily-rollup average) for target/promotion ETAs.
+		if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
+			resp.Rates = r
+		}
+	} else if resp.Error == "" {
+		resp.OK = false
+		resp.Error = "store_error"
+	}
+
+	// Standing-guard trend signals for this pass — built once (cheap no-op
+	// with zero alert rules, see buildTrendContext) and threaded through every
+	// evaluation call below, so a mixed rule like "promoted AND ratio < 1"
+	// sees the same numbers whether it fires from the event path or the poll.
+	var trends notify.TrendContext
+	if d.Alerts != nil {
+		trends = buildTrendContext(d, t, resp.Fields, resp.Rates)
+	}
+	if err == nil && resp.OK {
+		recordGroupChange(d, t, resp.Fields, oldGroup, mergedFieldString(resp.Fields, "group"), trends)
+	}
+
+	// Alert evaluation — fires webhooks on rising-edge rule matches. Runs on
+	// every refresh path (frontend poll, single, or the background loop);
+	// edge-triggering + per-tracker priming keep it from spamming.
+	if d.Alerts != nil {
+		d.Alerts.Evaluate(t, resp.Fields, resp.OK, trends)
+		// Target-met events need fresh data to mean anything — a failed
+		// refresh serves the last stored fields, which would just re-diff the
+		// same values against themselves.
+		if resp.OK {
+			evaluateTrackerTargets(d, t, resp.Fields, trends)
+			evaluateTrackerPins(d, t, resp.Fields, resp.Rates, trends, cyc)
+		}
+	}
+	return resp
+}
+
+// fetchAPI is refreshTracker's API contact for a tracker that has an API:
+// fetch, persist the layer, and record the outcome (the min-age guard,
+// connection health, the Trackers table's status column, the timeline). On
+// failure it falls back to a policy-respecting profile scrape.
+func fetchAPI(d *Deps, t models.Tracker, conn string, resp *models.TrackerStatsResponse) {
 	data, ferr := d.Fetch.Fetch(t)
 	// The Trackers table's status column: this fetch is as much an answer as
-	// a Test would be. Only where a request is actually made — a scrape-only
-	// tracker's empty API layer is a static "N/A" on read, not a success.
-	if d.Reg.APIKind(t.URL, t.Type) != "none" {
-		kind, n := "", len(data)
-		if ferr != nil {
-			kind = ferr.Kind
-		}
-		recordRefreshCheck(d, t.ID, "api", kind, n)
+	// a Test would be.
+	kind, n := "", len(data)
+	if ferr != nil {
+		kind = ferr.Kind
 	}
+	recordRefreshCheck(d, t.ID, "api", kind, n)
 	if ferr == nil {
 		lastFetchAt.Store(t.ID, fetchAttempt{at: time.Now(), conn: conn}) // gate future non-forced fetches
 		_ = d.Stats.SaveAPI(t.ID, data)
@@ -210,48 +286,24 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 
 	// Read AFTER the fetch above, so a success this pass is reflected.
 	resp.APIUpdatedAt = d.Stats.LayerUpdatedAt(t.ID, models.SourceAPI)
+}
 
-	merged, err := d.Stats.Merged(t.ID)
-	if err == nil {
-		resp.Fields = merged
-		if resp.OK {
-			_ = d.Stats.RecordHistory(t.ID, merged)
-		}
-		// Growth rates (daily-rollup average) for target/promotion ETAs.
-		if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
-			resp.Rates = r
-		}
-	} else if resp.Error == "" {
-		resp.OK = false
-		resp.Error = "store_error"
+// hasNewLayerData reports whether a tracker with no API has had a scrape or qui
+// update stored since its newest history point. Its refresh fetches nothing,
+// so recording on every pass would restamp the same scraped values as new
+// points (on a headless instance, where nothing scrapes, forever) and flatten
+// the growth rates, the same trap manual trackers had.
+func hasNewLayerData(d *Deps, trackerID string) bool {
+	last, err := d.DB.LatestHistoryAt(trackerID)
+	if err != nil {
+		return false
 	}
-
-	// Standing-guard trend signals for this pass — built once (cheap no-op
-	// with zero alert rules, see buildTrendContext) and threaded through every
-	// evaluation call below, so a mixed rule like "promoted AND ratio < 1"
-	// sees the same numbers whether it fires from the event path or the poll.
-	var trends notify.TrendContext
-	if d.Alerts != nil {
-		trends = buildTrendContext(d, t, resp.Fields, resp.Rates)
-	}
-	if err == nil && resp.OK {
-		recordGroupChange(d, t, resp.Fields, oldGroup, mergedFieldString(resp.Fields, "group"), trends)
-	}
-
-	// Alert evaluation — fires webhooks on rising-edge rule matches. Runs on
-	// every refresh path (frontend poll, single, or the background loop);
-	// edge-triggering + per-tracker priming keep it from spamming.
-	if d.Alerts != nil {
-		d.Alerts.Evaluate(t, resp.Fields, resp.OK, trends)
-		// Target-met events need fresh data to mean anything — a failed
-		// refresh serves the last stored fields, which would just re-diff the
-		// same values against themselves.
-		if resp.OK {
-			evaluateTrackerTargets(d, t, resp.Fields, trends)
-			evaluateTrackerPins(d, t, resp.Fields, resp.Rates, trends, cyc)
+	for _, src := range []models.Source{models.SourceScrape, models.SourceQUI} {
+		if d.Stats.LayerUpdatedAt(trackerID, src) > last {
+			return true
 		}
 	}
-	return resp
+	return false
 }
 
 // mergedFieldString reads one merged field as a trimmed string ("" if absent),
@@ -400,6 +452,11 @@ const RefreshFloorMinutes = 15
 // lastFetchAt records each tracker's last API attempt that reached it, for the
 // min-age guard. In memory only; access only under the tracker's refresh lock.
 var lastFetchAt sync.Map // trackerID -> fetchAttempt
+
+// lastPassAt is lastFetchAt's counterpart for trackers with no API: when
+// refreshTracker last ran for them. Kept apart so lastFetchAt only ever means
+// a real fetch attempt.
+var lastPassAt sync.Map // trackerID -> time.Time
 
 // fetchAttempt is one lastFetchAt entry; errKind/err are "" on success. conn
 // ties it to the settings used, so it never gates a refresh with edited ones.

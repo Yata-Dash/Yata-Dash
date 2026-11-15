@@ -27,9 +27,9 @@ type summaryTracker struct {
 	Abbr    string `json:"abbr,omitempty"`
 	URL     string `json:"url"`
 	Enabled bool   `json:"enabled"`
-	// Status: ok | error | disabled | opted_out | unknown ("unknown" = not
-	// refreshed since the server started; numbers below are still the stored
-	// last-known values).
+	// Status: ok | error | disabled | opted_out | retired | no_api | unknown
+	// ("unknown" = not refreshed since the server started; numbers below are
+	// still the stored last-known values. "no_api" = scrape-only, manual or untyped).
 	Status    string `json:"status"`
 	ErrorKind string `json:"error_kind,omitempty"`
 
@@ -62,7 +62,7 @@ type summaryTracker struct {
 type summaryTotals struct {
 	Trackers int `json:"trackers"`
 	Enabled  int `json:"enabled"`
-	OK       int `json:"ok"`
+	OK       int `json:"ok"`     // enabled trackers whose status is ok; no_api counts in neither this nor Issues
 	Issues   int `json:"issues"` // enabled trackers whose status is error
 
 	UploadedGiB   float64  `json:"uploaded_gib"`
@@ -132,7 +132,7 @@ func getSummary(d *Deps) http.HandlerFunc {
 				}
 			}
 
-			st.Status, st.ErrorKind = trackerStatus(d, t.ID, t.Enabled, t.URL)
+			st.Status, st.ErrorKind = trackerStatus(d, t)
 			if t.Enabled {
 				totals.Enabled++
 				switch st.Status {
@@ -200,17 +200,24 @@ func summaryCount(merged models.MergedStats, field string) *float64 {
 // trackerStatus derives the health one-liner from the refresh loop's last
 // outcome (lastFetchState — in-memory, so a fresh boot reports "unknown"
 // until the first cycle touches the tracker).
-func trackerStatus(d *Deps, trackerID string, enabled bool, url string) (status, errKind string) {
-	if !enabled {
+func trackerStatus(d *Deps, t models.Tracker) (status, errKind string) {
+	if !t.Enabled {
 		return "disabled", ""
 	}
-	if _, opted := d.Reg.OptOut(url); opted {
+	if _, opted := d.Reg.OptOut(t.URL); opted {
 		return "opted_out", ""
 	}
-	if _, retired := d.Reg.Retired(url); retired {
+	if _, retired := d.Reg.Retired(t.URL); retired {
 		return "retired", ""
 	}
-	v, seen := lastFetchState.Load(trackerID)
+	// Scrape-only and manual trackers have no API for this status to report
+	// on. Without this they read "unknown" forever: never fetched, so never
+	// seen. Scrape health is deliberately not folded in; it has its own
+	// surface, and this field stays about the API.
+	if d.Reg.APIKind(t.URL, t.Type) == "none" {
+		return "no_api", ""
+	}
+	v, seen := lastFetchState.Load(t.ID)
 	if !seen {
 		return "unknown", ""
 	}

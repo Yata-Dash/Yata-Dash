@@ -308,6 +308,165 @@ func TestManualStatsClearedWhenRemoved(t *testing.T) {
 	}
 }
 
+// TestManualHistoryRecordsSavesNotRefreshes: a hand-entered tracker's history
+// is its saves. A refresh learns nothing and must not restamp the typed values
+// as new points, and a save that leaves the numbers alone records nothing.
+func TestManualHistoryRecordsSavesNotRefreshes(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "m3", Name: "Manual", URL: "https://manual.example",
+		Type: models.TypeManual, Enabled: true,
+		ManualStats: map[string]string{"uploaded": "5.00 TiB"}}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	uploadedPoints := func() int {
+		pts, err := d.DB.TrackerHistorySince(tr.ID, time.Now().Add(-time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, p := range pts {
+			if p.Field == "uploaded" {
+				n++
+			}
+		}
+		return n
+	}
+
+	syncManualLayer(d, tr)
+	if n := uploadedPoints(); n != 1 {
+		t.Fatalf("after first save: %d uploaded points, want 1", n)
+	}
+	for range 3 {
+		refreshTracker(d, tr, true)
+	}
+	if n := uploadedPoints(); n != 1 {
+		t.Errorf("after refreshes: %d uploaded points, want still 1", n)
+	}
+	tr.Name = "Renamed"
+	syncManualLayer(d, tr)
+	if n := uploadedPoints(); n != 1 {
+		t.Errorf("after a save with unchanged numbers: %d uploaded points, want still 1", n)
+	}
+	tr.ManualStats = map[string]string{"uploaded": "6.00 TiB"}
+	syncManualLayer(d, tr)
+	if n := uploadedPoints(); n != 2 {
+		t.Errorf("after saving new numbers: %d uploaded points, want 2", n)
+	}
+}
+
+// TestNoAPITrackerRecordsNoAPIContact: a scrape-only tracker's fetcher sends
+// nothing, so a refresh must not count as an API success — no connection row,
+// no timeline event, no fetch time — while still serving its scraped stats.
+func TestNoAPITrackerRecordsNoAPIContact(t *testing.T) {
+	d := testDeps(t)
+	const url = "https://scrapeonly.example"
+	if kind := d.Reg.APIKind(url, "scrape_only"); kind != "none" {
+		t.Fatalf("APIKind = %q, want none", kind)
+	}
+	// No username or cookie, so no scrape can run either.
+	tr := models.Tracker{ID: "so1", Name: "Scrape Only", URL: url, Type: "scrape_only", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"ratio": "3.1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, force := range []bool{true, false} { // second pass goes through the min-age guard
+		resp := refreshTracker(d, tr, force)
+		if !resp.OK || resp.FetchedAt != 0 || resp.APIUpdatedAt != 0 {
+			t.Errorf("force=%v: ok=%v fetched_at=%d api_updated_at=%d, want ok with both 0",
+				force, resp.OK, resp.FetchedAt, resp.APIUpdatedAt)
+		}
+		if got := resp.Fields["ratio"]; got.Value != "3.1" {
+			t.Errorf("force=%v: ratio = %v, want the scraped 3.1", force, got.Value)
+		}
+	}
+
+	days, err := d.DB.ConnectionDaily([]string{tr.ID}, time.Now().AddDate(0, 0, -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(days) != 0 {
+		t.Errorf("connection_daily = %+v, want no row — nothing was contacted", days)
+	}
+	if ev, _ := d.DB.LatestEventDetail(tr.ID, connectionKind("api")); ev != "" {
+		t.Errorf("api connection event = %q, want none", ev)
+	}
+	if _, ok := lastFetchAt.Load(tr.ID); ok {
+		t.Error("lastFetchAt stored for a tracker that was never fetched")
+	}
+	// /api/summary says so rather than "unknown" forever.
+	if status, _ := trackerStatus(d, tr); status != "no_api" {
+		t.Errorf("summary status = %q, want no_api", status)
+	}
+	if !toView(d, tr).NoAPI {
+		t.Error("tracker view no_api = false, want true")
+	}
+	retired := models.Tracker{ID: "a4k", URL: "https://aura4k.net", Type: "unit3d"}
+	if toView(d, retired).NoAPI {
+		t.Error("retired tracker view no_api = true, want false — it had an API")
+	}
+}
+
+// TestNoAPIHistoryOnlyForNewData: a scrape-only tracker's refresh fetches
+// nothing, so it records history only when a scrape has landed since the
+// last point, not once per pass with the same values restamped.
+func TestNoAPIHistoryOnlyForNewData(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "so2", Name: "Scrape Only", URL: "https://scrapeonly.example",
+		Type: "scrape_only", Enabled: true}
+	if err := d.Cfg.AddTracker(tr); err != nil {
+		t.Fatal(err)
+	}
+	points := func() int {
+		pts, err := d.DB.TrackerHistorySince(tr.ID, time.Now().Add(-time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(pts)
+	}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"uploaded": "5.00 TiB"}); err != nil {
+		t.Fatal(err)
+	}
+	refreshTracker(d, tr, true)
+	if n := points(); n != 1 {
+		t.Fatalf("after the first refresh: %d points, want 1", n)
+	}
+	refreshTracker(d, tr, true)
+	if n := points(); n != 1 {
+		t.Errorf("after a refresh with no new scrape: %d points, want still 1", n)
+	}
+	// Timestamps are whole seconds; stamp the next scrape clearly later.
+	if err := d.DB.ReplaceLayer(tr.ID, string(models.SourceScrape),
+		map[string]any{"uploaded": "6.00 TiB"}, time.Now().Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	refreshTracker(d, tr, true)
+	if n := points(); n != 2 {
+		t.Errorf("after a new scrape: %d points, want 2", n)
+	}
+}
+
+// TestScrapeRecordsGroupChange: a scrape run outside a refresh records the
+// promotion it brings. The refresh can't see it afterwards, because the store
+// already holds the new group by then.
+func TestScrapeRecordsGroupChange(t *testing.T) {
+	d := testDeps(t)
+	tr := models.Tracker{ID: "so3", Name: "Scrape Only", URL: "https://scrapeonly.example",
+		Type: "scrape_only", Enabled: true}
+	if err := d.Stats.SaveScrape(tr.ID, map[string]any{"group": "User"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := saveScrapeResult(d, tr, map[string]string{"group": "Power User"}); err != nil {
+		t.Fatal(err)
+	}
+	if ev, _ := d.DB.LatestEventDetail(tr.ID, "group_change"); ev != "User→Power User" {
+		t.Errorf("group_change event = %q, want User→Power User", ev)
+	}
+}
+
 // TestRetiredTrackerIsNeverContacted covers the whole retirement path.
 //
 // The trap it guards is why the flag exists at all: api.kind lives on the
@@ -359,7 +518,7 @@ func TestRetiredTrackerIsNeverContacted(t *testing.T) {
 // tracker that is gone has not failed.
 func TestRetiredTrackerStatus(t *testing.T) {
 	d := testDeps(t)
-	if status, _ := trackerStatus(d, "x", true, "https://aura4k.net"); status != "retired" {
+	if status, _ := trackerStatus(d, models.Tracker{ID: "x", Enabled: true, URL: "https://aura4k.net", Type: "unit3d"}); status != "retired" {
 		t.Errorf("status = %q, want retired", status)
 	}
 }

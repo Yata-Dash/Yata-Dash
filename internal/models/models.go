@@ -167,6 +167,11 @@ type TrackerView struct {
 	// SupportsHTMLScrape is false when the type architecturally cannot scrape
 	// (skip_html_scrape) OR the tracker operator forbids it (disable_scraping).
 	SupportsHTMLScrape bool `json:"supports_html_scrape"`
+	// NoAPI is true when the tracker's type has no API (scrape-only, manual,
+	// undefined), so the UI can say so instead of implying a broken one. A
+	// retired tracker is excluded: it had an API, and its last data still came
+	// from it.
+	NoAPI bool `json:"no_api,omitempty"`
 	// ScrapeDisabledByTracker is true when the tracker def itself disables
 	// scraping (operator request) — shown distinctly in the UI.
 	ScrapeDisabledByTracker bool `json:"scrape_disabled_by_tracker"`

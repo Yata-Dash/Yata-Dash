@@ -493,7 +493,7 @@ func testScrape(d *Deps, t models.Tracker, persist bool) CheckResult {
 		return CheckResult{Status: "fail", Detail: serr.Kind}
 	}
 	if persist && len(result) > 0 {
-		_ = d.Stats.SaveScrape(t.ID, toAnyMap(result))
+		_, _ = saveScrapeResult(d, t, result)
 	}
 	return CheckResult{Status: "ok", Fields: len(result)}
 }
