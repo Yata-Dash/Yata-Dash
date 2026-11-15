@@ -29,6 +29,14 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   the page, a few more tracker-derived values are escaped, and responses now
   carry a basic Content-Security-Policy.
 - **One tracker can no longer crash Yata**: a profile page with certain non-ASCII text panicked the scraper, and any panic in a background refresh now fails only that tracker; the log file also recovers after a failed rotation, and the server times out slow request headers.
+- **The weekly digest could repeat.** An out-of-range day or hour (from a
+  hand-edited or imported config) sent it every five minutes, and a digest
+  sent while Alerts were being saved, or alongside *Send now*, could go out
+  twice. Out-of-range schedules are now refused or reset to Monday 09:00.
+- **A tracker's text could ping a whole Discord server or lose a Telegram
+  alert.** Discord messages no longer allow mentions, so an event named
+  `@everyone` stays text; Telegram messages are escaped, so a stray `_` or `*`
+  no longer gets them rejected.
 
 ## [Beta-20261011]
 
