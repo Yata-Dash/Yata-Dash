@@ -29,7 +29,7 @@ approved it in `approved_by`. Without it, leave the def API-only. Trackers on
 
 ## Building and running
 
-Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 18+](https://nodejs.org/).
+Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 22.12+](https://nodejs.org/).
 
 ```bash
 make build && ./yata        # Linux / macOS — builds the frontend, then the binary

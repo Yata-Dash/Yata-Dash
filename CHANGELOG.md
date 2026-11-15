@@ -23,6 +23,9 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **Faster page loads.** Responses are now gzip-compressed (the history chart
   data shrinks about fivefold), and the pathways pages no longer re-read every
   route's requirements on each view.
+- **Build toolchain refreshed.** The image builds the frontend on Node 24 LTS
+  (Node 20 is end-of-life) and runs on Alpine 3.24; vite and puppeteer-core
+  are updated to releases that clear all open `npm audit` advisories.
 
 ### Fixed
 

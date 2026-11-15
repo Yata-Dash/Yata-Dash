@@ -113,7 +113,7 @@ Settings → Privacy & Security.
 
 ## From source
 
-Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 18+](https://nodejs.org/).
+Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 22.12+](https://nodejs.org/).
 
 ```bash
 # Linux / macOS
