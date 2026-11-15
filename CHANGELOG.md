@@ -22,6 +22,11 @@ All notable changes to Yata, newest first. Versions are date-based builds:
   "[object Object]"** among the tracker's stats. Such values are now dropped
   before storage.
 
+### Docs
+
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: a map of the code, the refresh
+  path from tracker API to screen, and where each feature lives.
+
 ## [Beta-20260930]
 
 ### Added
