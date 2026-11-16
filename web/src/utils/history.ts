@@ -63,6 +63,42 @@ export function buildAggSeries(points: HistoryPoint[]): AggSeries {
   };
 }
 
+/**
+ * Window change of a summed field: Σ over trackers of (last − first), each tracker
+ * diffed against ITSELF, so one added mid-window doesn't count its lifetime total.
+ * Null when no tracker has two points.
+ */
+export function fieldDelta(points: HistoryPoint[], field: string): number | null {
+  const ends = new Map<string, { t0: number; v0: number; t1: number; v1: number; n: number }>();
+  for (const p of points) {
+    if (p.field !== field) continue;
+    const e = ends.get(p.tracker_id);
+    if (!e) { ends.set(p.tracker_id, { t0: p.recorded_at, v0: p.value, t1: p.recorded_at, v1: p.value, n: 1 }); continue; }
+    e.n++;
+    // Input is oldest-first, but compare times rather than trust the order.
+    if (p.recorded_at < e.t0) { e.t0 = p.recorded_at; e.v0 = p.value; }
+    if (p.recorded_at >= e.t1) { e.t1 = p.recorded_at; e.v1 = p.value; }
+  }
+  let sum = 0, any = false;
+  for (const e of ends.values()) {
+    if (e.n < 2) continue;
+    sum += e.v1 - e.v0;
+    any = true;
+  }
+  return any ? sum : null;
+}
+
+/** Per-tracker window changes for the aggregate cards. Buffer falls back to
+ *  uploaded − downloaded when none is recorded, as in buildAggSeries. */
+export function aggDeltas(points: HistoryPoint[]): { up: number | null; down: number | null; buffer: number | null } {
+  const up = fieldDelta(points, 'uploaded');
+  const down = fieldDelta(points, 'downloaded');
+  const buffer = points.some(p => p.field === 'buffer')
+    ? fieldDelta(points, 'buffer')
+    : (up === null && down === null ? null : (up ?? 0) - (down ?? 0));
+  return { up, down, buffer };
+}
+
 /** Carry-forward combine of one field across trackers over shared buckets. */
 function combine(points: HistoryPoint[], field: string, buckets: number[], mode: 'sum' | 'avg'): number[] {
   // Per-tracker chronological points for this field (input is oldest first).

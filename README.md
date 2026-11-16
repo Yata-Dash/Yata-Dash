@@ -116,7 +116,7 @@ services:
 
 **Windows** — download `yata-<version>-windows-amd64.zip` from the [latest release](https://github.com/Yata-Dash/Yata-Dash/releases/latest), extract it, run `yata.exe`.
 
-**From source** — Go 1.23+ and Node 18+, then `make build && ./yata` (or `.\build.ps1 -Run` on Windows).
+**From source** — Go 1.23+ and Node 22.12+, then `make build && ./yata` (or `.\build.ps1 -Run` on Windows).
 
 Yata listens on port 8420 and binds all interfaces by default; `--port` and `--host 127.0.0.1` change that ([all flags](docs/SETUP.md#port-address-and-file-paths)).
 
@@ -182,11 +182,13 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | Anthelion | Gazelle (ANT/NEB) | Yes | 6/6 | API only | Expanded API stats added 2026-07, shared with Nebulance |
 | Blutopia | UNIT3D | No | 3/5 | API only |  |
 | BroadcastTheNet | Custom API | No | 5/6 | API only | JSON-RPC userInfo; 150 API calls per hour |
+| CapybaraBR | UNIT3D | No | 3/5 | API only |  |
 | DarkPeers | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
+| DreadVault | UNIT3D | No | 3/6 (4 scraped) | Default |  |
 | GazelleGames | GazelleGames | No | 1/1 | API only |  |
 | Hawke-uno | UNIT3D | No | 6/6 | API only | Not on this tracker can't seek approval |
 | HHD | UNIT3D | No | 6/6 | API only |  |
-| InfinityHD | UNIT3D | Yes | 3/6 (4 scraped) | Default |  |
+| InfinityHD | UNIT3D | Yes | 7/7 | API only |  |
 | LST | UNIT3D | Yes | 3/6 (4 scraped) | 180min |  |
 | Luminarr | UNIT3D | Yes | 3/6 (4 scraped) | 120min |  |
 | MidnightScene | UNIT3D | Yes | 3/5 (4 scraped) | 60min |  |
@@ -195,13 +197,15 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | OldToonsWorld | UNIT3D | Yes | 5/5 | API only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | UNIT3D | Yes | 3/6 (4 scraped) | Once per day |  |
 | Orpheus | Gazelle (ajax.php) | No | 6/6 | API only | Required ratio is calculated dynamically |
-| PeerGarden | traxary | No | 4/6 | API only | Comments and forum posts not yet in the API |
+| PeerGarden | traxary | No | Tracker-served | API only | Comments and forum posts not yet in the API |
 | Redacted | Gazelle (ajax.php) | No | 6/6 | API only |  |
 | ReelFliX | UNIT3D | Yes | 6/6 | API only |  |
 | RetroFlix | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
 | RocketHD | UNIT3D | Yes | 3/6 | API only |  |
+| Samaritano | UNIT3D | No | 3/6 | API only |  |
 | Seedpool | UNIT3D | Yes | 2/3 (3 scraped) | 180min |  |
 | SpeedApp | Custom API | Yes | 3/3 | API only | Added API stats - Thanks team! |
+| Traxary | traxary | No | Tracker-served | API only |  |
 | Unwalled | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
 | Upload.cx | UNIT3D | No | 3/6 | API only |  |
 | YUSCENE | UNIT3D | Yes | 3/5 (4 scraped) | 180min |  |
@@ -223,6 +227,12 @@ Trackers with no API that don't welcome scraping (TorrentLeech, IPTorrents, the 
 ## Feedback & beta notes
 
 This is a beta: expect rough edges and report anything odd — especially stats that parse wrong, group ladders that have drifted from the def, promotion or pathway estimates that disagree with reality, and anything a tracker operator wants changed about how their site is handled. [What to include in a report](docs/CONTRIBUTING.md#reporting-a-problem).
+
+## Support Yata
+
+Yata is free and always will be. If it's useful to you and you'd like to help keep it going, you can buy me a coffee:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/K4P02AO50X)
 
 ## License
 

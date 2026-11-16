@@ -14,6 +14,7 @@ import type { HistoryRangeKey, SeriesUnit } from '../utils/series';
 import { connectionEventText, esc, fmtTrackerName, isConnectionKind } from '../utils/format';
 import type { HistorySeriesResponse, Tracker } from '../types';
 import { appSettings, groupDefs, statsCache } from '../state';
+import { localStore } from '../utils/storage';
 
 // Tracker line colors, assigned by position in the enabled-tracker list so a
 // tracker keeps its color across metric/range switches.
@@ -45,7 +46,7 @@ function loadUIState(): HistoryUIState {
     portfolio: false, projection: false, smoothing: false,
   };
   try {
-    const raw = JSON.parse(localStorage.getItem(LS_KEY) ?? '{}');
+    const raw = JSON.parse(localStore.get(LS_KEY) ?? '{}');
     const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
     return {
       metric: HISTORY_METRICS.some(m => m.key === raw.metric) ? raw.metric : dflt.metric,
@@ -66,7 +67,7 @@ function loadUIState(): HistoryUIState {
 }
 
 function saveUIState() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(ui)); } catch { /* private mode */ }
+  localStore.set(LS_KEY, JSON.stringify(ui));
 }
 
 const ui = loadUIState();

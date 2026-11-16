@@ -5,6 +5,7 @@
 import * as api from '../api';
 import type { LogEntry } from '../types';
 import { jsId, esc } from '../utils/format';
+import { localStore } from '../utils/storage';
 import type { ToastType } from './toast';
 
 const POLL_MS = 2500;
@@ -22,13 +23,13 @@ let shown: Set<string> = loadShown();
 
 function loadShown(): Set<string> {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStore.get(LS_KEY);
     if (raw) return new Set(JSON.parse(raw));
   } catch { /* ignore */ }
   return new Set(['info', 'warn', 'error']);
 }
 function saveShown(): void {
-  try { localStorage.setItem(LS_KEY, JSON.stringify([...shown])); } catch { /* ignore */ }
+  localStore.set(LS_KEY, JSON.stringify([...shown]));
 }
 
 function fmtTime(ms: number): string {
@@ -43,14 +44,14 @@ function reEscape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Wrap matches in the ALREADY-ESCAPED message. Escaping first and searching
- *  second keeps the markup safe: the needle is escaped the same way, so a
- *  search for "<" matches the "&lt;" the message became. */
-function highlight(escaped: string, q: string): string {
-  if (!q) return escaped;
-  const needle = esc(q);
-  if (!needle) return escaped;
-  return escaped.replace(new RegExp(reEscape(needle), 'gi'), m => `<mark class="log-hit">${m}</mark>`);
+/** Escape raw text, wrapping matches of q in <mark>. Match on the RAW text, then escape
+ *  each piece: searching escaped text could split an entity like "&amp;". */
+function highlight(raw: string, q: string): string {
+  if (!q) return esc(raw);
+  // The capturing group keeps matches in split(), at the odd indices.
+  return raw.split(new RegExp(`(${reEscape(q)})`, 'gi'))
+    .map((part, i) => (i % 2 ? `<mark class="log-hit">${esc(part)}</mark>` : esc(part)))
+    .join('');
 }
 
 function renderChips(): void {
@@ -84,7 +85,7 @@ function renderEntries(): void {
     // Full date on hover: the line shows only a time, which is ambiguous on a
     // log that rolls over days.
     const stamp = new Date(e.time).toLocaleString();
-    return `<div class="log-line log-${esc(lvl)}"><span class="log-time" title="${esc(stamp)}">${fmtTime(e.time)}</span><span class="log-lvl">${esc(lvl.slice(0, 3).toUpperCase())}</span><span class="log-msg">${highlight(esc(e.msg), query.trim())}</span></div>`;
+    return `<div class="log-line log-${esc(lvl)}"><span class="log-time" title="${esc(stamp)}">${fmtTime(e.time)}</span><span class="log-lvl">${esc(lvl.slice(0, 3).toUpperCase())}</span><span class="log-msg">${highlight(String(e.msg), query.trim())}</span></div>`;
   }).join('');
   if (autoScroll && atBottom) view.scrollTop = view.scrollHeight;
 }

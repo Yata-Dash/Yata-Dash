@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -113,7 +112,7 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 			jsonError(w, fmt.Sprintf("prowlarr http_%d", resp.StatusCode), http.StatusBadGateway)
 			return
 		}
-		body, err := io.ReadAll(resp.Body)
+		body, err := netguard.ReadLimited(resp.Body, netguard.MaxResponseBytes)
 		if err != nil {
 			jsonError(w, "read_error", http.StatusBadGateway)
 			return

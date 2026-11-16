@@ -7,6 +7,7 @@
 // choosing a tracker to add, and looking at one you already have.
 import type { TrackerCapabilities } from '../types';
 import { esc, fieldLabel } from '../utils/format';
+import { localStore } from '../utils/storage';
 
 /** Capabilities worth their own icon, in display order. Canonical stat field
  *  names — the same vocabulary as everything else, so there is no second list
@@ -98,11 +99,11 @@ const CAPS_OPEN_KEY = 'yata.detail.caps-open';
 /** Whether the breakdown was left open. Collapsed by default: this answers a
  *  question people ask occasionally, not daily. */
 function capsOpen(): boolean {
-  return localStorage.getItem(CAPS_OPEN_KEY) === '1';
+  return localStore.get(CAPS_OPEN_KEY) === '1';
 }
 
 export function setCapsOpen(open: boolean): void {
-  try { localStorage.setItem(CAPS_OPEN_KEY, open ? '1' : '0'); } catch { /* private mode */ }
+  localStore.set(CAPS_OPEN_KEY, open ? '1' : '0');
 }
 
 /**

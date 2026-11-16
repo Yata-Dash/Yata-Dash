@@ -19,7 +19,14 @@ if (-not $SkipWeb) {
     Write-Host "==> Building frontend (web/ -> static/dashboard.js)" -ForegroundColor Cyan
     Push-Location (Join-Path $root 'web')
     try {
-        if (-not (Test-Path 'node_modules')) { npm install }
+        # Reinstall when node_modules is missing or older than the lockfile (npm
+        # stamps installs in node_modules/.package-lock.json), so a bump isn't built stale.
+        $stamp = 'node_modules/.package-lock.json'
+        if (-not (Test-Path $stamp) -or
+            (Get-Item 'package-lock.json').LastWriteTime -gt (Get-Item $stamp).LastWriteTime) {
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+        }
         npm run build
         if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
     } finally { Pop-Location }

@@ -4,8 +4,8 @@
     "name": "trackerpathways",
     "url": "https://github.com/handokota/trackerpathways",
     "license": "MIT",
-    "fetched": "2026-10-10",
-    "updated": "2026-10"
+    "fetched": "2026-11-16",
+    "updated": "2026-11"
   },
   "abbr": {
     "1PTBA": "1PT",
@@ -507,10 +507,10 @@
     {
       "from": "AnimeBytes",
       "to": "HDBits",
-      "days": 365,
-      "reqs": "Legend, 1 year, 3 profile links",
+      "days": 730,
+      "reqs": "Torrent Master+, 2 year, 250 Anime uploads, 2 TiB seed size, 3-month average seed time",
       "active": true,
-      "updated": "Jan 2026"
+      "updated": "Nov 2026"
     },
     {
       "from": "AnimeBytes",
@@ -612,33 +612,33 @@
       "from": "AnimeZ",
       "to": "AvistaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AnimeZ",
       "to": "CinemaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AnimeZ",
       "to": "ExoticaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AnimeZ",
       "to": "PrivateHD",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 120 days, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Anthelion",
@@ -660,7 +660,7 @@
       "from": "Anthelion",
       "to": "BeyondHD",
       "days": 540,
-      "reqs": "Elite+, 18 months",
+      "reqs": "Elite+, 18 months, 100 uploads or 200 adopted torrents + 10 uploads, 5 TiB upload, ratio\u003e=2.5",
       "active": true,
       "updated": "Feb 2026"
     },
@@ -684,7 +684,7 @@
       "from": "Anthelion",
       "to": "CinemaZ",
       "days": 180,
-      "reqs": "Fanatic+, 6 months (180 days), 50 uploads or 75 adopted torrents + 5 uploads, 1TiB upload, ratio\u003e=1.1",
+      "reqs": "Fanatic+, 6 months (180 days), 25 uploads or 50 adopted torrents + 5 uploads, 2 TiB upload, ratio\u003e=1.5",
       "active": true,
       "updated": "Feb 2026"
     },
@@ -708,7 +708,7 @@
       "from": "Anthelion",
       "to": "Nebulance",
       "days": 90,
-      "reqs": "Fanatic+, 3 months",
+      "reqs": "Fanatic+, 3 months, 25 uploads or 50 adopted torrents + 5 uploads, 2 TiB upload, ratio\u003e=1.5",
       "active": true,
       "updated": "Feb 2026"
     },
@@ -724,7 +724,7 @@
       "from": "Anthelion",
       "to": "Orpheus",
       "days": 180,
-      "reqs": "Fanatic+, 6 months",
+      "reqs": "Fanatic+, 6 months, 25 uploads or 50 adopted torrents + 5 uploads, 2 TiB upload, ratio\u003e=1.5",
       "active": true,
       "updated": "Feb 2026"
     },
@@ -772,33 +772,33 @@
       "from": "AvistaZ",
       "to": "AnimeZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AvistaZ",
       "to": "CinemaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AvistaZ",
       "to": "ExoticaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "AvistaZ",
       "to": "PrivateHD",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Bemaniso",
@@ -1038,23 +1038,23 @@
       "days": 180,
       "reqs": "Elite, 6months",
       "active": true,
-      "updated": "Oct 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Bit-HDTV",
       "to": "SpeedApp",
       "days": 0,
       "reqs": "Screenshot",
-      "active": false,
-      "updated": "Oct 2025"
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "Bit-HDTV",
-      "to": "seedpool",
+      "to": "YuScene",
       "days": 0,
-      "reqs": "500 GB seedsize",
+      "reqs": "Invite forum access",
       "active": true,
-      "updated": "Oct 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "BitPorn",
@@ -1086,7 +1086,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1094,23 +1094,47 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
       "to": "Cinematik",
       "days": 365,
-      "reqs": "BluArchivist or higher, 20 TiB seeding size, 3 months average seedtime; or you have a good track record of uploading personal TiK worthy releases to BLU, 1 year, clear record of seeding full disc torrents",
+      "reqs": "BluArchivist or higher, 1 year, show a clear record of seeding full disc torrents",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
       "to": "Concertos",
       "days": 0,
-      "reqs": "10 uploads",
+      "reqs": "BluUser or BluCollector, 10+ uploaded torrents",
       "active": true,
-      "updated": "Aug 2025"
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "Blutopia",
+      "to": "DarkPeers",
+      "days": 0,
+      "reqs": "Invite forum access",
+      "active": true,
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "Blutopia",
+      "to": "DesiGaane",
+      "days": 180,
+      "reqs": "6 months",
+      "active": true,
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "Blutopia",
+      "to": "DesiTorrents",
+      "days": 180,
+      "reqs": "6 months",
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1118,7 +1142,7 @@
       "days": 365,
       "reqs": "1 year",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1126,7 +1150,7 @@
       "days": 365,
       "reqs": "3x 1 year old additional profile links and screenshots",
       "active": true,
-      "updated": "Aug 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1134,7 +1158,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "June 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1142,23 +1166,15 @@
       "days": 90,
       "reqs": "3 months",
       "active": true,
-      "updated": "Feb 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
-      "to": "OldToonsWorld",
-      "days": 0,
-      "reqs": "Invite forum access",
+      "to": "MidnightScene",
+      "days": 180,
+      "reqs": "6 months, 3TB uploaded",
       "active": true,
-      "updated": "Aug 2025"
-    },
-    {
-      "from": "Blutopia",
-      "to": "Periodical",
-      "days": 0,
-      "reqs": "Invite forum access",
-      "active": true,
-      "updated": "Sep 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1166,7 +1182,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1174,7 +1190,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Aug 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1182,7 +1198,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1190,7 +1206,7 @@
       "days": 0,
       "reqs": "5 uploads",
       "active": true,
-      "updated": "Aug 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Blutopia",
@@ -1198,7 +1214,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Mar 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "BroadCity",
@@ -1564,33 +1580,33 @@
       "from": "CinemaZ",
       "to": "AnimeZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "CinemaZ",
       "to": "AvistaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "CinemaZ",
       "to": "ExoticaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "CinemaZ",
       "to": "PrivateHD",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Cinemageddon",
@@ -1876,33 +1892,33 @@
       "from": "ExoticaZ",
       "to": "AnimeZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "ExoticaZ",
       "to": "AvistaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "ExoticaZ",
       "to": "CinemaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "ExoticaZ",
       "to": "PrivateHD",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1910,7 +1926,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Jan 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1918,7 +1934,7 @@
       "days": 180,
       "reqs": "Elite Gamer, 6 months",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1926,7 +1942,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1934,15 +1950,7 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "BeyondHD",
-      "days": 0,
-      "reqs": "Legendary Gamer, Legendary Invites forum",
-      "active": true,
-      "updated": "Sep 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1950,7 +1958,7 @@
       "days": 365,
       "reqs": "1 year",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1958,7 +1966,23 @@
       "days": 0,
       "reqs": "Ratio\u003e=1.0",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "GazelleGames",
+      "to": "Concertos",
+      "days": 365,
+      "reqs": "1 year",
+      "active": true,
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "GazelleGames",
+      "to": "D3Si",
+      "days": 540,
+      "reqs": "Elite Gamer, 18 months, 3TB+ upload buffer",
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1966,7 +1990,15 @@
       "days": 0,
       "reqs": "10 music torrents or 15 other torrents",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "GazelleGames",
+      "to": "ExtremeBits",
+      "days": 365,
+      "reqs": "1 year",
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1974,23 +2006,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "HDBits",
-      "days": 730,
-      "reqs": "Master Gamer, 2 years, 250 seeded uploads, seedsize \u003e 2TB AND avg. seedtime \u003e 2 months OR avg. seedtime \u003e 5 months, Legendary Invites forum",
-      "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "Last Digital Underground",
-      "days": 0,
-      "reqs": "Invite forum access",
-      "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -1998,7 +2014,15 @@
       "days": 180,
       "reqs": "6 months",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
+    },
+    {
+      "from": "GazelleGames",
+      "to": "Materialize",
+      "days": 180,
+      "reqs": "6 months",
+      "active": true,
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2006,7 +2030,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2014,15 +2038,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "OldToonsWorld",
-      "days": 0,
-      "reqs": "Invite forum access",
-      "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2030,7 +2046,7 @@
       "days": 180,
       "reqs": "Elite Gamer, 6 months",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2038,15 +2054,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Aug 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "PassThePopcorn",
-      "days": 730,
-      "reqs": "Master Gamer, 2 years, 250 uploads, Legendary Invites forum",
-      "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2054,7 +2062,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2062,7 +2070,7 @@
       "days": 180,
       "reqs": "3x 6 months old profile links (including GGn)",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2070,7 +2078,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2078,23 +2086,15 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
       "to": "Unwalled",
       "days": 0,
-      "reqs": "Elite Gamer, 5 video game uploads",
+      "reqs": "Elite Gamer, 5+ video game uploads",
       "active": true,
-      "updated": "Nov 2025"
-    },
-    {
-      "from": "GazelleGames",
-      "to": "Upload.cx",
-      "days": 0,
-      "reqs": "Invite forum access",
-      "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2102,7 +2102,7 @@
       "days": 0,
       "reqs": "Invite forum access",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "GazelleGames",
@@ -2110,7 +2110,7 @@
       "days": 0,
       "reqs": "1TiB seedsize",
       "active": true,
-      "updated": "Nov 2025"
+      "updated": "Oct 2026"
     },
     {
       "from": "Great Poster Wall",
@@ -2731,8 +2731,8 @@
     {
       "from": "LST",
       "to": "Aither",
-      "days": 360,
-      "reqs": "Leviathan or Ship, 12 months",
+      "days": 365,
+      "reqs": "Leviathan: 50 TiB upload or 20 TiB seedsize, 15 uploads, ratio \u003e= 1.5, 1 year account age, 3 months avg seedtime; or, Ship: 20 TiB seedsize, ratio \u003e= 1.5, 1 year account age, 3 months avg seedtime",
       "active": true,
       "updated": "Apr 2026"
     },
@@ -3802,6 +3802,14 @@
     },
     {
       "from": "PassThePopcorn",
+      "to": "RocketHD",
+      "days": 0,
+      "reqs": "Invite forum access",
+      "active": true,
+      "updated": "Nov 2026"
+    },
+    {
+      "from": "PassThePopcorn",
       "to": "SceneHD",
       "days": 365,
       "reqs": "1 year",
@@ -3844,33 +3852,33 @@
       "from": "PrivateHD",
       "to": "AnimeZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "PrivateHD",
       "to": "AvistaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "PrivateHD",
       "to": "CinemaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "PrivateHD",
       "to": "ExoticaZ",
       "days": 120,
-      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB",
+      "reqs": "10k bp, Member Rank, 4 months, seeding 5 torrents, ratio\u003e2.0, 300 GB upload",
       "active": true,
-      "updated": "Apr 2026"
+      "updated": "Oct 2026"
     },
     {
       "from": "Racing4Everyone",
@@ -5040,7 +5048,11 @@
     },
     "DarkPeers": {
       "days": 120,
-      "text": "ExtremeUser: 4 months, 20TiB upload, ratio\u003e0.8, avg seedtime \u003e= 2 months, 15 torrents"
+      "text": "ExtremeUser: 4 months, 20TiB upload, ratio\u003e0.8, avg seedtime \u003e= 2 months, 15 torrents uploaded; or, Hoarder: 4 months, 16TiB seedsize, ratio\u003e0.8, avg seedtime \u003e= 3 months"
+    },
+    "DigitalCore.Club": {
+      "days": 210,
+      "text": "Sentry: 7 months, 1,200 GiB upload, ratio\u003e=1.10"
     },
     "Dolphin Is Coming": {
       "days": 14,
@@ -5067,12 +5079,12 @@
       "text": "HD Monster: 250GB upload, ratio\u003e2"
     },
     "HDBits": {
-      "days": 28,
-      "text": "1080i: 1 year, 2FA enabled for at least 1 month, last email/password change must have been more than a month ago; 1080i: 4 weeks, 30GB download, ratio\u003e0.95"
+      "days": 365,
+      "text": "1080i: 1 year, 2FA enabled for at least 1 month, last email/password change must have been more than a month ago"
     },
     "HomieHelpDesk": {
-      "days": 180,
-      "text": "Specialist: 5TiB upload, 1 TiB seedsize, 6 months, ave seedtime \u003e= 3 weeks, ratio \u003e= 0.8, 1 torrent upload"
+      "days": 730,
+      "text": "Uploader: 250 approved uploads; or, Archivist: 200,000 seeding days, 12 TiB real upload, 1,000 torrents seeding, 20 TiB seedsize, ratio \u003e= 1.5, 2 years"
     },
     "JPopsuki": {
       "days": 0,

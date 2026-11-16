@@ -4,6 +4,9 @@ Bug reports, tracker definitions and code are all welcome. This is the short
 guide to the repo; the rules that matter most are the security ones at the
 end.
 
+**Open pull requests against `dev`, not `main`.** GitHub picks `main` by
+default; change the base branch when you open the PR.
+
 ## Reporting a problem
 
 Open an issue with the **three versions** from Settings → General (app,
@@ -29,7 +32,7 @@ approved it in `approved_by`. Without it, leave the def API-only. Trackers on
 
 ## Building and running
 
-Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 18+](https://nodejs.org/).
+Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 22.12+](https://nodejs.org/).
 
 ```bash
 make build && ./yata        # Linux / macOS — builds the frontend, then the binary
@@ -47,6 +50,9 @@ cd web && npm run dev       # Vite on :5173, proxying /api to the backend
 rather serve everything from the Go binary.
 
 ## Repo layout
+
+How the pieces fit together, and the refresh path from tracker API to screen:
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ```
 cmd/yata/            entry point (flags, env, startup)
@@ -84,7 +90,8 @@ checked in the browser where it can't.
 feature branch  --PR-->  dev  --PR-->  main  --tag-->  release
 ```
 
-Review happens at feature → dev, one focused change per PR, squash-merged.
+Branch from `dev` and open your PR against `dev`. Review happens at
+feature → dev, one focused change per PR, squash-merged.
 dev → main is a promotion of code that has already been reviewed. Releases are
 date-stamped (`Beta-YYYYMMDD`), cut from main by the release workflow, and
 their notes come from `CHANGELOG.md` — so add a line under *Unreleased* with

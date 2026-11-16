@@ -3,6 +3,7 @@ package defs
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/parse"
@@ -108,13 +109,13 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 		}
 		gd := GroupDef{
 			Name:         name,
-			Style:        GroupStyle{Color: strings.TrimSpace(g.Color), Icon: strings.TrimSpace(g.Icon)},
+			Style:        GroupStyle{Color: SafeColor(g.Color), Icon: SafeIconClass(g.Icon)},
 			Requirements: requirementsFromAPI(g.Reqs, spec.Requirements),
 		}
 		gd.Requirements.Description = strings.TrimSpace(g.Description)
 		for _, p := range g.Perks {
 			if label := strings.TrimSpace(p.Label); label != "" {
-				gd.Perks = append(gd.Perks, GroupPerk{Icon: strings.TrimSpace(p.Icon), Label: label})
+				gd.Perks = append(gd.Perks, GroupPerk{Icon: SafeIconClass(p.Icon), Label: label})
 			}
 		}
 		out = append(out, gd)
@@ -123,6 +124,51 @@ func LadderFromAPI(body []byte, spec GroupAPISpec) []GroupDef {
 		return nil
 	}
 	return out
+}
+
+// Allow-lists of shape, not escapes: `red;background:url(…)` has nothing to
+// escape yet adds its own declaration. Mirrors safeColor/safeIconClass in
+// web/src/utils/format.ts so no client ever receives a hostile value.
+var (
+	hexColorRe  = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
+	funcColorRe = regexp.MustCompile(`^(?i:rgba?|hsla?)\([\d\s.,%/]+\)$`)
+	varColorRe  = regexp.MustCompile(`^var\(--[\w-]+\)$`)
+	wordColorRe = regexp.MustCompile(`^[a-zA-Z]+$`)
+	iconClassRe = regexp.MustCompile(`^[\w\s-]+$`)
+	// Font Awesome tokens only: any other class (`login-overlay`) would pull in
+	// Yata's own CSS and could cover the page.
+	faTokenRe = regexp.MustCompile(`^(fa|fa[srbldt]|fas[srlt]|fa(-[a-z0-9]+)+)$`)
+)
+
+// SafeColor returns s trimmed if it is a plain CSS colour (hex, numeric
+// rgb/hsl[a](), var(--name) or a keyword), else "".
+func SafeColor(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 64 {
+		return ""
+	}
+	if hexColorRe.MatchString(s) || funcColorRe.MatchString(s) ||
+		varColorRe.MatchString(s) || wordColorRe.MatchString(s) {
+		return s
+	}
+	return ""
+}
+
+// SafeIconClass returns the Font Awesome classes in s, or "" if s is not a
+// plain class list. Other classes are dropped (e.g. a tracker's own
+// "text-success"), since they can only match Yata's stylesheet.
+func SafeIconClass(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 60 || !iconClassRe.MatchString(s) {
+		return ""
+	}
+	var keep []string
+	for _, tok := range strings.Fields(s) {
+		if faTokenRe.MatchString(tok) {
+			keep = append(keep, tok)
+		}
+	}
+	return strings.Join(keep, " ")
 }
 
 // requirementsFromAPI converts one rank's thresholds. Order within min_counts

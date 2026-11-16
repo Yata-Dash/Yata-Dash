@@ -191,23 +191,16 @@ func (m *Manager) Import(data []byte) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// An import with no digest send history keeps the live one; a LastSentAt
+	// of 0 would make this week's digest due again at once.
+	if incoming.Notifications.Digest.LastSentAt == 0 {
+		incoming.Notifications.Digest.LastSentAt = m.cfg.Notifications.Digest.LastSentAt
+		if incoming.Notifications.Digest.LastReadyTargets == nil {
+			incoming.Notifications.Digest.LastReadyTargets = append([]string(nil), m.cfg.Notifications.Digest.LastReadyTargets...)
+		}
+	}
 	m.cfg = incoming
-	// Reuse the same defaulting the loader applies.
-	if m.cfg.Server.Host == "" {
-		m.cfg.Server.Host = "0.0.0.0"
-	}
-	if m.cfg.Server.Port == 0 {
-		m.cfg.Server.Port = 8420
-	}
-	if m.cfg.Settings.ScrapeIntervalMinutes < 60 {
-		m.cfg.Settings.ScrapeIntervalMinutes = 60
-	}
-	if m.cfg.Settings.QUIEnabledInstances == nil {
-		m.cfg.Settings.QUIEnabledInstances = []int{}
-	}
-	if m.cfg.Trackers == nil {
-		m.cfg.Trackers = []models.Tracker{}
-	}
-	normalizeBackup(&m.cfg.Settings)
+	// Same migrations as a startup load. Saved regardless: the import is the change.
+	m.normalizeLoaded()
 	return m.saveLocked()
 }

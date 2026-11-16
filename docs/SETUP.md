@@ -113,7 +113,7 @@ Settings → Privacy & Security.
 
 ## From source
 
-Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 18+](https://nodejs.org/).
+Prerequisites: [Go 1.23+](https://go.dev/dl/) and [Node.js 22.12+](https://nodejs.org/).
 
 ```bash
 # Linux / macOS
@@ -259,8 +259,11 @@ Whether the hostname setting above applies depends on the proxy:
 
 Behind a proxy, turn on **Settings → General → Network → Trust proxy headers** so
 rate limiting sees the real client address — and only then, because it makes
-`X-Forwarded-For` authoritative. Put TLS on the proxy if Yata leaves your LAN;
-Yata itself serves plain HTTP.
+`X-Forwarded-For` authoritative. Yata takes the **last** address in that
+header, the one your proxy appended, and assumes exactly one proxy sits in
+front of it. Behind a chain (a CDN in front of nginx, say) every visitor
+arriving through the outer proxy shares one login lockout. Put TLS on the proxy
+if Yata leaves your LAN; Yata itself serves plain HTTP.
 
 ## Outbound proxy for tracker traffic
 
