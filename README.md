@@ -228,6 +228,12 @@ Trackers with no API that don't welcome scraping (TorrentLeech, IPTorrents, the 
 
 This is a beta: expect rough edges and report anything odd — especially stats that parse wrong, group ladders that have drifted from the def, promotion or pathway estimates that disagree with reality, and anything a tracker operator wants changed about how their site is handled. [What to include in a report](docs/CONTRIBUTING.md#reporting-a-problem).
 
+## Support Yata
+
+Yata is free and always will be. If it's useful to you and you'd like to help keep it going, you can buy me a coffee:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/K4P02AO50X)
+
 ## License
 
 [GPL-3.0](LICENSE). Free to use, study, modify, and redistribute — forever. Any derivative must stay open source under the same terms, so no fork of Yata can ever become a paid or closed product. If you'd rather rebuild the whole idea from scratch in your own code, that's not a derivative and you owe nobody anything — go for it, we actively encourage it.
