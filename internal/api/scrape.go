@@ -2,11 +2,13 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
+	"github.com/Yata-Dash/Yata-Dash/internal/notify"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
 	"github.com/Yata-Dash/Yata-Dash/internal/store"
 )
@@ -214,18 +216,50 @@ func runScrape(d *Deps) http.HandlerFunc {
 			return
 		}
 		d.logInfof("scrape: %s (%s) ok — %d fields", t.Name, t.ID, len(result))
-		_ = d.Stats.SaveScrape(t.ID, toAnyMap(result))
 
-		merged, err := d.Stats.Merged(t.ID)
+		merged, err := saveScrapeResult(d, t, result)
 		if err != nil {
 			jsonError(w, "store_error", http.StatusInternalServerError)
 			return
 		}
-		jsonOK(w, models.TrackerStatsResponse{
+		// The page keeps its last refresh's ok/error and timestamps and takes
+		// only the fields from this (see scrapeProfile in main.ts); a scrape
+		// is not an API update. Rates ride along for a card with no entry yet.
+		resp := models.TrackerStatsResponse{
 			TrackerID: t.ID,
 			OK:        true,
 			Fields:    merged,
 			FetchedAt: time.Now().Unix(),
-		})
+		}
+		if r := d.Stats.GrowthRates(t.ID); len(r) > 0 {
+			resp.Rates = r
+		}
+		jsonOK(w, resp)
 	}
+}
+
+// saveScrapeResult stores a scrape made outside a refresh pass (the Scrape
+// button, auto-sync, a Tracker Test) and records the group change it brings.
+// The next refresh can't: it reads its "before" group from the store, which
+// by then already holds the new one — so a scrape-only tracker, whose group
+// only ever arrives this way, never recorded a promotion.
+func saveScrapeResult(d *Deps, t models.Tracker, result map[string]string) (models.MergedStats, error) {
+	oldGroup := mergedString(d, t.ID, "group")
+	if err := d.Stats.SaveScrape(t.ID, toAnyMap(result)); err != nil {
+		return nil, err
+	}
+	merged, err := d.Stats.Merged(t.ID)
+	if err != nil {
+		return nil, err
+	}
+	// Checked before recordGroupChange only to skip building the trend
+	// context on the common no-change path.
+	if newGroup := mergedFieldString(merged, "group"); !strings.EqualFold(oldGroup, newGroup) {
+		var trends notify.TrendContext
+		if d.Alerts != nil {
+			trends = buildTrendContext(d, t, merged, d.Stats.GrowthRates(t.ID))
+		}
+		recordGroupChange(d, t, merged, oldGroup, newGroup, trends)
+	}
+	return merged, nil
 }

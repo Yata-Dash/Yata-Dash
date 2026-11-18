@@ -364,7 +364,16 @@ export function renderCard(
     const effectiveMinRatio = !isNaN(requiredRatio) && requiredRatio > 0 ? requiredRatio : tracker.min_ratio;
     const rc       = ratioColorFor(ratio, effectiveMinRatio);
     const hnr      = parseInt(strOf(stats, 'hit_and_runs')) || 0;
-    const updated  = fmtDateTime(stats.fetched_at);
+    // "API <time>" is when the API last RETURNED DATA, the same number as the
+    // table's Last API Update column. fetched_at is only the attempt: on an API
+    // failing for a week it read "API 09:52" over week-old numbers. The
+    // attempt moves to the hover text, as it does in the table.
+    const footerText = stats.manual_entry ? 'Entered by hand'
+      : tracker.no_api ? 'No API'
+      : `API ${fmtDateTime(stats.api_updated_at)}`;
+    const footerTip = stats.manual_entry ? 'Yata never contacts this tracker — these are the numbers you typed in'
+      : tracker.no_api ? 'This tracker type has no API to update from'
+      : stats.fetched_at ? `Last attempt: ${fmtDateTime(stats.fetched_at)}` : '';
     const ast      = parseSeedTime(strOf(stats, 'avg_seed_time'));
     const seeding  = parseInt(strOf(stats, 'seeding'))  || 0;
     const leeching = parseInt(strOf(stats, 'leeching')) || 0;
@@ -428,11 +437,11 @@ export function renderCard(
       ${buildRulesLine(tracker, stats, settings)}
     </div>
     <div class="card-footer">
-      <span class="card-last-updated"${stats?.manual_entry ? ' title="Yata never contacts this tracker — these are the numbers you typed in"' : ''}>${
+      <span class="card-last-updated"${footerTip ? ` title="${esc(footerTip)}"` : ''}>${
         // A manual tracker has no fetch time to report (see internal/api/stats.go),
         // so it says what the numbers ARE rather than pairing "Entered" with a
         // dash — or, as it did before, with whenever the page last polled.
-        stats?.manual_entry ? 'Entered by hand' : `API ${updated}`}</span>
+        footerText}</span>
       ${(() => {
         // A manual tracker is never scraped BECAUSE it is never contacted at
         // all. "API only" would be doubly wrong there — there is no API either.

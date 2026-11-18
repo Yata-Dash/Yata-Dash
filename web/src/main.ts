@@ -635,7 +635,12 @@ async function scrapeProfile(id: string, silent = false): Promise<void> {
   const t = state.trackers.find(x => x.id === id);
   const res = await api.runScrape(id);
   if (res.ok && res.data) {
-    mergeStatsEntry(id, res.data);
+    // A scrape brings fields, nothing more. The rest of the entry (ok/error,
+    // fetched_at, api_updated_at, rates) describes the last refresh, and
+    // replacing it made every scrape pose as an API update: "API <now>" on
+    // the card, a failing API's banner gone, the ETAs blanked.
+    const old = state.statsCache[id];
+    mergeStatsEntry(id, old ? { ...old, fields: res.data.fields } : { ...res.data, fetched_at: 0 });
     if (t) renderCard(t, state.statsCache[id], state.appSettings, state.groupDefs);
     renderTable();
     updateSummary();

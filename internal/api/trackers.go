@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 	"github.com/Yata-Dash/Yata-Dash/internal/scrape"
+	"github.com/Yata-Dash/Yata-Dash/internal/stats"
 )
 
 const maskedKey = "••••••••"
@@ -129,6 +131,7 @@ func toView(d *Deps, t models.Tracker) models.TrackerView {
 	rs := d.Reg.ResolveScrape(t.URL, t.Type)
 	v.SupportsHTMLScrape = !rs.SkipHTMLScrape && !rs.DisableScraping
 	v.ScrapeDisabledByTracker = rs.DisableScraping
+	v.NoAPI = d.Reg.APIKind(t.URL, t.Type) == "none" && !rs.Retired
 	if rs.OptedOut {
 		v.OptedOut = true
 		v.OptOutNote = rs.OptOut.Note
@@ -538,11 +541,32 @@ func clampTrackerScrape(d *Deps, t *models.Tracker) {
 	}
 }
 
-// syncManualLayer mirrors the tracker's user-entered values (currently just
-// the join date) into the lowest-priority "manual" stats layer, so they fill
-// gaps the API and scrape leave empty. Called after every create/update.
+// syncManualLayer mirrors the tracker's user-entered values (typed-in stats,
+// join date, recorded login) into the lowest-priority "manual" stats layer, so
+// they fill gaps the API and scrape leave empty. Called after every
+// create/update.
+//
+// For a manual-entry tracker this is also where history is recorded: a save
+// that changes the numbers is the only new datapoint such a tracker ever gets.
+// A save that leaves them alone (a rename, a recorded login) records nothing,
+// and neither do the startup and import re-syncs, which bypass this function.
 func syncManualLayer(d *Deps, t models.Tracker) {
+	var before map[string]float64
+	if t.Type == models.TypeManual {
+		// A tracker switched to manual keeps its old API and scrape layers,
+		// which outrank the typed numbers and would hide every change to them.
+		clearStaleLayers(d, t.ID, manualStaleSources(d, t)...)
+		if merged, err := d.Stats.Merged(t.ID); err == nil {
+			before = stats.NumericSnapshot(merged)
+		}
+	}
 	_ = d.Stats.SaveManual(t.ID, t.ManualLayer()) // empty map clears the layer
+	if t.Type != models.TypeManual {
+		return
+	}
+	if merged, err := d.Stats.Merged(t.ID); err == nil && !maps.Equal(before, stats.NumericSnapshot(merged)) {
+		_ = d.Stats.RecordHistory(t.ID, merged)
+	}
 }
 
 func deleteTracker(d *Deps) http.HandlerFunc {

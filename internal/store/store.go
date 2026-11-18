@@ -524,6 +524,14 @@ func (d *DB) AddHistory(trackerID string, at time.Time, fields map[string]float6
 	return tx.Commit()
 }
 
+// LatestHistoryAt returns when a tracker's newest history point was recorded
+// (unix seconds; 0 = none).
+func (d *DB) LatestHistoryAt(trackerID string) (int64, error) {
+	var ts sql.NullInt64
+	err := d.sql.QueryRow(`SELECT MAX(recorded_at) FROM history WHERE tracker_id = ?`, trackerID).Scan(&ts)
+	return ts.Int64, err
+}
+
 // PruneHistory deletes points older than before.
 func (d *DB) PruneHistory(before time.Time) error {
 	_, err := d.sql.Exec(`DELETE FROM history WHERE recorded_at < ?`, before.Unix())

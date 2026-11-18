@@ -43,6 +43,9 @@ export interface Tracker {
   mock_scenario?: string;
   /** False when the type architecturally cannot scrape OR the operator forbids it. */
   supports_html_scrape: boolean;
+  /** The tracker's type has no API (scrape-only, manual, undefined); never
+   *  set for a retired tracker, whose last data did come from one. */
+  no_api?: boolean;
   /** True when the tracker def itself disables scraping (operator request). */
   scrape_disabled_by_tracker: boolean;
   api_key_hint?: string;

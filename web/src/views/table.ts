@@ -384,6 +384,9 @@ function buildCell(
       if (s?.manual_entry) {
         return `<td class="td-center" title="Entered by hand — Yata never contacts this tracker, so there is no API update to report">${dash}</td>`;
       }
+      if (t.no_api) {
+        return `<td class="td-center" title="This tracker type has no API to update from">${dash}</td>`;
+      }
       const ok = s?.api_updated_at ?? 0;
       const tried = s?.fetched_at ?? 0;
       const failing = scrapeStatus[t.id]?.api_down;
@@ -470,7 +473,8 @@ function buildExpanded(
     { l: 'Account Age',  v: joinDate ? memberDur(joinDate) : '—' },
     ...(stats.manual_entry
       ? [{ l: 'Stats Source', v: 'Entered by hand' }]
-      : [{ l: 'Last API Update', v: stats.fetched_at ? fmtDateTime(stats.fetched_at) : '—' }]),
+      // Same number as the column above: the last data, not the last attempt.
+      : [{ l: 'Last API Update', v: tracker.no_api ? 'No API' : stats.api_updated_at ? fmtDateTime(stats.api_updated_at) : '—' }]),
     // Directly under the API's own freshness, because it is the thing that
     // will silently END it: a lapsed key stops the stats and just looks like a
     // broken tracker. Only LST issues expiring keys, so this is normally absent.

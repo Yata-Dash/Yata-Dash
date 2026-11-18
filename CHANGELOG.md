@@ -71,6 +71,13 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **`/api/summary` never reported `warnings`.**
 - **Importing an older config** could leave alerts with nowhere to record and
   a renamed tracker type not collecting until the next restart.
+- **Scrape-only trackers no longer log API contact that never happened** in
+  Connection Health or the card's "API" time, and `/api/summary` reports them,
+  and manual trackers, as `no_api`, counted in a new `totals.no_api` (so `ok`
+  can be below `enabled` with nothing wrong).
+- **Manual and scrape-only trackers record history only when there is new
+  data** (a save, or a new scrape), so their charts and growth rates are no
+  longer flattened by every refresh restamping the same values.
 
 ## [Beta-20261011]
 
