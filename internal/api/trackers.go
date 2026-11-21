@@ -282,7 +282,7 @@ func createTracker(d *Deps) http.HandlerFunc {
 			return
 		}
 		syncManualLayer(d, t)
-		d.logInfof("tracker: added %s (%s, type %s)", t.Name, t.ID, t.Type)
+		d.logInfof("tracker: added %s (%s, type %s)", trackerLabel(d, t), t.ID, t.Type)
 		jsonStatus(w, http.StatusCreated, toView(d, t))
 	}
 }
@@ -350,7 +350,7 @@ func updateTracker(d *Deps) http.HandlerFunc {
 		// graduates to the official cached result only if what was just saved
 		// matches what was tested — otherwise it's discarded as stale.
 		promoteOrDiscardPendingTest(d, t)
-		d.logInfof("tracker: updated %s (%s)", t.Name, t.ID)
+		d.logInfof("tracker: updated %s (%s)", trackerLabel(d, t), t.ID)
 		jsonOK(w, toView(d, t))
 	}
 }
@@ -429,9 +429,9 @@ func recordLogin(d *Deps) http.HandlerFunc {
 		t, _ := d.Cfg.Tracker(id)
 		syncManualLayer(d, t)
 		if cleared {
-			d.logInfof("tracker: cleared recorded login for %s (%s)", t.Name, t.ID)
+			d.logInfof("tracker: cleared recorded login for %s (%s)", trackerLabel(d, t), t.ID)
 		} else {
-			d.logInfof("tracker: recorded login for %s (%s) at %s", t.Name, t.ID, at)
+			d.logInfof("tracker: recorded login for %s (%s) at %s", trackerLabel(d, t), t.ID, at)
 		}
 		jsonOK(w, toView(d, t))
 	}
@@ -572,9 +572,9 @@ func syncManualLayer(d *Deps, t models.Tracker) {
 func deleteTracker(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		name := ""
+		name := id
 		if t, ok := d.Cfg.Tracker(id); ok {
-			name = t.Name
+			name = trackerLabel(d, t)
 		}
 		if err := d.Cfg.DeleteTracker(id); err != nil {
 			jsonError(w, err.Error(), http.StatusNotFound)

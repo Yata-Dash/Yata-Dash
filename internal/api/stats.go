@@ -231,7 +231,7 @@ func refreshTrackerInCycle(d *Deps, t models.Tracker, force bool, cyc *refreshCy
 	// every refresh path (frontend poll, single, or the background loop);
 	// edge-triggering + per-tracker priming keep it from spamming.
 	if d.Alerts != nil {
-		d.Alerts.Evaluate(t, resp.Fields, resp.OK, trends)
+		d.Alerts.Evaluate(labelled(d, t), resp.Fields, resp.OK, trends)
 		// Target-met events need fresh data to mean anything — a failed
 		// refresh serves the last stored fields, which would just re-diff the
 		// same values against themselves.
@@ -387,7 +387,7 @@ func addGroupChangeEvent(d *Deps, t models.Tracker, detail string) bool {
 	if err := d.DB.AddEvent(t.ID, time.Now().UTC(), "group_change", detail); err != nil {
 		return true // as before: a failed insert still lets the alert through
 	}
-	d.logInfof("event: %s (%s) group change — %s", t.Name, t.ID, detail)
+	d.logInfof("event: %s (%s) group change — %s", trackerLabel(d, t), t.ID, detail)
 	return true
 }
 
@@ -426,9 +426,9 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 		return
 	}
 	if newIdx > oldIdx {
-		d.Alerts.EvaluateEvent(t, merged, notify.EventContext{Kind: "promoted", Detail: "promoted: " + oldGroup + " → " + newGroup}, trends)
+		d.Alerts.EvaluateEvent(labelled(d, t), merged, notify.EventContext{Kind: "promoted", Detail: "promoted: " + oldGroup + " → " + newGroup}, trends)
 	} else {
-		d.Alerts.EvaluateEvent(t, merged, notify.EventContext{Kind: "demoted", Detail: "demoted: " + oldGroup + " → " + newGroup}, trends)
+		d.Alerts.EvaluateEvent(labelled(d, t), merged, notify.EventContext{Kind: "demoted", Detail: "demoted: " + oldGroup + " → " + newGroup}, trends)
 	}
 }
 
@@ -440,7 +440,7 @@ func recordGroupChange(d *Deps, t models.Tracker, merged models.MergedStats, old
 // must prime, not fire on a stale "unmet".
 func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats, trends notify.TrendContext) {
 	if len(t.Targets) == 0 && t.TargetGroup == "" {
-		d.Alerts.EvaluateTargets(t, merged, nil, 0, 0, trends)
+		d.Alerts.EvaluateTargets(labelled(d, t), merged, nil, 0, 0, trends)
 		return
 	}
 	var groups []defs.GroupDef
@@ -448,7 +448,7 @@ func evaluateTrackerTargets(d *Deps, t models.Tracker, merged models.MergedStats
 		groups = groupsFor(d, td, t.ID)
 	}
 	rows, met, total := evaluateTargetRows(t, merged, groups)
-	d.Alerts.EvaluateTargets(t, merged, rows, met, total, trends)
+	d.Alerts.EvaluateTargets(labelled(d, t), merged, rows, met, total, trends)
 }
 
 // evaluateTrackerPins re-measures every pinned path and hands the engine one
@@ -463,7 +463,7 @@ func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, r
 	if len(pins) == 0 || d.Paths == nil {
 		// An empty pass, so the engine forgets every chain: a pin removed and
 		// later re-pinned must prime afresh, not inherit a state from before.
-		d.Alerts.EvaluatePins(t, merged, nil, trends)
+		d.Alerts.EvaluatePins(labelled(d, t), merged, nil, trends)
 		return
 	}
 	users := cyc.pinUsers(d, t, merged, rates)
@@ -482,7 +482,7 @@ func evaluateTrackerPins(d *Deps, t models.Tracker, merged models.MergedStats, r
 			Ready:     !r.StartDisabled && open.ETADays == 0 && !open.HasUnknown,
 		})
 	}
-	d.Alerts.EvaluatePins(t, merged, rows, trends)
+	d.Alerts.EvaluatePins(labelled(d, t), merged, rows, trends)
 }
 
 // refreshCycle is state shared by one refresh pass (RunRefreshCycle or a bulk
@@ -594,13 +594,13 @@ func logFetchTransition(d *Deps, t models.Tracker, errKind string) {
 	lastFetchState.Store(t.ID, errKind)
 	switch {
 	case errKind == "" && seen && prev != "":
-		d.logInfof("fetch: %s (%s) recovered — API reachable again", t.Name, t.ID)
+		d.logInfof("fetch: %s (%s) recovered — API reachable again", trackerLabel(d, t), t.ID)
 	case errKind != "" && (!seen || prev == ""):
-		d.logWarnf("fetch: %s (%s) failed — %s", t.Name, t.ID, errKind)
+		d.logWarnf("fetch: %s (%s) failed — %s", trackerLabel(d, t), t.ID, errKind)
 	case errKind != "" && prev != errKind:
-		d.logWarnf("fetch: %s (%s) still failing — now %s (was %s)", t.Name, t.ID, errKind, prev)
+		d.logWarnf("fetch: %s (%s) still failing — now %s (was %s)", trackerLabel(d, t), t.ID, errKind, prev)
 	case errKind != "":
-		d.logDebugf("fetch: %s (%s) still failing — %s", t.Name, t.ID, errKind)
+		d.logDebugf("fetch: %s (%s) still failing — %s", trackerLabel(d, t), t.ID, errKind)
 	}
 }
 
@@ -656,7 +656,7 @@ func recordConnection(d *Deps, t models.Tracker, source, errKind string) {
 		return
 	}
 	if err := d.DB.AddEvent(t.ID, now, kind, detail); err == nil {
-		d.logDebugf("event: %s (%s) %s %s", t.Name, t.ID, kind, detail)
+		d.logDebugf("event: %s (%s) %s %s", trackerLabel(d, t), t.ID, kind, detail)
 	}
 }
 
@@ -670,9 +670,9 @@ func logOptOutTransition(d *Deps, t models.Tracker, opted bool) {
 	lastOptOutState.Store(t.ID, opted)
 	switch {
 	case opted && (!seen || prev == false):
-		d.logWarnf("fetch: %s (%s) skipped — tracker is on the opt-out list (defs/optout.json); not contacting it", t.Name, t.ID)
+		d.logWarnf("fetch: %s (%s) skipped — tracker is on the opt-out list (defs/optout.json); not contacting it", trackerLabel(d, t), t.ID)
 	case !opted && seen && prev == true:
-		d.logInfof("fetch: %s (%s) no longer opted out — resuming", t.Name, t.ID)
+		d.logInfof("fetch: %s (%s) no longer opted out — resuming", trackerLabel(d, t), t.ID)
 	}
 }
 
@@ -788,12 +788,15 @@ func RunRefreshCycle(d *Deps) {
 // one tracker's panic would otherwise kill the process. It is logged with a
 // stack and reported as failed, keeping the last stored stats.
 func safeRefreshTracker(d *Deps, t models.Tracker, force bool, cyc *refreshCycle) (resp models.TrackerStatsResponse) {
+	// Named before the recover is installed, so the panic line never needs the
+	// registry while unwinding.
+	label := trackerLabel(d, t)
 	defer func() {
 		p := recover()
 		if p == nil {
 			return
 		}
-		d.logErrorf("refresh: %s (%s) panicked — %v\n%s", t.Name, t.ID, p, debug.Stack())
+		d.logErrorf("refresh: %s (%s) panicked — %v\n%s", label, t.ID, p, debug.Stack())
 		resp = models.TrackerStatsResponse{
 			TrackerID: t.ID,
 			FetchedAt: time.Now().Unix(),

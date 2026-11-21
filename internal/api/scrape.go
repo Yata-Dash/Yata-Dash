@@ -187,9 +187,9 @@ func runScrape(d *Deps) http.HandlerFunc {
 			// logs its expected cooldown skips at debug, not here.)
 			if pol.NextAllowedAt > 0 {
 				d.logWarnf("scrape: %s (%s) blocked — %s (next allowed %s)",
-					t.Name, t.ID, pol.Reason, time.Unix(pol.NextAllowedAt, 0).Format("15:04:05"))
+					trackerLabel(d, t), t.ID, pol.Reason, time.Unix(pol.NextAllowedAt, 0).Format("15:04:05"))
 			} else {
-				d.logWarnf("scrape: %s (%s) blocked — %s", t.Name, t.ID, pol.Reason)
+				d.logWarnf("scrape: %s (%s) blocked — %s", trackerLabel(d, t), t.ID, pol.Reason)
 			}
 			jsonStatus(w, http.StatusTooManyRequests, map[string]any{
 				"error":  pol.Reason,
@@ -211,11 +211,11 @@ func runScrape(d *Deps) http.HandlerFunc {
 		result, serr := scrape.Profile(t, spec)
 		recordScrapeAttempt(d, t, serr, len(result))
 		if serr != nil {
-			d.logWarnf("scrape: %s (%s) failed — %s", t.Name, t.ID, serr.Kind)
+			d.logWarnf("scrape: %s (%s) failed — %s", trackerLabel(d, t), t.ID, serr.Kind)
 			jsonError(w, serr.Kind, upstreamStatus(serr.Status))
 			return
 		}
-		d.logInfof("scrape: %s (%s) ok — %d fields", t.Name, t.ID, len(result))
+		d.logInfof("scrape: %s (%s) ok — %d fields", trackerLabel(d, t), t.ID, len(result))
 
 		merged, err := saveScrapeResult(d, t, result)
 		if err != nil {

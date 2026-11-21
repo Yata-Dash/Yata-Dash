@@ -79,7 +79,7 @@ func checkCapabilityDrift(d *Deps, t models.Tracker, data map[string]any) {
 	}
 	d.logWarnf("capabilities: %s returned %s, which its definition (defs/trackers/%s.json) "+
 		"doesn't declare — add to capabilities.api_stats_add so the tracker's coverage is reported correctly",
-		t.Name, strings.Join(undeclared, ", "), td.Key)
+		trackerLabel(d, t), strings.Join(undeclared, ", "), td.Key)
 }
 
 // resetCapDriftMemory clears the suppression map. Called when defs are

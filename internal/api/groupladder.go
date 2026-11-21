@@ -129,12 +129,12 @@ func maybeRefreshGroupLadder(d *Deps, t models.Tracker, currentGroup string) {
 	}
 	payload, ferr := d.Fetch.FetchGroups(t)
 	if ferr != nil {
-		d.logDebugf("group ladder: %s (%s) — %s", t.Name, t.ID, ferr.Kind)
+		d.logDebugf("group ladder: %s (%s) — %s", trackerLabel(d, t), t.ID, ferr.Kind)
 		return
 	}
 	before, had := d.DB.LatestGroupLadder(t.ID)
 	if err := d.DB.SaveGroupLadder(t.ID, payload, now); err != nil {
-		d.logDebugf("group ladder: %s (%s) — store error: %v", t.Name, t.ID, err)
+		d.logDebugf("group ladder: %s (%s) — store error: %v", trackerLabel(d, t), t.ID, err)
 		return
 	}
 	after, ok := d.DB.LatestGroupLadder(t.ID)
@@ -147,8 +147,8 @@ func maybeRefreshGroupLadder(d *Deps, t models.Tracker, currentGroup string) {
 	switch {
 	case !had:
 		d.logInfof("group ladder: %s (%s) — %d ranks loaded from the tracker",
-			t.Name, t.ID, len(defs.LadderFromAPI(payload, *spec)))
+			trackerLabel(d, t), t.ID, len(defs.LadderFromAPI(payload, *spec)))
 	case changed:
-		d.logInfof("group ladder: %s (%s) — requirements changed", t.Name, t.ID)
+		d.logInfof("group ladder: %s (%s) — requirements changed", trackerLabel(d, t), t.ID)
 	}
 }

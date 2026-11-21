@@ -129,7 +129,7 @@ func exportHistoryCSV(d *Deps) http.HandlerFunc {
 		// tracker id → display name
 		names := map[string]string{}
 		for _, t := range d.Cfg.Trackers() {
-			names[t.ID] = t.Name
+			names[t.ID] = trackerLabel(d, t)
 		}
 
 		// (tracker, day) → field → value; collect the set of fields seen.

@@ -132,7 +132,7 @@ func detectTrackerType(d *Deps) http.HandlerFunc {
 			switch {
 			case ferr != nil:
 				attempt.Status, attempt.Detail = "fail", ferr.Kind
-				d.logWarnf("detect: %s as %s — %v", t.Name, typeKey, ferr)
+				d.logWarnf("detect: %s as %s — %v", trackerLabel(d, t), typeKey, ferr)
 			case !looksLikeStats(fields):
 				// It answered, but with nothing that resembles account stats.
 				attempt.Status, attempt.Detail = "ok", "no_stats"
@@ -156,9 +156,9 @@ func detectTrackerType(d *Deps) http.HandlerFunc {
 				return
 			}
 			resp.Applied = true
-			d.logInfof("tracker: detected %s as type %s", t.Name, resp.Detected)
+			d.logInfof("tracker: detected %s as type %s", trackerLabel(d, t), resp.Detected)
 		} else {
-			d.logInfof("tracker: type detection found no match for %s", t.Name)
+			d.logInfof("tracker: type detection found no match for %s", trackerLabel(d, t))
 		}
 		// Record the probe as this tracker's latest test result so the table
 		// pill reflects what just happened rather than a stale success.
