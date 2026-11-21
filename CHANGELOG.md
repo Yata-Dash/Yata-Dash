@@ -29,6 +29,8 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Fixed
 
+- **Trackers without a custom name are named in logs, alerts and the digest**
+  by their definition's name (or host), instead of a blank (#95).
 - **Login protection is harder to get round.** Every password prompt now
   counts towards the five-attempt lockout, parallel guesses can no longer
   slip past it, a spoofed `X-Forwarded-For` no longer resets it, and removing

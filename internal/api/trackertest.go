@@ -208,7 +208,7 @@ func testTracker(d *Deps) http.HandlerFunc {
 		// Level follows the outcome: a user asked for this test, so a failed
 		// or rate-limit-blocked check is a warning, not a routine info line.
 		msg := fmt.Sprintf("test: %s (%s) — api=%s scrape=%s",
-			t.Name, t.ID, fmtCheck(res.API), fmtCheck(res.Scrape))
+			trackerLabel(d, t), t.ID, fmtCheck(res.API), fmtCheck(res.Scrape))
 		if res.API.Status == "fail" || res.Scrape.Status == "fail" ||
 			res.Scrape.Status == "blocked" {
 			d.logWarnf("%s", msg)
@@ -434,7 +434,7 @@ func testAPI(d *Deps, t models.Tracker, persist bool) CheckResult {
 		// NOT part of CheckResult — the UI only ever shows the short Kind via
 		// friendlyDetail's fixed map. Log it here so a failure is diagnosable
 		// from the server log without re-querying the tracker.
-		d.logWarnf("test: %s (%s) — api fetch detail: %v", t.Name, t.ID, ferr)
+		d.logWarnf("test: %s (%s) — api fetch detail: %v", trackerLabel(d, t), t.ID, ferr)
 		return CheckResult{Status: "fail", Detail: ferr.Kind}
 	}
 	if persist {

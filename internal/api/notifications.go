@@ -127,7 +127,7 @@ func putNotifications(d *Deps) http.HandlerFunc {
 				}
 			}
 			if len(newRules) > 0 {
-				d.Alerts.Announce(newRules, d.Cfg.Trackers(), func(id string) models.MergedStats {
+				d.Alerts.Announce(newRules, labelledAll(d, d.Cfg.Trackers()), func(id string) models.MergedStats {
 					m, _ := d.Stats.Merged(id)
 					return m
 				}, trendFnFor(d))
@@ -152,7 +152,7 @@ func dryRunNotification(d *Deps) http.HandlerFunc {
 			jsonError(w, "rule has no conditions", http.StatusBadRequest)
 			return
 		}
-		results := notify.DryRun(rule, d.Cfg.Trackers(), func(id string) models.MergedStats {
+		results := notify.DryRun(rule, labelledAll(d, d.Cfg.Trackers()), func(id string) models.MergedStats {
 			m, _ := d.Stats.Merged(id)
 			return m
 		}, trendFnFor(d))

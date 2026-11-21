@@ -178,7 +178,7 @@ func buildDigest(d *Deps, now time.Time) (text string, readyNow []string) {
 		if frag := quiDigestFragment(merged); frag != "" {
 			line += " · " + frag
 		}
-		attention.add(t.Name, merged)
+		attention.add(trackerLabel(d, t), merged)
 		trackerLines = append(trackerLines, line)
 		if moved {
 			anyMovement = true
@@ -348,7 +348,7 @@ func trackerDigestLine(d *Deps, t models.Tracker, merged models.MergedStats, rat
 	if base == "" {
 		base = "no change"
 	}
-	line = t.Name + ": " + base
+	line = trackerLabel(d, t) + ": " + base
 
 	if frag := digestTargetFragment(d, t, merged); frag != "" {
 		line += " · " + frag
@@ -519,7 +519,7 @@ func digestEventLines(d *Deps, trackersByID map[string]models.Tracker, since tim
 			symbol, verb = "▼", "demoted"
 		}
 		day := time.Unix(e.At, 0).Format("Mon")
-		lines = append(lines, fmt.Sprintf("%s %s %s %s → %s (%s)", symbol, t.Name, verb, oldGroup, newGroup, day))
+		lines = append(lines, fmt.Sprintf("%s %s %s %s → %s (%s)", symbol, trackerLabel(d, t), verb, oldGroup, newGroup, day))
 	}
 	return lines
 }
