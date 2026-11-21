@@ -6,6 +6,10 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ## [Unreleased]
 
+### Added
+
+- **Nightbloom** (API only, approval pending); its seeding classes can't be tracked until the API reports seed size and seed time.
+
 ### Security
 
 - **Tracker credentials stay on the tracker's own host.** A definition path not
