@@ -1,0 +1,493 @@
+{
+  "schema_version": 1,
+  "key": "nightbloom",
+  "name": "Nightbloom",
+  "abbr": "NB",
+  "url": "https://nightbloom.cx",
+  "type": "unit3d",
+  "last_updated": "2026-11-22",
+  "approved_by": {
+    "status": "pending",
+    "note": "Accepted after applying as the Yata dev asking to add support; no formal approval yet."
+  },
+  "rules": {
+    "min_ratio": 0.4
+  },
+  "api": {
+    "required_fields": [
+      "join_date"
+    ]
+  },
+  "scrape": {
+    "disable_scraping": true
+  },
+  "notes": "New tracker (2026-11), heavily modified UNIT3D. /api/user is the stock shape without join_date, so the age gates need it entered; it has no seed size or average seed time, so Rootkeeper and Seedkeeper can't be tracked yet. Classes are checked once a day and can move down as well as up. No scraping: not approved.",
+  "groups": [
+    {
+      "name": "Wilted",
+      "style": {
+        "color": "#E08A8A"
+      },
+      "requirements": {
+        "description": "Ratio under 0.40: no downloading, uploading or inviting until the next daily check after the ratio recovers."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Sprout",
+      "style": {
+        "color": "#9CB5AA"
+      },
+      "requirements": {
+        "min_ratio": 0.4
+      },
+      "perks": [
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload releases (staff approval)"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Bud",
+      "style": {
+        "color": "#B9DCCB"
+      },
+      "requirements": {
+        "min_uploaded": "1 TiB",
+        "min_ratio": 0.4,
+        "min_age": "30D"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload releases (staff approval)"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Bloom",
+      "style": {
+        "color": "#7CF5C4"
+      },
+      "requirements": {
+        "min_uploaded": "5 TiB",
+        "min_ratio": 0.4,
+        "min_age": "60D"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload releases (staff approval)"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Moonflower",
+      "style": {
+        "color": "#C3A6FF"
+      },
+      "requirements": {
+        "min_uploaded": "20 TiB",
+        "min_ratio": 0.4,
+        "min_age": "90D"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Night Queen",
+      "style": {
+        "color": "#F4F1D0",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "50 TiB",
+        "min_ratio": 0.4,
+        "min_age": "180D"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Evergreen",
+      "style": {
+        "color": "#5FD3A0",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_uploaded": "100 TiB",
+        "min_ratio": 0.4,
+        "min_age": "1Y"
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-upload",
+          "label": "Upload releases (staff approval)"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Rootkeeper",
+      "style": {
+        "color": "#8FE0C4",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_ratio": 0.4,
+        "min_age": "30D",
+        "min_seed_size": "5 TiB",
+        "min_seedtime": "30D",
+        "note": "Seeding class: ranks above the upload ladder."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Seedkeeper",
+      "style": {
+        "color": "#A8E6CF",
+        "sparkle": true
+      },
+      "requirements": {
+        "min_ratio": 0.4,
+        "min_age": "90D",
+        "min_seed_size": "10 TiB",
+        "min_seedtime": "60D",
+        "note": "Seeding class: ranks above the upload ladder."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        },
+        {
+          "icon": "fas fa-paper-plane",
+          "label": "Send invites"
+        },
+        {
+          "icon": "fas fa-hand-holding-heart",
+          "label": "Requests"
+        },
+        {
+          "icon": "fas fa-comments",
+          "label": "Chat and comments"
+        }
+      ]
+    },
+    {
+      "name": "Greenhouse",
+      "style": {
+        "color": "#BAD9A0"
+      },
+      "requirements": {
+        "description": "Given by staff. Members of the site's own release groups."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Gardener",
+      "style": {
+        "color": "#9FE8FF"
+      },
+      "requirements": {
+        "description": "Given by staff. Trusted uploaders."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Grove Keeper",
+      "style": {
+        "color": "#BFE3FF"
+      },
+      "requirements": {
+        "description": "Given by staff. Long-standing members staff vouch for."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Botanist",
+      "style": {
+        "color": "#FFC9E6"
+      },
+      "requirements": {
+        "description": "Given by staff. Staff: release metadata."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Groundskeeper",
+      "style": {
+        "color": "#FFC9E6"
+      },
+      "requirements": {
+        "description": "Given by staff. Staff: releases."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Warden",
+      "style": {
+        "color": "#FFB4D6"
+      },
+      "requirements": {
+        "description": "Given by staff. Staff: moderation."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Head Gardener",
+      "style": {
+        "color": "#FFB4A8"
+      },
+      "requirements": {
+        "description": "Given by staff. Staff: site settings."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Moonkeeper",
+      "style": {
+        "color": "#FFE9A8"
+      },
+      "requirements": {
+        "description": "Given by staff. Sysop."
+      },
+      "perks": [
+        {
+          "icon": "fas fa-star text-gold",
+          "label": "Freeleech"
+        },
+        {
+          "icon": "fas fa-syringe",
+          "label": "No hit and run warnings"
+        },
+        {
+          "icon": "fas fa-tasks",
+          "label": "Uploads skip approval"
+        }
+      ]
+    },
+    {
+      "name": "Firefly",
+      "style": {
+        "color": "#E9FF9A"
+      },
+      "requirements": {
+        "description": "Given by staff. Site bots."
+      }
+    }
+  ]
+}

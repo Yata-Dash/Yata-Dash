@@ -194,6 +194,7 @@ If you are a tracker on this list and wish to approve or ask to opt out entirely
 | MidnightScene | UNIT3D | Yes | 3/5 (4 scraped) | 60min |  |
 | MyAnonamouse | Custom API | Yes | 3/3 | API only |  |
 | Nebulance | Gazelle (ANT/NEB) | No | 5/5 | API only | Ratioless; episode and season seed-time rules differ |
+| Nightbloom | UNIT3D | Asked | 3/5 | API only |  |
 | OldToonsWorld | UNIT3D | Yes | 5/5 | API only | Added all required stats to API - Thanks team! |
 | OnlyEncodes+ | UNIT3D | Yes | 3/6 (4 scraped) | Once per day |  |
 | Orpheus | Gazelle (ajax.php) | No | 6/6 | API only | Required ratio is calculated dynamically |
