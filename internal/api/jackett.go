@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
@@ -150,9 +151,12 @@ func jackettIndexers(d *Deps) http.HandlerFunc {
 
 		// The fetch worked — remember the connection like the Prowlarr import.
 		if stored.JackettURL != req.URL || stored.JackettAdminPassword != req.AdminPassword {
-			s := d.Cfg.Settings()
-			s.JackettURL, s.JackettAdminPassword = req.URL, req.AdminPassword
-			if err := d.Cfg.UpdateSettings(s); err != nil {
+			// Only these two fields, in one locked step: replacing the whole
+			// object read before the fetch would undo settings saved meanwhile.
+			if _, _, err := d.Cfg.PatchSettings(func(s *models.Settings) error {
+				s.JackettURL, s.JackettAdminPassword = req.URL, req.AdminPassword
+				return nil
+			}); err != nil {
 				d.logWarnf("jackett: could not save connection settings: %v", err)
 			}
 		}

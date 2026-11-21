@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -411,9 +412,7 @@ func (m *Manager) Server() models.ServerConfig {
 func (m *Manager) Settings() models.Settings {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	s := m.cfg.Settings
-	s.QUIEnabledInstances = append([]int(nil), s.QUIEnabledInstances...)
-	return s
+	return copySettings(m.cfg.Settings)
 }
 
 // Trackers returns a copy of all trackers.
@@ -542,6 +541,9 @@ func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 }
 
 // UpdateSettings replaces the settings (server config untouched) and persists.
+// It is for code that owns the whole object (tests, migrations). Anything
+// changing a few fields of the live settings uses PatchSettings, so that a
+// write never carries back values someone else changed since it read them.
 func (m *Manager) UpdateSettings(s models.Settings) error {
 	cleaned, err := CleanAllowedHosts(s.AllowedHosts)
 	if err != nil {
@@ -550,6 +552,45 @@ func (m *Manager) UpdateSettings(s models.Settings) error {
 	s.AllowedHosts = cleaned
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	normalizeSettings(&s)
+	m.cfg.Settings = s
+	return m.saveLocked()
+}
+
+// ErrInvalidSettings wraps a patch the settings rules refuse (a bad hostname,
+// or the mutate func's own complaint), as opposed to a failure to save.
+var ErrInvalidSettings = errors.New("invalid settings")
+
+// PatchSettings changes the settings in one locked step: mutate gets a private
+// copy of the current settings, the result is checked, normalised and saved,
+// and before/after are the exact states either side of this write. A mutate
+// error or a refused hostname list (both wrapped in ErrInvalidSettings) or a
+// failed save leaves the settings as they were. mutate must not call back
+// into the Manager.
+func (m *Manager) PatchSettings(mutate func(*models.Settings) error) (before, after models.Settings, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	prev := m.cfg.Settings
+	draft := copySettings(prev)
+	if err := mutate(&draft); err != nil {
+		return before, after, fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	cleaned, err := CleanAllowedHosts(draft.AllowedHosts)
+	if err != nil {
+		return before, after, fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	draft.AllowedHosts = cleaned
+	normalizeSettings(&draft)
+	m.cfg.Settings = draft
+	if err := m.saveLocked(); err != nil {
+		m.cfg.Settings = prev
+		return before, after, err
+	}
+	return copySettings(prev), copySettings(draft), nil
+}
+
+// normalizeSettings applies the floors and defaults every settings write gets.
+func normalizeSettings(s *models.Settings) {
 	if s.ScrapeIntervalMinutes < 60 {
 		s.ScrapeIntervalMinutes = 60
 	}
@@ -559,9 +600,7 @@ func (m *Manager) UpdateSettings(s models.Settings) error {
 	if s.QUISeedsizeMode != "missing" && s.QUISeedsizeMode != "prefer" {
 		s.QUISeedsizeMode = "off"
 	}
-	normalizeBackup(&s)
-	m.cfg.Settings = s
-	return m.saveLocked()
+	normalizeBackup(s)
 }
 
 // CleanAllowedHosts tidies and checks a Settings.AllowedHosts list on its way
@@ -713,8 +752,36 @@ func (m *Manager) saveLocked() error {
 func (m *Manager) copyLocked() models.Config {
 	c := m.cfg
 	c.Trackers = copyTrackers(m.cfg.Trackers)
-	c.Settings.QUIEnabledInstances = append([]int(nil), m.cfg.Settings.QUIEnabledInstances...)
+	c.Settings = copySettings(m.cfg.Settings)
 	return c
+}
+
+// copySettings is a copy that shares no memory with s. Its slices and *bool
+// fields would otherwise alias the live config, so a caller editing its copy
+// (or json-decoding a patch onto it, which writes through a non-nil pointer)
+// would change the stored settings without the lock.
+func copySettings(s models.Settings) models.Settings {
+	s.AllowedHosts = slices.Clone(s.AllowedHosts)
+	s.QUIEnabledInstances = slices.Clone(s.QUIEnabledInstances)
+	s.PathwayFavorites = slices.Clone(s.PathwayFavorites)
+	s.PathwayNotInterested = slices.Clone(s.PathwayNotInterested)
+	if s.PathwayPins != nil {
+		pins := make([]models.PathwayPin, len(s.PathwayPins))
+		for i, p := range s.PathwayPins {
+			pins[i] = models.PathwayPin{Hops: slices.Clone(p.Hops)}
+		}
+		s.PathwayPins = pins
+	}
+	v := reflect.ValueOf(&s).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		if f.Kind() == reflect.Pointer && !f.IsNil() && f.CanSet() {
+			c := reflect.New(f.Type().Elem())
+			c.Elem().Set(f.Elem())
+			f.Set(c)
+		}
+	}
+	return s
 }
 
 func copyTrackers(in []models.Tracker) []models.Tracker {
