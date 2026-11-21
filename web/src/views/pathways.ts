@@ -5,6 +5,7 @@
 // dataset is community-driven; the disclosure footer is REQUIRED and always
 // visible. Selection persists in localStorage.
 import * as api from '../api';
+import { toast } from '../components/toast';
 import { appSettings, trackers } from '../state';
 import { esc, fmtEtaDays, safeUrl } from '../utils/format';
 import { unavailEyeSvg } from '../utils/icons';
@@ -54,7 +55,12 @@ function togglePathwayList(name: string, which: 'fav' | 'hide') {
   }
   appSettings.pathway_favorites = [...favs].sort();
   appSettings.pathway_not_interested = [...hid].sort();
-  void api.saveSettings({ ...appSettings });
+  void api.patchSettings({
+    pathway_favorites: appSettings.pathway_favorites,
+    pathway_not_interested: appSettings.pathway_not_interested,
+  }).then(({ ok }) => {
+    if (!ok) toast('Could not save your pathway lists — reload to see what is stored', 'error');
+  });
   renderComboList(lastComboFilter); // reflect immediately, list stays open
 }
 

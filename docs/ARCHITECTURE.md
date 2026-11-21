@@ -165,6 +165,11 @@ A def with its own `api.path` always uses `custom`, whatever its type.
 
 A housekeeping loop prunes these on their retention windows every six hours.
 
+Settings are changed with `PATCH /api/settings`, which takes only the fields to change and applies
+them under one lock (`config.PatchSettings`); a full-object `PUT` is refused. Code that changes a few
+settings uses `PatchSettings` too, never "read `Settings()`, edit, `UpdateSettings`", which would put
+back anything changed in between.
+
 ## Frontend
 
 `web/src` is plain TypeScript built by Vite (`npm run build` in `web/`) into

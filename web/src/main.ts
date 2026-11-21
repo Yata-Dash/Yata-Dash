@@ -121,7 +121,7 @@ function dismissAuthNudge() {
  *  never returns (reversible from Settings → General → Account). */
 async function dontWarnLogin() {
   hideAuthNudgeEl();
-  const { ok } = await api.saveSettings({ ...state.appSettings, hide_login_warning: true });
+  const { ok } = await api.patchSettings({ hide_login_warning: true });
   if (ok) {
     state.setAppSettings({ ...state.appSettings, hide_login_warning: true });
     toast('Login-protection warning hidden. Re-enable it in Settings → General.', 'success');
@@ -133,7 +133,7 @@ async function dontWarnLogin() {
  *  means "warn me" (hide_login_warning=false). Reflects immediately on the
  *  dashboard banner when login is still unconfigured. */
 (window as any).setLoginWarnVisible = async (show: boolean) => {
-  const { ok } = await api.saveSettings({ ...state.appSettings, hide_login_warning: !show });
+  const { ok } = await api.patchSettings({ hide_login_warning: !show });
   if (!ok) return;
   state.setAppSettings({ ...state.appSettings, hide_login_warning: !show });
   sessionStore.remove('yata-nudge-dismissed'); // an explicit choice overrides a session dismiss
@@ -346,8 +346,7 @@ async function togglePrivacyQuick() {
   const next = !(state.appSettings.private_mode ?? false);
   applyPrivateMode(next); // instant feedback
   state.appSettings.private_mode = next;
-  // Persist. appSettings round-trips safely (QUI key is the mask sentinel).
-  const { ok } = await api.saveSettings({ ...state.appSettings, private_mode: next });
+  const { ok } = await api.patchSettings({ private_mode: next });
   if (!ok) {
     // Revert on failure so the UI never lies about what's stored.
     state.appSettings.private_mode = !next;

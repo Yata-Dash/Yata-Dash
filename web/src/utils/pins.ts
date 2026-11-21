@@ -52,7 +52,7 @@ async function doToggle(hops: string[]): Promise<boolean> {
   const before = pinList();
   const kept = before.filter(p => chainKey(p.hops) !== k && p.hops[p.hops.length - 1] !== dest);
   appSettings.pathway_pins = wasPinned ? kept : [...kept, { hops }];
-  const { ok } = await api.saveSettings({ ...appSettings });
+  const { ok } = await api.patchSettings({ pathway_pins: appSettings.pathway_pins });
   if (!ok) {
     // Put the list back exactly as it was, or the buttons would claim a pin
     // the server never heard about and the next reload would contradict them.

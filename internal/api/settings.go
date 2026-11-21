@@ -1,8 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -13,6 +17,7 @@ import (
 func registerSettings(r chi.Router, d *Deps) {
 	r.Get("/settings", getSettings(d))
 	r.Put("/settings", putSettings(d))
+	r.Patch("/settings", patchSettings(d))
 }
 
 // getSettings returns the settings with secrets masked. The QUI API key is
@@ -37,38 +42,64 @@ func maskSettings(s models.Settings) models.Settings {
 	return s
 }
 
-func putSettings(d *Deps) http.HandlerFunc {
+// putSettings refuses the old full-object write. A page that loaded settings
+// earlier would send every field back at the value it loaded, undoing changes
+// made since in another tab or by a restart with an edited config (#94). A
+// page still running the old script gets this and is told to reload.
+func putSettings(_ *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		jsonError(w, "settings_reload_required: this page is out of date, reload it to save settings", http.StatusConflict)
+	}
+}
+
+// patchSettings changes only the settings named in the body; everything else
+// keeps its current value, so two tabs editing different settings can't undo
+// each other. Read, change and save happen under one lock (PatchSettings).
+func patchSettings(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var s models.Settings
-		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
 			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		// Mask sentinel = "keep the stored key". Empty string clears it.
-		// With a new origin the mask clears it too: refreshQUI below would
-		// otherwise send the key to whatever host was typed.
-		stored := d.Cfg.Settings()
-		s.QUIAPIKey = resolveMaskedSecret(s.QUIAPIKey, stored.QUIAPIKey, s.QUIURL, stored.QUIURL)
-		s.ProwlarrAPIKey = resolveMaskedSecret(s.ProwlarrAPIKey, stored.ProwlarrAPIKey, s.ProwlarrURL, stored.ProwlarrURL)
-		s.JackettAdminPassword = resolveMaskedSecret(s.JackettAdminPassword, stored.JackettAdminPassword, s.JackettURL, stored.JackettURL)
-		// UpdateSettings re-checks this; doing it here too is what turns a bad
-		// hostname into a 400 with the reason rather than a 500.
-		cleaned, err := config.CleanAllowedHosts(s.AllowedHosts)
-		if err != nil {
-			jsonError(w, err.Error(), http.StatusBadRequest)
+		var present map[string]json.RawMessage
+		if err := json.Unmarshal(body, &present); err != nil || present == nil {
+			jsonError(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
-		s.AllowedHosts = cleaned
-		if err := d.Cfg.UpdateSettings(s); err != nil {
+		stored, ns, err := d.Cfg.PatchSettings(func(s *models.Settings) error {
+			prev := *s
+			dec := json.NewDecoder(bytes.NewReader(body))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(s); err != nil {
+				return err
+			}
+			// A secret left out of the patch counts as the mask ("keep it"),
+			// so moving qui/Prowlarr/Jackett to another host still clears it.
+			secret := func(key, sent, kept, newURL, oldURL string) string {
+				if _, ok := present[key]; !ok {
+					sent = maskedKey
+				}
+				return resolveMaskedSecret(sent, kept, newURL, oldURL)
+			}
+			s.QUIAPIKey = secret("qui_api_key", s.QUIAPIKey, prev.QUIAPIKey, s.QUIURL, prev.QUIURL)
+			s.ProwlarrAPIKey = secret("prowlarr_api_key", s.ProwlarrAPIKey, prev.ProwlarrAPIKey, s.ProwlarrURL, prev.ProwlarrURL)
+			s.JackettAdminPassword = secret("jackett_admin_password", s.JackettAdminPassword, prev.JackettAdminPassword, s.JackettURL, prev.JackettURL)
+			return nil
+		})
+		if errors.Is(err, config.ErrInvalidSettings) {
+			jsonError(w, strings.TrimPrefix(err.Error(), config.ErrInvalidSettings.Error()+": "), http.StatusBadRequest)
+			return
+		}
+		if err != nil {
 			jsonError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// Debug, not info — auto-save PUTs on every toggled setting.
+		// Debug, not info — auto-save writes on every toggled setting.
 		d.logDebugf("settings: saved")
 		// Seedsize mode switched on (or its qui config changed): populate the
 		// qui layers now instead of waiting up to a refresh cycle. Async —
 		// settings saves must not block on a qui round-trip.
-		ns := d.Cfg.Settings()
 		quiChanged := ns.QUIURL != stored.QUIURL || ns.QUIAPIKey != stored.QUIAPIKey
 		seedTurnedOn := ns.QUISeedsizeMode != "off" && (ns.QUISeedsizeMode != stored.QUISeedsizeMode || quiChanged)
 		alertsTurnedOn := ns.QUIAlertsEnabled && (!stored.QUIAlertsEnabled || quiChanged)
@@ -80,6 +111,6 @@ func putSettings(d *Deps) http.HandlerFunc {
 		if stored.QUIAlertsEnabled && !ns.QUIAlertsEnabled {
 			go clearQUIProblemCounts(d)
 		}
-		jsonOK(w, maskSettings(d.Cfg.Settings()))
+		jsonOK(w, maskSettings(ns))
 	}
 }

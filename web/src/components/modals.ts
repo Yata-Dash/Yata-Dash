@@ -2827,7 +2827,7 @@ export async function toggleAutoUpdate(): Promise<void> {
   const cb = document.getElementById('s-update-auto') as HTMLInputElement | null;
   const on = cb?.checked ?? false;
   appSettings.update_check_auto = on;
-  const { ok } = await api.saveSettings({ ...appSettings, update_check_auto: on });
+  const { ok } = await api.patchSettings({ update_check_auto: on });
   if (ok) {
     _sd.toast(on ? 'Daily update check on' : 'Daily update check off', 'success');
   } else {
@@ -2918,7 +2918,7 @@ export async function removeAllowedHost(host: string): Promise<void> {
 async function commitAllowedHosts(hosts: string[]): Promise<boolean> {
   if (!_sd) return false;
   const previous = appSettings.allowed_hosts ?? [];
-  const { ok, data } = await api.saveSettings({ ...appSettings, allowed_hosts: hosts });
+  const { ok, data } = await api.patchSettings({ allowed_hosts: hosts });
   if (ok) {
     appSettings.allowed_hosts = hosts;
     renderAllowedHosts();
@@ -2938,7 +2938,7 @@ export async function toggleTrustProxy(): Promise<void> {
   const cb = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
   const on = cb?.checked ?? false;
   appSettings.trust_proxy_headers = on;
-  const { ok } = await api.saveSettings({ ...appSettings, trust_proxy_headers: on });
+  const { ok } = await api.patchSettings({ trust_proxy_headers: on });
   if (ok) {
     _sd.toast(on ? 'Proxy headers trusted' : 'Proxy headers ignored', 'success');
   } else {
@@ -3100,6 +3100,9 @@ export function openSettingsPage(settings: AppSettings, _meta: unknown[], deps: 
   // an inline fallback in index.html and registered on window by the bundle).
   (window as unknown as { _applyScrapeLockouts?: () => void })._applyScrapeLockouts?.();
 
+  // What the form showed when it opened: saves send only what differs.
+  _formBaseline = { ...readSettingsForm(), qui_enabled_instances: [...(settings.qui_enabled_instances ?? [])].sort((a, b) => a - b) };
+
   setTimeout(() => deps.renderQUIInstanceChecklist(), 80);
 }
 
@@ -3257,10 +3260,8 @@ export function wireSettingsAutoSave(): void {
   }
 }
 
-export async function saveSettings(deps: SettingsDeps) {
-  const btn = document.getElementById('s-save-btn') as HTMLButtonElement | null;
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
-
+/** Every setting the form controls, as currently shown. */
+function readSettingsForm(): Partial<AppSettings> {
   const enabledIds: number[] = [];
   document.querySelectorAll<HTMLInputElement>('.qui-inst-toggle:checked')
     .forEach(cb => enabledIds.push(parseInt(cb.value)));
@@ -3275,13 +3276,9 @@ export async function saveSettings(deps: SettingsDeps) {
   // replaces it, and an EMPTY field clears it. Send the field value as-is.
   const quiKey = (document.getElementById('s-qui-key') as HTMLInputElement).value.trim();
 
-  // PUT /api/settings is a FULL REPLACE — start from the current settings so
-  // nothing gets zeroed, then overlay every form value.
-  const payload: AppSettings = {
-    ...appSettings,
+  const form: Partial<AppSettings> = {
     qui_url:               (document.getElementById('s-qui-url') as HTMLInputElement).value.trim(),
     qui_api_key:           quiKey,
-    qui_enabled_instances: enabledIds,
     qui_bars_visible:      isOn('s-qui-bars-track', true),
     qui_seedsize_mode:     ((document.getElementById('s-qui-seedsize-mode') as HTMLSelectElement)?.value ?? 'off') as AppSettings['qui_seedsize_mode'],
     qui_alerts_enabled:    isOn('s-qui-alerts-track', false),
@@ -3317,20 +3314,52 @@ export async function saveSettings(deps: SettingsDeps) {
     max_scrapes_per_day:     Math.max(0, parseInt((document.getElementById('s-max-scrapes') as HTMLInputElement | null)?.value ?? '0', 10) || 0),
     refresh_interval_minutes: Math.max(15, parseInt((document.getElementById('s-refresh-interval') as HTMLInputElement | null)?.value ?? '30', 10) || 30),
     qui_refresh_seconds:      Math.max(1,  parseInt((document.getElementById('s-qui-refresh') as HTMLInputElement | null)?.value ?? '10', 10) || 10),
-    // Must be included: this PUT replaces the whole settings object, so
-    // omitting it would clear the list every time any other setting is
-    // saved — locking the user out of their own domain from a distance.
     allowed_hosts:            readAllowedHostsField(),
   };
+  // The instance list is drawn after a qui round trip; until it is on screen
+  // there is nothing to read, and reading [] would switch every instance off.
+  if (document.querySelector('.qui-inst-toggle')) form.qui_enabled_instances = enabledIds.sort((a, b) => a - b);
+  return form;
+}
 
-  const { ok } = await api.saveSettings(payload);
+
+/** The form's values when it opened, advanced as saves land. A save sends
+ *  only the settings that differ from it, so a tab open since before another
+ *  tab (or a restart with an edited config) changed something can't put the
+ *  old value back (#94). */
+let _formBaseline: Partial<AppSettings> | null = null;
+/** Saves from this tab run one at a time, in order. */
+let _saveChain: Promise<void> = Promise.resolve();
+
+export function saveSettings(deps: SettingsDeps): Promise<void> {
+  _saveChain = _saveChain.then(() => saveSettingsNow(deps), () => saveSettingsNow(deps));
+  return _saveChain;
+}
+
+async function saveSettingsNow(deps: SettingsDeps) {
+  const btn = document.getElementById('s-save-btn') as HTMLButtonElement | null;
+  const form = readSettingsForm();
+  const base = _formBaseline ?? {};
+  const changes: Partial<AppSettings> = {};
+  for (const [k, v] of Object.entries(form)) {
+    if (JSON.stringify(v) !== JSON.stringify((base as Record<string, unknown>)[k])) {
+      (changes as Record<string, unknown>)[k] = v;
+    }
+  }
+  if (!Object.keys(changes).length) return;
+  const quiKey = form.qui_api_key ?? '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  const { ok, data } = await api.patchSettings(changes);
   if (btn) { btn.disabled = false; btn.textContent = 'Save Settings'; }
   if (ok) {
+    _formBaseline = { ...base, ...changes };
     deps.toast('Settings saved', 'success');
     await deps.loadSettings();
     // Re-sync the key field with the (re)masked value so a second save
     // round-trips safely instead of wiping the stored key.
     setVal('s-qui-key', appSettings.qui_api_key ?? '');
+    if (_formBaseline) _formBaseline.qui_api_key = appSettings.qui_api_key ?? '';
     setPlaceholder('s-qui-key', appSettings.qui_api_key ? `${MASKED_KEY} = keep current key` : 'Your qui API key');
     // A move to another host cleared the masked key; say so, it's easy to miss.
     if (quiKey === MASKED_KEY && !appSettings.qui_api_key) {
@@ -3346,7 +3375,7 @@ export async function saveSettings(deps: SettingsDeps) {
     // Full-page settings: stay on the page — the toast is the confirmation.
     await deps.refreshQuiStatsWrapper();
   } else {
-    deps.toast('Failed to save settings', 'error');
+    deps.toast((data as { error?: string } | null)?.error ?? 'Failed to save settings', 'error');
   }
 }
 

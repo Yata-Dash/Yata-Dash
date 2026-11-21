@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/Yata-Dash/Yata-Dash/internal/models"
 	"github.com/Yata-Dash/Yata-Dash/internal/netguard"
 )
 
@@ -37,10 +38,10 @@ type prowlarrIndexer struct {
 	HasAPIKey     bool   `json:"has_api_key"`
 	APIKey        string `json:"api_key,omitempty"`
 	SessionCookie string `json:"session_cookie,omitempty"`
-	DefKey        string `json:"def_key"`       // matched Yata def ("" = manual)
+	DefKey        string `json:"def_key"`                // matched Yata def ("" = manual)
 	DefApproval   string `json:"def_approval,omitempty"` // approval status of the matched def
-	AlreadyAdded  bool   `json:"already_added"` // URL matches an existing tracker
-	Enabled       bool   `json:"enabled"`       // enabled in Prowlarr
+	AlreadyAdded  bool   `json:"already_added"`          // URL matches an existing tracker
+	Enabled       bool   `json:"enabled"`                // enabled in Prowlarr
 }
 
 // Prowlarr and Jackett are companion apps, normally on localhost or the same
@@ -175,9 +176,12 @@ func prowlarrIndexers(d *Deps) http.HandlerFunc {
 		// The fetch worked — remember the connection so it survives restarts
 		// and the section comes prefilled next time.
 		if stored.ProwlarrURL != req.URL || stored.ProwlarrAPIKey != req.APIKey {
-			s := d.Cfg.Settings()
-			s.ProwlarrURL, s.ProwlarrAPIKey = req.URL, req.APIKey
-			if err := d.Cfg.UpdateSettings(s); err != nil {
+			// Only these two fields, in one locked step: replacing the whole
+			// object read before the fetch would undo settings saved meanwhile.
+			if _, _, err := d.Cfg.PatchSettings(func(s *models.Settings) error {
+				s.ProwlarrURL, s.ProwlarrAPIKey = req.URL, req.APIKey
+				return nil
+			}); err != nil {
 				d.logWarnf("prowlarr: could not save connection settings: %v", err)
 			}
 		}

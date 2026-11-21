@@ -218,7 +218,7 @@ func TestTrackerCreateKeepsItsCredentials(t *testing.T) {
 func putSettingsJSON(t *testing.T, router http.Handler, s models.Settings) models.Settings {
 	t.Helper()
 	b, _ := json.Marshal(s)
-	req := httptest.NewRequest(http.MethodPut, "/api/settings", bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPatch, "/api/settings", bytes.NewReader(b))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

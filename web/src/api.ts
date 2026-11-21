@@ -279,9 +279,12 @@ export const fetchVersion = () => call<{ version: string }>('/api/version');
 export const fetchUpdateStatus = () => call<UpdateStatus>('/api/updates');
 export const runUpdateCheck = () => call<UpdateStatus>('/api/updates/check', { method: 'POST' });
 
-/** PUT /api/settings is a FULL REPLACE — always send the complete object. */
-export const saveSettings = (payload: AppSettings) =>
-  call<AppSettings>('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+/** PATCH /api/settings changes only the fields sent and returns the full,
+ *  masked settings. Send just what this action changed: a whole object built
+ *  from a copy loaded earlier would put back anything another tab changed
+ *  since (#94). Leaving out a secret means "keep it" (same origin only). */
+export const patchSettings = (changes: Partial<AppSettings>) =>
+  call<AppSettings>('/api/settings', { method: 'PATCH', body: JSON.stringify(changes) });
 
 // ── Tracker definitions ───────────────────────────────────────────────────
 
