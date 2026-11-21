@@ -61,7 +61,9 @@ func TestTrackerLabelFallbacks(t *testing.T) {
 		{"blank name uses the def", models.Tracker{ID: "a", Name: " \t ", URL: "https://named.example/"}, "Example Tracker"},
 		{"no def uses the host", models.Tracker{ID: "a", URL: "https://bob:pw@other.example:8443/secret?k=v#f"}, "other.example"},
 		{"bare host", models.Tracker{ID: "a", URL: "other.example"}, "other.example"},
+		{"a name that is just the URL uses the host", models.Tracker{ID: "a", Name: "https://other.example/x", URL: "https://other.example/x/"}, "other.example"},
 		{"no URL uses the ID", models.Tracker{ID: "a"}, "a"},
+		{"the ID is cleaned too", models.Tracker{ID: "a\nb"}, "a b"},
 		{"nothing at all", models.Tracker{}, "unknown tracker"},
 		{"control characters can't break the line", models.Tracker{ID: "a", Name: "Mi\nne\x1b"}, "Mi ne"},
 	}

@@ -13,7 +13,9 @@ import (
 // (toView does the same), so printing t.Name alone gave "fetch:  (id) failed".
 // Control characters become spaces so a name can't start a new log line.
 func trackerLabel(d *Deps, t models.Tracker) string {
-	if n := cleanLabel(t.Name); n != "" {
+	// Creating a tracker with no name and no matching def stores its URL as
+	// the name; the host reads better and carries no path.
+	if n := cleanLabel(t.Name); n != "" && !sameURL(n, t.URL) {
 		return n
 	}
 	if d != nil && d.Reg != nil {
@@ -26,10 +28,15 @@ func trackerLabel(d *Deps, t models.Tracker) string {
 	if h := hostOfURL(strings.TrimSpace(t.URL)); h != "" {
 		return h
 	}
-	if t.ID != "" {
-		return t.ID
+	if id := cleanLabel(t.ID); id != "" {
+		return id
 	}
 	return "unknown tracker"
+}
+
+func sameURL(name, rawURL string) bool {
+	u := strings.TrimRight(strings.TrimSpace(rawURL), "/")
+	return u != "" && strings.EqualFold(strings.TrimRight(name, "/"), u)
 }
 
 // labelled returns a copy of t whose Name is its trackerLabel, for handing to
