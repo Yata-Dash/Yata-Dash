@@ -13,6 +13,7 @@ package scrape
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -52,6 +53,11 @@ type Spec struct {
 	// PresenceFlags detect boolean header states (unread mail/notifications)
 	// by element presence — zero extra requests, the header is in the page.
 	PresenceFlags map[string]defs.PresenceFlag
+	// GroupTitleClass reads the group from the title of a link with this class
+	// that points at Username's own profile (see defs.ScrapeSpec).
+	GroupTitleClass string
+	// Username is the scraped account; Profile fills it from the tracker.
+	Username string
 	// Identify is the def-resolved traffic-identification mode ("ua" default,
 	// "header", "none") — see internal/ident.
 	Identify string
@@ -224,7 +230,47 @@ func ExtractFromHTML(rawHTML string, spec Spec) map[string]string {
 		result["seed_size"] = parse.NormalizeSeedSize(v)
 	}
 	extractPresenceFlags(rawHTML, spec.PresenceFlags, result)
+	extractGroupTitle(rawHTML, spec.GroupTitleClass, spec.Username, result)
 	return result
+}
+
+// extractGroupTitle sets "group" from the title attribute of the first link
+// with class cls whose href ends in the user's own profile segment
+// (".../users/alice"). Without a username there is no way to tell the user's
+// link from anyone else's, so nothing is set.
+func extractGroupTitle(rawHTML, cls, username string, result map[string]string) {
+	username = strings.TrimSpace(username)
+	if cls == "" || username == "" || result["group"] != "" {
+		return
+	}
+	doc, err := html.Parse(strings.NewReader(rawHTML))
+	if err != nil {
+		return
+	}
+	walkNodes(doc, func(n *html.Node) {
+		if result["group"] != "" || n.Type != html.ElementNode || n.Data != "a" || !hasClass(n, cls) {
+			return
+		}
+		title := collapseSpace(strings.TrimSpace(attr(n, "title")))
+		if title == "" || !linksToUser(attr(n, "href"), username) {
+			return
+		}
+		result["group"] = title
+	})
+}
+
+// linksToUser reports whether href's last path segment is the username.
+func linksToUser(href, username string) bool {
+	u, err := url.Parse(href)
+	if err != nil {
+		return false
+	}
+	p := strings.TrimRight(u.Path, "/")
+	seg := p[strings.LastIndex(p, "/")+1:]
+	if dec, err := url.PathUnescape(seg); err == nil {
+		seg = dec
+	}
+	return seg != "" && strings.EqualFold(seg, username)
 }
 
 // extractPresenceFlags detects boolean page states by element presence: for
@@ -284,6 +330,9 @@ func hasDescendantElement(n *html.Node, name string) bool {
 func Profile(t models.Tracker, spec Spec) (map[string]string, *Error) {
 	if strings.TrimSpace(t.Username) == "" {
 		return nil, serr(http.StatusBadRequest, "no_username")
+	}
+	if spec.Username == "" {
+		spec.Username = t.Username
 	}
 	// Defence in depth: the policy layer blocks cookie-less scrapes, but
 	// guard here too — an unauthenticated request gets the login page and

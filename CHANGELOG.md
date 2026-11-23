@@ -8,6 +8,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Added
 
+- **Group from the profile page:** a definition's new `scrape.group_title_class` reads the user's class from their own username link, so trackers without a stats API can show rank progress.
 - **Nightbloom** (API only, approval pending); its seeding classes can't be tracked until the API reports seed size and seed time.
 
 ### Security

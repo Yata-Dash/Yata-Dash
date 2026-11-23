@@ -175,6 +175,14 @@ type ScrapeSpec struct {
 	// the profile HTML we already fetch, so these cost zero extra requests.
 	PresenceFlags map[string]PresenceFlag `json:"presence_flags,omitempty"`
 
+	// GroupTitleClass reads the user's group from the title attribute of a
+	// link with this CSS class. UNIT3D renders a username as
+	// <a class="user-tag__link" href=".../users/alice" title="Power User">,
+	// so a tracker without a stats API still reports its class from the
+	// profile page. Only a link to the scraped user's own profile counts:
+	// other users named on the page (comments, staff lists) are ignored.
+	GroupTitleClass string `json:"group_title_class,omitempty"`
+
 	// Identify controls how Yata identifies itself in ALL requests to this
 	// tracker (API fetches and scrapes) so staff can monitor the traffic:
 	//   "ua" (default) — browser UA with a "Yata/<version>" suffix

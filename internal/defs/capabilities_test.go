@@ -290,3 +290,20 @@ func TestEventListDerivesEventsCapability(t *testing.T) {
 		t.Errorf("active_events derived with no event_list: %v", got)
 	}
 }
+
+// TestScrapeCapabilityGroupTitle: a def that reads the group from the
+// username link reports group as a scrape stat, and the class survives the
+// type → tracker merge.
+func TestScrapeCapabilityGroupTitle(t *testing.T) {
+	typeJSON := `{"schema_version":1,"key":"fam","label":"Family","api":{"kind":"none"}}`
+	reg := capsRegistry(t, typeJSON,
+		`{"schema_version":1,"key":"t","name":"T","url":"https://t.example","type":"fam",
+		  "scrape":{"group_title_class":"user-tag__link"}}`)
+	if got := reg.ResolveScrape("https://t.example", "").GroupTitleClass; got != "user-tag__link" {
+		t.Errorf("resolved group_title_class = %q", got)
+	}
+	caps := reg.ResolveCapabilities("https://t.example", "")
+	if !sortedContains(caps.ScrapeStats, "group") {
+		t.Errorf("scrape stats = %v, want group included", caps.ScrapeStats)
+	}
+}

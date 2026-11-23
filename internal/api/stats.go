@@ -715,6 +715,7 @@ func tryScrapeFallback(d *Deps, t models.Tracker) {
 		EventTitleClass: rs.EventTitleClass,
 		StatCardClasses: rs.StatCardClasses,
 		PresenceFlags:   rs.PresenceFlags,
+		GroupTitleClass: rs.GroupTitleClass,
 		Identify:        rs.Identify,
 		Gazelle:         d.Reg.TypeKeyFor(t.URL, t.Type) == gazelleANTNEBType,
 		KnownUserID:     mergedString(d, t.ID, "user_id"),
