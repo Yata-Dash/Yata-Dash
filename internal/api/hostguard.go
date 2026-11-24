@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // The attack this exists for:
@@ -99,7 +100,59 @@ func allowedHostsFor(d *Deps) []string {
 // hostWarned keeps the rejection log to one line per unknown hostname. A
 // rebinding attempt retries in a loop, and a misconfigured proxy sends every
 // request under the same name — neither is worth thousands of identical lines.
-var hostWarned sync.Map
+//
+// It is filled before anyone signs in, from a header the client chooses, so it
+// is bounded: at most hostWarnCap names, each forgotten after hostWarnTTL, and
+// once full a single summary line per hostWarnTTL instead of one per name.
+var hostWarned = &hostWarnings{seen: map[string]time.Time{}}
+
+const (
+	hostWarnCap = 256
+	hostWarnTTL = time.Hour
+	// hostShownMax caps how much of a refused Host is logged or echoed back.
+	hostShownMax = 100
+)
+
+type hostWarnings struct {
+	mu      sync.Mutex
+	seen    map[string]time.Time
+	floodAt time.Time
+}
+
+// check reports whether to log this host now (logHost), or instead the one
+// summary line for a flood of distinct names (logFlood).
+func (h *hostWarnings) check(host string, now time.Time) (logHost, logFlood bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if at, ok := h.seen[host]; ok && now.Sub(at) < hostWarnTTL {
+		return false, false
+	}
+	if len(h.seen) >= hostWarnCap {
+		for k, at := range h.seen {
+			if now.Sub(at) >= hostWarnTTL {
+				delete(h.seen, k)
+			}
+		}
+	}
+	if len(h.seen) >= hostWarnCap {
+		if now.Sub(h.floodAt) >= hostWarnTTL {
+			h.floodAt = now
+			return false, true
+		}
+		return false, false
+	}
+	h.seen[host] = now
+	return true, false
+}
+
+// shownHost is the refused Host as logged and echoed: trimmed to a length a
+// person can read, since the client picks it.
+func shownHost(host string) string {
+	if len(host) <= hostShownMax {
+		return host
+	}
+	return strings.ToValidUTF8(host[:hostShownMax], "") + "…"
+}
 
 // hostGuard rejects requests whose Host is a name Yata was not told to answer
 // to. It runs before everything, including the static assets: they are not
@@ -112,8 +165,14 @@ func hostGuard(d *Deps) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			host := hostOnly(r.Host)
-			if _, seen := hostWarned.LoadOrStore(host, true); !seen {
+			host := shownHost(hostOnly(r.Host))
+			logHost, logFlood := hostWarned.check(host, time.Now())
+			if logFlood {
+				d.logWarnf("security: refusing requests for many different hostnames (over %d in the "+
+					"last hour); not logging each one. If this is unexpected, something is probing "+
+					"this instance.", hostWarnCap)
+			}
+			if logHost {
 				d.logWarnf("security: refused a request for host %q — if this is your own "+
 					"reverse proxy or hostname, add it in Settings → Network, or with "+
 					"YATA_ALLOWED_HOSTS=%s (Docker), \"allowed_hosts\": [%q] in config.json's "+
