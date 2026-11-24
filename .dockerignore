@@ -1,6 +1,7 @@
 # Keep in step with .gitignore: anything that must never be committed must
 # never reach an image or the build context either. Unlike .gitignore, a
-# bare pattern here matches only at the root, hence the **/ on secrets.
+# bare pattern here matches only at the root, hence the **/ on secrets and
+# on every folder .gitignore excludes at any depth.
 .git/
 *.md
 
@@ -12,10 +13,10 @@ static/dashboard.js
 web/dist/
 dist/
 web/node_modules/
-.claude/
-.vscode/
-.idea/
-old/
+**/.claude/
+**/.vscode/
+**/.idea/
+**/old/
 
 # User data and credentials
 **/config.json
@@ -23,12 +24,12 @@ old/
 **/*.db-wal
 **/*.db-shm
 **/yata.db*
-data/
+**/data/
 .env
 .env.*
 **/.env
 **/.env.*
-backups/
+**/backups/
 
 # Local test instance and local-only tools
 test/
@@ -41,7 +42,7 @@ tools/local/
 **/yata.log.*
 
 # Saved tracker pages (personal profile data)
-reference/
+**/reference/
 
 # Self-hosted Font Awesome (e.g. Pro): licensed, must not ship in an image
 static/fontawesome/
