@@ -89,11 +89,18 @@ func (d *DB) SetTOTPSecret(secret string, enabled bool) error {
 	return err
 }
 
-// SetTOTPLastStep records the most recently consumed time step, so a code
-// observed in transit can't be replayed for the rest of its 30-second window.
-func (d *DB) SetTOTPLastStep(step int64) error {
-	_, err := d.sql.Exec(`UPDATE auth SET totp_last_step = ? WHERE id = 1`, step)
-	return err
+// ConsumeTOTPStep spends a time step, so a code observed in transit can't be
+// replayed for the rest of its 30-second window. It reports false when that
+// step (or a later one) was already spent: the check and the write are one
+// statement, so two logins racing with the same code can't both succeed.
+func (d *DB) ConsumeTOTPStep(step int64) (bool, error) {
+	res, err := d.sql.Exec(
+		`UPDATE auth SET totp_last_step = ? WHERE id = 1 AND totp_last_step < ?`, step, step)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // DisableTOTP clears 2FA entirely, including any unused recovery codes.

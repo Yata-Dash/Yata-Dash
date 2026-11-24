@@ -520,8 +520,10 @@ func consumeSecondFactor(d *Deps, u store.User, code string, now time.Time) (ok,
 	if !valid {
 		return false, false, nil
 	}
-	// Burn the step so the same code can't be replayed within its window.
-	return true, false, d.DB.SetTOTPLastStep(step)
+	// Spend the step so the same code can't be replayed within its window. The
+	// check above read a snapshot; this is the one that decides.
+	spent, err := d.DB.ConsumeTOTPStep(step)
+	return spent, false, err
 }
 
 // upgradeStoredHash re-hashes the password when the stored hash predates the

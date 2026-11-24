@@ -114,7 +114,7 @@ func totpEnable(d *Deps) http.HandlerFunc {
 		}
 		// The enrolment code counts as spent, so it can't immediately be
 		// replayed against the login form.
-		_ = d.DB.SetTOTPLastStep(step)
+		_, _ = d.DB.ConsumeTOTPStep(step)
 		// Security: other sessions got in on the password alone (possibly
 		// leaked), so sign them out; keep the caller's, which proved the factor.
 		var current string
