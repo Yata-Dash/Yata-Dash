@@ -2215,6 +2215,44 @@ func TestFetchUnit3DEnvelopeOnExtendedEndpoint(t *testing.T) {
 	}
 }
 
+// An event list arriving from the extended endpoint gets the same validation
+// and cap as one from /api/user; it used to be merged in after the check (QV-03).
+func TestEventsFromExtendedEndpointAreValidated(t *testing.T) {
+	freezeNow(t, "2026-09-15T12:00:00Z")
+	var events strings.Builder
+	events.WriteString(`{"name":"Bad","status":"live","ends_at":"\"><b>x</b>"}`)
+	for range maxActiveEvents + 5 {
+		events.WriteString(`,{"name":"e","status":"upcoming"}`)
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/user":
+			fmt.Fprint(w, `{"username":"alice","group":"User"}`)
+		case "/api/user/stats":
+			fmt.Fprint(w, `{"active_events":[`+events.String()+`]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	c := NewClient(unit3dExtendedRegistry(t, ts.URL), "")
+	data, ferr := c.Fetch(models.Tracker{URL: ts.URL, Type: "unit3d", APIKey: "sekrit"})
+	if ferr != nil {
+		t.Fatalf("Fetch: %v", ferr)
+	}
+	evs, _ := data["active_events"].([]any)
+	if len(evs) != maxActiveEvents {
+		t.Fatalf("kept %d events from the extended endpoint, want the cap %d", len(evs), maxActiveEvents)
+	}
+	if _, present := evs[0].(map[string]any)["ends_at"]; present {
+		t.Errorf("an unparsable ends_at from the extended endpoint survived: %#v", evs[0])
+	}
+	if data["active_event"] != "Bad" {
+		t.Errorf("active_event = %#v, want the live event's name derived after the merge", data["active_event"])
+	}
+}
+
 // TestFetchUnit3DExtendedAPIKeyNeverPersisted is the regression test for the
 // leak: mergeExtended copies every key the core response lacks, so sanitising
 // only the core response made an extended api_key MORE likely to be stored —
