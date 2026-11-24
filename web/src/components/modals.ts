@@ -367,6 +367,10 @@ export function checkTrackerOptOut(): void {
 
 /** URL the open Edit panel's tracker is saved with ("" in Add mode). */
 let _editStoredUrl = '';
+/** Whether the open edit form showed a stored session cookie (the mask). An
+ *  emptied field then means "remove it"; a field that was empty and still is
+ *  says nothing, so a stale form can't clear a cookie added since it opened. */
+let _editCookieStored = false;
 
 /** Warn that moving the tracker to another host drops its saved key and
  *  cookie (the server won't carry them to a new origin). */
@@ -1352,6 +1356,7 @@ export function openEditModal(
   setPlaceholder('modal-key', t.has_key ? `${MASKED_KEY} = keep current key` : 'Your API token');
 
   setVal('modal-session-cookie', t.has_session ? MASKED_KEY : '');
+  _editCookieStored = !!t.has_session;
   setPlaceholder('modal-session-cookie',
     t.has_session ? `${MASKED_KEY} = keep current cookie` : 'Paste cookie string from browser DevTools');
   // Best-effort default before defs are confirmed loaded: visible unless
@@ -1755,7 +1760,7 @@ function remaskSecrets(saved?: Tracker): void {
     if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
     else if (el.value) el.value = MASKED_KEY;
   }
-  if (saved) _editStoredUrl = saved.url;
+  if (saved) { _editStoredUrl = saved.url; _editCookieStored = !!saved.has_session; }
   checkUrlCredentialHint();
 }
 
@@ -1853,7 +1858,8 @@ export async function saveTracker(deps: ModalDeps) {
     name, url, enabled: _modalEnabled,
     api_key:  getVal('modal-key'),        // MASKED_KEY sentinel = unchanged
     username: getVal('modal-username'),
-    ...(cookieVal ? { session_cookie: cookieVal } : {}),
+    // MASKED_KEY = unchanged; '' clears, but only a cookie this form showed.
+    ...(cookieVal || (!isNew && _editCookieStored) ? { session_cookie: cookieVal } : {}),
     min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
     ...(targets !== undefined ? { targets } : {}),
     target_group: chosenGroup,

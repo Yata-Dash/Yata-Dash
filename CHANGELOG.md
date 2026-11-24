@@ -35,6 +35,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 ### Fixed
 
 - **Settings saved on their own** (hostnames, the update check, proxy headers, private mode) are no longer resent by a later save of something else, which could undo another tab's change (#94).
+- **A tracker's session cookie can be removed again**: emptying the field and saving now clears it, instead of reporting success and keeping it.
 - **Trackers without a custom name are named in logs, alerts and the digest**
   by their definition's name (or host), instead of a blank (#95).
 - **Saving settings from an older tab no longer reverts changes made since.**
