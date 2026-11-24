@@ -141,7 +141,10 @@ func (h *hostWarnings) check(host string, now time.Time) (logHost, logFlood bool
 		}
 		return false, false
 	}
-	h.seen[host] = now
+	// A copy, not the caller's string: hostOnly and shownHost return slices of
+	// r.Host, so storing one would keep the whole header (up to ~1 MB, e.g. a
+	// huge port after a short name) alive for as long as the entry lives.
+	h.seen[strings.Clone(host)] = now
 	return true, false
 }
 

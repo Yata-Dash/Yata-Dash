@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/config"
 )
@@ -291,5 +292,24 @@ func TestRefusedHostIsTrimmedInTheReply(t *testing.T) {
 	}
 	if got := shownHost(long); len(got) > hostShownMax+len("…") {
 		t.Errorf("shownHost kept %d bytes", len(got))
+	}
+}
+
+// The remembered key must not share memory with the request's Host: a short
+// name before a huge port would otherwise pin the whole header (QV-01).
+func TestRefusedHostKeyDoesNotPinTheHeader(t *testing.T) {
+	h := &hostWarnings{seen: map[string]time.Time{}}
+	raw := "a:" + strings.Repeat("1", 1<<20)
+	host := shownHost(hostOnly(raw))
+	if host != "a" {
+		t.Fatalf("host = %q, want a", host)
+	}
+	if lh, _ := h.check(host, time.Now()); !lh {
+		t.Fatal("first sighting was not logged")
+	}
+	for k := range h.seen {
+		if unsafe.StringData(k) == unsafe.StringData(host) {
+			t.Fatal("the stored key shares the request header's memory")
+		}
 	}
 }
