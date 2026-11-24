@@ -47,16 +47,16 @@ func TestPasswordPolicy(t *testing.T) {
 	router := NewRouter(d)
 
 	short := strings.Repeat("a", minPasswordLen-1)
-	if code, body, _ := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: short}, nil); code != http.StatusBadRequest || body["error"] != "password_too_short" {
+	if code, body, _ := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: short}, nil); code != http.StatusBadRequest || body["error"] != "password_too_short" {
 		t.Fatalf("an %d-character password should be refused, got %d %v", len(short), code, body["error"])
 	}
 	long := strings.Repeat("a", maxPasswordLen+1)
-	if code, body, _ := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: long}, nil); code != http.StatusBadRequest || body["error"] != "password_too_long" {
+	if code, body, _ := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: long}, nil); code != http.StatusBadRequest || body["error"] != "password_too_long" {
 		t.Fatalf("a %d-character password should be refused (bcrypt truncates at %d), got %d %v",
 			len(long), maxPasswordLen, code, body["error"])
 	}
 	ok := strings.Repeat("a", minPasswordLen)
-	code, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: ok}, nil)
+	code, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: ok}, nil)
 	if code != http.StatusOK {
 		t.Fatalf("a %d-character password should be accepted, got %d", minPasswordLen, code)
 	}
@@ -86,14 +86,14 @@ func TestGrandfatheredPasswordIsFlagged(t *testing.T) {
 	// Simulate an old account: an eight-character password at the old cost.
 	old := "hunter22"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(old), bcrypt.MinCost)
-	if err := d.DB.SetUser("mystery", string(hash)); err != nil {
+	if err := d.DB.SetUser("alice", string(hash)); err != nil {
 		t.Fatal(err)
 	}
 	if u, _, _ := d.DB.GetUser(); u.WeakPassword {
 		t.Fatal("the flag should start clear — nothing is known until a login")
 	}
 
-	code, _, cookie := authPost(t, router, "/api/auth/login", authCreds{Username: "mystery", Password: old}, nil)
+	code, _, cookie := authPost(t, router, "/api/auth/login", authCreds{Username: "alice", Password: old}, nil)
 	if code != http.StatusOK {
 		t.Fatalf("a grandfathered password must still sign in, got %d", code)
 	}
@@ -182,7 +182,7 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	router := NewRouter(d)
 	pw := strings.Repeat("a", minPasswordLen)
 
-	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: pw}, nil)
+	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: pw}, nil)
 
 	// A wrong code must not enable 2FA.
 	if _, _, c := authPost(t, router, "/api/auth/totp/start", authCreds{Password: pw}, cookie); c != nil {
@@ -202,7 +202,7 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 
 	// The password alone is no longer enough, and no session is issued.
 	resetTestLimiter()
-	code, body, noSession := authPost(t, router, "/api/auth/login", authCreds{Username: "mystery", Password: pw}, nil)
+	code, body, noSession := authPost(t, router, "/api/auth/login", authCreds{Username: "alice", Password: pw}, nil)
 	if code != http.StatusUnauthorized || body["error"] != "totp_required" {
 		t.Fatalf("password-only login: want 401 totp_required, got %d %v", code, body["error"])
 	}
@@ -211,7 +211,7 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	}
 	// A wrong second factor fails.
 	if code, body, _ := authPost(t, router, "/api/auth/login",
-		authCreds{Username: "mystery", Password: pw, Code: "000000"}, nil); code != http.StatusUnauthorized || body["error"] != "totp_invalid" {
+		authCreds{Username: "alice", Password: pw, Code: "000000"}, nil); code != http.StatusUnauthorized || body["error"] != "totp_invalid" {
 		t.Fatalf("wrong code: want 401 totp_invalid, got %d %v", code, body["error"])
 	}
 
@@ -220,7 +220,7 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	resetTestLimiter()
 	good := nextCode(t, secret)
 	code, _, session := authPost(t, router, "/api/auth/login",
-		authCreds{Username: "mystery", Password: pw, Code: good}, nil)
+		authCreds{Username: "alice", Password: pw, Code: good}, nil)
 	if code != http.StatusOK || session == nil {
 		t.Fatalf("login with a valid code: got %d (session %v)", code, session != nil)
 	}
@@ -228,14 +228,14 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	// The same code cannot be replayed, even though its window is still open.
 	resetTestLimiter()
 	if code, body, _ := authPost(t, router, "/api/auth/login",
-		authCreds{Username: "mystery", Password: pw, Code: good}, nil); code != http.StatusUnauthorized {
+		authCreds{Username: "alice", Password: pw, Code: good}, nil); code != http.StatusUnauthorized {
 		t.Fatalf("replayed code: want 401, got %d %v", code, body["error"])
 	}
 
 	// A recovery code works, exactly once.
 	resetTestLimiter()
 	code, _, session = authPost(t, router, "/api/auth/login",
-		authCreds{Username: "mystery", Password: pw, Code: recovery[0]}, nil)
+		authCreds{Username: "alice", Password: pw, Code: recovery[0]}, nil)
 	if code != http.StatusOK || session == nil {
 		t.Fatalf("recovery-code login: got %d", code)
 	}
@@ -244,7 +244,7 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	}
 	resetTestLimiter()
 	if code, _, _ := authPost(t, router, "/api/auth/login",
-		authCreds{Username: "mystery", Password: pw, Code: recovery[0]}, nil); code != http.StatusUnauthorized {
+		authCreds{Username: "alice", Password: pw, Code: recovery[0]}, nil); code != http.StatusUnauthorized {
 		t.Fatalf("a spent recovery code must not work twice, got %d", code)
 	}
 }
@@ -256,7 +256,7 @@ func TestTOTPDisableNeedsBothFactors(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
 	pw := strings.Repeat("a", minPasswordLen)
-	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: pw}, nil)
+	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: pw}, nil)
 	secret, _, cookie := enrol2FA(t, d, router, pw, cookie)
 
 	// Session + password but no code.
@@ -293,7 +293,7 @@ func TestAuthStatusHidesAccountDetail(t *testing.T) {
 	d := testDeps(t)
 	router := NewRouter(d)
 	pw := strings.Repeat("a", minPasswordLen)
-	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "mystery", Password: pw}, nil)
+	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: pw}, nil)
 	enrol2FA(t, d, router, pw, cookie)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
@@ -319,7 +319,7 @@ func quickAccount(t *testing.T, d *Deps, password string) *http.Cookie {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := d.DB.SetUser("mystery", string(hash)); err != nil {
+	if err := d.DB.SetUser("alice", string(hash)); err != nil {
 		t.Fatal(err)
 	}
 	return quickSession(t, d)
@@ -365,7 +365,7 @@ func TestPasswordCheckingEndpointsShareTheLockout(t *testing.T) {
 				t.Fatalf("right password while locked out: want 429, got %d", code)
 			}
 			if code, _, _ := authPost(t, router, "/api/auth/login",
-				authCreds{Username: "mystery", Password: pw}, nil); code != http.StatusTooManyRequests {
+				authCreds{Username: "alice", Password: pw}, nil); code != http.StatusTooManyRequests {
 				t.Fatalf("login after guessing at %s: want 429 — the lockout is not shared, got %d", path, code)
 			}
 			if u, ok, _ := d.DB.GetUser(); !ok || u.TOTPSecret != "" {

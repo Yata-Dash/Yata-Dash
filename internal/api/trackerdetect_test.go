@@ -10,7 +10,7 @@ import (
 // as a successful match — which is how a tracker ends up permanently mislabelled.
 func TestLooksLikeStats(t *testing.T) {
 	convincing := []map[string]any{
-		{"username": "mystery", "group": "PowerUser"},
+		{"username": "alice", "group": "PowerUser"},
 		{"uploaded": "5.00 TiB", "downloaded": "1.00 TiB"},
 		{"ratio": 5.0},
 		{"seeding": 42.0},
