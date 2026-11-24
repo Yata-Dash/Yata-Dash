@@ -2910,13 +2910,16 @@ export async function addAllowedHost(): Promise<void> {
     _sd?.toast('Already on the list', 'error');
     return;
   }
-  if (await commitAllowedHosts(merged)) input.value = '';
+  if (await commitAllowedHosts(list => {
+    const next = [...list];
+    for (const p of parts) if (!next.some(h => h.toLowerCase() === p)) next.push(p);
+    return next;
+  })) input.value = '';
   input.focus();
 }
 
 export async function removeAllowedHost(host: string): Promise<void> {
-  const current = appSettings.allowed_hosts ?? [];
-  await commitAllowedHosts(current.filter(h => h !== host));
+  await commitAllowedHosts(list => list.filter(h => h !== host));
 }
 
 /** Save a hostname list, redrawing from whatever actually stuck.
@@ -2924,19 +2927,19 @@ export async function removeAllowedHost(host: string): Promise<void> {
  *  Worth getting right: someone typing their domain here is usually doing it
  *  BEFORE they travel, and will not find out it failed until they are away
  *  from the machine. So a rejection has to be visible now, not silent. */
-async function commitAllowedHosts(hosts: string[]): Promise<boolean> {
+async function commitAllowedHosts(edit: (current: string[]) => string[]): Promise<boolean> {
   if (!_sd) return false;
-  const previous = appSettings.allowed_hosts ?? [];
-  const { ok, data } = await patchSettingsNow({ allowed_hosts: hosts });
+  // The edit is applied when this save's turn comes, to the list as the saves
+  // before it left it: removing a then b from [a, b] quickly must end at [].
+  const { ok, data } = await patchSettingsNow(() => ({ allowed_hosts: edit(appSettings.allowed_hosts ?? []) }));
+  const hosts = appSettings.allowed_hosts ?? [];
   if (ok) {
-    appSettings.allowed_hosts = hosts;
     renderAllowedHosts();
     _sd.toast(hosts.length
       ? `Yata will answer to ${hosts.join(', ')}`
       : 'Hostnames cleared — IP and localhost access still work', 'success');
     return true;
   }
-  appSettings.allowed_hosts = previous;
   renderAllowedHosts();
   _sd.toast((data as { error?: string })?.error ?? 'Could not save the hostname list', 'error');
   return false;
@@ -3350,10 +3353,19 @@ export function saveSettings(deps: SettingsDeps): Promise<void> {
 /** Save a few settings straight away (a toggle, the hostname list), queued
  *  behind this tab's form saves. On success they join the baseline, so a later
  *  save of something else doesn't resend them over another tab's change. */
-export function patchSettingsNow(changes: Partial<AppSettings>): ReturnType<typeof api.patchSettings> {
+export function patchSettingsNow(
+  changes: Partial<AppSettings> | (() => Partial<AppSettings>),
+): ReturnType<typeof api.patchSettings> {
   const run = async () => {
-    const res = await api.patchSettings(changes);
-    if (res.ok && _formBaseline) Object.assign(_formBaseline, JSON.parse(JSON.stringify(changes)));
+    // A function is evaluated now, at this save's turn, so an edit builds on
+    // the saves queued before it rather than on what the page showed earlier.
+    const c = typeof changes === 'function' ? changes() : changes;
+    const res = await api.patchSettings(c);
+    if (res.ok) {
+      // Applied here, before the next queued save runs, not by the caller.
+      Object.assign(appSettings, JSON.parse(JSON.stringify(c)));
+      if (_formBaseline) Object.assign(_formBaseline, JSON.parse(JSON.stringify(c)));
+    }
     return res;
   };
   const result = _saveChain.then(run, run);
