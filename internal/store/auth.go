@@ -120,6 +120,37 @@ func (d *DB) DisableTOTP() error {
 	return tx.Commit()
 }
 
+// EnableTOTP switches 2FA on for the pending secret in one transaction: it
+// spends the enrolment step and replaces the recovery codes together, or does
+// nothing. It reports false when 2FA was already on or the pending secret has
+// changed, so of two racing enables only one issues recovery codes.
+func (d *DB) EnableTOTP(secret string, step int64, hashes []string, now time.Time) (bool, error) {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(
+		`UPDATE auth SET totp_enabled = 1, totp_last_step = ? WHERE id = 1 AND totp_enabled = 0 AND totp_secret = ?`,
+		step, secret)
+	if err != nil {
+		return false, err
+	}
+	if n, err := res.RowsAffected(); err != nil || n != 1 {
+		return false, err
+	}
+	if _, err := tx.Exec(`DELETE FROM recovery_codes`); err != nil {
+		return false, err
+	}
+	for _, h := range hashes {
+		if _, err := tx.Exec(
+			`INSERT INTO recovery_codes (hash, created_at) VALUES (?, ?)`, h, now.Unix()); err != nil {
+			return false, err
+		}
+	}
+	return true, tx.Commit()
+}
+
 // ReplaceRecoveryCodes swaps the whole set for a freshly generated one. Codes
 // are stored hashed; the caller shows the plaintext once and then forgets it.
 func (d *DB) ReplaceRecoveryCodes(hashes []string, now time.Time) error {

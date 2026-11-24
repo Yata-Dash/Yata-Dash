@@ -289,6 +289,70 @@ func TestTOTPCodeCannotBeUsedTwiceConcurrently(t *testing.T) {
 	}
 }
 
+// Concurrent enables with one valid code: exactly one turns 2FA on and gets
+// recovery codes; the rest are told it's already on (QV-02).
+func TestTOTPEnableRacesIssueOneSetOfCodes(t *testing.T) {
+	resetTestLimiter()
+	d := testDeps(t)
+	router := NewRouter(d)
+	pw := strings.Repeat("a", minPasswordLen)
+	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: pw}, nil)
+	code, body, c := authPost(t, router, "/api/auth/totp/start", authCreds{Password: pw}, cookie)
+	if code != http.StatusOK {
+		t.Fatalf("totp/start: %d %v", code, body)
+	}
+	if c != nil {
+		cookie = c
+	}
+	secret, _ := body["secret_compact"].(string)
+	good, err := totpCode(secret, totpStep(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 6
+	results := make(chan map[string]any, n)
+	statuses := make(chan int, n)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			st, b, _ := authPost(t, router, "/api/auth/totp/enable", authCreds{Code: good}, cookie)
+			statuses <- st
+			results <- b
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(statuses)
+	close(results)
+	ok := 0
+	for st := range statuses {
+		if st == http.StatusOK {
+			ok++
+		}
+	}
+	var issued []any
+	for b := range results {
+		if rc, has := b["recovery_codes"].([]any); has {
+			issued = rc
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d of %d concurrent enables succeeded, want exactly 1", ok, n)
+	}
+	// The codes that were shown are the ones that work.
+	first, _ := issued[0].(string)
+	resetTestLimiter()
+	if st, _, _ := authPost(t, router, "/api/auth/login",
+		authCreds{Username: "alice", Password: pw, Code: first}, nil); st != http.StatusOK {
+		t.Fatalf("the recovery code that was shown doesn't work: %d", st)
+	}
+}
+
 // TestTOTPDisableNeedsBothFactors: a stolen session must not be enough to
 // strip the second factor off the account.
 func TestTOTPDisableNeedsBothFactors(t *testing.T) {
