@@ -14,6 +14,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 - **An authenticator code works for one sign-in only**, even when two arrive at the same moment; before, concurrent logins could all accept it.
 - **Docker builds leave local secrets out**: `.env` files, config backups, databases, logs, the test instance and a self-hosted Font Awesome folder no longer reach the build context or a locally built image.
+- **Requests for unknown hostnames can't grow memory or the log without limit**: Yata remembers at most 256 refused names for an hour, logs one summary line beyond that, and trims long hostnames.
 - **A tracker's event list can no longer inject markup into the Detail page.** Event times that don't parse are dropped, text fields must be text, the list is capped at 50, and the page escapes and type-checks events stored before this fix.
 - **Tracker credentials stay on the tracker's own host.** A definition path not
   starting with a single "/" is refused, since it could send the API key or

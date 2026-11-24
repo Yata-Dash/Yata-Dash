@@ -1,10 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Yata-Dash/Yata-Dash/internal/config"
 )
@@ -240,5 +242,54 @@ func TestCleanAllowedHostsRejectsThingsThatAreNotHostnames(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != "yata.example.com" || got[1] != "box.tailnet.ts.net:8420" {
 		t.Errorf("CleanAllowedHosts = %v, want the two real entries trimmed", got)
+	}
+}
+
+// The refused-host log memory is filled before sign-in from a header the
+// client picks, so it must stay bounded however many names arrive (SR-08).
+func TestRefusedHostMemoryIsBounded(t *testing.T) {
+	h := &hostWarnings{seen: map[string]time.Time{}}
+	now := time.Unix(1_800_000_000, 0)
+	logged, floods := 0, 0
+	for i := range hostWarnCap * 4 {
+		lh, lf := h.check(fmt.Sprintf("probe-%d.example", i), now)
+		if lh {
+			logged++
+		}
+		if lf {
+			floods++
+		}
+	}
+	if len(h.seen) > hostWarnCap {
+		t.Fatalf("remembered %d hosts, want at most %d", len(h.seen), hostWarnCap)
+	}
+	if logged != hostWarnCap || floods != 1 {
+		t.Fatalf("logged %d hosts and %d flood lines, want %d and 1", logged, floods, hostWarnCap)
+	}
+	// A name already logged stays quiet within the window.
+	if lh, _ := h.check("probe-0.example", now.Add(time.Minute)); lh {
+		t.Error("a host logged a minute ago was logged again")
+	}
+	// After the window, old names are forgotten and new ones log again.
+	if lh, _ := h.check("later.example", now.Add(hostWarnTTL)); !lh {
+		t.Error("a new host after the window was not logged")
+	}
+	if len(h.seen) > hostWarnCap {
+		t.Fatalf("remembered %d hosts after expiry, want at most %d", len(h.seen), hostWarnCap)
+	}
+}
+
+func TestRefusedHostIsTrimmedInTheReply(t *testing.T) {
+	router := hostGuardRouter(t)
+	long := strings.Repeat("a", 5000) + ".example"
+	rec := requestWithHost(t, router, long, "/")
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), strings.Repeat("a", hostShownMax+1)) {
+		t.Error("the reply echoed more of the Host than hostShownMax")
+	}
+	if got := shownHost(long); len(got) > hostShownMax+len("…") {
+		t.Errorf("shownHost kept %d bytes", len(got))
 	}
 }
