@@ -239,19 +239,24 @@ export async function loadAlerts(deps: { toast: Toast }): Promise<void> {
  *  in-memory edits and editor/dry-run state. */
 async function reload(): Promise<void> {
   const { ok, data } = await api.fetchNotifications();
-  if (ok) {
-    destinations = data.destinations ?? [];
-    rules = (data.rules ?? []).map(r => ({
-      ...r,
-      tracker_ids: r.tracker_ids?.length ? r.tracker_ids : (r.tracker_id ? [r.tracker_id] : []),
-      tracker_mode: r.tracker_mode || 'include',
-      destinations: r.destinations ?? [],
-      conditions: r.conditions ?? [],
-    }));
-    digest = data.digest ?? { enabled: false, weekday: 1, hour: 9, destinations: [] };
-    digest.destinations = digest.destinations ?? [];
-    loaded = true;
+  if (!ok) {
+    // Never fall back to an empty, editable model: saving it would replace
+    // the real rules and destinations with nothing.
+    loaded = false;
+    renderLoadError();
+    return;
   }
+  destinations = data.destinations ?? [];
+  rules = (data.rules ?? []).map(r => ({
+    ...r,
+    tracker_ids: r.tracker_ids?.length ? r.tracker_ids : (r.tracker_id ? [r.tracker_id] : []),
+    tracker_mode: r.tracker_mode || 'include',
+    destinations: r.destinations ?? [],
+    conditions: r.conditions ?? [],
+  }));
+  digest = data.digest ?? { enabled: false, weekday: 1, hour: 9, destinations: [] };
+  digest.destinations = digest.destinations ?? [];
+  loaded = true;
   editingDest = -1;
   editingRule = -1;
   pendingDelete = null;
@@ -270,6 +275,7 @@ function confirmDeleteHtml(kind: 'dest' | 'rule', idx: number, name: string): st
 }
 
 export async function saveAlerts(): Promise<void> {
+  if (!loaded) { toast('Alerts haven’t loaded, so there is nothing to save yet', 'error'); return; }
   collectFromDOM();
   // A threshold that is not a size or a number is refused here, not stored:
   // the engine would read "1 terabyte" as 0 and the rule would be quietly
@@ -307,6 +313,8 @@ export function exportAlerts(): void {
 export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   if (!file) return;
+  // Import keeps the current digest schedule, which is only known once loaded.
+  if (!loaded) { input.value = ''; toast('Alerts haven’t loaded yet, so import would reset the digest. Retry first.', 'error'); return; }
   const text = await file.text();
   input.value = '';
   let parsed: { destinations?: NotifyDestination[]; rules?: AlertRule[] };
@@ -329,9 +337,22 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
 // them, and the standing weekly summary. They stay on one page deliberately —
 // an alert always has a destination and a destination is useless without a
 // rule, so splitting them would mean switching tabs mid-task.
+function setSaveEnabled(on: boolean): void {
+  document.querySelectorAll<HTMLButtonElement>('[data-action="save-alerts"]').forEach(b => { b.disabled = !on; });
+}
+
+function renderLoadError(): void {
+  setSaveEnabled(false);
+  const root = document.getElementById('alerts-content');
+  if (!root) return;
+  root.innerHTML = `<div class="set-empty">Couldn${'’'}t load your alerts, so they can${'’'}t be edited or saved right now.
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-left:8px" data-action="retry-load">Retry</button></div>`;
+}
+
 function render(): void {
   const root = document.getElementById('alerts-content');
   if (!root) return;
+  setSaveEnabled(loaded);
   const webhookCount = destinations.filter(d => !isInAppDest(d)).length;
   root.innerHTML = `
   <div class="set-grid">
@@ -767,6 +788,7 @@ function wire(): void {
       case 'add-cond': collectFromDOM(); rules[ri]?.conditions.push({ field: 'ratio', op: 'lt', value: '1.0' }); render(); break;
       case 'remove-cond': collectFromDOM(); rules[ri]?.conditions.splice(ci, 1); render(); break;
       case 'save-alerts': void saveAlerts(); break;
+      case 'retry-load': void reload(); break;
       // ── weekly digest ──
       case 'digest-preview': void previewDigest(); break;
       case 'digest-send': void sendDigestNowClick(); break;
