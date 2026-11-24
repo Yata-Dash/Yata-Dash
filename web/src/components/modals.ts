@@ -2827,8 +2827,11 @@ export async function toggleAutoUpdate(): Promise<void> {
   const cb = document.getElementById('s-update-auto') as HTMLInputElement | null;
   const on = cb?.checked ?? false;
   appSettings.update_check_auto = on;
-  const { ok } = await api.patchSettings({ update_check_auto: on });
+  const { ok } = await patchSettingsNow({ update_check_auto: on });
   if (ok) {
+    // Queued behind a form save, whose reload may have put the old value back.
+    appSettings.update_check_auto = on;
+    if (cb) cb.checked = on;
     _sd.toast(on ? 'Daily update check on' : 'Daily update check off', 'success');
   } else {
     appSettings.update_check_auto = !on;
@@ -2918,7 +2921,7 @@ export async function removeAllowedHost(host: string): Promise<void> {
 async function commitAllowedHosts(hosts: string[]): Promise<boolean> {
   if (!_sd) return false;
   const previous = appSettings.allowed_hosts ?? [];
-  const { ok, data } = await api.patchSettings({ allowed_hosts: hosts });
+  const { ok, data } = await patchSettingsNow({ allowed_hosts: hosts });
   if (ok) {
     appSettings.allowed_hosts = hosts;
     renderAllowedHosts();
@@ -2938,8 +2941,10 @@ export async function toggleTrustProxy(): Promise<void> {
   const cb = document.getElementById('s-trust-proxy') as HTMLInputElement | null;
   const on = cb?.checked ?? false;
   appSettings.trust_proxy_headers = on;
-  const { ok } = await api.patchSettings({ trust_proxy_headers: on });
+  const { ok } = await patchSettingsNow({ trust_proxy_headers: on });
   if (ok) {
+    appSettings.trust_proxy_headers = on;
+    if (cb) cb.checked = on;
     _sd.toast(on ? 'Proxy headers trusted' : 'Proxy headers ignored', 'success');
   } else {
     appSettings.trust_proxy_headers = !on;
@@ -3336,6 +3341,20 @@ export function saveSettings(deps: SettingsDeps): Promise<void> {
   return _saveChain;
 }
 
+/** Save a few settings straight away (a toggle, the hostname list), queued
+ *  behind this tab's form saves. On success they join the baseline, so a later
+ *  save of something else doesn't resend them over another tab's change. */
+export function patchSettingsNow(changes: Partial<AppSettings>): ReturnType<typeof api.patchSettings> {
+  const run = async () => {
+    const res = await api.patchSettings(changes);
+    if (res.ok && _formBaseline) Object.assign(_formBaseline, JSON.parse(JSON.stringify(changes)));
+    return res;
+  };
+  const result = _saveChain.then(run, run);
+  _saveChain = result.then(() => undefined, () => undefined);
+  return result;
+}
+
 async function saveSettingsNow(deps: SettingsDeps) {
   const btn = document.getElementById('s-save-btn') as HTMLButtonElement | null;
   const form = readSettingsForm();
@@ -3353,7 +3372,7 @@ async function saveSettingsNow(deps: SettingsDeps) {
   const { ok, data } = await api.patchSettings(changes);
   if (btn) { btn.disabled = false; btn.textContent = 'Save Settings'; }
   if (ok) {
-    _formBaseline = { ...base, ...changes };
+    _formBaseline = { ...(_formBaseline ?? base), ...changes };
     deps.toast('Settings saved', 'success');
     await deps.loadSettings();
     // Re-sync the key field with the (re)masked value so a second save
