@@ -104,17 +104,19 @@ func totpEnable(d *Deps) http.HandlerFunc {
 			jsonError(w, "secret_error", http.StatusInternalServerError)
 			return
 		}
-		if err := d.DB.ReplaceRecoveryCodes(hashes, now); err != nil {
+		// One transaction: 2FA on, the enrolment code spent (so it can't be
+		// replayed against the login form) and the recovery codes stored, or
+		// none of it. Losing a race to another enable is a conflict, not a
+		// second set of codes.
+		enabled, err := d.DB.EnableTOTP(u.TOTPSecret, step, hashes, now)
+		if err != nil {
 			jsonError(w, "store_error", http.StatusInternalServerError)
 			return
 		}
-		if err := d.DB.SetTOTPSecret(u.TOTPSecret, true); err != nil {
-			jsonError(w, "store_error", http.StatusInternalServerError)
+		if !enabled {
+			jsonError(w, "totp_already_enabled", http.StatusConflict)
 			return
 		}
-		// The enrolment code counts as spent, so it can't immediately be
-		// replayed against the login form.
-		_, _ = d.DB.ConsumeTOTPStep(step)
 		// Security: other sessions got in on the password alone (possibly
 		// leaked), so sign them out; keep the caller's, which proved the factor.
 		var current string

@@ -12,6 +12,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Security
 
+- **Turning on 2FA happens in one step**: two enable requests at once can no longer both succeed with different recovery codes, and a failed save leaves 2FA off rather than half-enabled.
 - **An authenticator code works for one sign-in only**, even when two arrive at the same moment; before, concurrent logins could all accept it.
 - **Docker builds leave local secrets out**: `.env` files, config backups, databases, logs, the test instance and a self-hosted Font Awesome folder no longer reach the build context or a locally built image.
 - **Requests for unknown hostnames can't grow memory or the log without limit**: Yata remembers at most 256 refused names for an hour, logs one summary line beyond that, and trims long hostnames.
