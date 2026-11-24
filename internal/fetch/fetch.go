@@ -165,14 +165,19 @@ func (c *Client) Fetch(t models.Tracker) (map[string]any, *Error) {
 		delete(data, k)
 	}
 	fieldMap := c.Registry.ResolveAPIFieldMap(t.URL, t.Type)
-	return dropNested(normalizeStrings(defs.NormalizeAPIFields(fieldMap, data))), nil
+	data = defs.NormalizeAPIFields(fieldMap, data)
+	// Once more, now that every source has been merged and mapped: an extended
+	// endpoint or a field map can also deliver active_events, and the list must
+	// never reach the store unvalidated. Idempotent on an already-shaped list.
+	normalizeActiveEvents(data)
+	return dropNested(normalizeStrings(data)), nil
 }
 
 // dropNested removes list and object values from a fetcher's output. A stat
 // is a single value: a nested one reaching the stat layer is stored, then
 // listed on the tracker's page as "[object Object]" — which is what an
 // unmapped UNIT3D extra (a list of next ranks) did. active_events is the one
-// structured field Yata reads, and normalizeActiveEvents has already shaped it.
+// structured field Yata reads, and Fetch has just run normalizeActiveEvents on it.
 func dropNested(data map[string]any) map[string]any {
 	for k, v := range data {
 		if k == activeEventsField {
