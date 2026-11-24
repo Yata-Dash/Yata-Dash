@@ -61,6 +61,14 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # Files generated from the defs: the update manifest (versions.json, read
+      # from main by every instance's update check) and the README tracker table.
+      - name: Generated files are current
+        if: runner.os == 'Linux'
+        run: |
+          go run ./tools/genversions -check
+          go run ./tools/defsdoc -check
+
   web:
     runs-on: ubuntu-latest
     steps:
