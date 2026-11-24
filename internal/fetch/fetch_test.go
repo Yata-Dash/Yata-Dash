@@ -1724,6 +1724,52 @@ func TestStaleEventsAreDropped(t *testing.T) {
 	}
 }
 
+// A tracker's event times reach the page as attribute values, so anything that
+// isn't a time must not survive as one (SR-01), and display fields must be text.
+func TestEventFieldsAreValidated(t *testing.T) {
+	freezeNow(t, "2026-09-15T12:00:00Z")
+	data := fetchUnit3DBody(t, `{"username":"alice","active_events":[
+		{"name":"Bad times","status":"live",
+		 "ends_at":"\"><img src=x onerror=alert(1)>","starts_at":"soon"},
+		{"name":{"nested":"object"},"title":"Fine","status":7,"ends_at":"2026-09-20T00:00:00+00:00"}
+	]}`)
+	evs, _ := data["active_events"].([]any)
+	if len(evs) != 2 {
+		t.Fatalf("active_events = %#v, want both events kept", data["active_events"])
+	}
+	bad := evs[0].(map[string]any)
+	for _, f := range []string{"ends_at", "starts_at"} {
+		if v, present := bad[f]; present {
+			t.Errorf("%s = %#v survived; an unparsable time must be dropped", f, v)
+		}
+	}
+	odd := evs[1].(map[string]any)
+	if _, present := odd["name"]; present {
+		t.Errorf("an object name survived: %#v", odd["name"])
+	}
+	if _, present := odd["status"]; present {
+		t.Errorf("a numeric status survived: %#v", odd["status"])
+	}
+	if odd["label"] != "Fine" || odd["ends_at"] != int64(1789862400) {
+		t.Errorf("valid fields lost: %#v", odd)
+	}
+
+	// A flood of events is capped rather than stored whole.
+	var b strings.Builder
+	b.WriteString(`{"username":"alice","active_events":[`)
+	for i := 0; i < maxActiveEvents+10; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"name":"e","status":"upcoming"}`)
+	}
+	b.WriteString(`]}`)
+	data = fetchUnit3DBody(t, b.String())
+	if evs, _ := data["active_events"].([]any); len(evs) != maxActiveEvents {
+		t.Errorf("kept %d events, want the cap %d", len(evs), maxActiveEvents)
+	}
+}
+
 func TestFetchUnit3DActiveEvents(t *testing.T) {
 	freezeNow(t, "2026-07-15T00:00:00Z")
 	data := fetchUnit3DBody(t, `{

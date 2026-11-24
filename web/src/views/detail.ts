@@ -337,12 +337,26 @@ function renderEventBanners(stats: TrackerStatsResponse | undefined): string {
 /** The structured event list, or [] when this tracker doesn't report one. */
 function eventList(stats: TrackerStatsResponse | undefined): ActiveEvent[] {
   const raw = stats?.fields?.['active_events']?.value;
-  return Array.isArray(raw) ? raw as ActiveEvent[] : [];
+  if (!Array.isArray(raw)) return [];
+  // Stored data from a tracker: keep objects only, and only the text fields
+  // that are text. Events stored before the backend checked them still render.
+  return raw
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && !Array.isArray(e))
+    .map(e => {
+      const ev: ActiveEvent = { ...e };
+      for (const k of ['type', 'name', 'title', 'label', 'description', 'icon', 'status', 'url'] as const) {
+        if (ev[k] !== undefined && typeof ev[k] !== 'string') delete ev[k];
+      }
+      for (const k of ['starts_at', 'ends_at'] as const) {
+        if (ev[k] !== undefined && !(typeof ev[k] === 'number' && Number.isFinite(ev[k]))) delete ev[k];
+      }
+      return ev;
+    });
 }
 
 function countdownHtml(at: number, verb: 'ends' | 'starts' = 'ends'): string {
   return `<span class="exp-event-timer-wrap">
-    <span class="event-countdown exp-event-timer" data-ends-at="${at}">…</span>
+    <span class="event-countdown exp-event-timer" data-ends-at="${esc(String(at))}">…</span>
     <span class="exp-event-ends">${verb} ${esc(fmtStamp(at))}</span>
   </span>`;
 }
