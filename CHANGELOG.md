@@ -16,6 +16,30 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **Docker builds leave local secrets out**: `.env` files, config backups, databases, logs, the test instance and a self-hosted Font Awesome folder no longer reach the build context or a locally built image.
 - **Requests for unknown hostnames can't grow memory or the log without limit**: Yata remembers at most 256 refused names for an hour, logs one summary line beyond that, and trims long hostnames.
 - **A tracker's event list can no longer inject markup into the Detail page.** Event times that don't parse are dropped, text fields must be text, the list is capped at 50, and the page escapes and type-checks events stored before this fix.
+
+### Fixed
+
+- **Settings saved on their own** (hostnames, the update check, proxy headers, private mode) are no longer resent by a later save of something else, which could undo another tab's change (#94).
+- **A tracker's session cookie can be removed again**: emptying the field and saving now clears it, instead of reporting success and keeping it.
+- **A failed Alerts load can no longer wipe your alerts.** The tab shows an error with Retry and keeps Save and Import off until the rules have loaded, instead of offering an empty editor whose Save replaced them.
+- **Trackers without a custom name are named in logs, alerts and the digest**
+  by their definition's name (or host), instead of a blank (#95).
+- **Saving settings from an older tab no longer reverts changes made since.**
+  Each save now sends only the settings it changed (#94); a page open across
+  this upgrade needs a reload before it can save.
+- **Scrape-only trackers no longer log API contact that never happened** in
+  Connection Health or the card's "API" time, and `/api/summary` reports them,
+  and manual trackers, as `no_api`, counted in a new `totals.no_api` (so `ok`
+  can be below `enabled` with nothing wrong).
+- **Manual and scrape-only trackers record history only when there is new
+  data** (a save, or a new scrape), so their charts and growth rates are no
+  longer flattened by every refresh restamping the same values.
+
+
+## [Beta-20261116]
+
+### Security
+
 - **Tracker credentials stay on the tracker's own host.** A definition path not
   starting with a single "/" is refused, since it could send the API key or
   cookie elsewhere; API keys no longer follow redirects to another host; and
@@ -37,14 +61,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Fixed
 
-- **Settings saved on their own** (hostnames, the update check, proxy headers, private mode) are no longer resent by a later save of something else, which could undo another tab's change (#94).
-- **A tracker's session cookie can be removed again**: emptying the field and saving now clears it, instead of reporting success and keeping it.
-- **A failed Alerts load can no longer wipe your alerts.** The tab shows an error with Retry and keeps Save and Import off until the rules have loaded, instead of offering an empty editor whose Save replaced them.
-- **Trackers without a custom name are named in logs, alerts and the digest**
-  by their definition's name (or host), instead of a blank (#95).
-- **Saving settings from an older tab no longer reverts changes made since.**
-  Each save now sends only the settings it changed (#94); a page open across
-  this upgrade needs a reload before it can save.
 - **Login protection is harder to get round.** Every password prompt now
   counts towards the five-attempt lockout, parallel guesses can no longer
   slip past it, a spoofed `X-Forwarded-For` no longer resets it, and removing
@@ -87,13 +103,6 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 - **`/api/summary` never reported `warnings`.**
 - **Importing an older config** could leave alerts with nowhere to record and
   a renamed tracker type not collecting until the next restart.
-- **Scrape-only trackers no longer log API contact that never happened** in
-  Connection Health or the card's "API" time, and `/api/summary` reports them,
-  and manual trackers, as `no_api`, counted in a new `totals.no_api` (so `ok`
-  can be below `enabled` with nothing wrong).
-- **Manual and scrape-only trackers record history only when there is new
-  data** (a save, or a new scrape), so their charts and growth rates are no
-  longer flattened by every refresh restamping the same values.
 
 ## [Beta-20261011]
 

@@ -46,7 +46,8 @@ for t in "${TARGETS[@]}"; do
   rm -rf "$stage"
 done
 
-# Release notes: the version's changelog section, falling back to Unreleased.
+# Release notes: the version's own changelog section. A release without one
+# fails here rather than shipping the Unreleased notes, which keep changing.
 # Pure string matching (no regex) so it's portable across awk implementations —
 # version strings contain '-' which breaks naive regex bracket classes.
 extract() {
@@ -58,8 +59,10 @@ extract() {
 }
 NOTES="$DIST/RELEASE_NOTES.md"
 { extract "$VERSION"; } > "$NOTES" || true
-[ -s "$NOTES" ] || extract "Unreleased" > "$NOTES" || true
-[ -s "$NOTES" ] || echo "Yata $VERSION" > "$NOTES"
+if [ ! -s "$NOTES" ]; then
+  echo "CHANGELOG.md has no '## [$VERSION]' section: rename Unreleased to it before releasing" >&2
+  exit 1
+fi
 
 echo "packaged $(ls -1 "$DIST"/*.zip | wc -l) zips:"
 ls -1 "$DIST"/*.zip

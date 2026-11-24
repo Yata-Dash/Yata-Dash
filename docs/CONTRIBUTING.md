@@ -95,7 +95,13 @@ feature → dev, one focused change per PR, squash-merged.
 dev → main is a promotion of code that has already been reviewed. Releases are
 date-stamped (`Beta-YYYYMMDD`), cut from main by the release workflow, and
 their notes come from `CHANGELOG.md` — so add a line under *Unreleased* with
-your change. Keep it to what a user would notice.
+your change. Keep it to what a user would notice. A release needs its own
+`## [Beta-YYYYMMDD]` section (rename *Unreleased* when bumping the version);
+packaging fails without one.
+
+If you change a definition or the pathways data, run `go run ./tools/genversions`
+and `go run ./tools/defsdoc`; CI fails when `versions.json` or the README
+tracker table is out of date.
 
 ## Rules that are not negotiable
 
