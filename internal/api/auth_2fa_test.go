@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -246,6 +247,45 @@ func TestTOTPEnrolmentAndLogin(t *testing.T) {
 	if code, _, _ := authPost(t, router, "/api/auth/login",
 		authCreds{Username: "alice", Password: pw, Code: recovery[0]}, nil); code != http.StatusUnauthorized {
 		t.Fatalf("a spent recovery code must not work twice, got %d", code)
+	}
+}
+
+// Two logins racing with the same valid code: only one may get a session (SR-07).
+func TestTOTPCodeCannotBeUsedTwiceConcurrently(t *testing.T) {
+	resetTestLimiter()
+	d := testDeps(t)
+	router := NewRouter(d)
+	pw := strings.Repeat("a", minPasswordLen)
+	_, _, cookie := authPost(t, router, "/api/auth/setup", authCreds{Username: "alice", Password: pw}, nil)
+	secret, _, _ := enrol2FA(t, d, router, pw, cookie)
+	resetTestLimiter()
+	good := nextCode(t, secret)
+
+	const n = 8
+	codes := make(chan int, n)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			code, _, _ := authPost(t, router, "/api/auth/login",
+				authCreds{Username: "alice", Password: pw, Code: good}, nil)
+			codes <- code
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(codes)
+	ok := 0
+	for c := range codes {
+		if c == http.StatusOK {
+			ok++
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d of %d concurrent logins with one code succeeded, want exactly 1", ok, n)
 	}
 }
 
