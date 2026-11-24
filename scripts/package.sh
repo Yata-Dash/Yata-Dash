@@ -48,11 +48,13 @@ done
 
 # Release notes: the version's own changelog section. A release without one
 # fails here rather than shipping the Unreleased notes, which keep changing.
-# Pure string matching (no regex) so it's portable across awk implementations —
-# version strings contain '-' which breaks naive regex bracket classes.
+# The heading must be the whole line (a stray "## [Beta-…] draft" doesn't count).
+# Plain string equality, no regex on the version: it contains '-', which breaks
+# naive regex bracket classes.
 extract() {
   awk -v h="$1" '
-    index($0, "## [" h "]") == 1 { grab=1; next }
+    { line = $0; sub(/\r$/, "", line) }
+    line == "## [" h "]" { grab=1; next }
     grab && (substr($0,1,4) == "## [" || substr($0,1,4) == "<!--") { exit }
     grab { print }
   ' CHANGELOG.md
