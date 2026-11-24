@@ -189,6 +189,12 @@
     // tracker doesn't use the standard <strong> tag (e.g. LST uses "badge").
     "event_title_class": "",
 
+    // CSS class of a link whose title attribute holds the user's group, for
+    // trackers whose API doesn't report it. UNIT3D renders a username as
+    // <a class="user-tag__link" href=".../users/alice" title="Power User">.
+    // Only the link to the user's own profile is read, never another user's.
+    "group_title_class": "user-tag__link",
+
     // Value/label CSS class pair for trackers whose stat cards render the
     // value element next to a label element under a shared parent.
     // null/omitted = not used.

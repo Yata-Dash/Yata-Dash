@@ -18,18 +18,19 @@ type ResolvedScrape struct {
 	// fetch and scraping. OptOut carries the matched entry (name/date/note)
 	// for the UI. This can go true AFTER a tracker was added, so it must be
 	// enforced at runtime — not just at add-time.
-	OptedOut        bool
-	OptOut          OptOutEntry
+	OptedOut bool
+	OptOut   OptOutEntry
 	// Retired is true when the tracker's def records that the site has SHUT
 	// DOWN. It also forces DisableScraping, so a caller that doesn't know
 	// about retirement still refuses to fetch the page; this flag exists so
 	// the ones that do can say why, instead of blaming the operator.
-	Retired bool
+	Retired         bool
 	ProfilePath     string
 	Labels          map[string]string
 	EventTitleClass string
 	StatCardClasses *StatCardClasses
 	PresenceFlags   map[string]PresenceFlag
+	GroupTitleClass string
 	// Identify is how Yata identifies itself to this tracker ("ua" default,
 	// "header", or "none") — applies to API and scrape traffic alike.
 	Identify string
@@ -101,6 +102,9 @@ func applySpec(out *ResolvedScrape, s ScrapeSpec) {
 	}
 	if s.StatCardClasses != nil {
 		out.StatCardClasses = s.StatCardClasses
+	}
+	if s.GroupTitleClass != "" {
+		out.GroupTitleClass = s.GroupTitleClass
 	}
 	if s.Identify != "" {
 		out.Identify = s.Identify
@@ -411,6 +415,9 @@ func scrapeFieldsOf(rs ResolvedScrape) []string {
 	}
 	for field := range rs.PresenceFlags {
 		set[field] = true
+	}
+	if rs.GroupTitleClass != "" {
+		set["group"] = true
 	}
 	// Event banners come from the scraper's own extraction pass, not from the
 	// label map, so no def mentions them — but every scraped page goes through
