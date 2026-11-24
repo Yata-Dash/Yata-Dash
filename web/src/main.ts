@@ -348,7 +348,11 @@ async function togglePrivacyQuick() {
   state.appSettings.private_mode = next;
   // Through the settings form's queue: the open form shows this toggle too.
   const { ok } = await (await modalsReady).patchSettingsNow({ private_mode: next });
-  if (!ok) {
+  if (ok) {
+    // Queued behind a form save, whose reload may have put the old value back.
+    state.appSettings.private_mode = next;
+    applyPrivateMode(next);
+  } else {
     // Revert on failure so the UI never lies about what's stored.
     state.appSettings.private_mode = !next;
     applyPrivateMode(!next);

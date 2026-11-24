@@ -2829,6 +2829,9 @@ export async function toggleAutoUpdate(): Promise<void> {
   appSettings.update_check_auto = on;
   const { ok } = await patchSettingsNow({ update_check_auto: on });
   if (ok) {
+    // Queued behind a form save, whose reload may have put the old value back.
+    appSettings.update_check_auto = on;
+    if (cb) cb.checked = on;
     _sd.toast(on ? 'Daily update check on' : 'Daily update check off', 'success');
   } else {
     appSettings.update_check_auto = !on;
@@ -2940,6 +2943,8 @@ export async function toggleTrustProxy(): Promise<void> {
   appSettings.trust_proxy_headers = on;
   const { ok } = await patchSettingsNow({ trust_proxy_headers: on });
   if (ok) {
+    appSettings.trust_proxy_headers = on;
+    if (cb) cb.checked = on;
     _sd.toast(on ? 'Proxy headers trusted' : 'Proxy headers ignored', 'success');
   } else {
     appSettings.trust_proxy_headers = !on;
