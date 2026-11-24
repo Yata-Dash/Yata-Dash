@@ -326,9 +326,18 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   // digest isn't part of the share-safe export/import format (it has no
   // secrets to strip) — carry the CURRENT schedule forward so importing an
   // alerts file never resets the weekly digest as a side effect.
+  // From here until the reload lands, the editor holds the pre-import model:
+  // a Save now would put it back over the import, so Save is off throughout.
+  loaded = false;
+  setSaveEnabled(false);
   const { ok } = await api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest });
   if (ok) { toast('Alerts imported', 'success'); await reload(); }
-  else toast('Import failed', 'error');
+  else {
+    // Nothing changed on the server, so the editor's model is still current.
+    loaded = true;
+    setSaveEnabled(true);
+    toast('Import failed', 'error');
+  }
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
