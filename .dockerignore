@@ -1,10 +1,47 @@
-old/
-reference/
-data/
-web/node_modules/
-yata
-yata.exe
-config.json
-yata.db*
+# Keep in step with .gitignore: anything that must never be committed must
+# never reach an image or the build context either. Unlike .gitignore, a
+# bare pattern here matches only at the root, hence the **/ on secrets.
 .git/
 *.md
+
+# Build output and local tooling
+yata
+yata.exe
+*.exe
+static/dashboard.js
+web/dist/
+dist/
+web/node_modules/
+.claude/
+.vscode/
+.idea/
+old/
+
+# User data and credentials
+**/config.json
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/yata.db*
+data/
+.env
+.env.*
+**/.env
+**/.env.*
+backups/
+
+# Local test instance and local-only tools
+test/
+tools/local/
+**/*_local_test.go
+**/*.local.md
+
+# Logs (may hold paths and usernames)
+**/*.log
+**/yata.log.*
+
+# Saved tracker pages (personal profile data)
+reference/
+
+# Self-hosted Font Awesome (e.g. Pro): licensed, must not ship in an image
+static/fontawesome/
