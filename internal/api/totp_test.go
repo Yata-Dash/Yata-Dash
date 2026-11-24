@@ -166,8 +166,8 @@ func TestNewTOTPSecretDecodes(t *testing.T) {
 // TestTOTPURI: the enrolment URI carries every parameter an authenticator
 // needs, so no app has to fall back to its own defaults.
 func TestTOTPURI(t *testing.T) {
-	uri := totpURI("Yata", "mystery", rfcSecret)
-	if !strings.HasPrefix(uri, "otpauth://totp/Yata:mystery?") {
+	uri := totpURI("Yata", "example", rfcSecret)
+	if !strings.HasPrefix(uri, "otpauth://totp/Yata:example?") {
 		t.Fatalf("unexpected URI shape: %s", uri)
 	}
 	for _, want := range []string{

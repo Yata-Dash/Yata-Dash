@@ -1146,9 +1146,9 @@ const mamLoad = `{
   "seedHnr":   {"count": 0, "red": true,  "size": null},
   "seedUnsat": {"count": 0, "red": false, "size": null},
   "seedbonus": 17330,
-  "uid": 271767,
+  "uid": 12345,
   "uploaded_bytes": 474683379435,
-  "username": "MysteryGodzilla",
+  "username": "alice",
   "vip_until": "2026-08-19 21:18:17",
   "wedges": 106
 }`
@@ -1244,7 +1244,7 @@ func TestFetchCustomMAM(t *testing.T) {
 		"topic_notifications":    7,
 		"about_to_drop_client":   2,
 		// Seeding summary, from the same payload.
-		"username":     "MysteryGodzilla",
+		"username":     "alice",
 		"group":        "VIP",
 		"seeding":      114, // sSat + seedHnr + seedUnsat
 		"seed_size":    "140.66 GiB",

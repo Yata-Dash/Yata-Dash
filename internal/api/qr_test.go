@@ -91,7 +91,7 @@ func TestQREncodeChoosesSmallestVersion(t *testing.T) {
 // these are wrong the symbol is unreadable no matter how good the data is.
 func TestQRStructure(t *testing.T) {
 	// Long enough to reach a version that carries version information.
-	m, err := qrEncode(totpURI("Yata", "mystery", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"))
+	m, err := qrEncode(totpURI("Yata", "example", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestQRSVGIsSelfContained(t *testing.T) {
 	// The secret is the RFC 4226 test vector, not a credential — see
 	// rfcSecret in totp_test.go. Secret scanners flag it; there is nothing
 	// behind it to rotate.
-	svg, err := qrSVG("otpauth://totp/Yata:mystery?secret=GEZDGNBVGY3TQOJQ") //nolint:gosec // RFC 4226 test vector
+	svg, err := qrSVG("otpauth://totp/Yata:example?secret=GEZDGNBVGY3TQOJQ") //nolint:gosec // RFC 4226 test vector
 	if err != nil {
 		t.Fatal(err)
 	}
