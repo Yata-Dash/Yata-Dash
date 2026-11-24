@@ -505,10 +505,20 @@ func normalizeActiveEvents(data map[string]any) {
 		if !ok {
 			continue
 		}
+		if len(events) >= maxActiveEvents {
+			break
+		}
 		clean := make(map[string]any, len(ev))
 		for k, v := range ev {
 			if v == nil {
 				continue
+			}
+			// The fields the UI prints as text must be text: a number or an
+			// object there is not a name, and would only break rendering.
+			if eventTextFields[k] {
+				if _, ok := v.(string); !ok {
+					continue
+				}
 			}
 			clean[k] = v
 		}
@@ -520,11 +530,18 @@ func normalizeActiveEvents(data map[string]any) {
 			// dropped here rather than shown as "Ended" indefinitely.
 			continue
 		}
+		// A time that doesn't parse is dropped, never passed through: the UI
+		// only ever receives unix seconds here, and a tracker's raw string in
+		// their place would reach the page as markup.
 		if endsAt > 0 {
 			clean["ends_at"] = endsAt
+		} else {
+			delete(clean, "ends_at")
 		}
 		if startsAt := eventUnix(clean["starts_at"]); startsAt > 0 {
 			clean["starts_at"] = startsAt
+		} else {
+			delete(clean, "starts_at")
 		}
 		// The display label, derived once here rather than re-derived by every
 		// consumer. The flat active_event banner already used eventName; the
@@ -563,6 +580,17 @@ func normalizeActiveEvents(data map[string]any) {
 		// expire rather than an outer window that is still weeks away.
 		data["active_event_ends_at"] = soonestEnd
 	}
+}
+
+// maxActiveEvents caps the list kept from one response; a tracker running more
+// promotions than this at once is sending something other than promotions.
+const maxActiveEvents = 50
+
+// eventTextFields are the event keys the UI shows as text. Anything else in an
+// event passes through untouched.
+var eventTextFields = map[string]bool{
+	"type": true, "name": true, "title": true, "label": true,
+	"description": true, "icon": true, "status": true, "url": true,
 }
 
 // eventGrace is how long a finished event is still listed (as "Ended") before
