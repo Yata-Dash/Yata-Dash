@@ -24,6 +24,8 @@ let baseDests = new Map<string, string>();
 let baseRules = new Map<string, string>();
 let baseDigest: Pick<DigestConfig, 'enabled' | 'weekday' | 'hour' | 'destinations'> =
   { enabled: false, weekday: 1, hour: 9, destinations: [] };
+let loadCount = 0;   // bumped by each load, so a save's reply can tell it predates one
+let saving = false;  // a save is in flight: one at a time, each building on the last
 let editingDest = -1;   // index of the destination shown in its edit form (-1 = none)
 let editingRule = -1;   // index of the rule shown in its edit form (-1 = none)
 let pendingDelete: string | null = null; // dest/rule id awaiting inline delete confirm
@@ -266,6 +268,7 @@ async function reload(): Promise<void> {
   baseDests = new Map(destinations.map(d => [d.id, destKey(d)]));
   baseRules = new Map(rules.map(r => [r.id, ruleKey(r)]));
   baseDigest = { enabled: digest.enabled, weekday: digest.weekday, hour: digest.hour, destinations: [...digest.destinations] };
+  loadCount++;
   loaded = true;
   editingDest = -1;
   editingRule = -1;
@@ -285,6 +288,7 @@ function confirmDeleteHtml(kind: 'dest' | 'rule', idx: number, name: string): st
 }
 
 export async function saveAlerts(): Promise<void> {
+  if (saving) return;
   if (!loaded) { toast('Alerts haven’t loaded, so there is nothing to save yet', 'error'); return; }
   collectFromDOM();
   // A threshold that is not a size or a number is refused here, not stored:
@@ -296,8 +300,12 @@ export async function saveAlerts(): Promise<void> {
     return;
   }
   const { patch, destKeys, ruleKeys } = changesSinceLoad();
-  const { ok } = await api.patchNotifications(patch);
-  if (ok) {
+  const load = loadCount;
+  saving = true;
+  let ok = false;
+  try { ({ ok } = await api.patchNotifications(patch)); } finally { saving = false; }
+  // A load since the send already holds this save's result.
+  if (ok && load === loadCount) {
     // What was sent is now stored; the rest stays as last loaded.
     for (const id of patch.delete_destinations ?? []) baseDests.delete(id);
     for (const id of patch.delete_rules ?? []) baseRules.delete(id);
@@ -384,6 +392,8 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   if (!file) return;
   // Import keeps the current digest schedule, which is only known once loaded.
   if (!loaded) { input.value = ''; toast('Alerts haven’t loaded yet, so import would reset the digest. Retry first.', 'error'); return; }
+  // A save landing after the import would put edited rules back over it.
+  if (saving) { input.value = ''; toast('A save is still running. Import again once it finishes.', 'error'); return; }
   const text = await file.text();
   input.value = '';
   let parsed: { destinations?: NotifyDestination[]; rules?: AlertRule[] };
