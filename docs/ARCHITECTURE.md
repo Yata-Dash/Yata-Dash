@@ -169,7 +169,9 @@ Settings are changed with `PATCH /api/settings`, which takes only the fields to 
 them under one lock (`config.PatchSettings`); a full-object `PUT` is refused. Code that changes a few
 settings uses `PatchSettings` too, never "read `Settings()`, edit, `UpdateSettings`", which would put
 back anything changed in between. Tracker edits follow the same rule: `PUT /api/trackers/{id}`
-leaves any field missing from the body as stored, and the Edit form sends only the fields changed since it opened.
+leaves any field missing from the body as stored, and the Edit form sends only the fields changed
+since it opened. The one exception: a `url` on another origin clears a key or cookie that is
+omitted or masked, so a credential never follows the tracker to a new host.
 
 ## Frontend
 

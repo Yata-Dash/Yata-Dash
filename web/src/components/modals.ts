@@ -374,6 +374,11 @@ let _editStoredUrl = '';
  *  another tab changed the tracker can't put the old values back, and a key
  *  field that was empty and still is can't clear a key added since. */
 let _editBaseline: TrackerPayload | null = null;
+/** Bumped each time the panel is cleared for an open, so a save's reply can
+ *  tell whether the panel that sent it is still the one on screen. */
+let _editPanel = 0;
+/** An add or edit request is in flight. */
+let _trackerSaving = false;
 
 /** Warn that moving the tracker to another host drops its saved key and
  *  cookie (the server won't carry them to a new origin). */
@@ -1752,24 +1757,30 @@ function markSaved(): void {
   }, 1600));
 }
 
-/** After a save the stored key and cookie are what the fields showed, so put
- *  the panel back into the state a fresh open would give it: the mask
- *  sentinel, meaning "unchanged". Without this a second save re-sends the
- *  plaintext, and the panel keeps a secret on screen for as long as it is
- *  left open. A secret the server no longer holds (`saved`) empties its field. */
-function remaskSecrets(saved?: Tracker): void {
-  const fields: [string, boolean | undefined, string][] = [
-    ['modal-key', saved?.has_key, 'Your API token'],
-    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools'],
+/** After a save the stored key and cookie are what was sent, so put the
+ *  panel back into the state a fresh open would give it: the mask sentinel,
+ *  meaning "unchanged". Without this a second save re-sends the plaintext, and
+ *  the panel keeps a secret on screen for as long as it is left open. A secret
+ *  the server no longer holds (`saved`) empties its field. A field edited while
+ *  the save was in flight keeps the new edit. Returns each field's new
+ *  "unchanged" value, for the baseline. */
+function remaskSecrets(saved: Tracker | undefined, sent: { key: string; cookie: string }): { key: string; cookie: string } {
+  const fields: [string, boolean | undefined, string, string][] = [
+    ['modal-key', saved?.has_key, 'Your API token', sent.key],
+    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools', sent.cookie],
   ];
-  for (const [id, stored, emptyPlaceholder] of fields) {
+  const now: string[] = [];
+  for (const [id, stored, emptyPlaceholder, submitted] of fields) {
+    const v = stored === false ? '' : (submitted ? MASKED_KEY : '');
+    now.push(v);
     const el = document.getElementById(id) as HTMLInputElement | null;
-    if (!el) continue;
-    if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
-    else if (el.value) el.value = MASKED_KEY;
+    if (!el || el.value !== submitted) continue;
+    el.value = v;
+    if (stored === false) el.placeholder = emptyPlaceholder;
   }
   if (saved) _editStoredUrl = saved.url;
   checkUrlCredentialHint();
+  return { key: now[0] ?? '', cookie: now[1] ?? '' };
 }
 
 /** The tracker form as a request body: every field it shows. Reads only;
@@ -1872,6 +1883,8 @@ function changedTrackerFields(form: TrackerPayload, base: TrackerPayload | null)
 }
 
 export async function saveTracker(deps: ModalDeps) {
+  // One save at a time: each builds on the baseline the one before it left.
+  if (_trackerSaving) return;
   const id    = getVal('modal-tracker-id');
   const isNew = !id;
   const isDemo = isNew
@@ -1927,7 +1940,13 @@ export async function saveTracker(deps: ModalDeps) {
   const payload = isNew ? form : changedTrackerFields(form, _editBaseline);
 
   if (!isNew) {
-    const { ok, status, data } = await api.updateTracker(id, payload);
+    const panel = _editPanel;
+    _trackerSaving = true;
+    let res: Awaited<ReturnType<typeof api.updateTracker>>;
+    try { res = await api.updateTracker(id, payload); } finally { _trackerSaving = false; }
+    const { ok, status, data } = res;
+    // The reply belongs to the panel that sent it, not one opened since.
+    const samePanel = panel === _editPanel;
     if (ok) {
       deps.toast(`${name} updated`, 'success');
       // Saving is not the same as being finished. Editing a tracker is a
@@ -1935,19 +1954,21 @@ export async function saveTracker(deps: ModalDeps) {
       // closing on every save made Save mean "save and leave", so the only way
       // to keep a change was to postpone it. Adding a tracker still closes:
       // that one IS finished, and the next thing to do is look at the list.
-      markSaved();
       // A move to another host cleared masked secrets; say so, it's easy to miss.
       if (data && ((keyVal === MASKED_KEY && !data.has_key)
         || (cookieVal === MASKED_KEY && !data.has_session))) {
         deps.toast('The new address is a different host, so the saved key/cookie were cleared — re-enter them', 'warning');
       }
-      remaskSecrets(data ?? undefined);
-      // What was sent is now stored. The secret fields now show the mask or
-      // nothing, which is their new "unchanged".
-      _editBaseline = {
-        ...(_editBaseline ?? {}), ...payload,
-        api_key: getVal('modal-key'), session_cookie: getVal('modal-session-cookie'),
-      };
+      if (samePanel) {
+        markSaved();
+        // What was sent is now stored; the secrets' "unchanged" is the mask
+        // or nothing.
+        const secrets = remaskSecrets(data ?? undefined, { key: keyVal, cookie: cookieVal });
+        _editBaseline = {
+          ...(_editBaseline ?? {}), ...payload,
+          api_key: secrets.key, session_cookie: secrets.cookie,
+        };
+      }
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -1955,7 +1976,10 @@ export async function saveTracker(deps: ModalDeps) {
     }
     else    { deps.toast(status === 400 && serverError(data) ? serverError(data) : 'Failed to update tracker', 'error'); }
   } else {
-    const { ok, status, data } = await api.addTracker(payload);
+    _trackerSaving = true;
+    let res: Awaited<ReturnType<typeof api.addTracker>>;
+    try { res = await api.addTracker(payload); } finally { _trackerSaving = false; }
+    const { ok, status, data } = res;
     if (ok) {
       deps.toast(`${name} added`, 'success');
       closeModal();
@@ -3498,6 +3522,7 @@ function clearModal() {
   });
   _editStoredUrl = ''; // Add mode has no saved secrets to warn about
   _editBaseline = null;
+  _editPanel++;
   hide('modal-url-cred-hint');
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
