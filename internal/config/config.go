@@ -475,10 +475,11 @@ func (m *Manager) Notifications() models.NotificationConfig {
 	return copyNotifications(m.cfg.Notifications)
 }
 
-// UpdateNotifications replaces the notification config and persists.
-func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// fillNotificationDefaults runs on every write: empty lists rather than null,
+// and the notification centre always present. A save that dropped the centre
+// would leave rules resolving to nothing with no visible cause; its Enabled
+// state is kept, so turning it off still works.
+func fillNotificationDefaults(n *models.NotificationConfig) {
 	if n.Destinations == nil {
 		n.Destinations = []models.NotifyDestination{}
 	}
@@ -488,11 +489,35 @@ func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
 	if n.Digest.Destinations == nil {
 		n.Digest.Destinations = []string{}
 	}
-	// On every write, not just at load: the destination list arrives from the
-	// editor, and a save that dropped the notification centre would leave rules
-	// resolving to nothing with no visible cause. Its Enabled state is
-	// preserved, so turning it off still works.
-	ensureInAppDestination(&n)
+	ensureInAppDestination(n)
+}
+
+// PatchNotifications changes the stored notification config in place, under
+// the lock, so an edit lands on what is stored now and not on a copy read
+// earlier. mutate gets a copy: if it returns an error, or the save fails,
+// nothing changes. Returns the config as saved.
+func (m *Manager) PatchNotifications(mutate func(*models.NotificationConfig) error) (models.NotificationConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := copyNotifications(m.cfg.Notifications)
+	if err := mutate(&n); err != nil {
+		return models.NotificationConfig{}, err
+	}
+	fillNotificationDefaults(&n)
+	old := m.cfg.Notifications
+	m.cfg.Notifications = n
+	if err := m.saveLocked(); err != nil {
+		m.cfg.Notifications = old
+		return models.NotificationConfig{}, err
+	}
+	return copyNotifications(n), nil
+}
+
+// UpdateNotifications replaces the notification config and persists.
+func (m *Manager) UpdateNotifications(n models.NotificationConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	fillNotificationDefaults(&n)
 	// Carried forward so a save can never re-trigger seeding — the editor sends
 	// the whole config back, and a client that omits the counter would
 	// otherwise re-inject every starter rule the user has deleted.
@@ -533,6 +558,7 @@ func copyNotifications(n models.NotificationConfig) models.NotificationConfig {
 	for i, r := range n.Rules {
 		r.Conditions = append([]models.Condition(nil), r.Conditions...)
 		r.Destinations = append([]string(nil), r.Destinations...)
+		r.TrackerIDs = append([]string(nil), r.TrackerIDs...)
 		out.Rules[i] = r
 	}
 	out.Digest.Destinations = append([]string(nil), n.Digest.Destinations...)

@@ -4,7 +4,7 @@ import type {
   AlertRule, AlertsResponse, ApiTokenInfo, AppSettings, AuthStatus, BackupsResponse, DefsPayload, DefsReloadResult,
   DetectTypeResponse, DryRunResult,
   HistorySeriesResponse,
-  LogsResponse, NotificationConfig, NotifyDestination, PathwayFromResponse, PathwayPathsResponse, PathwayPinnedResponse,
+  LogsResponse, NotificationConfig, NotificationsPatch, NotifyDestination, PathwayFromResponse, PathwayPathsResponse, PathwayPinnedResponse,
   PathwayTargetsResponse, ProwlarrIndexer,
   ScrapeStatusMap, StatsMap, TestStatusMap, ThemeInfo, Tracker, TrackerGroupMap,
   TrackerPayload, TrackerStatsResponse, TrackerTestOverrides, TrackerTestResult, UpdateStatus,
@@ -159,8 +159,11 @@ export const createBackup = () => call<{ ok: boolean }>('/api/backups', { method
 
 // ── Alerts & notifications ──────────────────────────────────────────────────
 export const fetchNotifications = () => call<NotificationConfig>('/api/notifications');
+/** Replaces everything: import only. The editor saves with patchNotifications. */
 export const saveNotifications = (n: NotificationConfig) =>
   call<NotificationConfig>('/api/notifications', { method: 'PUT', body: JSON.stringify(n) });
+export const patchNotifications = (p: NotificationsPatch) =>
+  call<NotificationConfig>('/api/notifications', { method: 'PATCH', body: JSON.stringify(p) });
 export const testNotification = (dest: NotifyDestination) =>
   call<{ ok: boolean; error?: string }>('/api/notifications/test', { method: 'POST', body: JSON.stringify(dest) });
 export const dryRunRule = (rule: AlertRule) =>

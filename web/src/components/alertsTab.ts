@@ -3,12 +3,13 @@
 // trackers→destinations scope callout on rules) that expand into edit forms.
 // Tracker scope and "send to" both use a searchable multi-select (qui-style:
 // chips + dropdown with search) so 100+ trackers stay manageable.
-// State is held in memory and saved as a whole via PUT /api/notifications.
+// State is held in memory; Save sends only what changed since the load
+// (PATCH /api/notifications), so an older tab can't put old rules back.
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { appSettings, trackers } from '../state';
 import { normalizeInput } from '../utils/units';
-import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotifyDestination } from '../types';
+import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotificationsPatch, NotifyDestination } from '../types';
 import type { ToastType } from './toast';
 
 type Toast = (msg: string, type?: ToastType) => void;
@@ -17,6 +18,12 @@ let toast: Toast = () => {};
 let destinations: NotifyDestination[] = [];
 let rules: AlertRule[] = [];
 let digest: DigestConfig = { enabled: false, weekday: 1, hour: 9, destinations: [] };
+// What the server holds as far as this tab knows: set by a load, advanced by
+// each save. Item maps are id → itemKey; a save sends what differs from them.
+let baseDests = new Map<string, string>();
+let baseRules = new Map<string, string>();
+let baseDigest: Pick<DigestConfig, 'enabled' | 'weekday' | 'hour' | 'destinations'> =
+  { enabled: false, weekday: 1, hour: 9, destinations: [] };
 let editingDest = -1;   // index of the destination shown in its edit form (-1 = none)
 let editingRule = -1;   // index of the rule shown in its edit form (-1 = none)
 let pendingDelete: string | null = null; // dest/rule id awaiting inline delete confirm
@@ -256,6 +263,9 @@ async function reload(): Promise<void> {
   }));
   digest = data.digest ?? { enabled: false, weekday: 1, hour: 9, destinations: [] };
   digest.destinations = digest.destinations ?? [];
+  baseDests = new Map(destinations.map(d => [d.id, destKey(d)]));
+  baseRules = new Map(rules.map(r => [r.id, ruleKey(r)]));
+  baseDigest = { enabled: digest.enabled, weekday: digest.weekday, hour: digest.hour, destinations: [...digest.destinations] };
   loaded = true;
   editingDest = -1;
   editingRule = -1;
@@ -285,8 +295,67 @@ export async function saveAlerts(): Promise<void> {
     toast('Fix the highlighted value first', 'error');
     return;
   }
-  const { ok } = await api.saveNotifications({ destinations, rules, digest });
+  const { patch, destKeys, ruleKeys } = changesSinceLoad();
+  const { ok } = await api.patchNotifications(patch);
+  if (ok) {
+    // What was sent is now stored; the rest stays as last loaded.
+    for (const id of patch.delete_destinations ?? []) baseDests.delete(id);
+    for (const id of patch.delete_rules ?? []) baseRules.delete(id);
+    destKeys.forEach((k, id) => baseDests.set(id, k));
+    ruleKeys.forEach((k, id) => baseRules.set(id, k));
+    if (patch.digest) baseDigest = { ...baseDigest, ...patch.digest };
+  }
   toast(ok ? 'Alerts saved' : 'Failed to save alerts', ok ? 'success' : 'error');
+}
+
+/** A destination's or rule's editable content, for comparing with the last
+ *  load. Thresholds are compared in the form Save stores them in. */
+function destKey(d: NotifyDestination): string {
+  return JSON.stringify([d.name, d.type, d.url, d.token, d.chat_id, d.enabled]);
+}
+function ruleKey(r: AlertRule): string {
+  const conds = r.conditions.map(c => {
+    const type = fieldDef(toDisplay(c).field).type;
+    let value = c.value.trim();
+    if ((type === 'size' || type === 'numeric') && value) {
+      const res = normalizeInput(type === 'size' ? 'size' : 'number', value);
+      if (res.ok) value = res.value;
+    }
+    return [c.field, c.op, value];
+  });
+  return JSON.stringify([r.name, r.enabled, r.tracker_ids, r.tracker_mode, r.match, conds,
+    r.destinations, r.cooldown_minutes]);
+}
+
+/** The PATCH body for this tab's edits since the last load or save, plus the
+ *  keys of what it sends (the model can change while the save is in flight). */
+function changesSinceLoad(): { patch: NotificationsPatch; destKeys: Map<string, string>; ruleKeys: Map<string, string> } {
+  const patch: NotificationsPatch = {};
+  const destKeys = new Map<string, string>();
+  const ruleKeys = new Map<string, string>();
+  for (const d of destinations) {
+    const k = destKey(d);
+    if (baseDests.get(d.id) !== k) destKeys.set(d.id, k);
+  }
+  for (const r of rules) {
+    const k = ruleKey(r);
+    if (baseRules.get(r.id) !== k) ruleKeys.set(r.id, k);
+  }
+  const upD = destinations.filter(d => destKeys.has(d.id));
+  const upR = rules.filter(r => ruleKeys.has(r.id));
+  const delD = [...baseDests.keys()].filter(id => !destinations.some(d => d.id === id));
+  const delR = [...baseRules.keys()].filter(id => !rules.some(r => r.id === id));
+  if (upD.length) patch.upsert_destinations = JSON.parse(JSON.stringify(upD));
+  if (delD.length) patch.delete_destinations = delD;
+  if (upR.length) patch.upsert_rules = JSON.parse(JSON.stringify(upR));
+  if (delR.length) patch.delete_rules = delR;
+  const dg: NonNullable<NotificationsPatch['digest']> = {};
+  if (digest.enabled !== baseDigest.enabled) dg.enabled = digest.enabled;
+  if (digest.weekday !== baseDigest.weekday) dg.weekday = digest.weekday;
+  if (digest.hour !== baseDigest.hour) dg.hour = digest.hour;
+  if (JSON.stringify(digest.destinations) !== JSON.stringify(baseDigest.destinations)) dg.destinations = [...digest.destinations];
+  if (Object.keys(dg).length) patch.digest = dg;
+  return { patch, destKeys, ruleKeys };
 }
 
 /** Check every size/numeric condition value in the model against its shape,
