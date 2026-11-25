@@ -168,7 +168,8 @@ A housekeeping loop prunes these on their retention windows every six hours.
 Settings are changed with `PATCH /api/settings`, which takes only the fields to change and applies
 them under one lock (`config.PatchSettings`); a full-object `PUT` is refused. Code that changes a few
 settings uses `PatchSettings` too, never "read `Settings()`, edit, `UpdateSettings`", which would put
-back anything changed in between.
+back anything changed in between. Tracker edits follow the same rule: `PUT /api/trackers/{id}`
+leaves any field missing from the body as stored, and the Edit form sends only the fields changed since it opened.
 
 ## Frontend
 

@@ -20,6 +20,7 @@ All notable changes to Yata, newest first. Versions are date-based builds:
 
 ### Fixed
 
+- **Saving a tracker from an older tab no longer reverts changes made since**: Edit now sends only the fields you changed, so an empty key or cookie field can no longer clear one added elsewhere.
 - **Settings saved on their own** (hostnames, the update check, proxy headers, private mode) are no longer resent by a later save of something else, which could undo another tab's change (#94).
 - **A tracker's session cookie can be removed again**: emptying the field and saving now clears it, instead of reporting success and keeping it.
 - **A failed Alerts load can no longer wipe your alerts.** The tab shows an error with Retry and keeps Save and Import off until the rules have loaded, instead of offering an empty editor whose Save replaced them.

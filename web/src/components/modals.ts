@@ -246,6 +246,8 @@ export async function detectTrackerType(): Promise<void> {
   }
   const sel = document.getElementById('modal-edit-type') as HTMLSelectElement | null;
   if (sel) sel.value = data.detected;
+  // Detection saved the type itself.
+  if (_editBaseline) _editBaseline.type = data.detected;
   const hit = (data.attempts ?? []).find((a: DetectAttempt) => a.type === data.detected);
   show(`Detected <strong>${esc(data.label ?? data.detected)}</strong> — ${hit?.fields ?? 0} stats returned. Saved.`, 'green');
   _sd?.toast(`Type detected: ${data.label ?? data.detected}`, 'success');
@@ -367,10 +369,11 @@ export function checkTrackerOptOut(): void {
 
 /** URL the open Edit panel's tracker is saved with ("" in Add mode). */
 let _editStoredUrl = '';
-/** Whether the open edit form showed a stored session cookie (the mask). An
- *  emptied field then means "remove it"; a field that was empty and still is
- *  says nothing, so a stale form can't clear a cookie added since it opened. */
-let _editCookieStored = false;
+/** The Edit form as it read when it opened, advanced as saves land. A save
+ *  sends only the fields that differ from it, so a panel left open while
+ *  another tab changed the tracker can't put the old values back, and a key
+ *  field that was empty and still is can't clear a key added since. */
+let _editBaseline: TrackerPayload | null = null;
 
 /** Warn that moving the tracker to another host drops its saved key and
  *  cookie (the server won't carry them to a new origin). */
@@ -1356,7 +1359,6 @@ export function openEditModal(
   setPlaceholder('modal-key', t.has_key ? `${MASKED_KEY} = keep current key` : 'Your API token');
 
   setVal('modal-session-cookie', t.has_session ? MASKED_KEY : '');
-  _editCookieStored = !!t.has_session;
   setPlaceholder('modal-session-cookie',
     t.has_session ? `${MASKED_KEY} = keep current cookie` : 'Paste cookie string from browser DevTools');
   // Best-effort default before defs are confirmed loaded: visible unless
@@ -1468,6 +1470,12 @@ export function openEditModal(
   // field and Test connection unconditionally, so a manual tracker has to be
   // stripped of them after all of that, not before.
   applyManualCredentialsUI(t.type === MANUAL_TYPE);
+
+  _editBaseline = readTrackerForm(false, false, getVal('modal-name'), getVal('modal-url'));
+  // These two pickers fill in after a fetch, so read what they will show.
+  if (_editTypeTrackerId && t.type) _editBaseline.type = t.type;
+  else delete _editBaseline.type;
+  if (_editBaseline.mock_scenario !== undefined) _editBaseline.mock_scenario = t.mock_scenario || 'healthy';
 
   openTrackerPanel();
   setTimeout(() => (document.getElementById('modal-name') as HTMLInputElement)?.focus(), 80);
@@ -1760,8 +1768,107 @@ function remaskSecrets(saved?: Tracker): void {
     if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
     else if (el.value) el.value = MASKED_KEY;
   }
-  if (saved) { _editStoredUrl = saved.url; _editCookieStored = !!saved.has_session; }
+  if (saved) _editStoredUrl = saved.url;
   checkUrlCredentialHint();
+}
+
+/** The tracker form as a request body: every field it shows. Reads only;
+ *  saveTracker does the checks and messages first. */
+function readTrackerForm(isNew: boolean, isDemo: boolean, name: string, url: string): TrackerPayload {
+  // Build the targets map. Group selected → the group's base requirements
+  // from the def (nothing to type); manual → the builder rows. In add mode
+  // the section is hidden and targets start empty — set them later from the
+  // dashboard pencil or the edit screen.
+  const targetsVisible = document.getElementById('modal-targets-section')?.style.display !== 'none';
+  const groupRowEl = document.getElementById('modal-target-group-row');
+  const groupSelEl = document.getElementById('modal-target-group-select') as HTMLSelectElement | null;
+  const chosenGroup = (targetsVisible && groupRowEl?.style.display !== 'none')
+    ? (groupSelEl?.value ?? '') : '';
+  let targets: Record<string, string> | undefined = {};
+  // Manual mode reads per-row deadline inputs; group mode reads the ONE
+  // whole-group goal date from the hint panel and fans it out per key —
+  // empty means no goal (clears old per-key deadlines: the control shows
+  // the state, so what you see is what gets saved).
+  let targetDeadlines: Record<string, string> | undefined;
+  if (chosenGroup) {
+    const g = findGroupDef(groupDefs, groupRowEl?.dataset?.['trackerKey'] ?? '', chosenGroup);
+    // Def group missing (renamed/removed) → omit targets, keeping the stored
+    // values rather than wiping them.
+    targets = g ? groupRequirementsToTargets(g.requirements) : undefined;
+    if (g && targets) {
+      const date = document.querySelector<HTMLInputElement>('#modal-target-group-hint [data-target-deadline]')?.value ?? '';
+      targetDeadlines = date ? fanDeadline(targets, date) : {};
+    }
+  } else if (targetsVisible) {
+    targets = collectTargetRows();
+    targetDeadlines = collectTargetDeadlines();
+  }
+
+  const cookieVal   = getVal('modal-session-cookie');
+  // On add, the type comes from the chosen def or the type dropdown. On edit
+  // it is only sent for def-less trackers, where the picker is shown — the
+  // backend re-asserts the def's type for everything else regardless.
+  const trackerType = isNew
+    ? (_selectedDef?.type || _selectedTypeKey || undefined)
+    : (_editTypeTrackerId ? (getVal('modal-edit-type') || undefined) : undefined);
+  const minScrape   = parseInt(getVal('modal-min-scrape-interval'), 10);
+  const scrapeVisible = document.getElementById('modal-scrape-section')?.style.display !== 'none';
+  // Only send manual stats when the editor is on screen. A hidden section has
+  // no rows, and sending an empty map would wipe stored values for every
+  // tracker that doesn't show it.
+  const manualVisible = document.getElementById('modal-manual-section')?.style.display !== 'none';
+
+  const payload: TrackerPayload = {
+    name, url, enabled: _modalEnabled,
+    api_key:  getVal('modal-key'),        // MASKED_KEY sentinel = unchanged
+    username: getVal('modal-username'),
+    // MASKED_KEY = unchanged; '' clears. On edit the field is always read and
+    // the baseline decides whether it is sent.
+    ...(cookieVal || !isNew ? { session_cookie: cookieVal } : {}),
+    min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
+    ...(targets !== undefined ? { targets } : {}),
+    target_group: chosenGroup,
+    ...(targetDeadlines !== undefined ? { target_deadlines: targetDeadlines } : {}),
+    join_date: getVal('modal-joindate'),
+    ...(trackerType ? { type: trackerType } : {}),
+    ...(manualVisible ? { manual_stats: collectManualRows() } : {}),
+  };
+
+  // Per-tracker scrape options (only when the section is shown — edit mode).
+  if (scrapeVisible) {
+    const maxScrape = parseInt(getVal('modal-max-scrapes'), 10);
+    payload.max_scrapes_per_day = !isNaN(maxScrape) && maxScrape > 0 ? maxScrape : 0;
+    payload.auto_interval = !!(document.getElementById('modal-auto-interval') as HTMLInputElement | null)?.checked;
+    // When the def forbids scraping the toggle is forced ON for display only —
+    // don't persist that visual state (omit → backend keeps the stored value).
+    // Persisting it would bake api_only=true into the tracker, which outlives
+    // a later def change that re-allows scraping.
+    if (!_apiOnlyLocked) {
+      payload.api_only = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
+    }
+  } else if (_scrapeAllowedAtAdd) {
+    // Add mode has no scraping section, so the only way to say "scrape this
+    // one" is here — without it the server's API-only default for an unknown
+    // tracker would silently outrank the cookie the user just pasted.
+    payload.api_only = false;
+  }
+
+  if (isDemo || (!isNew && document.getElementById('modal-mock-group')?.style.display !== 'none')) {
+    payload.mock_scenario =
+      (document.getElementById('modal-mock-scenario') as HTMLSelectElement)?.value || 'healthy';
+  }
+  return payload;
+}
+
+/** The fields of `form` that differ from `base` (all of them without one).
+ *  Fields left out are kept as stored, whoever changed them last. */
+function changedTrackerFields(form: TrackerPayload, base: TrackerPayload | null): TrackerPayload {
+  if (!base) return form;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(form)) {
+    if (JSON.stringify(v) !== JSON.stringify((base as Record<string, unknown>)[k])) out[k] = v;
+  }
+  return out as TrackerPayload;
 }
 
 export async function saveTracker(deps: ModalDeps) {
@@ -1800,50 +1907,8 @@ export async function saveTracker(deps: ModalDeps) {
     return;
   }
 
-  // Build the targets map. Group selected → the group's base requirements
-  // from the def (nothing to type); manual → the builder rows. In add mode
-  // the section is hidden and targets start empty — set them later from the
-  // dashboard pencil or the edit screen.
-  const targetsVisible = document.getElementById('modal-targets-section')?.style.display !== 'none';
-  const groupRowEl = document.getElementById('modal-target-group-row');
-  const groupSelEl = document.getElementById('modal-target-group-select') as HTMLSelectElement | null;
-  const chosenGroup = (targetsVisible && groupRowEl?.style.display !== 'none')
-    ? (groupSelEl?.value ?? '') : '';
-  let targets: Record<string, string> | undefined = {};
-  // Manual mode reads per-row deadline inputs; group mode reads the ONE
-  // whole-group goal date from the hint panel and fans it out per key —
-  // empty means no goal (clears old per-key deadlines: the control shows
-  // the state, so what you see is what gets saved).
-  let targetDeadlines: Record<string, string> | undefined;
-  if (chosenGroup) {
-    const g = findGroupDef(groupDefs, groupRowEl?.dataset?.['trackerKey'] ?? '', chosenGroup);
-    // Def group missing (renamed/removed) → omit targets, keeping the stored
-    // values rather than wiping them.
-    targets = g ? groupRequirementsToTargets(g.requirements) : undefined;
-    if (g && targets) {
-      const date = document.querySelector<HTMLInputElement>('#modal-target-group-hint [data-target-deadline]')?.value ?? '';
-      targetDeadlines = date ? fanDeadline(targets, date) : {};
-    }
-  } else if (targetsVisible) {
-    targets = collectTargetRows();
-    targetDeadlines = collectTargetDeadlines();
-  }
-
-  const cookieVal   = getVal('modal-session-cookie');
-  // On add, the type comes from the chosen def or the type dropdown. On edit
-  // it is only sent for def-less trackers, where the picker is shown — the
-  // backend re-asserts the def's type for everything else regardless.
-  const trackerType = isNew
-    ? (_selectedDef?.type || _selectedTypeKey || undefined)
-    : (_editTypeTrackerId ? (getVal('modal-edit-type') || undefined) : undefined);
-  const minScrape   = parseInt(getVal('modal-min-scrape-interval'), 10);
-
   // Block a too-low scrape interval (also red-flagged on the field).
   const scrapeVisible = document.getElementById('modal-scrape-section')?.style.display !== 'none';
-  // Only send manual stats when the editor is on screen. A hidden section has
-  // no rows, and sending an empty map would wipe stored values for every
-  // tracker that doesn't show it.
-  const manualVisible = document.getElementById('modal-manual-section')?.style.display !== 'none';
   if (scrapeVisible && !modalValidateInterval()) {
     deps.toast(`Scrape interval must be at least ${_scrapeFloor} min`, 'error');
     return;
@@ -1854,44 +1919,12 @@ export async function saveTracker(deps: ModalDeps) {
     return;
   }
 
-  const payload: TrackerPayload = {
-    name, url, enabled: _modalEnabled,
-    api_key:  getVal('modal-key'),        // MASKED_KEY sentinel = unchanged
-    username: getVal('modal-username'),
-    // MASKED_KEY = unchanged; '' clears, but only a cookie this form showed.
-    ...(cookieVal || (!isNew && _editCookieStored) ? { session_cookie: cookieVal } : {}),
-    min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
-    ...(targets !== undefined ? { targets } : {}),
-    target_group: chosenGroup,
-    ...(targetDeadlines !== undefined ? { target_deadlines: targetDeadlines } : {}),
-    join_date: getVal('modal-joindate'),
-    ...(trackerType ? { type: trackerType } : {}),
-    ...(manualVisible ? { manual_stats: collectManualRows() } : {}),
-  };
-
-  // Per-tracker scrape options (only when the section is shown — edit mode).
-  if (scrapeVisible) {
-    const maxScrape = parseInt(getVal('modal-max-scrapes'), 10);
-    payload.max_scrapes_per_day = !isNaN(maxScrape) && maxScrape > 0 ? maxScrape : 0;
-    payload.auto_interval = !!(document.getElementById('modal-auto-interval') as HTMLInputElement | null)?.checked;
-    // When the def forbids scraping the toggle is forced ON for display only —
-    // don't persist that visual state (omit → backend keeps the stored value).
-    // Persisting it would bake api_only=true into the tracker, which outlives
-    // a later def change that re-allows scraping.
-    if (!_apiOnlyLocked) {
-      payload.api_only = document.getElementById('modal-api-only-track')?.classList.contains('on') ?? false;
-    }
-  } else if (_scrapeAllowedAtAdd) {
-    // Add mode has no scraping section, so the only way to say "scrape this
-    // one" is here — without it the server's API-only default for an unknown
-    // tracker would silently outrank the cookie the user just pasted.
-    payload.api_only = false;
-  }
-
-  if (isDemo || (!isNew && document.getElementById('modal-mock-group')?.style.display !== 'none')) {
-    payload.mock_scenario =
-      (document.getElementById('modal-mock-scenario') as HTMLSelectElement)?.value || 'healthy';
-  }
+  const form = readTrackerForm(isNew, isDemo, name, url);
+  const keyVal = form.api_key ?? '';
+  const cookieVal = form.session_cookie ?? '';
+  // An edit sends only what changed since the panel opened or last saved.
+  // Nothing changed still saves: that is what promotes a pending test result.
+  const payload = isNew ? form : changedTrackerFields(form, _editBaseline);
 
   if (!isNew) {
     const { ok, status, data } = await api.updateTracker(id, payload);
@@ -1904,11 +1937,17 @@ export async function saveTracker(deps: ModalDeps) {
       // that one IS finished, and the next thing to do is look at the list.
       markSaved();
       // A move to another host cleared masked secrets; say so, it's easy to miss.
-      if (data && ((payload.api_key === MASKED_KEY && !data.has_key)
+      if (data && ((keyVal === MASKED_KEY && !data.has_key)
         || (cookieVal === MASKED_KEY && !data.has_session))) {
         deps.toast('The new address is a different host, so the saved key/cookie were cleared — re-enter them', 'warning');
       }
       remaskSecrets(data ?? undefined);
+      // What was sent is now stored. The secret fields now show the mask or
+      // nothing, which is their new "unchanged".
+      _editBaseline = {
+        ...(_editBaseline ?? {}), ...payload,
+        api_key: getVal('modal-key'), session_cookie: getVal('modal-session-cookie'),
+      };
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -3436,6 +3475,7 @@ export async function switchMockScenario(
     deps.toast(`Scenario → ${prettyScenario(scenario)}`, 'success');
     const t = trackers.find(x => x.id === trackerId);
     if (t) t.mock_scenario = scenario;
+    if (_editBaseline && getVal('modal-tracker-id') === trackerId) _editBaseline.mock_scenario = scenario;
     await deps.refreshSingle(trackerId);
   } else {
     deps.toast('Failed to switch scenario', 'error');
@@ -3457,6 +3497,7 @@ function clearModal() {
     if (el) el.value = '';
   });
   _editStoredUrl = ''; // Add mode has no saved secrets to warn about
+  _editBaseline = null;
   hide('modal-url-cred-hint');
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
