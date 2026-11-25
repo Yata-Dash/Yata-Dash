@@ -26,6 +26,9 @@ let baseDigest: Pick<DigestConfig, 'enabled' | 'weekday' | 'hour' | 'destination
   { enabled: false, weekday: 1, hour: 9, destinations: [] };
 let loadCount = 0;   // bumped by each load, so a save's reply can tell it predates one
 let saving = false;  // a save is in flight: one at a time, each building on the last
+let saveCount = 0;   // bumped as each save is sent
+let saveDone: Promise<unknown> = Promise.resolve(); // settles when the latest save has
+let loading: Promise<void> | null = null; // the load in flight, which a second call joins
 let editingDest = -1;   // index of the destination shown in its edit form (-1 = none)
 let editingRule = -1;   // index of the rule shown in its edit form (-1 = none)
 let pendingDelete: string | null = null; // dest/rule id awaiting inline delete confirm
@@ -245,9 +248,34 @@ export async function loadAlerts(deps: { toast: Toast }): Promise<void> {
 }
 
 /** Fetch destinations/rules from the server and re-render, dropping any
- *  in-memory edits and editor/dry-run state. */
-async function reload(): Promise<void> {
-  const { ok, data } = await api.fetchNotifications();
+ *  in-memory edits and editor/dry-run state. One load at a time: a second
+ *  call joins the one in flight rather than racing it. */
+function reload(): Promise<void> {
+  loading ??= fetchAndInstall().finally(() => { loading = null; });
+  return loading;
+}
+
+/** Runs one write (a save or an import). While it runs no other write
+ *  starts, and a load that overlaps it reads again once it lands. */
+async function trackSave<T>(start: () => Promise<T>): Promise<T> {
+  saving = true;
+  saveCount++;
+  const req = start();
+  saveDone = req.catch(() => undefined);
+  try { return await req; } finally { saving = false; }
+}
+
+async function fetchAndInstall(): Promise<void> {
+  let res: Awaited<ReturnType<typeof api.fetchNotifications>>;
+  for (;;) {
+    const sent = saveCount;
+    res = await api.fetchNotifications();
+    // A snapshot read while a save was running may predate it, and would put
+    // the old values back as the baseline: read again once the save lands.
+    if (!saving && sent === saveCount) break;
+    await saveDone;
+  }
+  const { ok, data } = res;
   if (!ok) {
     // Never fall back to an empty, editable model: saving it would replace
     // the real rules and destinations with nothing.
@@ -301,9 +329,7 @@ export async function saveAlerts(): Promise<void> {
   }
   const { patch, destKeys, ruleKeys } = changesSinceLoad();
   const load = loadCount;
-  saving = true;
-  let ok = false;
-  try { ({ ok } = await api.patchNotifications(patch)); } finally { saving = false; }
+  const { ok } = await trackSave(() => api.patchNotifications(patch));
   // A load since the send already holds this save's result.
   if (ok && load === loadCount) {
     // What was sent is now stored; the rest stays as last loaded.
@@ -402,6 +428,8 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
     toast('Import failed: not an alerts file', 'error'); return;
   }
   if (!confirm('Import alerts?\n\nThis REPLACES your current destinations and rules. Any new rule already met will notify immediately.')) return;
+  // Again: a save may have started while the file was read.
+  if (saving) { toast('A save is still running. Import again once it finishes.', 'error'); return; }
   // digest isn't part of the share-safe export/import format (it has no
   // secrets to strip) — carry the CURRENT schedule forward so importing an
   // alerts file never resets the weekly digest as a side effect.
@@ -409,7 +437,7 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   // a Save now would put it back over the import, so Save is off throughout.
   loaded = false;
   setSaveEnabled(false);
-  const { ok } = await api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest });
+  const { ok } = await trackSave(() => api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest }));
   if (ok) { toast('Alerts imported', 'success'); await reload(); }
   else {
     // Nothing changed on the server, so the editor's model is still current.
