@@ -246,6 +246,8 @@ export async function detectTrackerType(): Promise<void> {
   }
   const sel = document.getElementById('modal-edit-type') as HTMLSelectElement | null;
   if (sel) sel.value = data.detected;
+  // Detection saved the type itself.
+  if (_editBaseline) _editBaseline.type = data.detected;
   const hit = (data.attempts ?? []).find((a: DetectAttempt) => a.type === data.detected);
   show(`Detected <strong>${esc(data.label ?? data.detected)}</strong> — ${hit?.fields ?? 0} stats returned. Saved.`, 'green');
   _sd?.toast(`Type detected: ${data.label ?? data.detected}`, 'success');
@@ -367,10 +369,16 @@ export function checkTrackerOptOut(): void {
 
 /** URL the open Edit panel's tracker is saved with ("" in Add mode). */
 let _editStoredUrl = '';
-/** Whether the open edit form showed a stored session cookie (the mask). An
- *  emptied field then means "remove it"; a field that was empty and still is
- *  says nothing, so a stale form can't clear a cookie added since it opened. */
-let _editCookieStored = false;
+/** The Edit form as it read when it opened, advanced as saves land. A save
+ *  sends only the fields that differ from it, so a panel left open while
+ *  another tab changed the tracker can't put the old values back, and a key
+ *  field that was empty and still is can't clear a key added since. */
+let _editBaseline: TrackerPayload | null = null;
+/** Bumped each time the panel is cleared for an open, so a save's reply can
+ *  tell whether the panel that sent it is still the one on screen. */
+let _editPanel = 0;
+/** An add or edit request is in flight. */
+let _trackerSaving = false;
 
 /** Warn that moving the tracker to another host drops its saved key and
  *  cookie (the server won't carry them to a new origin). */
@@ -1356,7 +1364,6 @@ export function openEditModal(
   setPlaceholder('modal-key', t.has_key ? `${MASKED_KEY} = keep current key` : 'Your API token');
 
   setVal('modal-session-cookie', t.has_session ? MASKED_KEY : '');
-  _editCookieStored = !!t.has_session;
   setPlaceholder('modal-session-cookie',
     t.has_session ? `${MASKED_KEY} = keep current cookie` : 'Paste cookie string from browser DevTools');
   // Best-effort default before defs are confirmed loaded: visible unless
@@ -1468,6 +1475,12 @@ export function openEditModal(
   // field and Test connection unconditionally, so a manual tracker has to be
   // stripped of them after all of that, not before.
   applyManualCredentialsUI(t.type === MANUAL_TYPE);
+
+  _editBaseline = readTrackerForm(false, false, getVal('modal-name'), getVal('modal-url'));
+  // These two pickers fill in after a fetch, so read what they will show.
+  if (_editTypeTrackerId && t.type) _editBaseline.type = t.type;
+  else delete _editBaseline.type;
+  if (_editBaseline.mock_scenario !== undefined) _editBaseline.mock_scenario = t.mock_scenario || 'healthy';
 
   openTrackerPanel();
   setTimeout(() => (document.getElementById('modal-name') as HTMLInputElement)?.focus(), 80);
@@ -1744,62 +1757,35 @@ function markSaved(): void {
   }, 1600));
 }
 
-/** After a save the stored key and cookie are what the fields showed, so put
- *  the panel back into the state a fresh open would give it: the mask
- *  sentinel, meaning "unchanged". Without this a second save re-sends the
- *  plaintext, and the panel keeps a secret on screen for as long as it is
- *  left open. A secret the server no longer holds (`saved`) empties its field. */
-function remaskSecrets(saved?: Tracker): void {
-  const fields: [string, boolean | undefined, string][] = [
-    ['modal-key', saved?.has_key, 'Your API token'],
-    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools'],
+/** After a save the stored key and cookie are what was sent, so put the
+ *  panel back into the state a fresh open would give it: the mask sentinel,
+ *  meaning "unchanged". Without this a second save re-sends the plaintext, and
+ *  the panel keeps a secret on screen for as long as it is left open. A secret
+ *  the server no longer holds (`saved`) empties its field. A field edited while
+ *  the save was in flight keeps the new edit. Returns each field's new
+ *  "unchanged" value, for the baseline. */
+function remaskSecrets(saved: Tracker | undefined, sent: { key: string; cookie: string }): { key: string; cookie: string } {
+  const fields: [string, boolean | undefined, string, string][] = [
+    ['modal-key', saved?.has_key, 'Your API token', sent.key],
+    ['modal-session-cookie', saved?.has_session, 'Paste cookie string from browser DevTools', sent.cookie],
   ];
-  for (const [id, stored, emptyPlaceholder] of fields) {
+  const now: string[] = [];
+  for (const [id, stored, emptyPlaceholder, submitted] of fields) {
+    const v = stored === false ? '' : (submitted ? MASKED_KEY : '');
+    now.push(v);
     const el = document.getElementById(id) as HTMLInputElement | null;
-    if (!el) continue;
-    if (stored === false) { el.value = ''; el.placeholder = emptyPlaceholder; }
-    else if (el.value) el.value = MASKED_KEY;
+    if (!el || el.value !== submitted) continue;
+    el.value = v;
+    if (stored === false) el.placeholder = emptyPlaceholder;
   }
-  if (saved) { _editStoredUrl = saved.url; _editCookieStored = !!saved.has_session; }
+  if (saved) _editStoredUrl = saved.url;
   checkUrlCredentialHint();
+  return { key: now[0] ?? '', cookie: now[1] ?? '' };
 }
 
-export async function saveTracker(deps: ModalDeps) {
-  const id    = getVal('modal-tracker-id');
-  const isNew = !id;
-  const isDemo = isNew
-    ? (_selectedDef?.type === 'test' || _selectedTypeKey === 'test')
-    : false;
-
-  const name = getVal('modal-name') || (_selectedDef?.name ?? '');
-  let url  = getVal('modal-url');
-  if (isDemo && !url) url = '//test.local'; // backend requires a URL; demo trackers never call it
-
-  if (!name)           { deps.toast('Name is required', 'error'); return; }
-  if (!isNew && !url)  { deps.toast('URL is required',  'error'); return; }
-  if (isNew && !url)   { deps.toast('URL is required',  'error'); return; }
-
-  // Required fields enforcement (e.g. gazelle: the API call needs a username)
-  if (!isDemo && _requiredFields.includes('username') && !getVal('modal-username')) {
-    deps.toast('Username is required by this tracker type', 'error');
-    return;
-  }
-  if (!isDemo && _requiredFields.includes('join_date') && !getVal('modal-joindate')) {
-    deps.toast('Join date is required — this tracker doesn\'t report one', 'error');
-    return;
-  }
-
-  // Opt-out backstop — the notice/disabled Save already block this normally
-  const optEntry = findOptOut(_defsCache?.opt_outs, url);
-  if (optEntry) { deps.toast(optOutMessage(optEntry), 'error'); return; }
-
-  // A target or stat still open with a value that failed its shape: it is
-  // flagged under its row, and the server would refuse it anyway.
-  if (!closeOpenChipEdits()) {
-    deps.toast('Fix the highlighted value first', 'error');
-    return;
-  }
-
+/** The tracker form as a request body: every field it shows. Reads only;
+ *  saveTracker does the checks and messages first. */
+function readTrackerForm(isNew: boolean, isDemo: boolean, name: string, url: string): TrackerPayload {
   // Build the targets map. Group selected → the group's base requirements
   // from the def (nothing to type); manual → the builder rows. In add mode
   // the section is hidden and targets start empty — set them later from the
@@ -1837,29 +1823,19 @@ export async function saveTracker(deps: ModalDeps) {
     ? (_selectedDef?.type || _selectedTypeKey || undefined)
     : (_editTypeTrackerId ? (getVal('modal-edit-type') || undefined) : undefined);
   const minScrape   = parseInt(getVal('modal-min-scrape-interval'), 10);
-
-  // Block a too-low scrape interval (also red-flagged on the field).
   const scrapeVisible = document.getElementById('modal-scrape-section')?.style.display !== 'none';
   // Only send manual stats when the editor is on screen. A hidden section has
   // no rows, and sending an empty map would wipe stored values for every
   // tracker that doesn't show it.
   const manualVisible = document.getElementById('modal-manual-section')?.style.display !== 'none';
-  if (scrapeVisible && !modalValidateInterval()) {
-    deps.toast(`Scrape interval must be at least ${_scrapeFloor} min`, 'error');
-    return;
-  }
-  // Block a daily cap above the tracker operator's maximum.
-  if (scrapeVisible && !modalValidateMaxScrapes()) {
-    deps.toast(`Max scrapes must be at most ${_scrapeCap} per day`, 'error');
-    return;
-  }
 
   const payload: TrackerPayload = {
     name, url, enabled: _modalEnabled,
     api_key:  getVal('modal-key'),        // MASKED_KEY sentinel = unchanged
     username: getVal('modal-username'),
-    // MASKED_KEY = unchanged; '' clears, but only a cookie this form showed.
-    ...(cookieVal || (!isNew && _editCookieStored) ? { session_cookie: cookieVal } : {}),
+    // MASKED_KEY = unchanged; '' clears. On edit the field is always read and
+    // the baseline decides whether it is sent.
+    ...(cookieVal || !isNew ? { session_cookie: cookieVal } : {}),
     min_scrape_interval_minutes: !isNaN(minScrape) && minScrape > 0 ? minScrape : 0,
     ...(targets !== undefined ? { targets } : {}),
     target_group: chosenGroup,
@@ -1892,9 +1868,85 @@ export async function saveTracker(deps: ModalDeps) {
     payload.mock_scenario =
       (document.getElementById('modal-mock-scenario') as HTMLSelectElement)?.value || 'healthy';
   }
+  return payload;
+}
+
+/** The fields of `form` that differ from `base` (all of them without one).
+ *  Fields left out are kept as stored, whoever changed them last. */
+function changedTrackerFields(form: TrackerPayload, base: TrackerPayload | null): TrackerPayload {
+  if (!base) return form;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(form)) {
+    if (JSON.stringify(v) !== JSON.stringify((base as Record<string, unknown>)[k])) out[k] = v;
+  }
+  return out as TrackerPayload;
+}
+
+export async function saveTracker(deps: ModalDeps) {
+  // One save at a time: each builds on the baseline the one before it left.
+  if (_trackerSaving) return;
+  const id    = getVal('modal-tracker-id');
+  const isNew = !id;
+  const isDemo = isNew
+    ? (_selectedDef?.type === 'test' || _selectedTypeKey === 'test')
+    : false;
+
+  const name = getVal('modal-name') || (_selectedDef?.name ?? '');
+  let url  = getVal('modal-url');
+  if (isDemo && !url) url = '//test.local'; // backend requires a URL; demo trackers never call it
+
+  if (!name)           { deps.toast('Name is required', 'error'); return; }
+  if (!isNew && !url)  { deps.toast('URL is required',  'error'); return; }
+  if (isNew && !url)   { deps.toast('URL is required',  'error'); return; }
+
+  // Required fields enforcement (e.g. gazelle: the API call needs a username)
+  if (!isDemo && _requiredFields.includes('username') && !getVal('modal-username')) {
+    deps.toast('Username is required by this tracker type', 'error');
+    return;
+  }
+  if (!isDemo && _requiredFields.includes('join_date') && !getVal('modal-joindate')) {
+    deps.toast('Join date is required — this tracker doesn\'t report one', 'error');
+    return;
+  }
+
+  // Opt-out backstop — the notice/disabled Save already block this normally
+  const optEntry = findOptOut(_defsCache?.opt_outs, url);
+  if (optEntry) { deps.toast(optOutMessage(optEntry), 'error'); return; }
+
+  // A target or stat still open with a value that failed its shape: it is
+  // flagged under its row, and the server would refuse it anyway.
+  if (!closeOpenChipEdits()) {
+    deps.toast('Fix the highlighted value first', 'error');
+    return;
+  }
+
+  // Block a too-low scrape interval (also red-flagged on the field).
+  const scrapeVisible = document.getElementById('modal-scrape-section')?.style.display !== 'none';
+  if (scrapeVisible && !modalValidateInterval()) {
+    deps.toast(`Scrape interval must be at least ${_scrapeFloor} min`, 'error');
+    return;
+  }
+  // Block a daily cap above the tracker operator's maximum.
+  if (scrapeVisible && !modalValidateMaxScrapes()) {
+    deps.toast(`Max scrapes must be at most ${_scrapeCap} per day`, 'error');
+    return;
+  }
+
+  const form = readTrackerForm(isNew, isDemo, name, url);
+  const keyVal = form.api_key ?? '';
+  const cookieVal = form.session_cookie ?? '';
+  // An edit sends only what changed since the panel opened or last saved.
+  // Nothing changed still saves: that is what promotes a pending test result.
+  const payload = isNew ? form : changedTrackerFields(form, _editBaseline);
 
   if (!isNew) {
-    const { ok, status, data } = await api.updateTracker(id, payload);
+    const panel = _editPanel;
+    _trackerSaving = true;
+    let res: Awaited<ReturnType<typeof api.updateTracker>>;
+    try { res = await api.updateTracker(id, payload); } finally { _trackerSaving = false; }
+    const { ok, status, data } = res;
+    // The reply belongs to the panel that sent it, not one opened since.
+    const samePanel = panel === _editPanel;
     if (ok) {
       deps.toast(`${name} updated`, 'success');
       // Saving is not the same as being finished. Editing a tracker is a
@@ -1902,13 +1954,21 @@ export async function saveTracker(deps: ModalDeps) {
       // closing on every save made Save mean "save and leave", so the only way
       // to keep a change was to postpone it. Adding a tracker still closes:
       // that one IS finished, and the next thing to do is look at the list.
-      markSaved();
       // A move to another host cleared masked secrets; say so, it's easy to miss.
-      if (data && ((payload.api_key === MASKED_KEY && !data.has_key)
+      if (data && ((keyVal === MASKED_KEY && !data.has_key)
         || (cookieVal === MASKED_KEY && !data.has_session))) {
         deps.toast('The new address is a different host, so the saved key/cookie were cleared — re-enter them', 'warning');
       }
-      remaskSecrets(data ?? undefined);
+      if (samePanel) {
+        markSaved();
+        // What was sent is now stored; the secrets' "unchanged" is the mask
+        // or nothing.
+        const secrets = remaskSecrets(data ?? undefined, { key: keyVal, cookie: cookieVal });
+        _editBaseline = {
+          ...(_editBaseline ?? {}), ...payload,
+          api_key: secrets.key, session_cookie: secrets.cookie,
+        };
+      }
       await deps.loadTrackers();
       await deps.refreshSingle(id);
       await deps.loadScrapeStatus(); // a saved cookie/key/enabled change can flip scrape-blocked badges
@@ -1916,7 +1976,10 @@ export async function saveTracker(deps: ModalDeps) {
     }
     else    { deps.toast(status === 400 && serverError(data) ? serverError(data) : 'Failed to update tracker', 'error'); }
   } else {
-    const { ok, status, data } = await api.addTracker(payload);
+    _trackerSaving = true;
+    let res: Awaited<ReturnType<typeof api.addTracker>>;
+    try { res = await api.addTracker(payload); } finally { _trackerSaving = false; }
+    const { ok, status, data } = res;
     if (ok) {
       deps.toast(`${name} added`, 'success');
       closeModal();
@@ -3436,6 +3499,7 @@ export async function switchMockScenario(
     deps.toast(`Scenario → ${prettyScenario(scenario)}`, 'success');
     const t = trackers.find(x => x.id === trackerId);
     if (t) t.mock_scenario = scenario;
+    if (_editBaseline && getVal('modal-tracker-id') === trackerId) _editBaseline.mock_scenario = scenario;
     await deps.refreshSingle(trackerId);
   } else {
     deps.toast('Failed to switch scenario', 'error');
@@ -3457,6 +3521,8 @@ function clearModal() {
     if (el) el.value = '';
   });
   _editStoredUrl = ''; // Add mode has no saved secrets to warn about
+  _editBaseline = null;
+  _editPanel++;
   hide('modal-url-cred-hint');
   // Reset the target builder + group summary between trackers.
   _editTargets = {};
