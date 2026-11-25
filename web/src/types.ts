@@ -425,6 +425,16 @@ export interface NotificationConfig {
   digest: DigestConfig;
 }
 
+/** PATCH /api/notifications: only what the editor changed. Items are matched
+ *  by id; anything not named stays as stored. */
+export interface NotificationsPatch {
+  upsert_destinations?: NotifyDestination[];
+  delete_destinations?: string[];
+  upsert_rules?: AlertRule[];
+  delete_rules?: string[];
+  digest?: Partial<Pick<DigestConfig, 'enabled' | 'weekday' | 'hour' | 'destinations'>>;
+}
+
 /** Weekly digest schedule (Settings → Alerts). last_sent_at/last_ready_targets
  *  are server-maintained — round-trip them but never edit; the backend
  *  ignores/overwrites them on save (see internal/api/notifications.go's

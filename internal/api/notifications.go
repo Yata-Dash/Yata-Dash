@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 
@@ -13,6 +14,7 @@ import (
 func registerNotifications(r chi.Router, d *Deps) {
 	r.Get("/notifications", getNotifications(d))
 	r.Put("/notifications", putNotifications(d))
+	r.Patch("/notifications", patchNotifications(d))
 	r.Post("/notifications/test", testNotification(d))
 	r.Post("/notifications/dryrun", dryRunNotification(d))
 	r.Get("/notifications/export", exportNotifications(d))
@@ -89,10 +91,8 @@ func putNotifications(d *Deps) http.HandlerFunc {
 			existingDests[dst.ID] = dst
 		}
 		for i := range n.Destinations {
-			dst := &n.Destinations[i]
-			if old, ok := existingDests[dst.ID]; ok &&
-				dst.URL == "" && dst.Token == "" && dst.ChatID == "" {
-				dst.URL, dst.Token, dst.ChatID = old.URL, old.Token, old.ChatID
+			if old, ok := existingDests[n.Destinations[i].ID]; ok {
+				backfillSecrets(&n.Destinations[i], old)
 			}
 		}
 		// Assign IDs to any new destinations/rules.
@@ -134,6 +134,142 @@ func putNotifications(d *Deps) http.HandlerFunc {
 			}
 		}
 		jsonOK(w, d.Cfg.Notifications())
+	}
+}
+
+// backfillSecrets gives a destination arriving with no URL, token or chat id
+// the stored ones: a share-safe export has them stripped.
+func backfillSecrets(dst *models.NotifyDestination, stored models.NotifyDestination) {
+	if dst.URL == "" && dst.Token == "" && dst.ChatID == "" {
+		dst.URL, dst.Token, dst.ChatID = stored.URL, stored.Token, stored.ChatID
+	}
+}
+
+// notificationsPatch is the body of PATCH /api/notifications: only what one
+// editor changed. Destinations and rules are whole items matched by id (a new
+// id adds one); anything not named is left as stored, so a tab open since
+// before another tab's save can't put old rules back.
+type notificationsPatch struct {
+	UpsertDestinations []models.NotifyDestination `json:"upsert_destinations"`
+	DeleteDestinations []string                   `json:"delete_destinations"`
+	UpsertRules        []models.AlertRule         `json:"upsert_rules"`
+	DeleteRules        []string                   `json:"delete_rules"`
+	Digest             *digestPatch               `json:"digest"`
+}
+
+// digestPatch holds the digest schedule fields that changed.
+type digestPatch struct {
+	Enabled      *bool     `json:"enabled"`
+	Weekday      *int      `json:"weekday"`
+	Hour         *int      `json:"hour"`
+	Destinations *[]string `json:"destinations"`
+}
+
+// apply edits n and returns the rules it added (ids not stored before).
+// Deletes run first; an upsert of an id deleted elsewhere adds it back,
+// since that edit is the newer one.
+func (p notificationsPatch) apply(n *models.NotificationConfig) []models.AlertRule {
+	drop := map[string]bool{}
+	for _, id := range p.DeleteDestinations {
+		drop[id] = true
+	}
+	kept := n.Destinations[:0]
+	for _, dst := range n.Destinations {
+		if !drop[dst.ID] {
+			kept = append(kept, dst)
+		}
+	}
+	n.Destinations = kept
+	for _, dst := range p.UpsertDestinations {
+		if dst.ID == "" {
+			dst.ID = newToken()[:16]
+		}
+		if i := slices.IndexFunc(n.Destinations, func(x models.NotifyDestination) bool { return x.ID == dst.ID }); i >= 0 {
+			backfillSecrets(&dst, n.Destinations[i])
+			n.Destinations[i] = dst
+		} else {
+			n.Destinations = append(n.Destinations, dst)
+		}
+	}
+
+	drop = map[string]bool{}
+	for _, id := range p.DeleteRules {
+		drop[id] = true
+	}
+	rules := n.Rules[:0]
+	for _, r := range n.Rules {
+		if !drop[r.ID] {
+			rules = append(rules, r)
+		}
+	}
+	n.Rules = rules
+	var added []models.AlertRule
+	for _, r := range p.UpsertRules {
+		if r.ID == "" {
+			r.ID = newToken()[:16]
+		}
+		if i := slices.IndexFunc(n.Rules, func(x models.AlertRule) bool { return x.ID == r.ID }); i >= 0 {
+			n.Rules[i] = r
+		} else {
+			n.Rules = append(n.Rules, r)
+			added = append(added, r)
+		}
+	}
+
+	if g := p.Digest; g != nil {
+		if g.Enabled != nil {
+			n.Digest.Enabled = *g.Enabled
+		}
+		if g.Weekday != nil {
+			n.Digest.Weekday = *g.Weekday
+		}
+		if g.Hour != nil {
+			n.Digest.Hour = *g.Hour
+		}
+		if g.Destinations != nil {
+			n.Digest.Destinations = append([]string{}, *g.Destinations...)
+		}
+	}
+	return added
+}
+
+// patchNotifications applies one editor's changes to the stored alerts.
+// Import still uses PUT: replacing everything is what it means.
+func patchNotifications(d *Deps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var p notificationsPatch
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			jsonError(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if g := p.Digest; g != nil {
+			if g.Weekday != nil && (*g.Weekday < 0 || *g.Weekday > 6) {
+				jsonError(w, "digest weekday must be 0 (Sunday) to 6 (Saturday)", http.StatusBadRequest)
+				return
+			}
+			if g.Hour != nil && (*g.Hour < 0 || *g.Hour > 23) {
+				jsonError(w, "digest hour must be 0 to 23", http.StatusBadRequest)
+				return
+			}
+		}
+		var added []models.AlertRule
+		n, err := d.Cfg.PatchNotifications(func(n *models.NotificationConfig) error {
+			added = p.apply(n)
+			return nil
+		})
+		if err != nil {
+			jsonError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.logInfof("notifications: saved changes (%d destinations, %d rules)", len(n.Destinations), len(n.Rules))
+		// Same as PUT: a new rule that is already met says so now.
+		if d.Alerts != nil && len(added) > 0 {
+			d.Alerts.Announce(added, labelledAll(d, d.Cfg.Trackers()), func(id string) models.MergedStats {
+				m, _ := d.Stats.Merged(id)
+				return m
+			}, trendFnFor(d))
+		}
+		jsonOK(w, n)
 	}
 }
 

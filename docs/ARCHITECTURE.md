@@ -173,6 +173,12 @@ leaves any field missing from the body as stored, and the Edit form sends only t
 since it opened. The one exception: a `url` on another origin clears a key or cookie that is
 omitted or masked, so a credential never follows the tracker to a new host.
 
+Alerts work the same way. The editor saves with `PATCH /api/notifications`: the rules and
+destinations it changed (whole items, matched by id), the ids it deleted, and the digest fields
+it changed. `config.PatchNotifications` applies them to the stored config under the lock and keeps
+nothing if the save fails. `PUT /api/notifications` still replaces everything, which is what Import
+means.
+
 ## Frontend
 
 `web/src` is plain TypeScript built by Vite (`npm run build` in `web/`) into

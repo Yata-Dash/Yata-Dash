@@ -3,12 +3,13 @@
 // trackers→destinations scope callout on rules) that expand into edit forms.
 // Tracker scope and "send to" both use a searchable multi-select (qui-style:
 // chips + dropdown with search) so 100+ trackers stay manageable.
-// State is held in memory and saved as a whole via PUT /api/notifications.
+// State is held in memory; Save sends only what changed since the load
+// (PATCH /api/notifications), so an older tab can't put old rules back.
 import * as api from '../api';
 import { esc } from '../utils/format';
 import { appSettings, trackers } from '../state';
 import { normalizeInput } from '../utils/units';
-import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotifyDestination } from '../types';
+import type { AlertCondition, AlertRule, DigestConfig, DryRunResult, NotificationsPatch, NotifyDestination } from '../types';
 import type { ToastType } from './toast';
 
 type Toast = (msg: string, type?: ToastType) => void;
@@ -17,6 +18,17 @@ let toast: Toast = () => {};
 let destinations: NotifyDestination[] = [];
 let rules: AlertRule[] = [];
 let digest: DigestConfig = { enabled: false, weekday: 1, hour: 9, destinations: [] };
+// What the server holds as far as this tab knows: set by a load, advanced by
+// each save. Item maps are id → itemKey; a save sends what differs from them.
+let baseDests = new Map<string, string>();
+let baseRules = new Map<string, string>();
+let baseDigest: Pick<DigestConfig, 'enabled' | 'weekday' | 'hour' | 'destinations'> =
+  { enabled: false, weekday: 1, hour: 9, destinations: [] };
+let loadCount = 0;   // bumped by each load, so a save's reply can tell it predates one
+let saving = false;  // a save is in flight: one at a time, each building on the last
+let saveCount = 0;   // bumped as each save is sent
+let saveDone: Promise<unknown> = Promise.resolve(); // settles when the latest save has
+let loading: Promise<void> | null = null; // the load in flight, which a second call joins
 let editingDest = -1;   // index of the destination shown in its edit form (-1 = none)
 let editingRule = -1;   // index of the rule shown in its edit form (-1 = none)
 let pendingDelete: string | null = null; // dest/rule id awaiting inline delete confirm
@@ -236,9 +248,34 @@ export async function loadAlerts(deps: { toast: Toast }): Promise<void> {
 }
 
 /** Fetch destinations/rules from the server and re-render, dropping any
- *  in-memory edits and editor/dry-run state. */
-async function reload(): Promise<void> {
-  const { ok, data } = await api.fetchNotifications();
+ *  in-memory edits and editor/dry-run state. One load at a time: a second
+ *  call joins the one in flight rather than racing it. */
+function reload(): Promise<void> {
+  loading ??= fetchAndInstall().finally(() => { loading = null; });
+  return loading;
+}
+
+/** Runs one write (a save or an import). While it runs no other write
+ *  starts, and a load that overlaps it reads again once it lands. */
+async function trackSave<T>(start: () => Promise<T>): Promise<T> {
+  saving = true;
+  saveCount++;
+  const req = start();
+  saveDone = req.catch(() => undefined);
+  try { return await req; } finally { saving = false; }
+}
+
+async function fetchAndInstall(): Promise<void> {
+  let res: Awaited<ReturnType<typeof api.fetchNotifications>>;
+  for (;;) {
+    const sent = saveCount;
+    res = await api.fetchNotifications();
+    // A snapshot read while a save was running may predate it, and would put
+    // the old values back as the baseline: read again once the save lands.
+    if (!saving && sent === saveCount) break;
+    await saveDone;
+  }
+  const { ok, data } = res;
   if (!ok) {
     // Never fall back to an empty, editable model: saving it would replace
     // the real rules and destinations with nothing.
@@ -256,6 +293,10 @@ async function reload(): Promise<void> {
   }));
   digest = data.digest ?? { enabled: false, weekday: 1, hour: 9, destinations: [] };
   digest.destinations = digest.destinations ?? [];
+  baseDests = new Map(destinations.map(d => [d.id, destKey(d)]));
+  baseRules = new Map(rules.map(r => [r.id, ruleKey(r)]));
+  baseDigest = { enabled: digest.enabled, weekday: digest.weekday, hour: digest.hour, destinations: [...digest.destinations] };
+  loadCount++;
   loaded = true;
   editingDest = -1;
   editingRule = -1;
@@ -275,6 +316,7 @@ function confirmDeleteHtml(kind: 'dest' | 'rule', idx: number, name: string): st
 }
 
 export async function saveAlerts(): Promise<void> {
+  if (saving) return;
   if (!loaded) { toast('Alerts haven’t loaded, so there is nothing to save yet', 'error'); return; }
   collectFromDOM();
   // A threshold that is not a size or a number is refused here, not stored:
@@ -285,8 +327,69 @@ export async function saveAlerts(): Promise<void> {
     toast('Fix the highlighted value first', 'error');
     return;
   }
-  const { ok } = await api.saveNotifications({ destinations, rules, digest });
+  const { patch, destKeys, ruleKeys } = changesSinceLoad();
+  const load = loadCount;
+  const { ok } = await trackSave(() => api.patchNotifications(patch));
+  // A load since the send already holds this save's result.
+  if (ok && load === loadCount) {
+    // What was sent is now stored; the rest stays as last loaded.
+    for (const id of patch.delete_destinations ?? []) baseDests.delete(id);
+    for (const id of patch.delete_rules ?? []) baseRules.delete(id);
+    destKeys.forEach((k, id) => baseDests.set(id, k));
+    ruleKeys.forEach((k, id) => baseRules.set(id, k));
+    if (patch.digest) baseDigest = { ...baseDigest, ...patch.digest };
+  }
   toast(ok ? 'Alerts saved' : 'Failed to save alerts', ok ? 'success' : 'error');
+}
+
+/** A destination's or rule's editable content, for comparing with the last
+ *  load. Thresholds are compared in the form Save stores them in. */
+function destKey(d: NotifyDestination): string {
+  return JSON.stringify([d.name, d.type, d.url, d.token, d.chat_id, d.enabled]);
+}
+function ruleKey(r: AlertRule): string {
+  const conds = r.conditions.map(c => {
+    const type = fieldDef(toDisplay(c).field).type;
+    let value = c.value.trim();
+    if ((type === 'size' || type === 'numeric') && value) {
+      const res = normalizeInput(type === 'size' ? 'size' : 'number', value);
+      if (res.ok) value = res.value;
+    }
+    return [c.field, c.op, value];
+  });
+  return JSON.stringify([r.name, r.enabled, r.tracker_ids, r.tracker_mode, r.match, conds,
+    r.destinations, r.cooldown_minutes]);
+}
+
+/** The PATCH body for this tab's edits since the last load or save, plus the
+ *  keys of what it sends (the model can change while the save is in flight). */
+function changesSinceLoad(): { patch: NotificationsPatch; destKeys: Map<string, string>; ruleKeys: Map<string, string> } {
+  const patch: NotificationsPatch = {};
+  const destKeys = new Map<string, string>();
+  const ruleKeys = new Map<string, string>();
+  for (const d of destinations) {
+    const k = destKey(d);
+    if (baseDests.get(d.id) !== k) destKeys.set(d.id, k);
+  }
+  for (const r of rules) {
+    const k = ruleKey(r);
+    if (baseRules.get(r.id) !== k) ruleKeys.set(r.id, k);
+  }
+  const upD = destinations.filter(d => destKeys.has(d.id));
+  const upR = rules.filter(r => ruleKeys.has(r.id));
+  const delD = [...baseDests.keys()].filter(id => !destinations.some(d => d.id === id));
+  const delR = [...baseRules.keys()].filter(id => !rules.some(r => r.id === id));
+  if (upD.length) patch.upsert_destinations = JSON.parse(JSON.stringify(upD));
+  if (delD.length) patch.delete_destinations = delD;
+  if (upR.length) patch.upsert_rules = JSON.parse(JSON.stringify(upR));
+  if (delR.length) patch.delete_rules = delR;
+  const dg: NonNullable<NotificationsPatch['digest']> = {};
+  if (digest.enabled !== baseDigest.enabled) dg.enabled = digest.enabled;
+  if (digest.weekday !== baseDigest.weekday) dg.weekday = digest.weekday;
+  if (digest.hour !== baseDigest.hour) dg.hour = digest.hour;
+  if (JSON.stringify(digest.destinations) !== JSON.stringify(baseDigest.destinations)) dg.destinations = [...digest.destinations];
+  if (Object.keys(dg).length) patch.digest = dg;
+  return { patch, destKeys, ruleKeys };
 }
 
 /** Check every size/numeric condition value in the model against its shape,
@@ -315,6 +418,8 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   if (!file) return;
   // Import keeps the current digest schedule, which is only known once loaded.
   if (!loaded) { input.value = ''; toast('Alerts haven’t loaded yet, so import would reset the digest. Retry first.', 'error'); return; }
+  // A save landing after the import would put edited rules back over it.
+  if (saving) { input.value = ''; toast('A save is still running. Import again once it finishes.', 'error'); return; }
   const text = await file.text();
   input.value = '';
   let parsed: { destinations?: NotifyDestination[]; rules?: AlertRule[] };
@@ -323,6 +428,8 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
     toast('Import failed: not an alerts file', 'error'); return;
   }
   if (!confirm('Import alerts?\n\nThis REPLACES your current destinations and rules. Any new rule already met will notify immediately.')) return;
+  // Again: a save may have started while the file was read.
+  if (saving) { toast('A save is still running. Import again once it finishes.', 'error'); return; }
   // digest isn't part of the share-safe export/import format (it has no
   // secrets to strip) — carry the CURRENT schedule forward so importing an
   // alerts file never resets the weekly digest as a side effect.
@@ -330,7 +437,7 @@ export async function importAlertsFile(input: HTMLInputElement): Promise<void> {
   // a Save now would put it back over the import, so Save is off throughout.
   loaded = false;
   setSaveEnabled(false);
-  const { ok } = await api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest });
+  const { ok } = await trackSave(() => api.saveNotifications({ destinations: parsed.destinations ?? [], rules: parsed.rules ?? [], digest }));
   if (ok) { toast('Alerts imported', 'success'); await reload(); }
   else {
     // Nothing changed on the server, so the editor's model is still current.
